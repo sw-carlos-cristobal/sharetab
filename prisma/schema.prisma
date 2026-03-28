@@ -1,0 +1,276 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── AUTH (NextAuth managed) ───────────────────────────────
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── CORE MODELS ───────────────────────────────────────────
+
+model User {
+  id              String    @id @default(cuid())
+  name            String?
+  email           String    @unique
+  emailVerified   DateTime?
+  passwordHash    String?
+  image           String?
+  defaultCurrency String    @default("USD")
+
+  accounts        Account[]
+  sessions        Session[]
+  groupMembers    GroupMember[]
+  expensesPaid    Expense[]          @relation("PaidBy")
+  expensesAdded   Expense[]          @relation("AddedBy")
+  expenseShares   ExpenseShare[]
+  settlementsPaid Settlement[]       @relation("SettledBy")
+  settlementsFor  Settlement[]       @relation("SettledFor")
+  activityLogs    ActivityLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Group {
+  id            String  @id @default(cuid())
+  name          String
+  description   String? @db.Text
+  currency      String  @default("USD")
+  emoji         String? @default("💰")
+  simplifyDebts Boolean @default(true)
+
+  members      GroupMember[]
+  expenses     Expense[]
+  settlements  Settlement[]
+  invites      GroupInvite[]
+  activityLogs ActivityLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model GroupMember {
+  id      String    @id @default(cuid())
+  userId  String
+  groupId String
+  role    GroupRole @default(MEMBER)
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  joinedAt DateTime @default(now())
+
+  @@unique([userId, groupId])
+}
+
+model GroupInvite {
+  id        String    @id @default(cuid())
+  groupId   String
+  email     String?
+  token     String    @unique @default(cuid())
+  expiresAt DateTime
+  usedAt    DateTime?
+  usedById  String?
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+enum GroupRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+// ─── EXPENSES ──────────────────────────────────────────────
+
+model Expense {
+  id          String    @id @default(cuid())
+  groupId     String
+  title       String
+  description String?   @db.Text
+  amount      Int       // total in cents
+  currency    String    @default("USD")
+  category    String?
+  expenseDate DateTime  @default(now())
+  splitMode   SplitMode @default(EQUAL)
+  paidById    String
+  addedById   String
+  receiptId   String?   @unique
+
+  group  Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  paidBy User           @relation("PaidBy", fields: [paidById], references: [id])
+  addedBy User          @relation("AddedBy", fields: [addedById], references: [id])
+  shares ExpenseShare[]
+  receipt Receipt?      @relation(fields: [receiptId], references: [id])
+  activityLogs ActivityLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([groupId])
+  @@index([paidById])
+}
+
+model ExpenseShare {
+  id         String @id @default(cuid())
+  expenseId  String
+  userId     String
+  amount     Int    // this user's share in cents (always the final calculated amount)
+  shares     Int    @default(1)  // raw share units (for SHARES mode)
+  percentage Int?   // basis points, e.g., 5000 = 50.00% (for PERCENTAGE mode)
+
+  expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@unique([expenseId, userId])
+}
+
+enum SplitMode {
+  EQUAL
+  EXACT
+  PERCENTAGE
+  SHARES
+  ITEM
+}
+
+// ─── RECEIPTS & AI ─────────────────────────────────────────
+
+model Receipt {
+  id            String        @id @default(cuid())
+  imagePath     String
+  originalName  String
+  mimeType      String
+  fileSize      Int
+  status        ReceiptStatus @default(PENDING)
+  aiProvider    String?
+  rawResponse   Json?
+  extractedData Json?
+
+  items   ReceiptItem[]
+  expense Expense?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ReceiptItem {
+  id         String @id @default(cuid())
+  receiptId  String
+  name       String
+  quantity   Int    @default(1)
+  unitPrice  Int    // cents
+  totalPrice Int    // cents
+  sortOrder  Int    @default(0)
+
+  assignments ReceiptItemAssignment[]
+  receipt     Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+
+  @@index([receiptId])
+}
+
+model ReceiptItemAssignment {
+  id            String @id @default(cuid())
+  receiptItemId String
+  userId        String
+  shareOfItem   Int    @default(1)
+
+  receiptItem ReceiptItem @relation(fields: [receiptItemId], references: [id], onDelete: Cascade)
+
+  @@unique([receiptItemId, userId])
+}
+
+enum ReceiptStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// ─── SETTLEMENTS ───────────────────────────────────────────
+
+model Settlement {
+  id       String  @id @default(cuid())
+  groupId  String
+  fromId   String
+  toId     String
+  amount   Int     // cents
+  currency String  @default("USD")
+  note     String?
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  from  User  @relation("SettledBy", fields: [fromId], references: [id])
+  to    User  @relation("SettledFor", fields: [toId], references: [id])
+
+  settledAt DateTime @default(now())
+
+  @@index([groupId])
+}
+
+// ─── ACTIVITY LOG ──────────────────────────────────────────
+
+model ActivityLog {
+  id       String       @id @default(cuid())
+  groupId  String
+  userId   String
+  type     ActivityType
+  entityId String?
+  metadata Json?
+
+  group   Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id])
+  expense Expense? @relation(fields: [entityId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([groupId, createdAt])
+}
+
+enum ActivityType {
+  EXPENSE_CREATED
+  EXPENSE_UPDATED
+  EXPENSE_DELETED
+  SETTLEMENT_CREATED
+  MEMBER_JOINED
+  MEMBER_LEFT
+  GROUP_UPDATED
+}
