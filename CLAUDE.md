@@ -13,7 +13,7 @@ Splitit — open-source, self-hosted Splitwise alternative with AI receipt scann
 - **ORM:** Prisma 7 + PostgreSQL 16 (via `@prisma/adapter-pg`)
 - **Auth:** NextAuth v5 (email/password + OAuth)
 - **UI:** TailwindCSS 4 + shadcn/ui (v4, uses `@base-ui/react` — use `render` prop instead of `asChild`)
-- **AI:** Pluggable providers (OpenAI, Claude, Ollama) — not yet implemented
+- **AI:** Pluggable providers (OpenAI, Claude, Ollama) via `src/server/ai/`
 
 ## Commands
 
@@ -88,7 +88,25 @@ docker compose exec db pg_dump -U splitit splitit > backup.sql  # Backup
 - Shared money utilities in `src/lib/money.ts`
 - All 15 routes building and type-checking clean
 
-### Phase 3: Balances & Settlements — NOT STARTED
-### Phase 4: AI Receipt Scanning — NOT STARTED
+### Phase 3: Settlements — COMPLETE
+- Settle-up dialog on group detail page (click a debt row to pre-fill)
+- Records payment, invalidates balance caches
+- "Settle up" button in balances card header
+
+### Phase 4: AI Receipt Scanning — COMPLETE
+- Pluggable AI provider system: `src/server/ai/provider.ts` interface
+- Three implementations: OpenAI (GPT-4o), Claude (Sonnet), Ollama (llava) in `src/server/ai/providers/`
+- Provider registry with env-based selection (`AI_PROVIDER` env var)
+- Receipt upload endpoint (`POST /api/upload`) with file validation
+- Receipt processing tRPC router: upload → AI extraction → ReceiptItem creation
+- Item assignment UI (`src/components/receipts/item-assignment.tsx`):
+  - Shows extracted items with per-member toggle buttons
+  - "Split all equally" quick action
+  - Live per-person total calculation with proportional tax/tip
+  - Tip override field
+  - Creates expense with ITEM split mode
+- Scan page accessible from group detail: `/groups/[groupId]/scan`
+- All 18 routes building and type-checking clean
+
 ### Phase 5: Polish & PWA — NOT STARTED
 ### Phase 6: Production Ready — NOT STARTED

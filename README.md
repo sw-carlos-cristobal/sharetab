@@ -5,8 +5,8 @@ Open-source, self-hosted Splitwise alternative with AI-powered receipt scanning.
 ## Features
 
 - **Group expense tracking** with multiple split modes (equal, percentage, shares, exact, item-level)
-- **AI receipt scanning** — photograph a receipt, extract line items, assign to group members (coming soon)
-- **Pluggable AI providers** — OpenAI, Claude, or local Ollama (coming soon)
+- **AI receipt scanning** — photograph a receipt, AI extracts line items, assign items to group members with proportional tax/tip
+- **Pluggable AI providers** — OpenAI (GPT-4o), Claude, or local Ollama
 - **Cross-group dashboard** — see all your balances at a glance
 - **Debt simplification** — minimize the number of payments needed
 - **Invite links** — share a link to add friends to your groups
@@ -81,8 +81,8 @@ src/
 
 - [x] Foundation (auth, database schema, tRPC API, Docker)
 - [x] Groups & Expenses UI (CRUD, 4 split modes, invites, balances)
-- [ ] Settlement recording UI
-- [ ] AI receipt scanning with item-level delegation
+- [x] Settlement recording UI
+- [x] AI receipt scanning with item-level delegation (OpenAI, Claude, Ollama)
 - [ ] PWA support
 - [ ] Unraid community template
 

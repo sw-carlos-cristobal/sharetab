@@ -14,9 +14,12 @@ import {
   UserPlus,
   ArrowRight,
   Receipt,
+  Handshake,
+  Camera,
 } from "lucide-react";
 import Link from "next/link";
 import { InviteDialog } from "@/components/groups/invite-dialog";
+import { SettleDialog } from "@/components/groups/settle-dialog";
 
 function getInitials(name?: string | null, email?: string | null): string {
   if (name) {
@@ -37,6 +40,12 @@ export default function GroupDetailPage({
 }) {
   const { groupId } = use(params);
   const [showInvite, setShowInvite] = useState(false);
+  const [settleState, setSettleState] = useState<{
+    open: boolean;
+    from?: string;
+    to?: string;
+    amount?: number;
+  }>({ open: false });
 
   const group = trpc.groups.get.useQuery({ groupId });
   const expenses = trpc.expenses.list.useQuery({ groupId, limit: 10 });
@@ -106,21 +115,43 @@ export default function GroupDetailPage({
       {debts.data && debts.data.debts.length > 0 && (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Balances</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">Balances</CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSettleState({ open: true })}
+              >
+                <Handshake className="mr-2 h-4 w-4" />
+                Settle up
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-2">
             {debts.data.debts.map((debt, i) => {
               const from = memberMap.get(debt.from);
               const to = memberMap.get(debt.to);
               return (
-                <div key={i} className="flex items-center gap-2 text-sm">
+                <button
+                  key={i}
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-md p-2 text-sm transition-colors hover:bg-muted/50"
+                  onClick={() =>
+                    setSettleState({
+                      open: true,
+                      from: debt.from,
+                      to: debt.to,
+                      amount: debt.amount,
+                    })
+                  }
+                >
                   <span className="font-medium">{from?.name ?? "Unknown"}</span>
                   <ArrowRight className="h-3 w-3 text-muted-foreground" />
                   <span className="font-medium">{to?.name ?? "Unknown"}</span>
                   <span className="ml-auto font-semibold text-red-600">
                     {formatCents(debt.amount, g.currency)}
                   </span>
-                </div>
+                </button>
               );
             })}
           </CardContent>
@@ -139,10 +170,20 @@ export default function GroupDetailPage({
       <div>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Expenses</h2>
-          <Button size="sm" render={<Link href={`/groups/${groupId}/expenses/new`} />}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Expense
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              render={<Link href={`/groups/${groupId}/scan`} />}
+            >
+              <Camera className="mr-2 h-4 w-4" />
+              Scan Receipt
+            </Button>
+            <Button size="sm" render={<Link href={`/groups/${groupId}/expenses/new`} />}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Expense
+            </Button>
+          </div>
         </div>
 
         {expenses.isLoading && <p className="text-muted-foreground">Loading...</p>}
@@ -191,6 +232,17 @@ export default function GroupDetailPage({
         groupId={groupId}
         open={showInvite}
         onOpenChange={setShowInvite}
+      />
+
+      <SettleDialog
+        groupId={groupId}
+        members={g.members.map((m) => ({ id: m.user.id, name: m.user.name }))}
+        suggestedFrom={settleState.from}
+        suggestedTo={settleState.to}
+        suggestedAmount={settleState.amount}
+        currency={g.currency}
+        open={settleState.open}
+        onOpenChange={(open) => setSettleState((s) => ({ ...s, open }))}
       />
     </div>
   );
