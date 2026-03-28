@@ -91,7 +91,7 @@ src/
 - [x] AI receipt scanning with item-level delegation (OpenAI, Claude, Ollama)
 - [x] PWA support + mobile hamburger menu
 - [x] Auth middleware + demo seed data
-- [ ] Unraid community template
+- [x] Unraid community template + production Docker hardening
 
 ## License
 

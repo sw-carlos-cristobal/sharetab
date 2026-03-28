@@ -119,4 +119,9 @@ docker compose exec db pg_dump -U splitit splitit > backup.sql  # Backup
   - Run with `npm run db:seed` or `npx prisma db seed`
   - Login: alice@example.com / bob@example.com / charlie@example.com, password: password123
 
-### Phase 6: Production Ready — NOT STARTED
+### Phase 6: Production Ready — COMPLETE
+- Unraid community template XML (`unraid/splitit.xml`)
+- Receipt image serving endpoint (`GET /api/uploads/[...path]`) with auth + path traversal protection
+- Docker entrypoint script with migration on startup
+- Dockerfile hardened: `--omit=dev`, cache clean, HEALTHCHECK directive, `.dockerignore`
+- All 19 routes building and type-checking clean

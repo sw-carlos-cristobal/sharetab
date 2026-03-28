@@ -1,0 +1,134 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>splitit</Name>
+  <Repository>ghcr.io/splitit/splitit:latest</Repository>
+  <Registry>https://github.com/splitit/splitit/pkgs/container/splitit</Registry>
+  <Branch>
+    <Tag>latest</Tag>
+    <TagDescription>Latest stable release</TagDescription>
+  </Branch>
+  <Network>bridge</Network>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/splitit/splitit/issues</Support>
+  <Project>https://github.com/splitit/splitit</Project>
+  <Overview>
+    Splitit is an open-source, self-hosted Splitwise alternative with AI-powered receipt scanning.
+
+    Features:
+    - Group expense tracking with multiple split modes
+    - AI receipt scanning: photograph a receipt, extract items, assign to friends
+    - Pluggable AI providers: OpenAI, Claude, or local Ollama
+    - Cross-group dashboard with debt simplification
+    - PWA installable on mobile
+
+    Requires a PostgreSQL database. You can use the PostgreSQL container from Community Apps.
+  </Overview>
+  <Category>Productivity: Tools:</Category>
+  <WebUI>http://[IP]:[PORT:3000]</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/splitit/splitit/main/unraid/splitit.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/splitit/splitit/main/public/icons/icon.svg</Icon>
+  <ExtraParams>--restart=unless-stopped</ExtraParams>
+  <Description>
+    Self-hosted Splitwise alternative with AI receipt scanning. Split expenses with friends using multiple modes (equal, percentage, shares, exact, item-level from receipts). Supports OpenAI, Claude, and local Ollama for receipt extraction.
+  </Description>
+  <Config
+    Name="Web UI Port"
+    Target="3000"
+    Default="3000"
+    Mode="tcp"
+    Description="Web interface port"
+    Type="Port"
+    Display="always"
+    Required="true"
+    Mask="false">3000</Config>
+  <Config
+    Name="Database URL"
+    Target="DATABASE_URL"
+    Default="postgresql://splitit:splitit@192.168.1.x:5432/splitit"
+    Description="PostgreSQL connection string. Point to your PostgreSQL container."
+    Type="Variable"
+    Display="always"
+    Required="true"
+    Mask="false">postgresql://splitit:splitit@192.168.1.x:5432/splitit</Config>
+  <Config
+    Name="Auth Secret"
+    Target="AUTH_SECRET"
+    Default=""
+    Description="Secret key for session encryption. Generate with: openssl rand -base64 32"
+    Type="Variable"
+    Display="always"
+    Required="true"
+    Mask="true"></Config>
+  <Config
+    Name="NextAuth URL"
+    Target="NEXTAUTH_URL"
+    Default="http://192.168.1.x:3000"
+    Description="The URL where Splitit is accessible (e.g., http://your-server-ip:3000)"
+    Type="Variable"
+    Display="always"
+    Required="true"
+    Mask="false">http://192.168.1.x:3000</Config>
+  <Config
+    Name="AI Provider"
+    Target="AI_PROVIDER"
+    Default="openai"
+    Description="AI provider for receipt scanning: openai, claude, or ollama"
+    Type="Variable"
+    Display="always"
+    Required="false"
+    Mask="false">openai</Config>
+  <Config
+    Name="OpenAI API Key"
+    Target="OPENAI_API_KEY"
+    Default=""
+    Description="API key for OpenAI (required if AI_PROVIDER=openai)"
+    Type="Variable"
+    Display="always"
+    Required="false"
+    Mask="true"></Config>
+  <Config
+    Name="Anthropic API Key"
+    Target="ANTHROPIC_API_KEY"
+    Default=""
+    Description="API key for Claude (required if AI_PROVIDER=claude)"
+    Type="Variable"
+    Display="always"
+    Required="false"
+    Mask="true"></Config>
+  <Config
+    Name="Ollama URL"
+    Target="OLLAMA_BASE_URL"
+    Default="http://192.168.1.x:11434"
+    Description="Ollama server URL (required if AI_PROVIDER=ollama)"
+    Type="Variable"
+    Display="always"
+    Required="false"
+    Mask="false">http://192.168.1.x:11434</Config>
+  <Config
+    Name="Ollama Model"
+    Target="OLLAMA_MODEL"
+    Default="llava"
+    Description="Ollama vision model for receipt scanning"
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false">llava</Config>
+  <Config
+    Name="Receipt Uploads"
+    Target="/app/uploads"
+    Default="/mnt/user/appdata/splitit/uploads"
+    Description="Path to store uploaded receipt images"
+    Type="Path"
+    Display="always"
+    Required="true"
+    Mask="false">/mnt/user/appdata/splitit/uploads</Config>
+  <Config
+    Name="Max Upload Size (MB)"
+    Target="MAX_UPLOAD_SIZE_MB"
+    Default="10"
+    Description="Maximum file upload size in megabytes"
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false">10</Config>
+</Container>
