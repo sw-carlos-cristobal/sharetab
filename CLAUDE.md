@@ -50,7 +50,9 @@ npx prisma db push   # Push schema without migration (dev only)
 - All monetary amounts are stored as integers in cents (e.g., $12.99 = 1299)
 - tRPC routers live in `src/server/trpc/routers/`
 - `protectedProcedure` requires auth; `groupMemberProcedure` requires group membership
-- AI providers will implement the `AIProvider` interface in `src/server/ai/provider.ts`
+- AI providers implement the `AIProvider` interface in `src/server/ai/provider.ts`
+- `src/middleware.ts` — NextAuth middleware protecting authenticated routes
+- `prisma/seed.ts` — Demo data seed script (run with `npm run db:seed`)
 - Prisma v7: datasource URL is configured in `prisma.config.ts`, not in `schema.prisma`
 - Prisma v7: PrismaClient requires `@prisma/adapter-pg` adapter in constructor
 - Prisma v7: import from `@/generated/prisma/client` (not `@/generated/prisma` — no index.ts)
@@ -108,5 +110,13 @@ docker compose exec db pg_dump -U splitit splitit > backup.sql  # Backup
 - Scan page accessible from group detail: `/groups/[groupId]/scan`
 - All 18 routes building and type-checking clean
 
-### Phase 5: Polish & PWA — NOT STARTED
+### Phase 5: Polish & PWA — COMPLETE
+- PWA manifest (`public/manifest.json`) with generated icons (192px, 512px)
+- Apple web app meta tags and viewport config
+- Mobile-responsive hamburger menu (`src/components/layout/mobile-header.tsx`) using Sheet
+- NextAuth middleware (`src/middleware.ts`) protecting `/dashboard`, `/groups`, `/settings`
+- Seed script (`prisma/seed.ts`) with 3 demo users, 2 groups, 6 expenses
+  - Run with `npm run db:seed` or `npx prisma db seed`
+  - Login: alice@example.com / bob@example.com / charlie@example.com, password: password123
+
 ### Phase 6: Production Ready — NOT STARTED

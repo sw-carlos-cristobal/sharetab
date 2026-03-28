@@ -10,6 +10,7 @@ Open-source, self-hosted Splitwise alternative with AI-powered receipt scanning.
 - **Cross-group dashboard** — see all your balances at a glance
 - **Debt simplification** — minimize the number of payments needed
 - **Invite links** — share a link to add friends to your groups
+- **PWA** — installable on mobile with app-like experience
 - **Self-hosted** — Docker Compose deployment, designed for Unraid
 
 ## Screenshots
@@ -42,9 +43,14 @@ docker compose -f docker/docker-compose.yml up db -d
 # Run database migrations
 npx prisma migrate dev
 
+# Seed demo data (optional)
+npm run db:seed
+
 # Start dev server
 npm run dev
 ```
+
+Demo accounts after seeding: `alice@example.com`, `bob@example.com`, `charlie@example.com` (password: `password123`)
 
 ## Project Structure
 
@@ -83,7 +89,8 @@ src/
 - [x] Groups & Expenses UI (CRUD, 4 split modes, invites, balances)
 - [x] Settlement recording UI
 - [x] AI receipt scanning with item-level delegation (OpenAI, Claude, Ollama)
-- [ ] PWA support
+- [x] PWA support + mobile hamburger menu
+- [x] Auth middleware + demo seed data
 - [ ] Unraid community template
 
 ## License
