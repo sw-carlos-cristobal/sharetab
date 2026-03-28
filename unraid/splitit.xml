@@ -14,14 +14,14 @@
   <Overview>
     Splitit is an open-source, self-hosted Splitwise alternative with AI-powered receipt scanning.
 
+    All-in-one container: PostgreSQL is bundled inside — no external database required.
+
     Features:
     - Group expense tracking with multiple split modes
     - AI receipt scanning: photograph a receipt, extract items, assign to friends
     - Pluggable AI providers: OpenAI, Claude, or local Ollama
     - Cross-group dashboard with debt simplification
     - PWA installable on mobile
-
-    Requires a PostgreSQL database. You can use the PostgreSQL container from Community Apps.
   </Overview>
   <Category>Productivity: Tools:</Category>
   <WebUI>http://[IP]:[PORT:3000]</WebUI>
@@ -29,7 +29,7 @@
   <Icon>https://raw.githubusercontent.com/splitit/splitit/main/public/icons/icon.svg</Icon>
   <ExtraParams>--restart=unless-stopped</ExtraParams>
   <Description>
-    Self-hosted Splitwise alternative with AI receipt scanning. Split expenses with friends using multiple modes (equal, percentage, shares, exact, item-level from receipts). Supports OpenAI, Claude, and local Ollama for receipt extraction.
+    Self-hosted Splitwise alternative with AI receipt scanning. All-in-one container with bundled PostgreSQL — no external database needed. Split expenses with friends using multiple modes (equal, percentage, shares, exact, item-level from receipts). Supports OpenAI, Claude, and local Ollama for receipt extraction.
   </Description>
   <Config
     Name="Web UI Port"
@@ -41,15 +41,6 @@
     Display="always"
     Required="true"
     Mask="false">3000</Config>
-  <Config
-    Name="Database URL"
-    Target="DATABASE_URL"
-    Default="postgresql://splitit:splitit@192.168.1.x:5432/splitit"
-    Description="PostgreSQL connection string. Point to your PostgreSQL container."
-    Type="Variable"
-    Display="always"
-    Required="true"
-    Mask="false">postgresql://splitit:splitit@192.168.1.x:5432/splitit</Config>
   <Config
     Name="Auth Secret"
     Target="AUTH_SECRET"
@@ -68,6 +59,24 @@
     Display="always"
     Required="true"
     Mask="false">http://192.168.1.x:3000</Config>
+  <Config
+    Name="Database Data"
+    Target="/var/lib/postgresql/data"
+    Default="/mnt/user/appdata/splitit/db"
+    Description="Path to store PostgreSQL data (for persistence across container restarts)"
+    Type="Path"
+    Display="always"
+    Required="true"
+    Mask="false">/mnt/user/appdata/splitit/db</Config>
+  <Config
+    Name="Database Password"
+    Target="DB_PASSWORD"
+    Default="splitit"
+    Description="Password for the bundled PostgreSQL database"
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="true">splitit</Config>
   <Config
     Name="AI Provider"
     Target="AI_PROVIDER"

@@ -19,14 +19,18 @@ Open-source, self-hosted Splitwise alternative with AI-powered receipt scanning.
 
 ## Quick Start (Docker)
 
+All-in-one container — PostgreSQL is bundled inside, no external database needed.
+
 ```bash
 cd docker
 cp ../.env.example .env
-# Edit .env with your settings (at minimum set NEXTAUTH_SECRET)
+# Edit .env with your settings (at minimum set NEXTAUTH_SECRET/AUTH_SECRET)
 docker compose up -d
 ```
 
 The app will be available at `http://localhost:3000`.
+
+**Backup:** `docker compose exec splitit su-exec postgres pg_dump -U splitit splitit > backup.sql`
 
 ## Development
 

@@ -61,9 +61,11 @@ npx prisma db push   # Push schema without migration (dev only)
 
 ## Docker
 
+All-in-one container: PostgreSQL is bundled inside — no external database required.
+
 ```bash
-cd docker && docker compose up -d    # Start app + PostgreSQL
-docker compose exec db pg_dump -U splitit splitit > backup.sql  # Backup
+cd docker && docker compose up -d    # Start app (PostgreSQL included)
+docker compose exec splitit su-exec postgres pg_dump -U splitit splitit > backup.sql  # Backup
 ```
 
 ## Implementation Status
