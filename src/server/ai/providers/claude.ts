@@ -6,10 +6,11 @@ import { RECEIPT_EXTRACTION_PROMPT } from "../prompts/receipt-extraction";
 
 type ImageMediaType = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
 
-// OAuth tokens currently only work with Claude 3 models via the oauth beta header.
-// API keys work with all models including Claude 4.
-const OAUTH_MODEL = "claude-3-haiku-20240307";
-const API_KEY_MODEL = "claude-sonnet-4-20250514";
+// OAuth tokens work with Haiku models via the oauth beta header.
+// Sonnet/Opus 4.x return 400 with OAuth regardless of headers.
+// API keys work with all models.
+const OAUTH_MODEL = "claude-haiku-4-5";
+const API_KEY_MODEL = "claude-sonnet-4-6";
 const OAUTH_BETA_HEADER = "oauth-2025-04-20";
 
 export class ClaudeProvider implements AIProvider {
