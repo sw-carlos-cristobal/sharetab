@@ -1,7 +1,5 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { readFile } from "fs/promises";
-import { join } from "path";
 import { Prisma } from "@/generated/prisma/client";
 import { createTRPCRouter, protectedProcedure, groupMemberProcedure } from "../init";
 import { getAIProvider } from "../../ai/registry";
@@ -23,11 +21,13 @@ export const receiptsRouter = createTRPCRouter({
       });
 
       try {
+        const { readFile } = await import("fs/promises");
+        const { join } = await import("path");
         const uploadDir = process.env.UPLOAD_DIR ?? "./uploads";
         const filepath = join(uploadDir, receipt.imagePath);
         const imageBuffer = await readFile(filepath);
 
-        const provider = getAIProvider();
+        const provider = await getAIProvider();
         const result = await provider.extractReceipt(imageBuffer, receipt.mimeType);
 
         // Create receipt items in DB
