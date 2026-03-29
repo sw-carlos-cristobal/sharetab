@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Splitit — open-source, self-hosted Splitwise alternative with AI receipt scanning. Targets Unraid (Docker).
+ShareTab — open-source, self-hosted Splitwise alternative with AI receipt scanning. Targets Unraid (Docker).
 
 ## Tech Stack
 
@@ -65,7 +65,7 @@ All-in-one container: PostgreSQL is bundled inside — no external database requ
 
 ```bash
 cd docker && docker compose up -d    # Start app (PostgreSQL included)
-docker compose exec splitit su-exec postgres pg_dump -U splitit splitit > backup.sql  # Backup
+docker compose exec sharetab su-exec postgres pg_dump -U sharetab sharetab > backup.sql  # Backup
 ```
 
 ## Implementation Status
@@ -122,7 +122,7 @@ docker compose exec splitit su-exec postgres pg_dump -U splitit splitit > backup
   - Login: alice@example.com / bob@example.com / charlie@example.com, password: password123
 
 ### Phase 6: Production Ready — COMPLETE
-- Unraid community template XML (`unraid/splitit.xml`)
+- Unraid community template XML (`unraid/sharetab.xml`)
 - Receipt image serving endpoint (`GET /api/uploads/[...path]`) with auth + path traversal protection
 - Docker entrypoint script with migration on startup
 - Dockerfile hardened: `--omit=dev`, cache clean, HEALTHCHECK directive, `.dockerignore`

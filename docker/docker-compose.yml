@@ -1,14 +1,14 @@
 services:
-  splitit:
+  sharetab:
     build:
       context: ..
       dockerfile: docker/Dockerfile
     ports:
       - "${PORT:-3000}:3000"
     environment:
-      - DB_USER=${DB_USER:-splitit}
-      - DB_PASSWORD=${DB_PASSWORD:-splitit}
-      - DB_NAME=${DB_NAME:-splitit}
+      - DB_USER=${DB_USER:-sharetab}
+      - DB_PASSWORD=${DB_PASSWORD:-sharetab}
+      - DB_NAME=${DB_NAME:-sharetab}
       - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-change-me-in-production}
       - AUTH_SECRET=${AUTH_SECRET:-change-me-in-production}

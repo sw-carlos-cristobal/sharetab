@@ -69,7 +69,7 @@ export default function LoginPage() {
           <Receipt className="h-6 w-6 text-primary" />
         </div>
         <CardTitle className="text-2xl">Welcome back</CardTitle>
-        <CardDescription>Sign in to your Splitit account</CardDescription>
+        <CardDescription>Sign in to your ShareTab account</CardDescription>
       </CardHeader>
       <CardContent>
         {!showMagicLink ? (

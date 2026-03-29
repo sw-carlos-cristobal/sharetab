@@ -119,8 +119,8 @@ test.describe("Security & Edge Cases", () => {
       const response = await ctx.get("/manifest.json");
       expect(response.status()).toBe(200);
       const manifest = await response.json();
-      expect(manifest.name).toBe("Splitit");
-      expect(manifest.short_name).toBe("Splitit");
+      expect(manifest.name).toBe("ShareTab");
+      expect(manifest.short_name).toBe("ShareTab");
       expect(manifest.start_url).toBe("/dashboard");
       expect(manifest.icons.length).toBeGreaterThanOrEqual(2);
       await ctx.dispose();

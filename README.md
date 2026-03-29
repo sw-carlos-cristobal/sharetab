@@ -1,4 +1,4 @@
-# Splitit
+# ShareTab
 
 Open-source, self-hosted Splitwise alternative with AI-powered receipt scanning.
 
@@ -6,10 +6,12 @@ Open-source, self-hosted Splitwise alternative with AI-powered receipt scanning.
 
 - **Group expense tracking** with multiple split modes (equal, percentage, shares, exact, item-level)
 - **AI receipt scanning** — photograph a receipt, AI extracts line items, assign items to group members with proportional tax/tip
+- **Guest bill splitting** — no account needed, shareable summary links
 - **Pluggable AI providers** — OpenAI (GPT-4o), Claude, or local Ollama
 - **Cross-group dashboard** — see all your balances at a glance
 - **Debt simplification** — minimize the number of payments needed
 - **Invite links** — share a link to add friends to your groups
+- **Magic link auth** — passwordless email sign-in
 - **PWA** — installable on mobile with app-like experience
 - **Self-hosted** — Docker Compose deployment, designed for Unraid
 
@@ -30,7 +32,7 @@ docker compose up -d
 
 The app will be available at `http://localhost:3000`.
 
-**Backup:** `docker compose exec splitit su-exec postgres pg_dump -U splitit splitit > backup.sql`
+**Backup:** `docker compose exec sharetab su-exec postgres pg_dump -U sharetab sharetab > backup.sql`
 
 ## Development
 
@@ -61,20 +63,23 @@ Demo accounts after seeding: `alice@example.com`, `bob@example.com`, `charlie@ex
 ```
 src/
 ├── app/                    # Next.js App Router
-│   ├── (auth)/             # Login, register pages
+│   ├── (auth)/             # Login, register, verify-request pages
 │   ├── (app)/              # Authenticated pages (dashboard, groups, expenses, settings)
 │   ├── api/                # API routes (auth, tRPC, health, upload)
+│   ├── split/              # Guest bill splitting (no auth required)
 │   └── invite/[token]/     # Invite join page
 ├── components/
 │   ├── ui/                 # shadcn/ui primitives
 │   ├── layout/             # Sidebar, navigation
 │   ├── groups/             # Group-specific components
+│   ├── receipts/           # Receipt scanning & item assignment
 │   └── expenses/           # Split mode components (equal, exact, percentage, shares)
 ├── server/
 │   ├── auth.ts             # NextAuth v5 configuration
 │   ├── db.ts               # Prisma client singleton
-│   └── trpc/               # tRPC routers (auth, groups, expenses, balances, settlements, activity)
-├── lib/                    # Client utilities (tRPC hooks, money formatting)
+│   ├── ai/                 # Pluggable AI providers (OpenAI, Claude, Ollama)
+│   └── trpc/               # tRPC routers (auth, groups, expenses, balances, settlements, activity, receipts, guest)
+├── lib/                    # Client utilities (tRPC hooks, money formatting, split calculator)
 └── generated/prisma/       # Auto-generated Prisma client (gitignored)
 ```
 
@@ -83,7 +88,7 @@ src/
 - **Next.js 15** (App Router) + TypeScript
 - **tRPC v11** — end-to-end type-safe API
 - **Prisma 7** + PostgreSQL (via `@prisma/adapter-pg`)
-- **NextAuth v5** — email/password + OAuth
+- **NextAuth v5** — email/password + magic link + OAuth
 - **TailwindCSS 4** + shadcn/ui
 - **Docker** — multi-stage build for production
 
@@ -96,6 +101,12 @@ src/
 - [x] PWA support + mobile hamburger menu
 - [x] Auth middleware + demo seed data
 - [x] Unraid community template + production Docker hardening
+- [x] Placeholder members + pending receipts
+- [x] Receipt image preview + editable items
+- [x] Expense editing
+- [x] Guest bill splitting + shareable links
+- [x] Magic link auth
+- [x] Humorous AI loading messages
 
 ## License
 

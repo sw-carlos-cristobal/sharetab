@@ -2,9 +2,9 @@
 set -e
 
 PGDATA="${PGDATA:-/var/lib/postgresql/data}"
-DB_USER="${DB_USER:-splitit}"
-DB_PASSWORD="${DB_PASSWORD:-splitit}"
-DB_NAME="${DB_NAME:-splitit}"
+DB_USER="${DB_USER:-sharetab}"
+DB_PASSWORD="${DB_PASSWORD:-sharetab}"
+DB_NAME="${DB_NAME:-sharetab}"
 
 # ── Start PostgreSQL ────────────────────────────────────────
 
@@ -52,5 +52,5 @@ npx prisma migrate deploy 2>/dev/null || npx prisma db push --skip-generate 2>/d
 
 # ── Start App ───────────────────────────────────────────────
 
-echo "Starting Splitit..."
+echo "Starting ShareTab..."
 exec su-exec nextjs node server.js

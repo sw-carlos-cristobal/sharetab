@@ -14,7 +14,7 @@ test.describe("Mobile Responsive", () => {
     // Mobile header with hamburger should be visible
     const header = page.locator("header");
     await expect(header).toBeVisible();
-    await expect(header.getByText("Splitit")).toBeVisible();
+    await expect(header.getByText("ShareTab")).toBeVisible();
   });
 
   test("7.6.2 — hamburger opens mobile menu", async ({ page }) => {

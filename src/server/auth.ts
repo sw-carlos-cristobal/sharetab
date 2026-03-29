@@ -65,7 +65,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 pass: process.env.EMAIL_SERVER_PASSWORD,
               },
             },
-            from: process.env.EMAIL_FROM ?? "Splitit <noreply@splitit.local>",
+            from: process.env.EMAIL_FROM ?? "ShareTab <noreply@sharetab.local>",
           }),
         ]
       : []),

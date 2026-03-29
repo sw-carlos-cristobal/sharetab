@@ -49,7 +49,7 @@ export default function InvitePage({
         </CardHeader>
         <CardContent className="space-y-4 text-center">
           <p className="text-sm text-muted-foreground">
-            You&apos;ve been invited to join a group on Splitit.
+            You&apos;ve been invited to join a group on ShareTab.
           </p>
 
           {joinGroup.error && (

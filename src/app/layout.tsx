@@ -15,13 +15,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Splitit",
+  title: "ShareTab",
   description: "Self-hosted expense splitting with AI receipt scanning",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Splitit",
+    title: "ShareTab",
   },
 };
 

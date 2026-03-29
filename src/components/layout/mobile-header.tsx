@@ -35,7 +35,7 @@ export function MobileHeader() {
     <header className="sticky top-0 z-50 flex h-14 items-center justify-between border-b bg-background px-4 md:hidden">
       <div className="flex items-center gap-2">
         <Receipt className="h-5 w-5 text-primary" />
-        <span className="text-lg font-bold">Splitit</span>
+        <span className="text-lg font-bold">ShareTab</span>
       </div>
 
       <Sheet open={open} onOpenChange={setOpen}>
@@ -46,7 +46,7 @@ export function MobileHeader() {
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <Receipt className="h-5 w-5 text-primary" />
-              Splitit
+              ShareTab
             </SheetTitle>
           </SheetHeader>
           <nav className="mt-6 space-y-1">

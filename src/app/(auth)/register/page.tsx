@@ -57,7 +57,7 @@ export default function RegisterPage() {
           <Receipt className="h-6 w-6 text-primary" />
         </div>
         <CardTitle className="text-2xl">Create an account</CardTitle>
-        <CardDescription>Get started with Splitit</CardDescription>
+        <CardDescription>Get started with ShareTab</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">

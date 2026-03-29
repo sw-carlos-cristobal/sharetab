@@ -1,4 +1,4 @@
-# Splitit — Functional Test Cases
+# ShareTab — Functional Test Cases
 
 ## 1. Authentication
 
@@ -251,7 +251,7 @@
 |---|-----------|-------|-----------------|
 | 8.1 | Health check (healthy) | GET /api/health with DB running | `{ status: "ok", db: "connected" }` with 200 |
 | 8.2 | Health check (db down) | GET /api/health with DB offline | `{ status: "error", db: "disconnected" }` with 503 |
-| 8.3 | PWA manifest | GET /manifest.json | Valid manifest with name "Splitit", icons, start_url |
+| 8.3 | PWA manifest | GET /manifest.json | Valid manifest with name "ShareTab", icons, start_url |
 | 8.4 | PWA icons | GET /icons/icon-192.png and /icons/icon-512.png | Valid PNG images at correct sizes |
 
 ---

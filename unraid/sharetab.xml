@@ -1,18 +1,18 @@
 <?xml version="1.0"?>
 <Container version="2">
-  <Name>splitit</Name>
-  <Repository>ghcr.io/splitit/splitit:latest</Repository>
-  <Registry>https://github.com/splitit/splitit/pkgs/container/splitit</Registry>
+  <Name>sharetab</Name>
+  <Repository>ghcr.io/sharetab/sharetab:latest</Repository>
+  <Registry>https://github.com/sharetab/sharetab/pkgs/container/sharetab</Registry>
   <Branch>
     <Tag>latest</Tag>
     <TagDescription>Latest stable release</TagDescription>
   </Branch>
   <Network>bridge</Network>
   <Privileged>false</Privileged>
-  <Support>https://github.com/splitit/splitit/issues</Support>
-  <Project>https://github.com/splitit/splitit</Project>
+  <Support>https://github.com/sharetab/sharetab/issues</Support>
+  <Project>https://github.com/sharetab/sharetab</Project>
   <Overview>
-    Splitit is an open-source, self-hosted Splitwise alternative with AI-powered receipt scanning.
+    ShareTab is an open-source, self-hosted Splitwise alternative with AI-powered receipt scanning.
 
     All-in-one container: PostgreSQL is bundled inside — no external database required.
 
@@ -25,8 +25,8 @@
   </Overview>
   <Category>Productivity: Tools:</Category>
   <WebUI>http://[IP]:[PORT:3000]</WebUI>
-  <TemplateURL>https://raw.githubusercontent.com/splitit/splitit/main/unraid/splitit.xml</TemplateURL>
-  <Icon>https://raw.githubusercontent.com/splitit/splitit/main/public/icons/icon.svg</Icon>
+  <TemplateURL>https://raw.githubusercontent.com/sharetab/sharetab/main/unraid/sharetab.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/sharetab/sharetab/main/public/icons/icon.svg</Icon>
   <ExtraParams>--restart=unless-stopped</ExtraParams>
   <Description>
     Self-hosted Splitwise alternative with AI receipt scanning. All-in-one container with bundled PostgreSQL — no external database needed. Split expenses with friends using multiple modes (equal, percentage, shares, exact, item-level from receipts). Supports OpenAI, Claude, and local Ollama for receipt extraction.
@@ -54,7 +54,7 @@
     Name="NextAuth URL"
     Target="NEXTAUTH_URL"
     Default="http://192.168.1.x:3000"
-    Description="The URL where Splitit is accessible (e.g., http://your-server-ip:3000)"
+    Description="The URL where ShareTab is accessible (e.g., http://your-server-ip:3000)"
     Type="Variable"
     Display="always"
     Required="true"
@@ -62,21 +62,21 @@
   <Config
     Name="Database Data"
     Target="/var/lib/postgresql/data"
-    Default="/mnt/user/appdata/splitit/db"
+    Default="/mnt/user/appdata/sharetab/db"
     Description="Path to store PostgreSQL data (for persistence across container restarts)"
     Type="Path"
     Display="always"
     Required="true"
-    Mask="false">/mnt/user/appdata/splitit/db</Config>
+    Mask="false">/mnt/user/appdata/sharetab/db</Config>
   <Config
     Name="Database Password"
     Target="DB_PASSWORD"
-    Default="splitit"
+    Default="sharetab"
     Description="Password for the bundled PostgreSQL database"
     Type="Variable"
     Display="advanced"
     Required="false"
-    Mask="true">splitit</Config>
+    Mask="true">sharetab</Config>
   <Config
     Name="AI Provider"
     Target="AI_PROVIDER"
@@ -125,12 +125,12 @@
   <Config
     Name="Receipt Uploads"
     Target="/app/uploads"
-    Default="/mnt/user/appdata/splitit/uploads"
+    Default="/mnt/user/appdata/sharetab/uploads"
     Description="Path to store uploaded receipt images"
     Type="Path"
     Display="always"
     Required="true"
-    Mask="false">/mnt/user/appdata/splitit/uploads</Config>
+    Mask="false">/mnt/user/appdata/sharetab/uploads</Config>
   <Config
     Name="Max Upload Size (MB)"
     Target="MAX_UPLOAD_SIZE_MB"

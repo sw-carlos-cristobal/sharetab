@@ -1,6 +1,6 @@
 {
-  "name": "Splitit",
-  "short_name": "Splitit",
+  "name": "ShareTab",
+  "short_name": "ShareTab",
   "description": "Self-hosted expense splitting with AI receipt scanning",
   "start_url": "/dashboard",
   "display": "standalone",
