@@ -46,3 +46,8 @@ next-env.d.ts
 
 # uploads
 /uploads
+
+# playwright
+/test-results/
+/playwright-report/
+/blob-report/
