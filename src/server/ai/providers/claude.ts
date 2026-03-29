@@ -6,15 +6,26 @@ import { RECEIPT_EXTRACTION_PROMPT } from "../prompts/receipt-extraction";
 
 type ImageMediaType = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
 
+// OAuth tokens currently only work with Claude 3 models via the oauth beta header.
+// API keys work with all models including Claude 4.
+const OAUTH_MODEL = "claude-3-haiku-20240307";
+const API_KEY_MODEL = "claude-sonnet-4-20250514";
+const OAUTH_BETA_HEADER = "oauth-2025-04-20";
+
 export class ClaudeProvider implements AIProvider {
   readonly name = "claude";
   private client: Anthropic;
+  private isOAuth: boolean;
 
   constructor(credential: string) {
-    // OAuth tokens (from `claude setup-token` or ~/.claude/.credentials.json)
-    // use Bearer auth; API keys use x-api-key header
-    if (credential.startsWith("sk-ant-oat01-")) {
-      this.client = new Anthropic({ authToken: credential, apiKey: null });
+    this.isOAuth = credential.startsWith("sk-ant-oat");
+
+    if (this.isOAuth) {
+      this.client = new Anthropic({
+        authToken: credential,
+        apiKey: null,
+        defaultHeaders: { "anthropic-beta": OAUTH_BETA_HEADER },
+      });
     } else {
       this.client = new Anthropic({ apiKey: credential });
     }
@@ -25,9 +36,10 @@ export class ClaudeProvider implements AIProvider {
     mimeType: string
   ): Promise<ReceiptExtractionResult> {
     const base64 = imageBuffer.toString("base64");
+    const model = this.isOAuth ? OAUTH_MODEL : API_KEY_MODEL;
 
     const response = await this.client.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model,
       max_tokens: 4000,
       messages: [
         {
@@ -61,7 +73,6 @@ export class ClaudeProvider implements AIProvider {
 
   async isAvailable(): Promise<boolean> {
     try {
-      // Simple check — try to create a minimal request
       return !!this.client;
     } catch {
       return false;
