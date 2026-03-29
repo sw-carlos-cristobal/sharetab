@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Trash2 } from "lucide-react";
+import { ArrowLeft, Trash2, Pencil } from "lucide-react";
 import Link from "next/link";
 
 export default function ExpenseDetailPage({
@@ -97,19 +97,29 @@ export default function ExpenseDetailPage({
         </CardContent>
       </Card>
 
-      <Button
-        variant="destructive"
-        className="w-full"
-        onClick={() => {
-          if (confirm("Delete this expense?")) {
-            deleteExpense.mutate({ groupId, expenseId });
-          }
-        }}
-        disabled={deleteExpense.isPending}
-      >
-        <Trash2 className="mr-2 h-4 w-4" />
-        {deleteExpense.isPending ? "Deleting..." : "Delete Expense"}
-      </Button>
+      <div className="flex gap-2">
+        <Button
+          variant="outline"
+          className="flex-1"
+          render={<Link href={`/groups/${groupId}/expenses/${expenseId}/edit`} />}
+        >
+          <Pencil className="mr-2 h-4 w-4" />
+          Edit Expense
+        </Button>
+        <Button
+          variant="destructive"
+          className="flex-1"
+          onClick={() => {
+            if (confirm("Delete this expense?")) {
+              deleteExpense.mutate({ groupId, expenseId });
+            }
+          }}
+          disabled={deleteExpense.isPending}
+        >
+          <Trash2 className="mr-2 h-4 w-4" />
+          {deleteExpense.isPending ? "Deleting..." : "Delete"}
+        </Button>
+      </div>
     </div>
   );
 }
