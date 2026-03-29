@@ -2,14 +2,14 @@
 
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
-import { formatCents } from "@/lib/money";
+import { formatCents, centsToDecimal, parseToCents } from "@/lib/money";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Check, Users } from "lucide-react";
+import { Check, Users, Pencil, Trash2, Plus, Image as ImageIcon } from "lucide-react";
 
 type Member = { id: string; name: string | null };
 
@@ -27,14 +27,36 @@ export function ItemAssignment({
   onComplete: () => void;
 }) {
   const receiptData = trpc.receipts.getReceiptItems.useQuery({ receiptId });
+  const utils = trpc.useUtils();
 
   const [assignments, setAssignments] = useState<Assignments>({});
   const [title, setTitle] = useState("");
   const [paidById, setPaidById] = useState("");
   const [tipOverride, setTipOverride] = useState<string>("");
+  const [showImage, setShowImage] = useState(false);
+  const [editingItem, setEditingItem] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState<{ name: string; quantity: string; totalPrice: string }>({ name: "", quantity: "", totalPrice: "" });
+  const [addingItem, setAddingItem] = useState(false);
+  const [newItem, setNewItem] = useState({ name: "", quantity: "1", totalPrice: "" });
 
   const createExpense = trpc.receipts.assignItemsAndCreateExpense.useMutation({
     onSuccess: onComplete,
+  });
+  const updateItem = trpc.receipts.updateItem.useMutation({
+    onSuccess: () => {
+      setEditingItem(null);
+      utils.receipts.getReceiptItems.invalidate({ receiptId });
+    },
+  });
+  const deleteItem = trpc.receipts.deleteItem.useMutation({
+    onSuccess: () => utils.receipts.getReceiptItems.invalidate({ receiptId }),
+  });
+  const addItem = trpc.receipts.addItem.useMutation({
+    onSuccess: () => {
+      setAddingItem(false);
+      setNewItem({ name: "", quantity: "1", totalPrice: "" });
+      utils.receipts.getReceiptItems.invalidate({ receiptId });
+    },
   });
 
   // Initialize title from merchant name when data loads
@@ -80,6 +102,41 @@ export function ItemAssignment({
       next[item.id] = new Set(members.map((m) => m.id));
     }
     setAssignments(next);
+  }
+
+  function startEditing(item: { id: string; name: string; quantity: number; totalPrice: number }) {
+    setEditingItem(item.id);
+    setEditValues({
+      name: item.name,
+      quantity: String(item.quantity),
+      totalPrice: centsToDecimal(item.totalPrice),
+    });
+  }
+
+  function saveEdit(itemId: string) {
+    const totalPrice = parseToCents(editValues.totalPrice);
+    const quantity = parseInt(editValues.quantity) || 1;
+    updateItem.mutate({
+      itemId,
+      name: editValues.name,
+      quantity,
+      totalPrice,
+      unitPrice: Math.round(totalPrice / quantity),
+    });
+  }
+
+  function handleAddItem(e: React.FormEvent) {
+    e.preventDefault();
+    const totalPrice = parseToCents(newItem.totalPrice);
+    const quantity = parseInt(newItem.quantity) || 1;
+    if (!newItem.name || totalPrice <= 0) return;
+    addItem.mutate({
+      receiptId,
+      name: newItem.name,
+      quantity,
+      unitPrice: Math.round(totalPrice / quantity),
+      totalPrice,
+    });
   }
 
   // Calculate per-person totals
@@ -149,6 +206,31 @@ export function ItemAssignment({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Receipt image toggle */}
+      {receipt.imagePath && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setShowImage(!showImage)}
+        >
+          <ImageIcon className="mr-2 h-4 w-4" />
+          {showImage ? "Hide Receipt Image" : "View Receipt Image"}
+        </Button>
+      )}
+
+      {showImage && receipt.imagePath && (
+        <Card>
+          <CardContent className="py-3">
+            <img
+              src={`/api/uploads/${receipt.imagePath}`}
+              alt="Receipt"
+              className="mx-auto max-h-[500px] rounded-md object-contain"
+            />
+          </CardContent>
+        </Card>
+      )}
+
       {/* Receipt summary */}
       <Card>
         <CardHeader className="pb-2">
@@ -232,29 +314,139 @@ export function ItemAssignment({
           <Users className="mr-2 h-4 w-4" />
           Split all equally
         </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setAddingItem(true)}
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          Add item
+        </Button>
       </div>
+
+      {/* Add new item form */}
+      {addingItem && (
+        <Card className="border-primary/50">
+          <CardContent className="py-3">
+            <form onSubmit={handleAddItem} className="space-y-2">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Item name"
+                  value={newItem.name}
+                  onChange={(e) => setNewItem((p) => ({ ...p, name: e.target.value }))}
+                  required
+                  className="flex-1"
+                />
+                <Input
+                  type="number"
+                  placeholder="Qty"
+                  value={newItem.quantity}
+                  onChange={(e) => setNewItem((p) => ({ ...p, quantity: e.target.value }))}
+                  className="w-16"
+                  min="1"
+                />
+                <Input
+                  type="number"
+                  step="0.01"
+                  placeholder="Price"
+                  value={newItem.totalPrice}
+                  onChange={(e) => setNewItem((p) => ({ ...p, totalPrice: e.target.value }))}
+                  className="w-24"
+                  required
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button type="submit" size="sm" disabled={addItem.isPending}>
+                  {addItem.isPending ? "Adding..." : "Add"}
+                </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setAddingItem(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Item assignment */}
       <div className="space-y-2">
         <Label>Assign items ({assignedItemCount}/{items.length} assigned)</Label>
         {items.map((item) => {
           const assigned = assignments[item.id] ?? new Set();
+          const isEditing = editingItem === item.id;
+
           return (
             <Card key={item.id} className={assigned.size === 0 ? "border-amber-300" : ""}>
               <CardContent className="py-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <div>
-                    <span className="font-medium">{item.name}</span>
-                    {item.quantity > 1 && (
-                      <span className="ml-1 text-xs text-muted-foreground">
-                        x{item.quantity}
-                      </span>
-                    )}
+                {isEditing ? (
+                  <div className="mb-2 space-y-2">
+                    <div className="flex gap-2">
+                      <Input
+                        value={editValues.name}
+                        onChange={(e) => setEditValues((p) => ({ ...p, name: e.target.value }))}
+                        className="flex-1"
+                        placeholder="Item name"
+                      />
+                      <Input
+                        type="number"
+                        value={editValues.quantity}
+                        onChange={(e) => setEditValues((p) => ({ ...p, quantity: e.target.value }))}
+                        className="w-16"
+                        placeholder="Qty"
+                        min="1"
+                      />
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={editValues.totalPrice}
+                        onChange={(e) => setEditValues((p) => ({ ...p, totalPrice: e.target.value }))}
+                        className="w-24"
+                        placeholder="Price"
+                      />
+                    </div>
+                    <div className="flex gap-1">
+                      <Button type="button" size="sm" onClick={() => saveEdit(item.id)} disabled={updateItem.isPending}>
+                        Save
+                      </Button>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setEditingItem(null)}>
+                        Cancel
+                      </Button>
+                    </div>
                   </div>
-                  <span className="font-semibold">
-                    {formatCents(item.totalPrice, extracted.currency)}
-                  </span>
-                </div>
+                ) : (
+                  <div className="mb-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{item.name}</span>
+                      {item.quantity > 1 && (
+                        <span className="text-xs text-muted-foreground">
+                          x{item.quantity}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => startEditing(item)}
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm(`Remove "${item.name}"?`)) {
+                            deleteItem.mutate({ itemId: item.id });
+                          }
+                        }}
+                        className="text-muted-foreground hover:text-destructive"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
+                    <span className="font-semibold">
+                      {formatCents(item.totalPrice, extracted.currency)}
+                    </span>
+                  </div>
+                )}
                 <div className="flex flex-wrap gap-1.5">
                   {members.map((m) => {
                     const isAssigned = assigned.has(m.id);

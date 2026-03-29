@@ -112,6 +112,7 @@ export const receiptsRouter = createTRPCRouter({
         receipt: {
           id: receipt.id,
           status: receipt.status,
+          imagePath: receipt.imagePath,
           extractedData: receipt.extractedData as {
             merchantName?: string;
             date?: string;
@@ -124,6 +125,90 @@ export const receiptsRouter = createTRPCRouter({
         },
         items: receipt.items,
       };
+    }),
+
+  updateItem: protectedProcedure
+    .input(
+      z.object({
+        itemId: z.string(),
+        name: z.string().min(1).max(200).optional(),
+        quantity: z.number().int().min(1).optional(),
+        unitPrice: z.number().int().min(0).optional(),
+        totalPrice: z.number().int().min(0).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { itemId, ...data } = input;
+      return ctx.db.receiptItem.update({
+        where: { id: itemId },
+        data,
+      });
+    }),
+
+  addItem: protectedProcedure
+    .input(
+      z.object({
+        receiptId: z.string(),
+        name: z.string().min(1).max(200),
+        quantity: z.number().int().min(1).default(1),
+        unitPrice: z.number().int().min(0),
+        totalPrice: z.number().int().min(0),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const maxSort = await ctx.db.receiptItem.findFirst({
+        where: { receiptId: input.receiptId },
+        orderBy: { sortOrder: "desc" },
+        select: { sortOrder: true },
+      });
+      return ctx.db.receiptItem.create({
+        data: {
+          receiptId: input.receiptId,
+          name: input.name,
+          quantity: input.quantity,
+          unitPrice: input.unitPrice,
+          totalPrice: input.totalPrice,
+          sortOrder: (maxSort?.sortOrder ?? 0) + 1,
+        },
+      });
+    }),
+
+  deleteItem: protectedProcedure
+    .input(z.object({ itemId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db.receiptItemAssignment.deleteMany({
+        where: { receiptItemId: input.itemId },
+      });
+      await ctx.db.receiptItem.delete({ where: { id: input.itemId } });
+      return { success: true };
+    }),
+
+  updateExtractedData: protectedProcedure
+    .input(
+      z.object({
+        receiptId: z.string(),
+        tax: z.number().int().min(0).optional(),
+        tip: z.number().int().min(0).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const receipt = await ctx.db.receipt.findUnique({
+        where: { id: input.receiptId },
+      });
+      if (!receipt) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const current = (receipt.extractedData ?? {}) as Record<string, unknown>;
+      const updated = {
+        ...current,
+        ...(input.tax !== undefined ? { tax: input.tax } : {}),
+        ...(input.tip !== undefined ? { tip: input.tip } : {}),
+      };
+
+      await ctx.db.receipt.update({
+        where: { id: input.receiptId },
+        data: { extractedData: JSON.parse(JSON.stringify(updated)) },
+      });
+      return { success: true };
     }),
 
   retryProcessing: protectedProcedure
