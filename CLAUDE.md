@@ -73,8 +73,8 @@ docker compose exec splitit su-exec postgres pg_dump -U splitit splitit > backup
 ### Phase 1: Foundation — COMPLETE
 - Next.js 15 + TypeScript + TailwindCSS 4 + shadcn/ui
 - Prisma 7 schema (14 models: User, Account, Session, VerificationToken, Group, GroupMember, GroupInvite, Expense, ExpenseShare, Receipt, ReceiptItem, ReceiptItemAssignment, Settlement, ActivityLog)
-- NextAuth v5 with email/password (bcrypt) + optional Google OAuth
-- tRPC v11 with 6 routers (auth, groups, expenses, balances, settlements, activity)
+- NextAuth v5 with email/password (bcrypt) + optional Google OAuth + optional magic link (Nodemailer)
+- tRPC v11 with 8 routers (auth, groups, expenses, balances, settlements, activity, receipts, guest)
 - Auth pages (login, register)
 - Dashboard page with balance summary + group list
 - App layout with sidebar navigation
@@ -144,3 +144,31 @@ docker compose exec splitit su-exec postgres pg_dump -U splitit splitit > backup
   - Manual merge available via API
 - Schema: `User.isPlaceholder`, `User.placeholderName`, `User.createdByUserId`,
   `Receipt.groupId`, `Receipt.savedById`, `GroupInvite.placeholderUserId`
+
+### Guest Bill Splitting & Shareable Links — COMPLETE
+- **Guest split flow** at `/split` — no login required:
+  - Upload receipt via camera or gallery (mobile-optimized with `capture="environment"`)
+  - AI processes receipt (reuses existing pluggable AI providers)
+  - Add people by name (just strings, no accounts)
+  - Assign items to people with tap-to-toggle buttons
+  - Proportional tax/tip distribution via shared `calculateSplitTotals()` utility
+  - Creates `GuestSplit` record with 7-day expiry
+- **Shareable summary** at `/split/[token]`:
+  - Public read-only page showing per-person breakdown
+  - Copy Link + Share buttons (Web Share API with clipboard fallback)
+  - Per-person item details with tax/tip breakdown
+  - CTA to create account or split own bill
+- **Humorous loading messages** during AI processing (both guest and authenticated flows)
+  - 25 rotating messages in `src/lib/loading-messages.ts`
+- **Mobile-first design**: full-width buttons, 44px+ touch targets, sticky bottom nav, camera-first UX
+- **Guest upload**: `/api/upload?guest=true` bypasses auth with IP-based rate limiting (10/hr)
+- Schema: `GuestSplit` model with `shareToken`, JSON columns for items/people/assignments/summary
+- Routes: `/split` (static), `/split/[token]` (dynamic)
+
+### Magic Link Auth — COMPLETE
+- **Email magic link sign-in** via NextAuth Nodemailer provider
+  - Enabled when `EMAIL_SERVER_HOST` env var is set
+  - Sends sign-in link to email, redirects to `/verify-request` page
+  - Login page toggle between password and magic link modes
+- **Environment variables**: `EMAIL_SERVER_HOST`, `EMAIL_SERVER_PORT`, `EMAIL_SERVER_USER`, `EMAIL_SERVER_PASSWORD`, `EMAIL_FROM`
+- Link to guest splitting from login page ("Split without an account")

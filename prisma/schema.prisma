@@ -285,3 +285,19 @@ enum ActivityType {
   PLACEHOLDER_CREATED
   PLACEHOLDER_MERGED
 }
+
+// ─── GUEST SPLITS (no auth required) ──────────────────────
+
+model GuestSplit {
+  id          String   @id @default(cuid())
+  shareToken  String   @unique @default(cuid())
+  receiptId   String?
+  receiptData Json     // {merchantName, date, subtotal, tax, tip, total, currency}
+  items       Json     // [{name, quantity, unitPrice, totalPrice}]
+  people      Json     // [{name}]
+  assignments Json     // [{itemIndex, personIndices}]
+  summary     Json?    // [{name, itemTotal, tax, tip, total}]
+  paidByIndex Int      @default(0)
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+}

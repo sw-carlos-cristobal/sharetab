@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { ArrowLeft, Loader2, Camera, Bookmark } from "lucide-react";
 import Link from "next/link";
 import { ItemAssignment } from "@/components/receipts/item-assignment";
+import { loadingMessages } from "@/lib/loading-messages";
 
 type Step = "upload" | "processing" | "assign" | "error";
 
@@ -28,6 +29,17 @@ export default function ScanReceiptPage({
   const [receiptId, setReceiptId] = useState<string | null>(resumeReceiptId);
   const [errorMessage, setErrorMessage] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [loadingMsgIdx, setLoadingMsgIdx] = useState(0);
+
+  // Rotate loading messages while processing
+  useEffect(() => {
+    if (step !== "processing") return;
+    setLoadingMsgIdx(Math.floor(Math.random() * loadingMessages.length));
+    const interval = setInterval(() => {
+      setLoadingMsgIdx((i) => (i + 1) % loadingMessages.length);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [step]);
 
   const processReceipt = trpc.receipts.processReceipt.useMutation({
     onSuccess: () => setStep("assign"),
@@ -142,10 +154,10 @@ export default function ScanReceiptPage({
         <Card>
           <CardContent className="flex flex-col items-center gap-4 py-12">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <div className="text-center">
+            <div className="text-center space-y-2">
               <p className="font-medium">Processing receipt...</p>
               <p className="text-sm text-muted-foreground">
-                AI is extracting items from your receipt. This may take a few seconds.
+                {loadingMessages[loadingMsgIdx]}
               </p>
             </div>
           </CardContent>
