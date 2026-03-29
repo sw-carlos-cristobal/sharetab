@@ -127,3 +127,20 @@ docker compose exec splitit su-exec postgres pg_dump -U splitit splitit > backup
 - Docker entrypoint script with migration on startup
 - Dockerfile hardened: `--omit=dev`, cache clean, HEALTHCHECK directive, `.dockerignore`
 - All 19 routes building and type-checking clean
+
+### Pending Receipts & Placeholder Members — COMPLETE
+- **Placeholder members**: Add people to groups without accounts (`User.isPlaceholder`)
+  - Created via group settings with just a name
+  - Appear in all split modes and receipt assignment
+  - Dashed border + "Pending" badge in UI
+  - Optional merge into real user when they sign up (via linked invite)
+- **Pending receipts**: Save processed receipts for later assignment
+  - `Receipt.groupId` + `Receipt.savedById` link receipts to groups
+  - "Save for Later" button on scan page after AI processing
+  - Pending receipts section on group detail page with "Resume" links
+  - Resume via `/groups/[groupId]/scan?receiptId=X`
+- **Merge flow**: `groups.mergePlaceholder` reassigns all FKs in a transaction
+  - Auto-merge via `GroupInvite.placeholderUserId` on invite acceptance
+  - Manual merge available via API
+- Schema: `User.isPlaceholder`, `User.placeholderName`, `User.createdByUserId`,
+  `Receipt.groupId`, `Receipt.savedById`, `GroupInvite.placeholderUserId`

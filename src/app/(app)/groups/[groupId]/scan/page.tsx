@@ -1,13 +1,13 @@
 "use client";
 
-import { use, useState } from "react";
-import { useRouter } from "next/navigation";
+import { use, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Upload, Loader2, Camera } from "lucide-react";
+import { ArrowLeft, Loader2, Camera, Bookmark } from "lucide-react";
 import Link from "next/link";
 import { ItemAssignment } from "@/components/receipts/item-assignment";
 
@@ -20,10 +20,12 @@ export default function ScanReceiptPage({
 }) {
   const { groupId } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const resumeReceiptId = searchParams.get("receiptId");
   const group = trpc.groups.get.useQuery({ groupId });
 
-  const [step, setStep] = useState<Step>("upload");
-  const [receiptId, setReceiptId] = useState<string | null>(null);
+  const [step, setStep] = useState<Step>(resumeReceiptId ? "assign" : "upload");
+  const [receiptId, setReceiptId] = useState<string | null>(resumeReceiptId);
   const [errorMessage, setErrorMessage] = useState("");
   const [uploading, setUploading] = useState(false);
 
@@ -32,6 +34,12 @@ export default function ScanReceiptPage({
     onError: (err) => {
       setErrorMessage(err.message);
       setStep("error");
+    },
+  });
+
+  const saveForLater = trpc.receipts.saveForLater.useMutation({
+    onSuccess: () => {
+      router.push(`/groups/${groupId}`);
     },
   });
 
@@ -61,8 +69,8 @@ export default function ScanReceiptPage({
       setStep("processing");
       setUploading(false);
 
-      // Start AI processing
-      processReceipt.mutate({ receiptId: data.receiptId });
+      // Start AI processing with groupId
+      processReceipt.mutate({ receiptId: data.receiptId, groupId });
     } catch (err) {
       setUploading(false);
       setErrorMessage(err instanceof Error ? err.message : "Upload failed");
@@ -74,10 +82,15 @@ export default function ScanReceiptPage({
     router.push(`/groups/${groupId}`);
   }
 
+  function handleSaveForLater() {
+    if (!receiptId) return;
+    saveForLater.mutate({ groupId, receiptId });
+  }
+
   const members =
     group.data?.members.map((m) => ({
       id: m.user.id,
-      name: m.user.name,
+      name: m.user.placeholderName ?? m.user.name,
     })) ?? [];
 
   return (
@@ -140,12 +153,23 @@ export default function ScanReceiptPage({
       )}
 
       {step === "assign" && receiptId && (
-        <ItemAssignment
-          groupId={groupId}
-          receiptId={receiptId}
-          members={members}
-          onComplete={handleExpenseCreated}
-        />
+        <>
+          <ItemAssignment
+            groupId={groupId}
+            receiptId={receiptId}
+            members={members}
+            onComplete={handleExpenseCreated}
+          />
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={handleSaveForLater}
+            disabled={saveForLater.isPending}
+          >
+            <Bookmark className="mr-2 h-4 w-4" />
+            {saveForLater.isPending ? "Saving..." : "Save for Later"}
+          </Button>
+        </>
       )}
 
       {step === "error" && (
@@ -162,7 +186,7 @@ export default function ScanReceiptPage({
                 <Button
                   onClick={() => {
                     setStep("processing");
-                    processReceipt.mutate({ receiptId });
+                    processReceipt.mutate({ receiptId, groupId });
                   }}
                 >
                   Retry processing

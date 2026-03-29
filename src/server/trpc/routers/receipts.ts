@@ -6,7 +6,7 @@ import { getAIProvider } from "../../ai/registry";
 
 export const receiptsRouter = createTRPCRouter({
   processReceipt: protectedProcedure
-    .input(z.object({ receiptId: z.string() }))
+    .input(z.object({ receiptId: z.string(), groupId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       const receipt = await ctx.db.receipt.findUnique({
         where: { id: input.receiptId },
@@ -17,7 +17,10 @@ export const receiptsRouter = createTRPCRouter({
 
       await ctx.db.receipt.update({
         where: { id: input.receiptId },
-        data: { status: "PROCESSING" },
+        data: {
+          status: "PROCESSING",
+          ...(input.groupId ? { groupId: input.groupId, savedById: ctx.session!.user!.id } : {}),
+        },
       });
 
       try {
@@ -281,5 +284,82 @@ export const receiptsRouter = createTRPCRouter({
       });
 
       return expense;
+    }),
+
+  saveForLater: groupMemberProcedure
+    .input(z.object({ groupId: z.string(), receiptId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const receipt = await ctx.db.receipt.findUnique({
+        where: { id: input.receiptId },
+      });
+      if (!receipt || receipt.status !== "COMPLETED") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Receipt must be processed first" });
+      }
+      // Check it's not already linked to an expense
+      const existing = await ctx.db.expense.findUnique({
+        where: { receiptId: input.receiptId },
+      });
+      if (existing) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Receipt already has an expense" });
+      }
+
+      await ctx.db.receipt.update({
+        where: { id: input.receiptId },
+        data: { groupId: input.groupId, savedById: ctx.user.id },
+      });
+      return { success: true };
+    }),
+
+  listPending: groupMemberProcedure
+    .input(z.object({ groupId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const receipts = await ctx.db.receipt.findMany({
+        where: {
+          groupId: input.groupId,
+          status: "COMPLETED",
+          expense: null,
+        },
+        orderBy: { createdAt: "desc" },
+      });
+
+      return receipts.map((r) => ({
+        id: r.id,
+        createdAt: r.createdAt,
+        extractedData: r.extractedData as {
+          merchantName?: string;
+          date?: string;
+          subtotal: number;
+          tax: number;
+          tip: number;
+          total: number;
+          currency: string;
+        } | null,
+      }));
+    }),
+
+  deletePending: protectedProcedure
+    .input(z.object({ receiptId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const receipt = await ctx.db.receipt.findUnique({
+        where: { id: input.receiptId },
+      });
+      if (!receipt) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+      // Only the person who saved it can delete it
+      if (receipt.savedById && receipt.savedById !== ctx.session!.user!.id) {
+        throw new TRPCError({ code: "FORBIDDEN" });
+      }
+      // Can't delete if already linked to expense
+      const expense = await ctx.db.expense.findUnique({
+        where: { receiptId: input.receiptId },
+      });
+      if (expense) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Receipt has an expense" });
+      }
+
+      await ctx.db.receiptItem.deleteMany({ where: { receiptId: input.receiptId } });
+      await ctx.db.receipt.delete({ where: { id: input.receiptId } });
+      return { success: true };
     }),
 });

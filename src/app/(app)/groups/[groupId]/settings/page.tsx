@@ -8,7 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Trash2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { ArrowLeft, Trash2, UserPlus } from "lucide-react";
 import Link from "next/link";
 
 export default function GroupSettingsPage({
@@ -23,6 +24,7 @@ export default function GroupSettingsPage({
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [placeholderName, setPlaceholderName] = useState("");
 
   useEffect(() => {
     if (group.data) {
@@ -44,6 +46,13 @@ export default function GroupSettingsPage({
     },
   });
 
+  const addPlaceholder = trpc.groups.addPlaceholder.useMutation({
+    onSuccess: () => {
+      setPlaceholderName("");
+      utils.groups.get.invalidate({ groupId });
+    },
+  });
+
   function handleSave(e: React.FormEvent) {
     e.preventDefault();
     updateGroup.mutate({
@@ -53,8 +62,17 @@ export default function GroupSettingsPage({
     });
   }
 
+  function handleAddPlaceholder(e: React.FormEvent) {
+    e.preventDefault();
+    if (!placeholderName.trim()) return;
+    addPlaceholder.mutate({ groupId, name: placeholderName.trim() });
+  }
+
   if (group.isLoading) return <p className="text-muted-foreground">Loading...</p>;
   if (!group.data) return <p className="text-destructive">Group not found.</p>;
+
+  const placeholders = group.data.members.filter((m) => m.user.isPlaceholder);
+  const realMembers = group.data.members.filter((m) => !m.user.isPlaceholder);
 
   return (
     <div className="mx-auto max-w-lg space-y-6">
@@ -95,6 +113,57 @@ export default function GroupSettingsPage({
               <p className="text-sm text-green-600">Saved!</p>
             )}
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <UserPlus className="h-4 w-4" />
+            Add Member
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Add someone to the group who doesn&apos;t have an account yet.
+            They can be assigned expenses and will show up in splits.
+            If they sign up later, their data can be merged into their real account.
+          </p>
+          <form onSubmit={handleAddPlaceholder} className="flex gap-2">
+            <Input
+              placeholder="Name (e.g., Dave)"
+              value={placeholderName}
+              onChange={(e) => setPlaceholderName(e.target.value)}
+              required
+            />
+            <Button type="submit" disabled={addPlaceholder.isPending}>
+              {addPlaceholder.isPending ? "Adding..." : "Add"}
+            </Button>
+          </form>
+          {addPlaceholder.error && (
+            <p className="text-sm text-destructive">{addPlaceholder.error.message}</p>
+          )}
+
+          {placeholders.length > 0 && (
+            <div className="space-y-2 pt-2">
+              <p className="text-sm font-medium text-muted-foreground">
+                Placeholder members ({placeholders.length})
+              </p>
+              {placeholders.map((m) => (
+                <div
+                  key={m.user.id}
+                  className="flex items-center justify-between rounded-md border border-dashed p-2"
+                >
+                  <span className="text-sm">
+                    {m.user.placeholderName ?? m.user.name}
+                  </span>
+                  <Badge variant="outline" className="text-[10px]">
+                    Pending
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 

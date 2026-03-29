@@ -50,6 +50,7 @@ export default function GroupDetailPage({
   const group = trpc.groups.get.useQuery({ groupId });
   const expenses = trpc.expenses.list.useQuery({ groupId, limit: 10 });
   const debts = trpc.balances.getSimplifiedDebts.useQuery({ groupId });
+  const pendingReceipts = trpc.receipts.listPending.useQuery({ groupId });
 
   if (group.isLoading) {
     return <p className="text-muted-foreground">Loading...</p>;
@@ -92,17 +93,31 @@ export default function GroupDetailPage({
       {/* Members */}
       <div className="flex flex-wrap gap-2">
         {g.members.map((m) => (
-          <div key={m.user.id} className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1">
+          <div
+            key={m.user.id}
+            className={`flex items-center gap-1.5 rounded-full px-3 py-1 ${
+              m.user.isPlaceholder
+                ? "border border-dashed border-muted-foreground/50 bg-muted/50"
+                : "bg-muted"
+            }`}
+          >
             <Avatar className="h-5 w-5">
               <AvatarImage src={m.user.image ?? undefined} />
               <AvatarFallback className="text-[10px]">
-                {getInitials(m.user.name, m.user.email)}
+                {getInitials(m.user.placeholderName ?? m.user.name, m.user.email)}
               </AvatarFallback>
             </Avatar>
-            <span className="text-sm">{m.user.name ?? m.user.email}</span>
+            <span className="text-sm">
+              {m.user.placeholderName ?? m.user.name ?? m.user.email}
+            </span>
             {m.role === "OWNER" && (
               <Badge variant="secondary" className="ml-1 text-[10px]">
                 Owner
+              </Badge>
+            )}
+            {m.user.isPlaceholder && (
+              <Badge variant="outline" className="ml-1 text-[10px]">
+                Pending
               </Badge>
             )}
           </div>
@@ -164,6 +179,37 @@ export default function GroupDetailPage({
             All settled up!
           </CardContent>
         </Card>
+      )}
+
+      {/* Pending Receipts */}
+      {pendingReceipts.data && pendingReceipts.data.length > 0 && (
+        <div>
+          <h2 className="mb-3 text-lg font-semibold">Pending Receipts</h2>
+          <div className="space-y-2">
+            {pendingReceipts.data.map((r) => (
+              <Link key={r.id} href={`/groups/${groupId}/scan?receiptId=${r.id}`}>
+                <Card className="transition-colors hover:bg-muted/50">
+                  <CardContent className="flex items-center justify-between py-3">
+                    <div>
+                      <p className="font-medium">
+                        {r.extractedData?.merchantName ?? "Receipt"}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {r.extractedData?.date ?? new Date(r.createdAt).toLocaleDateString()}
+                        {" · "}Saved for later
+                      </p>
+                    </div>
+                    <p className="text-lg font-semibold">
+                      {r.extractedData
+                        ? formatCents(r.extractedData.total, g.currency)
+                        : "—"}
+                    </p>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Expenses */}

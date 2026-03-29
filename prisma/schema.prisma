@@ -54,6 +54,9 @@ model User {
   passwordHash    String?
   image           String?
   defaultCurrency String    @default("USD")
+  isPlaceholder   Boolean   @default(false)
+  placeholderName String?
+  createdByUserId String?
 
   accounts        Account[]
   sessions        Session[]
@@ -82,6 +85,7 @@ model Group {
   settlements  Settlement[]
   invites      GroupInvite[]
   activityLogs ActivityLog[]
+  receipts     Receipt[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -109,6 +113,8 @@ model GroupInvite {
   expiresAt DateTime
   usedAt    DateTime?
   usedById  String?
+
+  placeholderUserId String?  // if set, auto-merge this placeholder when invite is used
 
   group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
@@ -185,9 +191,12 @@ model Receipt {
   aiProvider    String?
   rawResponse   Json?
   extractedData Json?
+  groupId       String?
+  savedById     String?
 
   items   ReceiptItem[]
   expense Expense?
+  group   Group?  @relation(fields: [groupId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -273,4 +282,6 @@ enum ActivityType {
   MEMBER_JOINED
   MEMBER_LEFT
   GROUP_UPDATED
+  PLACEHOLDER_CREATED
+  PLACEHOLDER_MERGED
 }
