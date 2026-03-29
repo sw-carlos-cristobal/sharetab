@@ -111,13 +111,12 @@ export default function EditExpensePage({
   return (
     <div className="mx-auto max-w-lg space-y-6">
       <div className="flex items-center gap-2">
-        <Button
-          variant="ghost"
-          size="icon"
-          render={<Link href={`/groups/${groupId}/expenses/${expenseId}`} />}
+        <a
+          href={`/groups/${groupId}/expenses/${expenseId}`}
+          className="inline-flex shrink-0 items-center justify-center rounded-lg size-8 hover:bg-muted hover:text-foreground transition-all [&_svg]:pointer-events-none"
         >
           <ArrowLeft className="h-4 w-4" />
-        </Button>
+        </a>
         <h1 className="text-2xl font-bold">Edit Expense</h1>
       </div>
 
