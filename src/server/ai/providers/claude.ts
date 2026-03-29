@@ -10,8 +10,14 @@ export class ClaudeProvider implements AIProvider {
   readonly name = "claude";
   private client: Anthropic;
 
-  constructor(apiKey: string) {
-    this.client = new Anthropic({ apiKey });
+  constructor(credential: string) {
+    // OAuth tokens (from `claude setup-token` or ~/.claude/.credentials.json)
+    // use Bearer auth; API keys use x-api-key header
+    if (credential.startsWith("sk-ant-oat01-")) {
+      this.client = new Anthropic({ authToken: credential, apiKey: null });
+    } else {
+      this.client = new Anthropic({ apiKey: credential });
+    }
   }
 
   async extractReceipt(
