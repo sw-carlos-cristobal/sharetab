@@ -6,30 +6,12 @@ import { RECEIPT_EXTRACTION_PROMPT } from "../prompts/receipt-extraction";
 
 type ImageMediaType = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
 
-// OAuth tokens work with Haiku models via the oauth beta header.
-// Sonnet/Opus 4.x return 400 with OAuth regardless of headers.
-// API keys work with all models.
-const OAUTH_MODEL = "claude-haiku-4-5";
-const API_KEY_MODEL = "claude-sonnet-4-6";
-const OAUTH_BETA_HEADER = "oauth-2025-04-20";
-
 export class ClaudeProvider implements AIProvider {
   readonly name = "claude";
   private client: Anthropic;
-  private isOAuth: boolean;
 
-  constructor(credential: string) {
-    this.isOAuth = credential.startsWith("sk-ant-oat");
-
-    if (this.isOAuth) {
-      this.client = new Anthropic({
-        authToken: credential,
-        apiKey: null,
-        defaultHeaders: { "anthropic-beta": OAUTH_BETA_HEADER },
-      });
-    } else {
-      this.client = new Anthropic({ apiKey: credential });
-    }
+  constructor(apiKey: string) {
+    this.client = new Anthropic({ apiKey });
   }
 
   async extractReceipt(
@@ -37,10 +19,9 @@ export class ClaudeProvider implements AIProvider {
     mimeType: string
   ): Promise<ReceiptExtractionResult> {
     const base64 = imageBuffer.toString("base64");
-    const model = this.isOAuth ? OAUTH_MODEL : API_KEY_MODEL;
 
     const response = await this.client.messages.create({
-      model,
+      model: "claude-sonnet-4-6",
       max_tokens: 4000,
       messages: [
         {

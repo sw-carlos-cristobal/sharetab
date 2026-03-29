@@ -99,16 +99,7 @@
     Name="Anthropic API Key"
     Target="ANTHROPIC_API_KEY"
     Default=""
-    Description="API key for Claude (required if AI_PROVIDER=claude, unless using OAuth token)"
-    Type="Variable"
-    Display="always"
-    Required="false"
-    Mask="true"></Config>
-  <Config
-    Name="Anthropic OAuth Token"
-    Target="ANTHROPIC_AUTH_TOKEN"
-    Default=""
-    Description="OAuth token from `claude setup-token` (alternative to API key for Claude Pro/Max subscribers)"
+    Description="API key for Claude (required if AI_PROVIDER=claude)"
     Type="Variable"
     Display="always"
     Required="false"

@@ -10,15 +10,14 @@ export async function getAIProvider(): Promise<AIProvider> {
     }
     case "claude": {
       const { ClaudeProvider } = await import("./providers/claude");
-      const credential =
-        process.env.ANTHROPIC_AUTH_TOKEN ||
-        process.env.ANTHROPIC_API_KEY;
-      if (!credential) {
-        throw new Error(
-          "Claude provider requires ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN (OAuth token from `claude setup-token`)"
-        );
+      if (!process.env.ANTHROPIC_API_KEY) {
+        throw new Error("Claude provider requires ANTHROPIC_API_KEY");
       }
-      return new ClaudeProvider(credential);
+      return new ClaudeProvider(process.env.ANTHROPIC_API_KEY);
+    }
+    case "claude-sdk": {
+      const { ClaudeSdkProvider } = await import("./providers/claude-sdk");
+      return new ClaudeSdkProvider();
     }
     case "ollama": {
       const { OllamaProvider } = await import("./providers/ollama");
@@ -29,7 +28,7 @@ export async function getAIProvider(): Promise<AIProvider> {
     }
     default:
       throw new Error(
-        `Unknown AI provider: "${name}". Available: openai, claude, ollama`
+        `Unknown AI provider: "${name}". Available: openai, claude, claude-sdk, ollama`
       );
   }
 }
