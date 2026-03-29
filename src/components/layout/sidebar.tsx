@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
@@ -49,7 +48,7 @@ export function AppSidebar({ user }: { user: SidebarUser }) {
         {navItems.map((item) => {
           const active = pathname === item.href || pathname.startsWith(item.href + "/");
           return (
-            <Link key={item.href} href={item.href}>
+            <a key={item.href} href={item.href}>
               <span
                 className={cn(
                   "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
@@ -61,7 +60,7 @@ export function AppSidebar({ user }: { user: SidebarUser }) {
                 <item.icon className="h-4 w-4" />
                 {item.label}
               </span>
-            </Link>
+            </a>
           );
         })}
       </nav>
@@ -78,10 +77,10 @@ export function AppSidebar({ user }: { user: SidebarUser }) {
           </div>
         </div>
         <div className="mt-1 flex gap-1">
-          <Button variant="ghost" size="sm" className="flex-1 justify-start gap-2" render={<Link href="/settings" />}>
+          <a href="/settings" className="inline-flex shrink-0 items-center justify-start gap-2 rounded-lg h-7 px-2.5 text-[0.8rem] font-medium hover:bg-muted hover:text-foreground transition-all flex-1">
             <Settings className="h-4 w-4" />
             Settings
-          </Button>
+          </a>
           <Button
             variant="ghost"
             size="sm"

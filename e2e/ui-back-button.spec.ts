@@ -87,4 +87,52 @@ test.describe("Back button navigation", () => {
 
     await dispose();
   });
+
+  test("sidebar Dashboard link works on expense edit page", async ({ page }) => {
+    await login(page, users.alice.email, users.alice.password);
+
+    const { owner, groupId, memberIds, dispose } = await createTestGroup(
+      users.alice.email, users.alice.password, [], "Sidebar Nav Test"
+    );
+    const aliceId = memberIds[users.alice.email];
+    const expenseRes = await trpcMutation(owner, "expenses.create", {
+      groupId,
+      title: "Sidebar Test Expense",
+      amount: 500,
+      splitMode: "EQUAL",
+      paidById: aliceId,
+      shares: [{ userId: aliceId, amount: 500 }],
+    });
+    const expense = (await expenseRes.json()).result?.data?.json;
+
+    await page.goto(`/groups/${groupId}/expenses/${expense.id}/edit`);
+    await expect(page.getByRole("heading", { name: "Edit Expense" })).toBeVisible();
+
+    // Click Dashboard in the sidebar
+    await page.getByRole("link", { name: "Dashboard" }).click();
+
+    await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible({ timeout: 10000 });
+    expect(page.url()).toContain("/dashboard");
+
+    await dispose();
+  });
+
+  test("sidebar Groups link works on add expense page", async ({ page }) => {
+    await login(page, users.alice.email, users.alice.password);
+
+    const { groupId, dispose } = await createTestGroup(
+      users.alice.email, users.alice.password, [], "Sidebar Groups Test"
+    );
+
+    await page.goto(`/groups/${groupId}/expenses/new`);
+    await expect(page.getByRole("heading", { name: "Add Expense" })).toBeVisible();
+
+    // Click Groups in the sidebar
+    await page.getByRole("link", { name: "Groups" }).click();
+
+    await expect(page.getByRole("heading", { name: "Groups" })).toBeVisible({ timeout: 10000 });
+    expect(page.url()).toContain("/groups");
+
+    await dispose();
+  });
 });

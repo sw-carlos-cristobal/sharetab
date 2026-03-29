@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
@@ -56,7 +55,7 @@ export function MobileHeader() {
                 pathname === item.href ||
                 pathname.startsWith(item.href + "/");
               return (
-                <Link
+                <a
                   key={item.href}
                   href={item.href}
                   onClick={() => setOpen(false)}
@@ -72,7 +71,7 @@ export function MobileHeader() {
                     <item.icon className="h-4 w-4" />
                     {item.label}
                   </span>
-                </Link>
+                </a>
               );
             })}
             <button
