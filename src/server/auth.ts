@@ -5,6 +5,7 @@ import Google from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { db } from "./db";
+import { logger } from "./lib/logger";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -34,8 +35,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!user?.passwordHash) return null;
 
         const valid = await bcrypt.compare(parsed.data.password, user.passwordHash);
-        if (!valid) return null;
+        if (!valid) {
+          logger.warn("auth.login_failed", { email: parsed.data.email, reason: "invalid_password" });
+          return null;
+        }
 
+        logger.info("auth.login", { userId: user.id, email: user.email });
         return { id: user.id, name: user.name, email: user.email, image: user.image };
       },
     }),

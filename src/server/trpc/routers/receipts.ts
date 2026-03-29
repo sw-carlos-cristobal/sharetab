@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { Prisma } from "@/generated/prisma/client";
 import { createTRPCRouter, protectedProcedure, groupMemberProcedure } from "../init";
 import { getAIProvider } from "../../ai/registry";
+import { logger } from "../../lib/logger";
 
 export const receiptsRouter = createTRPCRouter({
   processReceipt: protectedProcedure
@@ -31,7 +32,20 @@ export const receiptsRouter = createTRPCRouter({
         const imageBuffer = await readFile(filepath);
 
         const provider = await getAIProvider();
+        logger.info("receipt.processing", {
+          receiptId: input.receiptId,
+          provider: provider.name,
+          imageSize: imageBuffer.length,
+        });
+        const start = Date.now();
         const result = await provider.extractReceipt(imageBuffer, receipt.mimeType);
+        logger.info("receipt.extracted", {
+          receiptId: input.receiptId,
+          provider: provider.name,
+          items: result.items.length,
+          total: result.total,
+          durationMs: Date.now() - start,
+        });
 
         // Create receipt items in DB
         await ctx.db.receiptItem.createMany({
@@ -75,6 +89,10 @@ export const receiptsRouter = createTRPCRouter({
           itemCount: result.items.length,
         };
       } catch (error) {
+        logger.error("receipt.failed", {
+          receiptId: input.receiptId,
+          error: error instanceof Error ? error.message : "Unknown",
+        });
         await ctx.db.receipt.update({
           where: { id: input.receiptId },
           data: {

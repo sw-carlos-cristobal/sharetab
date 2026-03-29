@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { auth } from "@/server/auth";
 import { db } from "@/server/db";
+import { logger } from "@/server/lib/logger";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { randomUUID } from "crypto";
@@ -54,6 +55,13 @@ export async function POST(req: NextRequest) {
       fileSize: file.size,
       status: "PENDING",
     },
+  });
+
+  logger.info("upload.receipt", {
+    receiptId: receipt.id,
+    userId: session.user.id,
+    mimeType: file.type,
+    fileSize: file.size,
   });
 
   return Response.json({ receiptId: receipt.id, imagePath: receipt.imagePath });

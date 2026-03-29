@@ -3,6 +3,7 @@ import superjson from "superjson";
 import { z } from "zod";
 import { auth } from "../auth";
 import { db } from "../db";
+import { logger } from "../lib/logger";
 
 export const createTRPCContext = async () => {
   const session = await auth();
@@ -15,10 +16,28 @@ const t = initTRPC.context<TRPCContext>().create({
   transformer: superjson,
 });
 
-export const createTRPCRouter = t.router;
-export const publicProcedure = t.procedure;
+const loggingMiddleware = t.middleware(async ({ path, type, next, ctx }) => {
+  const start = Date.now();
+  const userId = ctx.session?.user?.id;
 
-export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
+  const result = await next();
+
+  const durationMs = Date.now() - start;
+  const ok = result.ok;
+
+  if (ok) {
+    logger.info("trpc.ok", { path, type, userId, durationMs });
+  } else {
+    logger.warn("trpc.error", { path, type, userId, durationMs });
+  }
+
+  return result;
+});
+
+export const createTRPCRouter = t.router;
+export const publicProcedure = t.procedure.use(loggingMiddleware);
+
+export const protectedProcedure = t.procedure.use(loggingMiddleware).use(({ ctx, next }) => {
   if (!ctx.session?.user?.id) {
     throw new TRPCError({ code: "UNAUTHORIZED" });
   }
