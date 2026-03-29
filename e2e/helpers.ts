@@ -59,9 +59,13 @@ export async function authedContext(email: string, password: string) {
 export async function trpcMutation(
   ctx: Awaited<ReturnType<typeof request.newContext>>,
   proc: string,
-  input: unknown
+  input: unknown,
+  timeoutMs?: number
 ) {
-  return ctx.post(`/api/trpc/${proc}`, { data: { json: input } });
+  return ctx.post(`/api/trpc/${proc}`, {
+    data: { json: input },
+    ...(timeoutMs ? { timeout: timeoutMs } : {}),
+  });
 }
 
 /**

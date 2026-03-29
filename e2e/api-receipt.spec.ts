@@ -4,21 +4,19 @@ import { readFileSync } from "fs";
 import { users, authedContext, trpcMutation, trpcQuery, trpcResult, trpcError, createTestGroup } from "./helpers";
 
 const BASE = process.env.BASE_URL || "http://localhost:3001";
+const AI_TIMEOUT = 90000; // 90s for AI processing calls
 
 test.describe("Receipt Scanning Pipeline (5.2-5.3)", () => {
-  // These tests require AI_PROVIDER to be configured on the server.
-  // Set RUN_AI_TESTS=1 to enable them.
+  // Set RUN_AI_TESTS=1 to enable AI-dependent tests
   const hasAI = !!process.env.RUN_AI_TESTS;
 
-  // AI processing can take 30+ seconds
   test.setTimeout(120000);
 
   test("5.2.1 — process receipt extracts items", async () => {
-    test.skip(!hasAI, "AI_PROVIDER not configured");
+    test.skip(!hasAI, "Set RUN_AI_TESTS=1 to enable");
 
     const ctx = await authedContext(users.alice.email, users.alice.password);
-    const receiptPath = resolve("e2e/test-receipt.png");
-    const receiptBuffer = readFileSync(receiptPath);
+    const receiptBuffer = readFileSync(resolve("e2e/test-receipt.png"));
 
     // Upload
     const uploadRes = await ctx.post(`${BASE}/api/upload`, {
@@ -29,11 +27,11 @@ test.describe("Receipt Scanning Pipeline (5.2-5.3)", () => {
     expect(uploadRes.status()).toBe(200);
     const { receiptId } = await uploadRes.json();
 
-    // Process
-    const processRes = await trpcMutation(ctx, "receipts.processReceipt", { receiptId });
+    // Process (AI call — needs long timeout)
+    const processRes = await trpcMutation(ctx, "receipts.processReceipt", { receiptId }, AI_TIMEOUT);
     const result = (await processRes.json()).result?.data?.json;
     expect(result.status).toBe("COMPLETED");
-    expect(result.itemCount).toBeGreaterThanOrEqual(15); // Our receipt has 18 items
+    expect(result.itemCount).toBeGreaterThanOrEqual(15);
     expect(result.subtotal).toBeGreaterThan(0);
     expect(result.tax).toBeGreaterThan(0);
     expect(result.total).toBeGreaterThan(0);
@@ -42,7 +40,7 @@ test.describe("Receipt Scanning Pipeline (5.2-5.3)", () => {
   });
 
   test("5.2.4 — get receipt items after processing", async () => {
-    test.skip(!hasAI, "AI_PROVIDER not configured");
+    test.skip(!hasAI, "Set RUN_AI_TESTS=1 to enable");
 
     const ctx = await authedContext(users.alice.email, users.alice.password);
     const receiptBuffer = readFileSync(resolve("e2e/test-receipt.png"));
@@ -53,7 +51,7 @@ test.describe("Receipt Scanning Pipeline (5.2-5.3)", () => {
       },
     });
     const { receiptId } = await uploadRes.json();
-    await trpcMutation(ctx, "receipts.processReceipt", { receiptId });
+    await trpcMutation(ctx, "receipts.processReceipt", { receiptId }, AI_TIMEOUT);
 
     // Get items
     const itemsRes = await trpcQuery(ctx, "receipts.getReceiptItems", { receiptId });
@@ -61,7 +59,6 @@ test.describe("Receipt Scanning Pipeline (5.2-5.3)", () => {
     expect(data.receipt.status).toBe("COMPLETED");
     expect(data.items.length).toBeGreaterThanOrEqual(15);
 
-    // Items should have name, quantity, prices
     for (const item of data.items) {
       expect(item.name).toBeDefined();
       expect(item.totalPrice).toBeGreaterThan(0);
@@ -73,7 +70,6 @@ test.describe("Receipt Scanning Pipeline (5.2-5.3)", () => {
   test("5.2.3 — retry processing resets receipt", async () => {
     const ctx = await authedContext(users.alice.email, users.alice.password);
 
-    // Upload a tiny fake image that will fail processing
     const uploadRes = await ctx.post(`${BASE}/api/upload`, {
       multipart: {
         file: { name: "fake.jpg", mimeType: "image/jpeg", buffer: Buffer.alloc(50, 0xFF) },
@@ -81,12 +77,10 @@ test.describe("Receipt Scanning Pipeline (5.2-5.3)", () => {
     });
     const { receiptId } = await uploadRes.json();
 
-    // Retry should reset status
     const retryRes = await trpcMutation(ctx, "receipts.retryProcessing", { receiptId });
     const body = await retryRes.json();
     expect(body.result?.data?.json?.success).toBe(true);
 
-    // Check status is PENDING
     const itemsRes = await trpcQuery(ctx, "receipts.getReceiptItems", { receiptId });
     const data = await trpcResult(itemsRes);
     expect(data.receipt.status).toBe("PENDING");
@@ -100,7 +94,6 @@ test.describe("Receipt Scanning Pipeline (5.2-5.3)", () => {
       "Receipt Pending Test"
     );
 
-    // Upload without processing
     const uploadRes = await owner.post(`${BASE}/api/upload`, {
       multipart: {
         file: { name: "pending.jpg", mimeType: "image/jpeg", buffer: Buffer.alloc(50, 0xFF) },
@@ -121,7 +114,7 @@ test.describe("Receipt Scanning Pipeline (5.2-5.3)", () => {
   });
 
   test("5.3.7 — full receipt to expense flow", async () => {
-    test.skip(!hasAI, "AI_PROVIDER not configured");
+    test.skip(!hasAI, "Set RUN_AI_TESTS=1 to enable");
 
     const { owner, groupId, memberIds, dispose } = await createTestGroup(
       users.alice.email, users.alice.password,
@@ -140,8 +133,8 @@ test.describe("Receipt Scanning Pipeline (5.2-5.3)", () => {
     });
     const { receiptId } = await uploadRes.json();
 
-    // Process
-    await trpcMutation(owner, "receipts.processReceipt", { receiptId });
+    // Process (AI call)
+    await trpcMutation(owner, "receipts.processReceipt", { receiptId }, AI_TIMEOUT);
 
     // Get items
     const itemsRes = await trpcQuery(owner, "receipts.getReceiptItems", { receiptId });
