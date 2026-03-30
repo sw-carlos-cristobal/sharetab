@@ -52,9 +52,23 @@ if ! "$PG_CTL" -D "$PGDATA" status > /dev/null 2>&1; then
   "$PG_CTL" -D "$PGDATA" -l "$PGDATA/logfile" start
 fi
 
+cleanup() {
+  echo ""
+  echo "Stopping PostgreSQL..."
+  "$PG_CTL" -D "$PGDATA" stop
+  echo "Done."
+}
+trap cleanup EXIT
+
+PG_WAIT=0
 until "$PG_ISREADY" -h 127.0.0.1 -p "$PG_PORT" -U postgres -q; do
+  if [ "$PG_WAIT" -ge 30 ]; then
+    echo "❌ PostgreSQL did not become ready after 30 seconds. Check $PGDATA/logfile"
+    exit 1
+  fi
   echo "Waiting for PostgreSQL..."
   sleep 1
+  PG_WAIT=$((PG_WAIT + 1))
 done
 echo "PostgreSQL is ready."
 
@@ -88,17 +102,7 @@ fi
 # ── Run migrations ──────────────────────────────────────────
 
 echo "Pushing Prisma schema..."
-npx prisma db push --skip-generate 2>/dev/null || echo "Warning: Could not push schema"
-
-# ── Stop Postgres on exit ───────────────────────────────────
-
-cleanup() {
-  echo ""
-  echo "Stopping PostgreSQL..."
-  "$PG_CTL" -D "$PGDATA" stop
-  echo "Done."
-}
-trap cleanup EXIT
+npx prisma db push --skip-generate || echo "Warning: Could not push schema"
 
 # ── Start dev server ────────────────────────────────────────
 
