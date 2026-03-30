@@ -76,7 +76,7 @@ export default function GuestSplitPage() {
     setLoadingMsgIdx(Math.floor(Math.random() * loadingMessages.length));
     const interval = setInterval(() => {
       setLoadingMsgIdx((i) => (i + 1) % loadingMessages.length);
-    }, 3000);
+    }, 5000);
     return () => clearInterval(interval);
   }, [step]);
 
