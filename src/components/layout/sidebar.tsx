@@ -40,7 +40,7 @@ export function AppSidebar({ user }: { user: SidebarUser }) {
     : user.email?.[0]?.toUpperCase() ?? "?";
 
   return (
-    <aside className="hidden w-64 shrink-0 border-r bg-gradient-to-b from-primary/[0.03] to-muted/40 md:flex md:flex-col md:sticky md:top-0 md:h-screen overflow-hidden">
+    <aside className="hidden w-64 shrink-0 border-r bg-gradient-to-b from-primary/[0.03] to-muted/40 md:flex md:flex-col md:sticky md:top-0 md:h-dvh overflow-hidden">
       {/* Brand area */}
       <div className="flex h-14 items-center gap-2.5 px-5 border-b border-transparent bg-gradient-to-r from-primary/[0.06] via-transparent to-transparent [border-image:linear-gradient(to_right,var(--color-primary)/0.15,transparent)_1]">
         <Receipt className="h-6 w-6 text-primary drop-shadow-sm" />
