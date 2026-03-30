@@ -8,7 +8,7 @@ test.describe("Balances & Settlements", () => {
     test("7.2.1 — shows balance cards", async ({ page }) => {
       await login(page, users.alice.email, users.alice.password);
       await expect(page.getByText("You are owed")).toBeVisible();
-      await expect(page.getByText("You owe")).toBeVisible();
+      await expect(page.getByText("You owe", { exact: true })).toBeVisible();
       // Alice is owed money from seed data
       const owedText = page.locator("text=$").first();
       await expect(owedText).toBeVisible();
