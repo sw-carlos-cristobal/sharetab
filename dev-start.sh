@@ -119,7 +119,7 @@ fi
 # ── Run migrations ──────────────────────────────────────────
 
 echo "Pushing Prisma schema..."
-npx prisma db push --skip-generate || echo "Warning: Could not push schema"
+npx prisma db push || echo "Warning: Could not push schema"
 
 # ── Start dev server ────────────────────────────────────────
 
