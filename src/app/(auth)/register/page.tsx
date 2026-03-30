@@ -51,15 +51,15 @@ export default function RegisterPage() {
   }
 
   return (
-    <Card>
-      <CardHeader className="text-center">
-        <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-          <Receipt className="h-6 w-6 text-primary" />
+    <Card className="border-primary/10 shadow-lg shadow-primary/5">
+      <CardHeader className="text-center pb-2">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 ring-1 ring-primary/20">
+          <Receipt className="h-7 w-7 text-primary" />
         </div>
-        <CardTitle className="text-2xl">Create an account</CardTitle>
-        <CardDescription>Get started with ShareTab</CardDescription>
+        <CardTitle className="text-2xl font-semibold tracking-tight">Create an account</CardTitle>
+        <CardDescription className="mt-1">Get started with ShareTab</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-4">
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
             <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
@@ -100,12 +100,14 @@ export default function RegisterPage() {
               minLength={6}
             />
           </div>
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button type="submit" className="w-full rounded-full h-10 text-sm font-medium mt-2" disabled={loading}>
             {loading ? "Creating account..." : "Create account"}
           </Button>
         </form>
 
-        <Separator className="my-6" />
+        <div className="relative my-8">
+          <Separator />
+        </div>
 
         <p className="text-center text-sm text-muted-foreground">
           Already have an account?{" "}

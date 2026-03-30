@@ -16,6 +16,7 @@ import {
   Receipt,
   Handshake,
   Camera,
+  Tag,
 } from "lucide-react";
 import Link from "next/link";
 import { InviteDialog } from "@/components/groups/invite-dialog";
@@ -31,6 +32,25 @@ function getInitials(name?: string | null, email?: string | null): string {
       .slice(0, 2);
   }
   return email?.[0]?.toUpperCase() ?? "?";
+}
+
+const avatarColors = [
+  "bg-blue-500",
+  "bg-emerald-500",
+  "bg-violet-500",
+  "bg-amber-500",
+  "bg-rose-500",
+  "bg-cyan-500",
+  "bg-fuchsia-500",
+  "bg-lime-500",
+];
+
+function avatarColor(userId: string): string {
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    hash = (hash * 31 + userId.charCodeAt(i)) | 0;
+  }
+  return avatarColors[Math.abs(hash) % avatarColors.length];
 }
 
 export default function GroupDetailPage({
@@ -66,12 +86,14 @@ export default function GroupDetailPage({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="text-3xl">{g.emoji}</span>
+        <div className="flex items-center gap-4">
+          <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-accent">
+            <span className="text-4xl leading-none">{g.emoji}</span>
+          </div>
           <div>
-            <h1 className="text-2xl font-bold">{g.name}</h1>
+            <h1 className="text-2xl font-bold leading-tight">{g.name}</h1>
             {g.description && (
-              <p className="text-sm text-muted-foreground">{g.description}</p>
+              <p className="mt-0.5 text-sm text-muted-foreground">{g.description}</p>
             )}
           </div>
         </div>
@@ -95,28 +117,36 @@ export default function GroupDetailPage({
         {g.members.map((m) => (
           <div
             key={m.user.id}
-            className={`flex items-center gap-1.5 rounded-full px-3 py-1 ${
+            className={`flex items-center gap-2 rounded-full py-1 pr-3 pl-1 ${
               m.user.isPlaceholder
-                ? "border border-dashed border-muted-foreground/50 bg-muted/50"
+                ? "border border-dashed border-muted-foreground/40 bg-muted/50"
                 : "bg-muted"
             }`}
           >
-            <Avatar className="h-5 w-5">
-              <AvatarImage src={m.user.image ?? undefined} />
-              <AvatarFallback className="text-[10px]">
+            {m.user.image ? (
+              <Avatar className="h-6 w-6">
+                <AvatarImage src={m.user.image} />
+                <AvatarFallback className="text-[10px]">
+                  {getInitials(m.user.placeholderName ?? m.user.name, m.user.email)}
+                </AvatarFallback>
+              </Avatar>
+            ) : (
+              <div
+                className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-medium text-white ${avatarColor(m.user.id)}`}
+              >
                 {getInitials(m.user.placeholderName ?? m.user.name, m.user.email)}
-              </AvatarFallback>
-            </Avatar>
-            <span className="text-sm">
+              </div>
+            )}
+            <span className="text-sm font-medium">
               {m.user.placeholderName ?? m.user.name ?? m.user.email}
             </span>
             {m.role === "OWNER" && (
-              <Badge variant="secondary" className="ml-1 text-[10px]">
+              <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
                 Owner
-              </Badge>
+              </span>
             )}
             {m.user.isPlaceholder && (
-              <Badge variant="outline" className="ml-1 text-[10px]">
+              <Badge variant="outline" className="ml-0.5 text-[10px]">
                 Pending
               </Badge>
             )}
@@ -142,7 +172,7 @@ export default function GroupDetailPage({
               </Button>
             </div>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent className="space-y-1">
             {debts.data.debts.map((debt, i) => {
               const from = memberMap.get(debt.from);
               const to = memberMap.get(debt.to);
@@ -150,7 +180,7 @@ export default function GroupDetailPage({
                 <button
                   key={i}
                   type="button"
-                  className="flex w-full items-center gap-2 rounded-md p-2 text-sm transition-colors hover:bg-muted/50"
+                  className="flex w-full items-center gap-2 rounded-lg p-2.5 text-sm transition-all hover:bg-muted/70 hover:shadow-sm"
                   onClick={() =>
                     setSettleState({
                       open: true,
@@ -160,10 +190,14 @@ export default function GroupDetailPage({
                     })
                   }
                 >
-                  <span className="font-medium">{from?.name ?? "Unknown"}</span>
-                  <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                  <span className="font-medium">{to?.name ?? "Unknown"}</span>
-                  <span className="ml-auto font-semibold text-red-600">
+                  <span className="font-medium text-red-600 dark:text-red-400">
+                    {from?.name ?? "Unknown"}
+                  </span>
+                  <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                    {to?.name ?? "Unknown"}
+                  </span>
+                  <span className="ml-auto font-semibold tabular-nums text-red-600 dark:text-red-400">
                     {formatCents(debt.amount, g.currency)}
                   </span>
                 </button>
@@ -251,27 +285,47 @@ export default function GroupDetailPage({
           </Card>
         )}
 
-        <div className="space-y-2">
-          {expenses.data?.expenses.map((expense) => (
-            <Link key={expense.id} href={`/groups/${groupId}/expenses/${expense.id}`}>
-              <Card className="transition-colors hover:bg-muted/50">
-                <CardContent className="flex items-center justify-between py-3">
-                  <div>
-                    <p className="font-medium">{expense.title}</p>
+        {expenses.data && expenses.data.expenses.length > 0 && (
+        <Card className="divide-y divide-border overflow-hidden">
+          {expenses.data.expenses.map((expense, index) => (
+            <Link
+              key={expense.id}
+              href={`/groups/${groupId}/expenses/${expense.id}`}
+              className="block"
+            >
+              <div
+                className={`flex items-center justify-between px-4 py-3 transition-colors hover:bg-muted/50 ${
+                  index % 2 === 1 ? "bg-muted/20" : ""
+                }`}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  {expense.category && (
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent">
+                      <Tag className="h-3.5 w-3.5 text-accent-foreground" />
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{expense.title}</p>
                     <p className="text-sm text-muted-foreground">
                       Paid by {expense.paidBy.name ?? "Unknown"}
                       {" · "}
                       {new Date(expense.expenseDate).toLocaleDateString()}
+                      {expense.category && (
+                        <span className="ml-1 text-muted-foreground/70">
+                          {" · "}{expense.category}
+                        </span>
+                      )}
                     </p>
                   </div>
-                  <p className="text-lg font-semibold">
-                    {formatCents(expense.amount, g.currency)}
-                  </p>
-                </CardContent>
-              </Card>
+                </div>
+                <p className="ml-4 shrink-0 text-lg font-semibold tabular-nums">
+                  {formatCents(expense.amount, g.currency)}
+                </p>
+              </div>
             </Link>
           ))}
-        </div>
+        </Card>
+        )}
       </div>
 
       <InviteDialog

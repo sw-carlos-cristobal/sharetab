@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
@@ -39,50 +40,63 @@ export function AppSidebar({ user }: { user: SidebarUser }) {
     : user.email?.[0]?.toUpperCase() ?? "?";
 
   return (
-    <aside className="hidden w-64 shrink-0 border-r bg-muted/30 md:flex md:flex-col md:sticky md:top-0 md:h-screen">
-      <div className="flex h-14 items-center gap-2 border-b px-4">
-        <Receipt className="h-6 w-6 text-primary" />
-        <span className="text-lg font-bold">ShareTab</span>
+    <aside className="hidden w-64 shrink-0 border-r bg-gradient-to-b from-primary/[0.03] to-muted/40 md:flex md:flex-col md:sticky md:top-0 md:h-screen">
+      {/* Brand area */}
+      <div className="flex h-14 items-center gap-2.5 px-5 border-b border-transparent bg-gradient-to-r from-primary/[0.06] via-transparent to-transparent [border-image:linear-gradient(to_right,var(--color-primary)/0.15,transparent)_1]">
+        <Receipt className="h-6 w-6 text-primary drop-shadow-sm" />
+        <span className="text-lg font-bold tracking-wide text-foreground">
+          ShareTab
+        </span>
       </div>
 
+      {/* Navigation */}
       <nav className="flex-1 space-y-1 p-3">
         {navItems.map((item) => {
-          const active = pathname === item.href || pathname.startsWith(item.href + "/");
+          const active =
+            pathname === item.href || pathname.startsWith(item.href + "/");
           return (
-            <a key={item.href} href={item.href}>
+            <Link key={item.href} href={item.href}>
               <span
                 className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
                   active
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    ? "border-l-[3px] border-primary bg-primary/10 text-primary shadow-sm"
+                    : "border-l-[3px] border-transparent text-muted-foreground hover:bg-muted/80 hover:text-foreground hover:translate-x-0.5"
                 )}
               >
-                <item.icon className="h-4 w-4" />
+                <item.icon className="h-5 w-5 shrink-0" />
                 {item.label}
               </span>
-            </a>
+            </Link>
           );
         })}
       </nav>
 
-      <div className="border-t p-3">
-        <div className="flex items-center gap-3 rounded-md px-3 py-2">
-          <Avatar className="h-8 w-8">
+      {/* User profile section */}
+      <div className="border-t border-transparent [border-image:linear-gradient(to_right,transparent,var(--color-border),transparent)_1] p-3">
+        <div className="flex items-center gap-3 rounded-lg px-3 py-2">
+          <Avatar className="h-8 w-8 ring-2 ring-primary/20">
             <AvatarImage src={user.image ?? undefined} />
-            <AvatarFallback className="text-xs">{initials}</AvatarFallback>
+            <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
+              {initials}
+            </AvatarFallback>
           </Avatar>
           <div className="flex-1 truncate">
             <p className="truncate text-sm font-medium">{user.name ?? "User"}</p>
-            <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+            <p className="truncate text-xs text-muted-foreground">
+              {user.email}
+            </p>
           </div>
         </div>
-        <div className="mt-1 flex items-center justify-between">
+        <div className="mt-2 flex items-center justify-between px-1">
           <div className="flex items-center gap-1">
-            <a href="/settings" className="inline-flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+            <Link
+              href="/settings"
+              className="inline-flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors duration-200 hover:bg-muted hover:text-foreground"
+            >
               <Settings className="h-3.5 w-3.5" />
               Settings
-            </a>
+            </Link>
             <Button
               variant="ghost"
               size="xs"

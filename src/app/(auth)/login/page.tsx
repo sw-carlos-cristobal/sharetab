@@ -63,15 +63,15 @@ export default function LoginPage() {
   }
 
   return (
-    <Card>
-      <CardHeader className="text-center">
-        <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-          <Receipt className="h-6 w-6 text-primary" />
+    <Card className="border-primary/10 shadow-lg shadow-primary/5">
+      <CardHeader className="text-center pb-2">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 ring-1 ring-primary/20">
+          <Receipt className="h-7 w-7 text-primary" />
         </div>
-        <CardTitle className="text-2xl">Welcome back</CardTitle>
-        <CardDescription>Sign in to your ShareTab account</CardDescription>
+        <CardTitle className="text-2xl font-semibold tracking-tight">Welcome back</CardTitle>
+        <CardDescription className="mt-1">Sign in to your ShareTab account</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-4">
         {!showMagicLink ? (
           <>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -103,16 +103,21 @@ export default function LoginPage() {
                   minLength={6}
                 />
               </div>
-              <Button type="submit" className="w-full" disabled={loading}>
+              <Button type="submit" className="w-full rounded-full h-10 text-sm font-medium mt-2" disabled={loading}>
                 {loading ? "Signing in..." : "Sign in"}
               </Button>
             </form>
 
-            <Separator className="my-6" />
+            <div className="relative my-8">
+              <Separator />
+              <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-3 text-xs text-muted-foreground uppercase tracking-wider">
+                or
+              </span>
+            </div>
 
             <Button
               variant="outline"
-              className="w-full"
+              className="w-full rounded-full h-10 text-sm border-primary/20 text-muted-foreground hover:text-foreground hover:border-primary/40"
               onClick={() => setShowMagicLink(true)}
             >
               <Mail className="mr-2 h-4 w-4" />
@@ -141,17 +146,22 @@ export default function LoginPage() {
                   required
                 />
               </div>
-              <Button type="submit" className="w-full" disabled={magicLinkSending}>
+              <Button type="submit" className="w-full rounded-full h-10 text-sm font-medium mt-2" disabled={magicLinkSending}>
                 <Mail className="mr-2 h-4 w-4" />
                 {magicLinkSending ? "Sending..." : "Send magic link"}
               </Button>
             </form>
 
-            <Separator className="my-6" />
+            <div className="relative my-8">
+              <Separator />
+              <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-3 text-xs text-muted-foreground uppercase tracking-wider">
+                or
+              </span>
+            </div>
 
             <Button
               variant="outline"
-              className="w-full"
+              className="w-full rounded-full h-10 text-sm border-primary/20 text-muted-foreground hover:text-foreground hover:border-primary/40"
               onClick={() => setShowMagicLink(false)}
             >
               Sign in with password
@@ -159,16 +169,18 @@ export default function LoginPage() {
           </>
         )}
 
-        <Separator className="my-6" />
+        <div className="relative my-8">
+          <Separator />
+        </div>
 
-        <div className="text-center space-y-2">
+        <div className="text-center space-y-3">
           <p className="text-sm text-muted-foreground">
             Don&apos;t have an account?{" "}
             <Link href="/register" className="font-medium text-primary hover:underline">
               Create one
             </Link>
           </p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs text-muted-foreground/80">
             Just need to split a bill?{" "}
             <Link href="/split" className="font-medium text-primary hover:underline">
               Split without an account
