@@ -85,15 +85,15 @@ export default function GroupDetailPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-accent">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-4">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-accent">
             <span className="text-4xl leading-none">{g.emoji}</span>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold leading-tight">{g.name}</h1>
+          <div className="min-w-0">
+            <h1 className="truncate text-2xl font-bold leading-tight">{g.name}</h1>
             {g.description && (
-              <p className="mt-0.5 text-sm text-muted-foreground">{g.description}</p>
+              <p className="mt-0.5 truncate text-sm text-muted-foreground">{g.description}</p>
             )}
           </div>
         </div>
@@ -190,14 +190,14 @@ export default function GroupDetailPage({
                     })
                   }
                 >
-                  <span className="font-medium text-red-600 dark:text-red-400">
+                  <span className="truncate text-xs font-medium text-red-600 sm:text-sm dark:text-red-400">
                     {from?.name ?? "Unknown"}
                   </span>
                   <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                  <span className="truncate text-xs font-medium text-emerald-600 sm:text-sm dark:text-emerald-400">
                     {to?.name ?? "Unknown"}
                   </span>
-                  <span className="ml-auto font-semibold tabular-nums text-red-600 dark:text-red-400">
+                  <span className="ml-auto shrink-0 font-semibold tabular-nums text-red-600 dark:text-red-400">
                     {formatCents(debt.amount, g.currency)}
                   </span>
                 </button>
@@ -250,7 +250,7 @@ export default function GroupDetailPage({
       <div>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Expenses</h2>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               size="sm"
               variant="outline"

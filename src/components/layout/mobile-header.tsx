@@ -34,7 +34,7 @@ export function MobileHeader() {
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-50 flex h-14 items-center justify-between border-b border-border/60 bg-background/80 px-4 backdrop-blur-md supports-[backdrop-filter]:bg-background/60 md:hidden">
+    <header className="sticky top-0 z-50 flex h-14 items-center justify-between border-b border-border/60 bg-background/80 px-4 backdrop-blur-md supports-[backdrop-filter]:bg-background/60 lg:hidden">
       <div className="flex items-center gap-2.5">
         <Receipt className="h-5 w-5 text-primary drop-shadow-sm" />
         <span className="text-lg font-bold tracking-wide">ShareTab</span>

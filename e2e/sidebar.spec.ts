@@ -31,7 +31,7 @@ test.describe("Sidebar", () => {
   });
 
   test("sidebar bottom visible at narrow viewport width", async ({ page }) => {
-    await page.setViewportSize({ width: 900, height: 700 });
+    await page.setViewportSize({ width: 1024, height: 700 });
     await page.goto("/dashboard");
     const signOut = page.locator("aside").getByText("Sign out");
     await expect(signOut).toBeVisible();
