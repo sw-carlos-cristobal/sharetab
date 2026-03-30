@@ -118,6 +118,9 @@ fi
 
 # ── Run migrations ──────────────────────────────────────────
 
+echo "Generating Prisma client..."
+npx prisma generate
+
 echo "Pushing Prisma schema..."
 npx prisma db push || echo "Warning: Could not push schema"
 
