@@ -8,6 +8,17 @@ DB_PASSWORD="sharetab"
 DB_NAME="sharetab"
 PG_PORT="5432"
 
+# ── Root handling ──────────────────────────────────────────
+# initdb and pg_ctl refuse to run as root; delegate to the postgres OS user
+
+run_pg() {
+  if [ "$(id -u)" = "0" ]; then
+    su -s /bin/bash postgres -c "$(printf '%q ' "$@")"
+  else
+    "$@"
+  fi
+}
+
 # ── Helpers ────────────────────────────────────────────────
 
 find_pg_bin() {
@@ -29,33 +40,39 @@ if [ -z "$PG_CTL" ] || [ -z "$INITDB" ] || [ -z "$PSQL" ] || [ -z "$PG_ISREADY" 
   exit 1
 fi
 
+# Ensure .pgdata is accessible to the postgres OS user when running as root
+if [ "$(id -u)" = "0" ]; then
+  mkdir -p "$PGDATA"
+  chown postgres:postgres "$PGDATA"
+fi
+
 # ── Initialize cluster if needed ───────────────────────────
 
 if [ ! -s "$PGDATA/PG_VERSION" ]; then
   echo "Initializing PostgreSQL cluster at $PGDATA..."
-  "$INITDB" -D "$PGDATA" --auth=trust -U postgres --no-instructions
+  run_pg "$INITDB" -D "$PGDATA" --auth=trust -U postgres --no-instructions
 
   # Allow TCP connections from localhost
-  echo "host all all 127.0.0.1/32 trust" >> "$PGDATA/pg_hba.conf"
-  echo "host all all ::1/128 trust"       >> "$PGDATA/pg_hba.conf"
+  run_pg bash -c "echo 'host all all 127.0.0.1/32 trust' >> \"$PGDATA/pg_hba.conf\""
+  run_pg bash -c "echo 'host all all ::1/128 trust' >> \"$PGDATA/pg_hba.conf\""
 
   # Set port
-  sed -i "s/#port = 5432/port = $PG_PORT/" "$PGDATA/postgresql.conf"
+  run_pg sed -i "s/#port = 5432/port = $PG_PORT/" "$PGDATA/postgresql.conf"
 
   echo "PostgreSQL cluster initialized."
 fi
 
 # ── Start Postgres ──────────────────────────────────────────
 
-if ! "$PG_CTL" -D "$PGDATA" status > /dev/null 2>&1; then
+if ! run_pg "$PG_CTL" -D "$PGDATA" status > /dev/null 2>&1; then
   echo "Starting PostgreSQL..."
-  "$PG_CTL" -D "$PGDATA" -l "$PGDATA/logfile" start
+  run_pg "$PG_CTL" -D "$PGDATA" -l "$PGDATA/logfile" start
 fi
 
 cleanup() {
   echo ""
   echo "Stopping PostgreSQL..."
-  "$PG_CTL" -D "$PGDATA" stop
+  run_pg "$PG_CTL" -D "$PGDATA" stop
   echo "Done."
 }
 trap cleanup EXIT

@@ -4,6 +4,16 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PGDATA="$SCRIPT_DIR/.pgdata"
 
+# initdb and pg_ctl refuse to run as root; delegate to the postgres OS user
+
+run_pg() {
+  if [ "$(id -u)" = "0" ]; then
+    su -s /bin/bash postgres -c "$(printf '%q ' "$@")"
+  else
+    "$@"
+  fi
+}
+
 # Find pg_ctl
 find_pg_bin() {
   if command -v "$1" &>/dev/null; then command -v "$1"; return; fi
@@ -20,9 +30,9 @@ if [ -z "$PG_CTL" ]; then
   exit 1
 fi
 
-if "$PG_CTL" -D "$PGDATA" status > /dev/null 2>&1; then
+if run_pg "$PG_CTL" -D "$PGDATA" status > /dev/null 2>&1; then
   echo "Stopping PostgreSQL..."
-  "$PG_CTL" -D "$PGDATA" stop
+  run_pg "$PG_CTL" -D "$PGDATA" stop
   echo "PostgreSQL stopped."
 else
   echo "PostgreSQL is not running."
