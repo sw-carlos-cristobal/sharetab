@@ -10,11 +10,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex min-h-dvh flex-col lg:h-dvh lg:flex-row">
+    <div className="min-h-dvh lg:flex lg:h-dvh lg:flex-row">
       <MobileHeader />
       <AppSidebar user={session.user} />
       <main className="@container flex-1 min-w-0 lg:overflow-auto">
-        <div className="mx-auto w-full max-w-5xl py-4 px-4 md:py-6 md:px-8">{children}</div>
+        <div className="w-full py-4 px-4 md:py-6 md:px-8 2xl:mx-auto 2xl:max-w-5xl">{children}</div>
       </main>
     </div>
   );
