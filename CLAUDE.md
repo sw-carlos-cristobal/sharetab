@@ -60,9 +60,26 @@ npx prisma db push   # Push schema without migration (dev only)
 - shadcn/ui v4: When rendering Button as a Link, add `nativeButton={false}`
 - Dark mode: class-based via `next-themes` ThemeProvider; toggle in sidebar and mobile menu
 - Theme: emerald/teal accent color (OKLCH), neutral backgrounds — defined in `globals.css`
-- Sidebar: sticky (`md:sticky md:top-0 md:h-screen`) so bottom section stays visible
 - `scripts/dev.mjs` — All-in-one dev script: starts embedded-postgres + Next.js dev server
 - `next.config.ts` has `output: "standalone"` for Docker builds
+
+## Responsive Layout Architecture
+
+- **Sidebar**: hidden below `lg` (1024px), visible at `lg+` with `lg:sticky lg:top-0 lg:h-dvh`; `overflow-hidden` + `overflow-y-auto` on nav + `shrink-0` on bottom section
+- **Outer container**: `min-h-dvh lg:flex lg:h-dvh lg:flex-row` — block flow on mobile (natural scroll), flex on desktop (contained scroll)
+- **Main**: `@container flex-1 min-w-0 lg:overflow-auto` — container query context; natural scroll on mobile, contained scroll on desktop
+- **Content**: `w-full py-4 px-4 md:py-6 md:px-8 2xl:mx-auto 2xl:max-w-5xl` — full width with padding, max-width only at 2xl+
+- **Card grids**: use CSS container queries (`@2xl:grid-cols-2`) NOT viewport breakpoints (`lg:grid-cols-2`) — they adapt to actual available space regardless of sidebar
+- **Uniform card lists**: use auto-fit grids `grid-cols-[repeat(auto-fit,minmax(280px,1fr))]` — no breakpoints needed
+- **Mobile header**: `lg:hidden` with frosted glass (`backdrop-blur-md`); uses Sheet for hamburger menu
+- **Never** use `overflow-hidden` on layout containers — it clips content
+
+## Testing
+
+- Use `BASE_URL=http://localhost:3000 npx playwright test --headed` for visual testing (accurate viewport)
+- Do NOT rely on Chrome DevTools MCP viewport emulation for visual accuracy — it doesn't account for browser chrome
+- Responsive tests cover: static viewport sizes, live resize behavior, horizontal overflow checks, scroll verification
+- Run `npm run dev:full` to start embedded PostgreSQL + dev server for testing
 
 ## Docker
 
