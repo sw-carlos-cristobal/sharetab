@@ -20,6 +20,7 @@ import {
   Settings,
   Menu,
 } from "lucide-react";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -74,16 +75,19 @@ export function MobileHeader() {
                 </a>
               );
             })}
-            <button
-              onClick={() => {
-                setOpen(false);
-                signOut({ callbackUrl: "/login" });
-              }}
-              className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <LogOut className="h-4 w-4" />
-              Sign out
-            </button>
+            <div className="flex w-full items-center gap-2 rounded-md px-3 py-2">
+              <button
+                onClick={() => {
+                  setOpen(false);
+                  signOut({ callbackUrl: "/login" });
+                }}
+                className="flex flex-1 items-center gap-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <LogOut className="h-4 w-4" />
+                Sign out
+              </button>
+              <ThemeToggle />
+            </div>
           </nav>
         </SheetContent>
       </Sheet>

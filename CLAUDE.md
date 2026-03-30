@@ -12,18 +12,18 @@ ShareTab — open-source, self-hosted Splitwise alternative with AI receipt scan
 - **API:** tRPC v11 (end-to-end type-safe)
 - **ORM:** Prisma 7 + PostgreSQL 16 (via `@prisma/adapter-pg`)
 - **Auth:** NextAuth v5 (email/password + OAuth)
-- **UI:** TailwindCSS 4 + shadcn/ui (v4, uses `@base-ui/react` — use `render` prop instead of `asChild`)
+- **UI:** TailwindCSS 4 + shadcn/ui (v4, uses `@base-ui/react` — use `render` prop instead of `asChild`) + next-themes (dark mode)
 - **AI:** Pluggable providers (OpenAI, Claude, Ollama) via `src/server/ai/`
 
 ## Commands
 
 ```bash
 npm run dev          # Start dev server (turbopack)
+npm run dev:full     # Start embedded PostgreSQL + dev server (all-in-one)
 npm run build        # Production build
 npm run start        # Start production server
 npm run lint         # ESLint
 npx prisma generate  # Regenerate Prisma client after schema changes
-npx prisma migrate dev --name <name>  # Create migration
 npx prisma db push   # Push schema without migration (dev only)
 ```
 
@@ -37,7 +37,7 @@ npx prisma db push   # Push schema without migration (dev only)
 - `src/server/trpc/routers/` — Individual routers: auth, groups, expenses, balances, settlements, activity
 - `src/app/` — Next.js App Router pages. `(auth)/` for login/register, `(app)/` for authenticated pages
 - `src/components/` — React components organized by domain
-- `src/components/providers.tsx` — Client-side tRPC + React Query + SessionProvider wrapper
+- `src/components/providers.tsx` — Client-side tRPC + React Query + SessionProvider + ThemeProvider wrapper
 - `src/lib/trpc.ts` — Client-side tRPC React hooks
 - `src/lib/utils.ts` — `cn()` utility for Tailwind class merging
 - `src/generated/prisma/` — Auto-generated Prisma client (do not edit, gitignored)
@@ -57,6 +57,11 @@ npx prisma db push   # Push schema without migration (dev only)
 - Prisma v7: PrismaClient requires `@prisma/adapter-pg` adapter in constructor
 - Prisma v7: import from `@/generated/prisma/client` (not `@/generated/prisma` — no index.ts)
 - shadcn/ui v4: Button uses `render` prop for polymorphism, NOT `asChild`
+- shadcn/ui v4: When rendering Button as a Link, add `nativeButton={false}`
+- Dark mode: class-based via `next-themes` ThemeProvider; toggle in sidebar and mobile menu
+- Theme: emerald/teal accent color (OKLCH), neutral backgrounds — defined in `globals.css`
+- Sidebar: sticky (`md:sticky md:top-0 md:h-screen`) so bottom section stays visible
+- `scripts/dev.mjs` — All-in-one dev script: starts embedded-postgres + Next.js dev server
 - `next.config.ts` has `output: "standalone"` for Docker builds
 
 ## Docker
@@ -172,3 +177,14 @@ docker compose exec sharetab su-exec postgres pg_dump -U sharetab sharetab > bac
   - Login page toggle between password and magic link modes
 - **Environment variables**: `EMAIL_SERVER_HOST`, `EMAIL_SERVER_PORT`, `EMAIL_SERVER_USER`, `EMAIL_SERVER_PASSWORD`, `EMAIL_FROM`
 - Link to guest splitting from login page ("Split without an account")
+
+### Theme & Dark Mode — COMPLETE
+- Emerald/teal accent color scheme (OKLCH) with neutral backgrounds
+- Dark mode support via `next-themes` (class-based, system preference default)
+- Theme toggle in sidebar and mobile menu (Sun/Moon icon)
+- `src/components/layout/theme-toggle.tsx` — theme toggle component
+
+### Dashboard Improvements — COMPLETE
+- **Per-person debt breakdown**: `balances.getOverallDebts` tRPC endpoint aggregates simplified debts across all groups by person, netting cross-group debts
+- Dashboard shows "People who owe you" and "People you owe" cards with avatar initials, names, and amounts
+- **Group search/filter**: Groups page has a search input for client-side filtering by group name

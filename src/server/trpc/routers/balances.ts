@@ -147,6 +147,108 @@ export const balancesRouter = createTRPCRouter({
       return { debts };
     }),
 
+  getOverallDebts: protectedProcedure.query(async ({ ctx }) => {
+    const groups = await ctx.db.group.findMany({
+      where: { members: { some: { userId: ctx.user.id } } },
+      include: {
+        expenses: { include: { shares: true } },
+        settlements: true,
+        members: {
+          include: { user: { select: { id: true, name: true } } },
+        },
+      },
+    });
+
+    // Aggregate net amounts across all groups per person pair
+    // Positive = they owe you, Negative = you owe them
+    const aggregated = new Map<string, { userName: string; amount: number }>();
+
+    for (const group of groups) {
+      const balanceMap = new Map<string, MemberBalance>();
+
+      const getOrCreate = (userId: string): MemberBalance => {
+        let b = balanceMap.get(userId);
+        if (!b) {
+          b = { userId, paid: 0, owes: 0, net: 0 };
+          balanceMap.set(userId, b);
+        }
+        return b;
+      };
+
+      for (const expense of group.expenses) {
+        const payer = getOrCreate(expense.paidById);
+        payer.paid += expense.amount;
+        for (const share of expense.shares) {
+          const member = getOrCreate(share.userId);
+          member.owes += share.amount;
+        }
+      }
+
+      for (const settlement of group.settlements) {
+        const from = getOrCreate(settlement.fromId);
+        const to = getOrCreate(settlement.toId);
+        from.paid += settlement.amount;
+        to.owes += settlement.amount;
+      }
+
+      for (const b of balanceMap.values()) {
+        b.net = b.paid - b.owes;
+      }
+
+      const balances = Array.from(balanceMap.values());
+      const debts = simplifyDebts(balances);
+
+      // Build a userId -> userName lookup for this group
+      const nameMap = new Map<string, string>();
+      for (const member of group.members) {
+        nameMap.set(member.user.id, member.user.name ?? "Unknown");
+      }
+
+      // Aggregate debts relative to the current user
+      for (const debt of debts) {
+        if (debt.to === ctx.user.id) {
+          // Someone owes the current user
+          const existing = aggregated.get(debt.from);
+          if (existing) {
+            existing.amount += debt.amount;
+          } else {
+            aggregated.set(debt.from, {
+              userName: nameMap.get(debt.from) ?? "Unknown",
+              amount: debt.amount,
+            });
+          }
+        } else if (debt.from === ctx.user.id) {
+          // Current user owes someone
+          const existing = aggregated.get(debt.to);
+          if (existing) {
+            existing.amount -= debt.amount;
+          } else {
+            aggregated.set(debt.to, {
+              userName: nameMap.get(debt.to) ?? "Unknown",
+              amount: -debt.amount,
+            });
+          }
+        }
+      }
+    }
+
+    const owedToYou: { userId: string; userName: string; amount: number }[] = [];
+    const youOwe: { userId: string; userName: string; amount: number }[] = [];
+
+    for (const [userId, { userName, amount }] of aggregated) {
+      if (amount > 0) {
+        owedToYou.push({ userId, userName, amount });
+      } else if (amount < 0) {
+        youOwe.push({ userId, userName, amount: -amount });
+      }
+    }
+
+    owedToYou.sort((a, b) => b.amount - a.amount);
+    youOwe.sort((a, b) => b.amount - a.amount);
+
+    return { owedToYou, youOwe };
+  }),
+
   getDashboard: protectedProcedure.query(async ({ ctx }) => {
     const groups = await ctx.db.group.findMany({
       where: { members: { some: { userId: ctx.user.id } } },

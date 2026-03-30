@@ -8,8 +8,38 @@ import { Separator } from "@/components/ui/separator";
 import { ArrowUpRight, ArrowDownLeft, Plus } from "lucide-react";
 import Link from "next/link";
 
+function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .map((part) => part[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
+
+const avatarColors = [
+  "bg-blue-500",
+  "bg-emerald-500",
+  "bg-violet-500",
+  "bg-amber-500",
+  "bg-rose-500",
+  "bg-cyan-500",
+  "bg-fuchsia-500",
+  "bg-lime-500",
+];
+
+function avatarColor(userId: string): string {
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    hash = (hash * 31 + userId.charCodeAt(i)) | 0;
+  }
+  return avatarColors[Math.abs(hash) % avatarColors.length];
+}
+
 export default function DashboardPage() {
   const dashboard = trpc.balances.getDashboard.useQuery();
+  const overallDebts = trpc.balances.getOverallDebts.useQuery();
   const groups = trpc.groups.list.useQuery();
 
   return (
@@ -42,6 +72,69 @@ export default function DashboardPage() {
           <CardContent>
             <div className="text-2xl font-bold text-red-600">
               {dashboard.data ? formatCents(dashboard.data.totalOwing) : "..."}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">People who owe you</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {overallDebts.isLoading && (
+              <p className="text-sm text-muted-foreground">Loading...</p>
+            )}
+            {overallDebts.data?.owedToYou.length === 0 && (
+              <p className="text-sm text-muted-foreground">All settled up</p>
+            )}
+            <div className="space-y-3">
+              {overallDebts.data?.owedToYou.map((person) => (
+                <div key={person.userId} className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium text-white ${avatarColor(person.userId)}`}
+                    >
+                      {getInitials(person.userName)}
+                    </div>
+                    <span className="text-sm font-medium">{person.userName}</span>
+                  </div>
+                  <span className="text-sm font-semibold text-green-600">
+                    {formatCents(person.amount)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">People you owe</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {overallDebts.isLoading && (
+              <p className="text-sm text-muted-foreground">Loading...</p>
+            )}
+            {overallDebts.data?.youOwe.length === 0 && (
+              <p className="text-sm text-muted-foreground">All settled up</p>
+            )}
+            <div className="space-y-3">
+              {overallDebts.data?.youOwe.map((person) => (
+                <div key={person.userId} className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium text-white ${avatarColor(person.userId)}`}
+                    >
+                      {getInitials(person.userName)}
+                    </div>
+                    <span className="text-sm font-medium">{person.userName}</span>
+                  </div>
+                  <span className="text-sm font-semibold text-red-600">
+                    {formatCents(person.amount)}
+                  </span>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>

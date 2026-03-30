@@ -12,6 +12,7 @@ import {
   LogOut,
   Settings,
 } from "lucide-react";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -38,7 +39,7 @@ export function AppSidebar({ user }: { user: SidebarUser }) {
     : user.email?.[0]?.toUpperCase() ?? "?";
 
   return (
-    <aside className="hidden w-64 shrink-0 border-r bg-muted/30 md:flex md:flex-col">
+    <aside className="hidden w-64 shrink-0 border-r bg-muted/30 md:flex md:flex-col md:sticky md:top-0 md:h-screen">
       <div className="flex h-14 items-center gap-2 border-b px-4">
         <Receipt className="h-6 w-6 text-primary" />
         <span className="text-lg font-bold">ShareTab</span>
@@ -76,20 +77,23 @@ export function AppSidebar({ user }: { user: SidebarUser }) {
             <p className="truncate text-xs text-muted-foreground">{user.email}</p>
           </div>
         </div>
-        <div className="mt-1 flex gap-1">
-          <a href="/settings" className="inline-flex shrink-0 items-center justify-start gap-2 rounded-lg h-7 px-2.5 text-[0.8rem] font-medium hover:bg-muted hover:text-foreground transition-all flex-1">
-            <Settings className="h-4 w-4" />
-            Settings
-          </a>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="flex-1 justify-start gap-2 text-muted-foreground"
-            onClick={() => signOut({ callbackUrl: "/login" })}
-          >
-            <LogOut className="h-4 w-4" />
-            Sign out
-          </Button>
+        <div className="mt-1 flex items-center justify-between">
+          <div className="flex items-center gap-1">
+            <a href="/settings" className="inline-flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+              <Settings className="h-3.5 w-3.5" />
+              Settings
+            </a>
+            <Button
+              variant="ghost"
+              size="xs"
+              className="gap-2 text-muted-foreground"
+              onClick={() => signOut({ callbackUrl: "/login" })}
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Sign out
+            </Button>
+          </div>
+          <ThemeToggle />
         </div>
       </div>
     </aside>

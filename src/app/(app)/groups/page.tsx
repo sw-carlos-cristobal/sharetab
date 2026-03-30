@@ -1,13 +1,22 @@
 "use client";
 
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Plus, Search } from "lucide-react";
 import Link from "next/link";
 
 export default function GroupsPage() {
   const groups = trpc.groups.list.useQuery();
+  const [search, setSearch] = useState("");
+
+  const hasGroups = (groups.data?.length ?? 0) > 0;
+
+  const filteredGroups = groups.data?.filter((group) =>
+    group.name.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
     <div className="space-y-6">
@@ -18,6 +27,18 @@ export default function GroupsPage() {
           New Group
         </Button>
       </div>
+
+      {hasGroups && (
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search groups..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-8"
+          />
+        </div>
+      )}
 
       {groups.isLoading && <p className="text-muted-foreground">Loading...</p>}
 
@@ -36,8 +57,14 @@ export default function GroupsPage() {
         </Card>
       )}
 
+      {hasGroups && filteredGroups?.length === 0 && (
+        <p className="text-center text-muted-foreground">
+          No groups match your search.
+        </p>
+      )}
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {groups.data?.map((group) => (
+        {filteredGroups?.map((group) => (
           <Link key={group.id} href={`/groups/${group.id}`}>
             <Card className="transition-colors hover:bg-muted/50">
               <CardHeader className="pb-2">
