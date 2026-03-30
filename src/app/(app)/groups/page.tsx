@@ -68,7 +68,7 @@ export default function GroupsPage() {
         </p>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(280px,1fr))]">
         {filteredGroups?.map((group) => (
           <Link key={group.id} href={`/groups/${group.id}`}>
             <Card className="border-l-[3px] border-l-primary/60 transition-all duration-200 hover:-translate-y-px hover:shadow-md hover:border-l-primary">

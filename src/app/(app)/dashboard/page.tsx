@@ -117,7 +117,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ---- Balance summary cards ---- */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 @2xl:grid-cols-2">
         {/* You are owed */}
         <Card className="relative overflow-hidden border-green-200/40 bg-gradient-to-br from-green-50/60 to-card dark:border-green-900/30 dark:from-green-950/30 dark:to-card">
           <div className="pointer-events-none absolute -right-4 -top-4 h-24 w-24 rounded-full bg-green-500/5 dark:bg-green-400/5" />
@@ -164,7 +164,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ---- Per-person debt cards ---- */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 @2xl:grid-cols-2">
         {/* People who owe you */}
         <Card>
           <CardHeader className="pb-2">
@@ -261,7 +261,7 @@ export default function DashboardPage() {
         <h2 className="mb-4 text-lg font-semibold">Your Groups</h2>
 
         {groups.isLoading && (
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4 @2xl:grid-cols-2">
             {[0, 1, 2, 3].map((i) => (
               <GroupCardSkeleton key={i} />
             ))}
@@ -286,7 +286,7 @@ export default function DashboardPage() {
           </Card>
         )}
 
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-4 @2xl:grid-cols-2">
           {groups.data?.map((group) => {
             const balance = dashboard.data?.perGroup.find(
               (g) => g.groupId === group.id

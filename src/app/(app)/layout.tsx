@@ -13,7 +13,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="flex min-h-dvh flex-col lg:h-dvh lg:flex-row">
       <MobileHeader />
       <AppSidebar user={session.user} />
-      <main className="flex-1 min-w-0 lg:overflow-auto">
+      <main className="@container flex-1 min-w-0 lg:overflow-auto">
         <div className="mx-auto w-full max-w-5xl py-4 px-4 md:py-6 md:px-8">{children}</div>
       </main>
     </div>
