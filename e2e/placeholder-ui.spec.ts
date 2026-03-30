@@ -11,11 +11,12 @@ test.describe("Placeholder Members UI", () => {
     await page.goto("/groups/new");
     await page.getByLabel("Group name").fill("Placeholder UI Test");
     await page.getByRole("button", { name: "Create Group" }).click();
-    await page.waitForURL(/\/groups\/\w+$/, { timeout: 15000 });
+    await expect(page.getByRole("heading", { name: "Placeholder UI Test" })).toBeVisible({ timeout: 15000 });
     const groupUrl = page.url();
 
-    // Go to settings
-    await page.goto(groupUrl + "/settings");
+    // Go to settings via the settings link on the group detail page
+    await page.locator('a[href*="/groups/"][href$="/settings"]').click();
+    await page.waitForURL(/\/groups\/\w+\/settings$/);
     await expect(page.getByText("Add Member")).toBeVisible();
 
     // Add a placeholder
@@ -32,11 +33,12 @@ test.describe("Placeholder Members UI", () => {
     await page.goto("/groups/new");
     await page.getByLabel("Group name").fill("Badge Test Group");
     await page.getByRole("button", { name: "Create Group" }).click();
-    await page.waitForURL(/\/groups\/\w+$/, { timeout: 15000 });
+    await expect(page.getByRole("heading", { name: "Badge Test Group" })).toBeVisible({ timeout: 15000 });
     const groupUrl = page.url();
 
-    // Add placeholder via settings
-    await page.goto(groupUrl + "/settings");
+    // Add placeholder via settings link on the group detail page
+    await page.locator('a[href*="/groups/"][href$="/settings"]').click();
+    await page.waitForURL(/\/groups\/\w+\/settings$/);
     await page.getByPlaceholder("Name (e.g., Dave)").fill("Ghost Member");
     await page.getByRole("button", { name: "Add" }).click();
     await expect(page.getByText("Ghost Member")).toBeVisible({ timeout: 10000 });

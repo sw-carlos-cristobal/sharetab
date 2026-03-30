@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { parseToCents } from "@/lib/money";
@@ -58,11 +58,14 @@ export default function NewExpensePage({
     },
   });
 
-  const members: MemberInfo[] =
-    group.data?.members.map((m) => ({
-      id: m.user.id,
-      name: m.user.name,
-    })) ?? [];
+  const members: MemberInfo[] = useMemo(
+    () =>
+      group.data?.members.map((m) => ({
+        id: m.user.id,
+        name: m.user.name,
+      })) ?? [],
+    [group.data?.members]
+  );
 
   const amountCents = parseToCents(amountStr);
 

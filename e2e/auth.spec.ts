@@ -49,7 +49,7 @@ test.describe("Authentication", () => {
       await page.goto("/login");
       await page.getByLabel("Email").fill(users.alice.email);
       await page.getByLabel("Password").fill("wrongpassword");
-      await page.getByRole("button", { name: "Sign in" }).click();
+      await page.getByRole("button", { name: "Sign in", exact: true }).click();
       await expect(page.getByText("Invalid email or password")).toBeVisible({ timeout: 15000 });
       await expect(page).toHaveURL(/login/);
     });
@@ -58,7 +58,7 @@ test.describe("Authentication", () => {
       await page.goto("/login");
       await page.getByLabel("Email").fill("nobody@nobody.com");
       await page.getByLabel("Password").fill("whatever123");
-      await page.getByRole("button", { name: "Sign in" }).click();
+      await page.getByRole("button", { name: "Sign in", exact: true }).click();
       await expect(page.getByText("Invalid email or password")).toBeVisible({ timeout: 15000 });
     });
 

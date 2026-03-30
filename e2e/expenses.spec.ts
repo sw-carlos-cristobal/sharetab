@@ -10,19 +10,31 @@ test.describe("Expenses", () => {
 
   test.describe("Expense Detail", () => {
     test("expense detail shows all fields", async ({ page }) => {
+      // Create a known expense so the test is immune to pollution
       await page.goto("/groups");
       await page.getByText("Apartment").click();
       await page.waitForURL(/\/groups\/\w+$/);
-      await page.getByText("Groceries").click();
+      const groupUrl = page.url();
+      await page.goto(groupUrl + "/expenses/new");
+
+      await page.getByLabel("Description").fill("Detail Test Expense");
+      await page.getByLabel("Amount").fill("85.47");
+      await page.getByLabel("Category (optional)").fill("Food");
+      await page.getByLabel("Paid by").selectOption({ label: "Alice Johnson" });
+      await page.getByRole("button", { name: "Add Expense" }).click();
+      await page.waitForURL(/\/groups\/\w+$/, { timeout: 15000 });
+
+      // Navigate to the newly created expense
+      await page.getByRole("link", { name: /Detail Test Expense/ }).first().click();
       await page.waitForURL(/\/expenses\/\w+$/);
 
-      await expect(page.getByRole("heading", { name: "Groceries" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Detail Test Expense" })).toBeVisible();
       await expect(page.getByText("$85.47")).toBeVisible();
       await expect(page.getByText("EQUAL")).toBeVisible();
-      await expect(page.getByText("Alice Johnson")).toBeVisible();
+      await expect(page.getByText("Alice Johnson").first()).toBeVisible();
       await expect(page.getByText("Food")).toBeVisible();
       // Split breakdown
-      await expect(page.getByText("$28.49")).toBeVisible();
+      await expect(page.getByText("$28.49").first()).toBeVisible();
     });
   });
 
@@ -69,8 +81,8 @@ test.describe("Expenses", () => {
 
       // Should redirect back to group page
       await page.waitForURL(/\/groups\/\w+$/, { timeout: 15000 });
-      await expect(page.getByText("Coffee run")).toBeVisible();
-      await expect(page.getByText("$15.00")).toBeVisible();
+      await expect(page.getByText("Coffee run").first()).toBeVisible();
+      await expect(page.getByText("$15.00").first()).toBeVisible();
     });
 
     test("7.4.2 — exact split UI shows remaining", async ({ page }) => {
@@ -98,8 +110,7 @@ test.describe("Expenses", () => {
       await page.getByLabel("Amount").fill("100.00");
       await page.getByRole("button", { name: /Percentage/ }).click();
 
-      await expect(page.getByText("Total:")).toBeVisible();
-      await expect(page.getByText("%")).toBeVisible();
+      await expect(page.getByText(/Total:.*%/)).toBeVisible();
     });
 
     test("7.4.4 — shares split UI shows share units", async ({ page }) => {
@@ -112,7 +123,7 @@ test.describe("Expenses", () => {
       await page.getByLabel("Amount").fill("90.00");
       await page.getByRole("button", { name: /Shares/ }).click();
 
-      await expect(page.getByText("shares")).toBeVisible();
+      await expect(page.getByText(/Total:.*shares/)).toBeVisible();
     });
   });
 
@@ -120,6 +131,9 @@ test.describe("Expenses", () => {
 
   test.describe("Delete Expense", () => {
     test("delete expense from detail page", async ({ page }) => {
+      // Use unique name to avoid collision with previous test runs
+      const expenseName = `Delete me ${Date.now()}`;
+
       // First create an expense to delete
       await page.goto("/groups");
       await page.getByText("Apartment").click();
@@ -127,24 +141,24 @@ test.describe("Expenses", () => {
       const groupUrl = page.url();
       await page.goto(groupUrl + "/expenses/new");
 
-      await page.getByLabel("Description").fill("Delete me");
+      await page.getByLabel("Description").fill(expenseName);
       await page.getByLabel("Amount").fill("10.00");
       await page.getByLabel("Paid by").selectOption({ label: "Alice Johnson" });
       await page.getByRole("button", { name: "Add Expense" }).click();
       await page.waitForURL(/\/groups\/\w+$/, { timeout: 15000 });
 
       // Click into the new expense
-      await page.getByText("Delete me").click();
+      await page.getByText(expenseName).first().click();
       await page.waitForURL(/\/expenses\/\w+$/);
 
       // Confirm delete
       page.on("dialog", (dialog) => dialog.accept());
-      await page.getByRole("button", { name: /Delete Expense/i }).click();
+      await page.getByRole("button", { name: /Delete/i }).click();
 
       // Should redirect back to group
       await page.waitForURL(/\/groups\/\w+$/, { timeout: 10000 });
       // Expense should be gone
-      await expect(page.getByText("Delete me")).not.toBeVisible();
+      await expect(page.getByText(expenseName)).not.toBeVisible();
     });
   });
 });

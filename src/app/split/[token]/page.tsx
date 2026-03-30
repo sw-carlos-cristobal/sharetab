@@ -42,7 +42,7 @@ export default function SharedSplitPage({
               : "This split link is invalid or has been removed."}
           </p>
         </div>
-        <Button render={<Link href="/split" />}>
+        <Button nativeButton={false} render={<Link href="/split" />}>
           <ArrowRight className="mr-2 h-4 w-4" />
           Split your own bill
         </Button>

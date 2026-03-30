@@ -13,7 +13,7 @@ export default function GroupsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Groups</h1>
-        <Button render={<Link href="/groups/new" />}>
+        <Button nativeButton={false} render={<Link href="/groups/new" />}>
           <Plus className="mr-2 h-4 w-4" />
           New Group
         </Button>
@@ -28,7 +28,7 @@ export default function GroupsPage() {
             <p className="mt-1 text-sm text-muted-foreground">
               Create a group to start splitting expenses with friends.
             </p>
-            <Button className="mt-4" render={<Link href="/groups/new" />}>
+            <Button nativeButton={false} className="mt-4" render={<Link href="/groups/new" />}>
               <Plus className="mr-2 h-4 w-4" />
               Create your first group
             </Button>
