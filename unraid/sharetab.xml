@@ -1,16 +1,16 @@
 <?xml version="1.0"?>
 <Container version="2">
   <Name>sharetab</Name>
-  <Repository>ghcr.io/sharetab/sharetab:latest</Repository>
-  <Registry>https://github.com/sharetab/sharetab/pkgs/container/sharetab</Registry>
+  <Repository>ghcr.io/sw-carlos-cristobal/sharetab:latest</Repository>
+  <Registry>https://github.com/sw-carlos-cristobal/sharetab/pkgs/container/sharetab</Registry>
   <Branch>
     <Tag>latest</Tag>
     <TagDescription>Latest stable release</TagDescription>
   </Branch>
   <Network>bridge</Network>
   <Privileged>false</Privileged>
-  <Support>https://github.com/sharetab/sharetab/issues</Support>
-  <Project>https://github.com/sharetab/sharetab</Project>
+  <Support>https://github.com/sw-carlos-cristobal/sharetab/issues</Support>
+  <Project>https://github.com/sw-carlos-cristobal/sharetab</Project>
   <Overview>
     ShareTab is an open-source, self-hosted Splitwise alternative with AI-powered receipt scanning.
 
@@ -19,37 +19,53 @@
     Features:
     - Group expense tracking with multiple split modes
     - AI receipt scanning: photograph a receipt, extract items, assign to friends
-    - Pluggable AI providers: OpenAI, Claude, or local Ollama
+    - Pluggable AI providers: OpenAI, Claude, Claude SDK, or local Ollama
     - Cross-group dashboard with debt simplification
     - PWA installable on mobile
+    - Magic link email authentication (optional)
   </Overview>
   <Category>Productivity: Tools:</Category>
   <WebUI>http://[IP]:[PORT:3000]</WebUI>
-  <TemplateURL>https://raw.githubusercontent.com/sharetab/sharetab/main/unraid/sharetab.xml</TemplateURL>
-  <Icon>https://raw.githubusercontent.com/sharetab/sharetab/main/public/icons/icon.svg</Icon>
+  <TemplateURL>https://raw.githubusercontent.com/sw-carlos-cristobal/sharetab/main/unraid/sharetab.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/sw-carlos-cristobal/sharetab/main/public/icons/icon.svg</Icon>
   <ExtraParams>--restart=unless-stopped</ExtraParams>
   <Description>
     Self-hosted Splitwise alternative with AI receipt scanning. All-in-one container with bundled PostgreSQL — no external database needed. Split expenses with friends using multiple modes (equal, percentage, shares, exact, item-level from receipts). Supports OpenAI, Claude, and local Ollama for receipt extraction.
   </Description>
+
+  <!-- Ports -->
   <Config
     Name="Web UI Port"
     Target="3000"
     Default="3000"
     Mode="tcp"
-    Description="Web interface port"
+    Description="Host port to expose ShareTab on"
     Type="Port"
     Display="always"
     Required="true"
     Mask="false">3000</Config>
+
+  <!-- Volumes -->
   <Config
-    Name="Auth Secret"
-    Target="AUTH_SECRET"
-    Default=""
-    Description="Secret key for session encryption. Generate with: openssl rand -base64 32"
-    Type="Variable"
+    Name="Database Data"
+    Target="/var/lib/postgresql/data"
+    Default="/mnt/user/appdata/sharetab/db"
+    Description="Path to store PostgreSQL data (persists across restarts)"
+    Type="Path"
     Display="always"
     Required="true"
-    Mask="true"></Config>
+    Mask="false">/mnt/user/appdata/sharetab/db</Config>
+  <Config
+    Name="Receipt Uploads"
+    Target="/app/uploads"
+    Default="/mnt/user/appdata/sharetab/uploads"
+    Description="Path to store uploaded receipt images"
+    Type="Path"
+    Display="always"
+    Required="true"
+    Mask="false">/mnt/user/appdata/sharetab/uploads</Config>
+
+  <!-- Auth -->
   <Config
     Name="NextAuth URL"
     Target="NEXTAUTH_URL"
@@ -60,28 +76,68 @@
     Required="true"
     Mask="false">http://192.168.1.x:3000</Config>
   <Config
-    Name="Database Data"
-    Target="/var/lib/postgresql/data"
-    Default="/mnt/user/appdata/sharetab/db"
-    Description="Path to store PostgreSQL data (for persistence across container restarts)"
-    Type="Path"
+    Name="Auth Secret"
+    Target="AUTH_SECRET"
+    Default=""
+    Description="Secret key for session encryption. Generate with: openssl rand -base64 32"
+    Type="Variable"
     Display="always"
     Required="true"
-    Mask="false">/mnt/user/appdata/sharetab/db</Config>
+    Mask="true"></Config>
   <Config
-    Name="Database Password"
+    Name="NextAuth Secret"
+    Target="NEXTAUTH_SECRET"
+    Default=""
+    Description="Same value as Auth Secret (required by NextAuth)"
+    Type="Variable"
+    Display="always"
+    Required="true"
+    Mask="true"></Config>
+  <Config
+    Name="Auth Trust Host"
+    Target="AUTH_TRUST_HOST"
+    Default="true"
+    Description="Set to true when running on a local network or behind a reverse proxy"
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false">true</Config>
+
+  <!-- Database -->
+  <Config
+    Name="DB Password"
     Target="DB_PASSWORD"
     Default="sharetab"
-    Description="Password for the bundled PostgreSQL database"
+    Description="Password for the bundled PostgreSQL user"
     Type="Variable"
     Display="advanced"
     Required="false"
     Mask="true">sharetab</Config>
   <Config
+    Name="DB User"
+    Target="DB_USER"
+    Default="sharetab"
+    Description="Username for the bundled PostgreSQL database"
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false">sharetab</Config>
+  <Config
+    Name="DB Name"
+    Target="DB_NAME"
+    Default="sharetab"
+    Description="Name of the bundled PostgreSQL database"
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false">sharetab</Config>
+
+  <!-- AI -->
+  <Config
     Name="AI Provider"
     Target="AI_PROVIDER"
     Default="openai"
-    Description="AI provider for receipt scanning: openai, claude, or ollama"
+    Description="AI provider for receipt scanning: openai | claude | claude-sdk | ollama"
     Type="Variable"
     Display="always"
     Required="false"
@@ -105,6 +161,15 @@
     Required="false"
     Mask="true"></Config>
   <Config
+    Name="Anthropic Auth Token"
+    Target="ANTHROPIC_AUTH_TOKEN"
+    Default=""
+    Description="Claude OAuth token for claude-sdk provider (uses Claude Max/Pro subscription). Expires every ~8h."
+    Type="Variable"
+    Display="always"
+    Required="false"
+    Mask="true"></Config>
+  <Config
     Name="Ollama URL"
     Target="OLLAMA_BASE_URL"
     Default="http://192.168.1.x:11434"
@@ -122,20 +187,80 @@
     Display="advanced"
     Required="false"
     Mask="false">llava</Config>
+
+  <!-- Email (magic link auth) -->
   <Config
-    Name="Receipt Uploads"
-    Target="/app/uploads"
-    Default="/mnt/user/appdata/sharetab/uploads"
-    Description="Path to store uploaded receipt images"
-    Type="Path"
-    Display="always"
-    Required="true"
-    Mask="false">/mnt/user/appdata/sharetab/uploads</Config>
+    Name="Email SMTP Host"
+    Target="EMAIL_SERVER_HOST"
+    Default=""
+    Description="SMTP server for magic link auth emails. Leave blank to disable magic link sign-in."
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false"></Config>
+  <Config
+    Name="Email SMTP Port"
+    Target="EMAIL_SERVER_PORT"
+    Default="465"
+    Description="SMTP port (465 for implicit TLS, 587 for STARTTLS)"
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false">465</Config>
+  <Config
+    Name="Email SMTP User"
+    Target="EMAIL_SERVER_USER"
+    Default=""
+    Description="SMTP username / email address"
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false"></Config>
+  <Config
+    Name="Email SMTP Password"
+    Target="EMAIL_SERVER_PASSWORD"
+    Default=""
+    Description="SMTP password or app password"
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="true"></Config>
+  <Config
+    Name="Email From"
+    Target="EMAIL_FROM"
+    Default=""
+    Description="From address for sent emails"
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false"></Config>
+
+  <!-- OAuth -->
+  <Config
+    Name="Google OAuth Client ID"
+    Target="GOOGLE_CLIENT_ID"
+    Default=""
+    Description="Google OAuth client ID (optional — enables Google sign-in)"
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false"></Config>
+  <Config
+    Name="Google OAuth Client Secret"
+    Target="GOOGLE_CLIENT_SECRET"
+    Default=""
+    Description="Google OAuth client secret"
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="true"></Config>
+
+  <!-- Misc -->
   <Config
     Name="Max Upload Size (MB)"
     Target="MAX_UPLOAD_SIZE_MB"
     Default="10"
-    Description="Maximum file upload size in megabytes"
+    Description="Maximum receipt image upload size in megabytes"
     Type="Variable"
     Display="advanced"
     Required="false"
