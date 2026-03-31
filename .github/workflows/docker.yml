@@ -1,4 +1,4 @@
-name: Build and Push Docker Image
+name: Test, Build and Push Docker Image
 
 on:
   push:
@@ -10,7 +10,82 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: sharetab
+          POSTGRES_PASSWORD: sharetab
+          POSTGRES_DB: sharetab
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Push schema to database
+        env:
+          DATABASE_URL: postgresql://sharetab:sharetab@localhost:5432/sharetab
+        run: npx prisma db push
+
+      - name: Seed database
+        env:
+          DATABASE_URL: postgresql://sharetab:sharetab@localhost:5432/sharetab
+        run: npm run db:seed
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Build application
+        env:
+          DATABASE_URL: postgresql://sharetab:sharetab@localhost:5432/sharetab
+          NEXTAUTH_SECRET: ci-test-secret-not-for-production
+          AUTH_SECRET: ci-test-secret-not-for-production
+          AUTH_TRUST_HOST: "true"
+        run: npm run build
+
+      - name: Run tests
+        env:
+          DATABASE_URL: postgresql://sharetab:sharetab@localhost:5432/sharetab
+          NEXTAUTH_SECRET: ci-test-secret-not-for-production
+          AUTH_SECRET: ci-test-secret-not-for-production
+          AUTH_TRUST_HOST: "true"
+          NEXTAUTH_URL: http://localhost:3000
+          BASE_URL: http://localhost:3000
+        run: |
+          npm run start &
+          npx wait-on http://localhost:3000/api/health --timeout 30000
+          npx playwright test
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: test-results/
+
   build-and-push:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
