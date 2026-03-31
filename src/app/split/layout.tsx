@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { Receipt } from "lucide-react";
+import { auth } from "@/server/auth";
 
-export default function SplitLayout({ children }: { children: React.ReactNode }) {
+export default async function SplitLayout({ children }: { children: React.ReactNode }) {
+  const session = await auth();
+
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background">
       {/* Minimal header */}
@@ -11,12 +14,21 @@ export default function SplitLayout({ children }: { children: React.ReactNode })
             <Receipt className="h-5 w-5 text-primary" />
             <span>ShareTab</span>
           </Link>
-          <Link
-            href="/login"
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Sign in
-          </Link>
+          {session?.user ? (
+            <Link
+              href="/dashboard"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Dashboard
+            </Link>
+          ) : (
+            <Link
+              href="/login"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Sign in
+            </Link>
+          )}
         </div>
       </header>
 

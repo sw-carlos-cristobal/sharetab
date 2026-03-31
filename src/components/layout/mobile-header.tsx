@@ -26,6 +26,7 @@ import { ThemeToggle } from "@/components/layout/theme-toggle";
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/groups", label: "Groups", icon: Users },
+  { href: "/split", label: "Quick Split", icon: Receipt },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
