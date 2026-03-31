@@ -78,11 +78,22 @@ The `claude-sdk` provider uses a Claude Max/Pro subscription instead of an API k
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID for "Sign in with Google". |
 | `GOOGLE_CLIENT_SECRET` | Corresponding client secret. |
 
+### Magic Link Auth (optional)
+
+| Variable | Description |
+|---|---|
+| `EMAIL_SERVER_HOST` | SMTP host (e.g. `smtp.gmail.com`). Required to enable magic link sign-in. |
+| `EMAIL_SERVER_PORT` | SMTP port. Use `465` for implicit TLS, `587` for STARTTLS. |
+| `EMAIL_SERVER_USER` | SMTP username / email address. |
+| `EMAIL_SERVER_PASSWORD` | SMTP password or app password. |
+| `EMAIL_FROM` | From address for sent emails. |
+
 ### Other
 
 | Variable | Default | Description |
 |---|---|---|
 | `NEXTAUTH_URL` | `http://localhost:3000` | Public URL of your instance. |
+| `AUTH_TRUST_HOST` | `false` | Set to `true` when running on a local network or behind a reverse proxy. |
 | `UPLOAD_DIR` | `./uploads` | Directory for receipt image uploads. |
 | `MAX_UPLOAD_SIZE_MB` | `10` | Maximum upload file size. |
 | `LOG_LEVEL` | `info` | Logging verbosity: `debug`, `info`, `warn`, or `error`. |
