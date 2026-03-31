@@ -39,6 +39,41 @@ export const authRouter = createTRPCRouter({
       return { id: user.id, name: user.name, email: user.email };
     }),
 
+  changePassword: protectedProcedure
+    .input(
+      z.object({
+        currentPassword: z.string().min(1),
+        newPassword: z.string().min(6).max(100),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const user = await ctx.db.user.findUnique({
+        where: { id: ctx.user.id },
+      });
+      if (!user?.passwordHash) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Account uses OAuth or magic link — no password to change",
+        });
+      }
+
+      const valid = await bcrypt.compare(input.currentPassword, user.passwordHash);
+      if (!valid) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Current password is incorrect",
+        });
+      }
+
+      const passwordHash = await bcrypt.hash(input.newPassword, 12);
+      await ctx.db.user.update({
+        where: { id: ctx.user.id },
+        data: { passwordHash },
+      });
+
+      return { success: true };
+    }),
+
   updateProfile: protectedProcedure
     .input(
       z.object({
