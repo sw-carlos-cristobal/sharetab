@@ -7,6 +7,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { db } from "./db";
 import { logger } from "./lib/logger";
+import { checkRateLimit } from "./lib/rate-limit";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -30,6 +31,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       async authorize(credentials) {
         const parsed = loginSchema.safeParse(credentials);
         if (!parsed.success) return null;
+
+        // Rate limit: 5 attempts per 15 minutes per email
+        const { allowed } = checkRateLimit(
+          `login:${parsed.data.email}`,
+          5,
+          15 * 60 * 1000
+        );
+        if (!allowed) {
+          logger.warn("auth.rate_limited", { email: parsed.data.email });
+          return null;
+        }
 
         const user = await db.user.findUnique({
           where: { email: parsed.data.email },

@@ -2,6 +2,7 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, publicProcedure, protectedProcedure } from "../init";
+import { checkRateLimit } from "../../lib/rate-limit";
 
 export const authRouter = createTRPCRouter({
   getSession: publicProcedure.query(({ ctx }) => {
@@ -17,6 +18,20 @@ export const authRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      // Rate limit: 10 registrations per hour per IP (fall back to global key)
+      const ip =
+        (ctx as Record<string, unknown>).headers &&
+        typeof ((ctx as Record<string, unknown>).headers as Headers | undefined)?.get === "function"
+          ? ((ctx as Record<string, unknown>).headers as Headers).get("x-forwarded-for") ?? "global"
+          : "global";
+      const { allowed } = checkRateLimit(`register:${ip}`, 10, 60 * 60 * 1000);
+      if (!allowed) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: "Too many registration attempts. Please try again later.",
+        });
+      }
+
       const existing = await ctx.db.user.findUnique({
         where: { email: input.email },
       });

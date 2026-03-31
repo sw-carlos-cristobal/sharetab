@@ -5,13 +5,24 @@ import { createTRPCRouter, protectedProcedure, groupMemberProcedure } from "../i
 import { getAIProvider } from "../../ai/registry";
 import { logger } from "../../lib/logger";
 
+async function verifyReceiptAccess(db: any, receiptId: string, userId: string) {
+  const receipt = await db.receipt.findUnique({
+    where: { id: receiptId },
+    include: { group: { include: { members: true } } },
+  });
+  if (!receipt) throw new TRPCError({ code: "NOT_FOUND" });
+  if (receipt.group) {
+    const isMember = receipt.group.members.some((m: any) => m.userId === userId);
+    if (!isMember) throw new TRPCError({ code: "FORBIDDEN" });
+  }
+  return receipt;
+}
+
 export const receiptsRouter = createTRPCRouter({
   processReceipt: protectedProcedure
     .input(z.object({ receiptId: z.string(), groupId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
-      const receipt = await ctx.db.receipt.findUnique({
-        where: { id: input.receiptId },
-      });
+      const receipt = await verifyReceiptAccess(ctx.db, input.receiptId, ctx.user.id);
       if (!receipt) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Receipt not found" });
       }
@@ -113,6 +124,8 @@ export const receiptsRouter = createTRPCRouter({
   getReceiptItems: protectedProcedure
     .input(z.object({ receiptId: z.string() }))
     .query(async ({ ctx, input }) => {
+      await verifyReceiptAccess(ctx.db, input.receiptId, ctx.user.id);
+
       const receipt = await ctx.db.receipt.findUnique({
         where: { id: input.receiptId },
         include: {
@@ -156,6 +169,12 @@ export const receiptsRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const item = await ctx.db.receiptItem.findUnique({
+        where: { id: input.itemId },
+      });
+      if (!item) throw new TRPCError({ code: "NOT_FOUND" });
+      await verifyReceiptAccess(ctx.db, item.receiptId, ctx.user.id);
+
       const { itemId, ...data } = input;
       return ctx.db.receiptItem.update({
         where: { id: itemId },
@@ -174,6 +193,8 @@ export const receiptsRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      await verifyReceiptAccess(ctx.db, input.receiptId, ctx.user.id);
+
       const maxSort = await ctx.db.receiptItem.findFirst({
         where: { receiptId: input.receiptId },
         orderBy: { sortOrder: "desc" },
@@ -194,6 +215,12 @@ export const receiptsRouter = createTRPCRouter({
   deleteItem: protectedProcedure
     .input(z.object({ itemId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      const item = await ctx.db.receiptItem.findUnique({
+        where: { id: input.itemId },
+      });
+      if (!item) throw new TRPCError({ code: "NOT_FOUND" });
+      await verifyReceiptAccess(ctx.db, item.receiptId, ctx.user.id);
+
       await ctx.db.receiptItemAssignment.deleteMany({
         where: { receiptItemId: input.itemId },
       });
@@ -210,10 +237,7 @@ export const receiptsRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const receipt = await ctx.db.receipt.findUnique({
-        where: { id: input.receiptId },
-      });
-      if (!receipt) throw new TRPCError({ code: "NOT_FOUND" });
+      const receipt = await verifyReceiptAccess(ctx.db, input.receiptId, ctx.user.id);
 
       const current = (receipt.extractedData ?? {}) as Record<string, unknown>;
       const updated = {
@@ -232,6 +256,8 @@ export const receiptsRouter = createTRPCRouter({
   retryProcessing: protectedProcedure
     .input(z.object({ receiptId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      await verifyReceiptAccess(ctx.db, input.receiptId, ctx.user.id);
+
       // Delete old items before retrying
       await ctx.db.receiptItem.deleteMany({
         where: { receiptId: input.receiptId },

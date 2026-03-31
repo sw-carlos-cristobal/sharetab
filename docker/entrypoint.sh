@@ -1,6 +1,16 @@
 #!/bin/sh
 set -e
 
+# ── Validate required secrets ──────────────────────────────────
+if [ -z "$NEXTAUTH_SECRET" ] || [ "$NEXTAUTH_SECRET" = "change-me-in-production" ]; then
+  echo "ERROR: NEXTAUTH_SECRET must be set. Generate with: openssl rand -base64 32"
+  exit 1
+fi
+if [ -z "$AUTH_SECRET" ] || [ "$AUTH_SECRET" = "change-me-in-production" ]; then
+  echo "ERROR: AUTH_SECRET must be set. Generate with: openssl rand -base64 32"
+  exit 1
+fi
+
 PGDATA="${PGDATA:-/var/lib/postgresql/data}"
 DB_USER="${DB_USER:-sharetab}"
 DB_PASSWORD="${DB_PASSWORD:-sharetab}"

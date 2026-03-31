@@ -11,8 +11,8 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:-sharetab}
       - DB_NAME=${DB_NAME:-sharetab}
       - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
-      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-change-me-in-production}
-      - AUTH_SECRET=${AUTH_SECRET:-change-me-in-production}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-}
+      - AUTH_SECRET=${AUTH_SECRET:-}
       - AUTH_TRUST_HOST=${AUTH_TRUST_HOST:-false}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}

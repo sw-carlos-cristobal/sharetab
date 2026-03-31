@@ -3,12 +3,26 @@ import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, publicProcedure } from "../init";
 import { getAIProvider } from "../../ai/registry";
 import { logger } from "../../lib/logger";
+import { checkRateLimit } from "../../lib/rate-limit";
 import { calculateSplitTotals } from "@/lib/split-calculator";
 
 export const guestRouter = createTRPCRouter({
   processReceipt: publicProcedure
     .input(z.object({ receiptId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      // Rate limit: 3 processing attempts per receipt per hour
+      const { allowed } = checkRateLimit(
+        `guest-process:${input.receiptId}`,
+        3,
+        60 * 60 * 1000
+      );
+      if (!allowed) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: "Too many processing attempts for this receipt. Please try again later.",
+        });
+      }
+
       const receipt = await ctx.db.receipt.findUnique({
         where: { id: input.receiptId },
       });
