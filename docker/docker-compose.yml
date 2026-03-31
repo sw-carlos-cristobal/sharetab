@@ -3,6 +3,7 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+    image: sharetab:latest
     ports:
       - "${PORT:-3000}:3000"
     environment:

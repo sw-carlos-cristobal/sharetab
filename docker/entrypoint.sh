@@ -8,6 +8,11 @@ DB_NAME="${DB_NAME:-sharetab}"
 
 # ── Start PostgreSQL ────────────────────────────────────────
 
+# Ensure data directory exists and is owned by postgres (needed for host bind-mounts)
+mkdir -p "$PGDATA"
+chown postgres:postgres "$PGDATA"
+chmod 700 "$PGDATA"
+
 # Initialize database if needed
 if [ ! -s "$PGDATA/PG_VERSION" ]; then
   echo "Initializing PostgreSQL database..."
