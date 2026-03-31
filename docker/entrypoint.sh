@@ -48,7 +48,8 @@ export DATABASE_URL="${DATABASE_URL:-postgresql://$DB_USER:$DB_PASSWORD@localhos
 # ── Run Migrations ──────────────────────────────────────────
 
 echo "Running database migrations..."
-npx prisma migrate deploy 2>/dev/null || npx prisma db push --skip-generate 2>/dev/null || echo "Warning: Could not run migrations"
+NODE_PATH=/prisma-cli/node_modules node /prisma-cli/node_modules/prisma/build/index.js db push --accept-data-loss || \
+echo "Warning: Could not apply schema"
 
 # ── Start App ───────────────────────────────────────────────
 

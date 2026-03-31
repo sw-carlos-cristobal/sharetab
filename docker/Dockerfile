@@ -6,12 +6,16 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY prisma ./prisma
 COPY prisma.config.ts ./
-RUN npm ci --omit=dev && npm cache clean --force
+RUN npm ci --omit=dev --legacy-peer-deps && npm cache clean --force
 
 # --- Builder ---
 FROM base AS builder
 WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+ENV DOCKER_BUILD=1
+COPY package.json package-lock.json ./
+COPY prisma ./prisma
+COPY prisma.config.ts ./
+RUN npm ci --legacy-peer-deps && npm cache clean --force
 COPY . .
 RUN npx prisma generate
 RUN npm run build
@@ -34,9 +38,10 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/src/generated ./src/generated
+# Install Prisma CLI in isolated dir to avoid conflict with standalone node_modules
+RUN mkdir -p /prisma-cli && cd /prisma-cli && npm init -y && \
+    npm install --legacy-peer-deps prisma dotenv && npm cache clean --force
 COPY docker/entrypoint.sh /app/entrypoint.sh
 
 # Create directories
