@@ -3,7 +3,7 @@ import { auth } from "@/server/auth";
 import { db } from "@/server/db";
 import { logger } from "@/server/lib/logger";
 import { writeFile, mkdir } from "fs/promises";
-import { join } from "path";
+import { join, resolve } from "path";
 import { randomUUID } from "crypto";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic"];
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const uploadDir = process.env.UPLOAD_DIR ?? "./uploads";
+  const uploadDir = resolve(process.env.UPLOAD_DIR ?? "uploads");
   const receiptsDir = join(uploadDir, "receipts");
   await mkdir(receiptsDir, { recursive: true });
 

@@ -37,8 +37,8 @@ export const guestRouter = createTRPCRouter({
 
       try {
         const { readFile } = await import("fs/promises");
-        const { join } = await import("path");
-        const uploadDir = process.env.UPLOAD_DIR ?? "./uploads";
+        const { join, resolve } = await import("path");
+        const uploadDir = resolve(process.env.UPLOAD_DIR ?? "uploads");
         const filepath = join(uploadDir, receipt.imagePath);
         const imageBuffer = await readFile(filepath);
 

@@ -3,7 +3,7 @@ import type { ReceiptExtractionResult } from "../schema";
 import { receiptExtractionSchema } from "../schema";
 import { RECEIPT_EXTRACTION_PROMPT } from "../prompts/receipt-extraction";
 import { writeFile, unlink, mkdir } from "fs/promises";
-import { join } from "path";
+import { join, resolve } from "path";
 import { randomUUID } from "crypto";
 
 /**
@@ -21,7 +21,7 @@ export class ClaudeSdkProvider implements AIProvider {
     const { query } = await import("@anthropic-ai/claude-agent-sdk");
 
     // Write image to a temp file so the SDK can read it
-    const uploadDir = process.env.UPLOAD_DIR ?? "./uploads";
+    const uploadDir = resolve(process.env.UPLOAD_DIR ?? "uploads");
     const tempDir = join(uploadDir, "temp");
     await mkdir(tempDir, { recursive: true });
     const ext = mimeType.split("/")[1] ?? "png";
