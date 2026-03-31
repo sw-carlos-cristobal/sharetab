@@ -1,4 +1,36 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#18181b"/>
-  <text x="256" y="340" text-anchor="middle" font-family="system-ui, sans-serif" font-size="280" font-weight="700" fill="white">S</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- Rounded square background -->
+  <rect width="512" height="512" rx="112" fill="#059669"/>
+
+  <!-- Left receipt half -->
+  <g transform="translate(-12, 0)">
+    <path d="M152 88h104v336H152l14-18-14-18 14-18-14-18 14-18-14-18 14-18-14-18 14-18-14-18 14-18-14-18 14-18-14-18z" fill="white" opacity="0.95"/>
+    <!-- Line items -->
+    <rect x="172" y="132" width="60" height="8" rx="4" fill="#059669" opacity="0.35"/>
+    <rect x="172" y="160" width="48" height="8" rx="4" fill="#059669" opacity="0.25"/>
+    <rect x="172" y="188" width="56" height="8" rx="4" fill="#059669" opacity="0.35"/>
+    <rect x="172" y="216" width="40" height="8" rx="4" fill="#059669" opacity="0.25"/>
+    <!-- Separator -->
+    <rect x="172" y="252" width="64" height="2" rx="1" fill="#059669" opacity="0.2"/>
+    <!-- Total -->
+    <rect x="172" y="272" width="52" height="10" rx="5" fill="#059669" opacity="0.55"/>
+  </g>
+
+  <!-- Right receipt half -->
+  <g transform="translate(12, 0)">
+    <path d="M256 88h104l-14 18 14 18-14 18 14 18-14 18 14 18-14 18 14 18-14 18 14 18-14 18 14 18-14 18 14 18H256z" fill="white" opacity="0.95"/>
+    <!-- Line items -->
+    <rect x="276" y="132" width="60" height="8" rx="4" fill="#059669" opacity="0.35"/>
+    <rect x="276" y="160" width="48" height="8" rx="4" fill="#059669" opacity="0.25"/>
+    <rect x="276" y="188" width="56" height="8" rx="4" fill="#059669" opacity="0.35"/>
+    <rect x="276" y="216" width="40" height="8" rx="4" fill="#059669" opacity="0.25"/>
+    <!-- Separator -->
+    <rect x="276" y="252" width="64" height="2" rx="1" fill="#059669" opacity="0.2"/>
+    <!-- Total -->
+    <rect x="276" y="272" width="52" height="10" rx="5" fill="#059669" opacity="0.55"/>
+  </g>
+
+  <!-- Split arrows (two small arrows pointing outward from center) -->
+  <path d="M246 340l-24 28h16v24h16v-24h16z" fill="white" opacity="0.7"/>
+  <path d="M266 340l24 28h-16v24h-16v-24h-16z" fill="white" opacity="0.7"/>
 </svg>
