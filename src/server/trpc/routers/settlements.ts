@@ -19,6 +19,7 @@ export const settlementsRouter = createTRPCRouter({
     .input(
       z.object({
         groupId: z.string(),
+        fromId: z.string().optional(),
         toId: z.string(),
         amount: z.number().int().positive(),
         currency: z.string().length(3).default("USD"),
@@ -29,7 +30,7 @@ export const settlementsRouter = createTRPCRouter({
       const settlement = await ctx.db.settlement.create({
         data: {
           groupId: input.groupId,
-          fromId: ctx.user.id,
+          fromId: input.fromId ?? ctx.user.id,
           toId: input.toId,
           amount: input.amount,
           currency: input.currency,

@@ -35,6 +35,7 @@ export function SettleDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const [fromId, setFromId] = useState(suggestedFrom ?? "");
   const [toId, setToId] = useState(suggestedTo ?? "");
   const [amountStr, setAmountStr] = useState(
     suggestedAmount ? (suggestedAmount / 100).toFixed(2) : ""
@@ -56,7 +57,7 @@ export function SettleDialog({
     e.preventDefault();
     const amount = parseToCents(amountStr);
     if (!toId || amount <= 0) return;
-    settle.mutate({ groupId, toId, amount, currency, note: note || undefined });
+    settle.mutate({ groupId, fromId: fromId || undefined, toId, amount, currency, note: note || undefined });
   }
 
   return (
@@ -65,13 +66,31 @@ export function SettleDialog({
         <DialogHeader>
           <DialogTitle>Record a payment</DialogTitle>
           <DialogDescription>
-            Record a payment you made to settle a debt.
+            Record a payment between two group members.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="to">Paid to</Label>
+            <Label htmlFor="from">From</Label>
+            <select
+              id="from"
+              value={fromId}
+              onChange={(e) => setFromId(e.target.value)}
+              required
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <option value="">Select member</option>
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name ?? "Unnamed"}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="to">To</Label>
             <select
               id="to"
               value={toId}
