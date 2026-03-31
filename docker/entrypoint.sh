@@ -76,6 +76,7 @@ echo "Warning: Could not apply schema"
 # ── Claude credentials: make readable by the app user ───────
 CLAUDE_CREDS="/root/.claude/.credentials.json"
 if [ -f "$CLAUDE_CREDS" ]; then
+  chmod o+x /root /root/.claude
   chmod 644 "$CLAUDE_CREDS"
 fi
 
