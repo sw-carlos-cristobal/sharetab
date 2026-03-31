@@ -64,6 +64,15 @@
     Display="always"
     Required="true"
     Mask="false">/mnt/user/appdata/sharetab/uploads</Config>
+  <Config
+    Name="Claude Credentials (claude-sdk)"
+    Target="/root/.claude/.credentials.json"
+    Default=""
+    Description="Mount your host Claude credentials file so the claude-sdk AI provider auto-refreshes its OAuth token. Typically ~/.claude/.credentials.json. Optional — only needed for AI_PROVIDER=claude-sdk."
+    Type="Path"
+    Display="always"
+    Required="false"
+    Mask="false"></Config>
 
   <!-- Auth -->
   <Config
