@@ -74,11 +74,13 @@ NODE_PATH=/prisma-cli/node_modules node /prisma-cli/node_modules/prisma/build/in
 echo "Warning: Could not apply schema"
 
 # ── Claude credentials: link into the app user's home ───────
-# The host bind-mounts .credentials.json as root-owned; the nextjs user
-# can't read /root directly. Symlink it into /home/nextjs/.claude so the
-# claude CLI finds it under the user's actual HOME.
+# The host bind-mounts .credentials.json as root-owned 600; the nextjs
+# user can't read /root directly. Fix permissions and symlink it into
+# /home/nextjs/.claude so the claude CLI finds it under the user's HOME.
 CLAUDE_CREDS="/root/.claude/.credentials.json"
 if [ -f "$CLAUDE_CREDS" ]; then
+  chmod o+x /root /root/.claude
+  chmod 644 "$CLAUDE_CREDS"
   mkdir -p /home/nextjs/.claude/sessions /home/nextjs/.claude/projects
   chown -R nextjs:nodejs /home/nextjs/.claude
   ln -sf "$CLAUDE_CREDS" /home/nextjs/.claude/.credentials.json
