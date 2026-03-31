@@ -42,6 +42,9 @@ COPY --from=builder /app/src/generated ./src/generated
 # Install Prisma CLI in isolated dir to avoid conflict with standalone node_modules
 RUN mkdir -p /prisma-cli && cd /prisma-cli && npm init -y && \
     npm install --legacy-peer-deps prisma dotenv && npm cache clean --force
+
+# Install Claude CLI for claude-sdk AI provider
+RUN npm install -g @anthropic-ai/claude-code --legacy-peer-deps && npm cache clean --force
 COPY docker/entrypoint.sh /app/entrypoint.sh
 
 # Create directories
