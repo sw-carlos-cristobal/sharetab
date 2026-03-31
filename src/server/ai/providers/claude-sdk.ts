@@ -32,10 +32,10 @@ export class ClaudeSdkProvider implements AIProvider {
     try {
       let result = "";
       for await (const msg of query({
-        prompt: `Read the image file at ${tempFile} and extract structured data from this receipt. ${RECEIPT_EXTRACTION_PROMPT}`,
+        prompt: `Use the Read tool ONCE to read the image at ${tempFile}, then immediately return the extracted receipt data as JSON. ${RECEIPT_EXTRACTION_PROMPT}`,
         options: {
-          maxTurns: 3,
-          model: "sonnet",
+          maxTurns: 2,
+          model: "claude-sonnet-4-6",
           allowedTools: ["Read"],
         },
       })) {

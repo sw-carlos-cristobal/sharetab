@@ -85,15 +85,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       : []),
   ],
   callbacks: {
-    jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id;
+        token.name = user.name;
+      }
+      if (trigger === "update") {
+        const fresh = await db.user.findUnique({
+          where: { id: token.id as string },
+          select: { name: true },
+        });
+        if (fresh) token.name = fresh.name;
       }
       return token;
     },
     session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
+        session.user.name = (token.name as string | null | undefined) ?? session.user.name;
       }
       return session;
     },
