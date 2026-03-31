@@ -39,6 +39,8 @@ COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./
 COPY --from=builder /app/src/generated ./src/generated
+# Copy claude-agent-sdk (dynamically imported, not traced by Next.js bundler)
+COPY --from=builder /app/node_modules/@anthropic-ai/claude-agent-sdk ./node_modules/@anthropic-ai/claude-agent-sdk
 # Install Prisma CLI in isolated dir to avoid conflict with standalone node_modules
 RUN mkdir -p /prisma-cli && cd /prisma-cli && npm init -y && \
     npm install --legacy-peer-deps prisma dotenv && npm cache clean --force

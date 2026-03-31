@@ -76,4 +76,5 @@ echo "Warning: Could not apply schema"
 # ── Start App ───────────────────────────────────────────────
 
 echo "Starting ShareTab..."
-exec su-exec nextjs node server.js
+# Set HOME=/root so the nextjs process can find Claude credentials at /root/.claude/
+exec su-exec nextjs env HOME=/root node server.js
