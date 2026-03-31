@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
 import { auth } from "@/server/auth";
 import { readFile, stat } from "fs/promises";
-import { join, resolve, sep } from "path";
+import { resolve, sep } from "path";
+import { getUploadDir } from "@/server/lib/upload-dir";
 
 const MIME_TYPES: Record<string, string> = {
   jpg: "image/jpeg",
@@ -23,8 +24,8 @@ export async function GET(
   const { path } = await params;
   const filePath = path.join("/");
 
-  const uploadDir = /* turbopackIgnore: true */ resolve(process.env.UPLOAD_DIR ?? "uploads");
-  const fullPath = /* turbopackIgnore: true */ resolve(uploadDir, filePath);
+  const uploadDir = getUploadDir();
+  const fullPath = resolve(uploadDir, filePath);
 
   // Prevent directory traversal by verifying resolved path stays within uploadDir
   if (!fullPath.startsWith(uploadDir + sep) && fullPath !== uploadDir) {

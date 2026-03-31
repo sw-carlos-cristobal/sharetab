@@ -3,7 +3,8 @@ import { auth } from "@/server/auth";
 import { db } from "@/server/db";
 import { logger } from "@/server/lib/logger";
 import { writeFile, mkdir } from "fs/promises";
-import { join, resolve } from "path";
+import { join } from "path";
+import { getUploadDir } from "@/server/lib/upload-dir";
 import { randomUUID } from "crypto";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic"];
@@ -66,7 +67,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const uploadDir = /* turbopackIgnore: true */ resolve(process.env.UPLOAD_DIR ?? "uploads");
+  const uploadDir = getUploadDir();
   const receiptsDir = join(uploadDir, "receipts");
   await mkdir(receiptsDir, { recursive: true });
 
