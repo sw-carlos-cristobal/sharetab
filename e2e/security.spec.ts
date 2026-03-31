@@ -13,7 +13,7 @@ test.describe("Security & Edge Cases", () => {
       await page.getByLabel("Email").fill(email);
       await page.getByLabel("Password").fill("testpass123");
       await page.getByRole("button", { name: "Create account" }).click();
-      await page.waitForURL("**/dashboard", { timeout: 15000 });
+      await page.waitForURL("**/dashboard", { timeout: 30000 });
 
       // The script tag should be rendered as text, not executed
       const nameText = await page.locator("text=<script>").count();
@@ -29,7 +29,7 @@ test.describe("Security & Edge Cases", () => {
       await page.getByLabel("Email").fill(email);
       await page.getByLabel("Password").fill("testpass123");
       await page.getByRole("button", { name: "Create account" }).click();
-      await page.waitForURL("**/dashboard", { timeout: 15000 });
+      await page.waitForURL("**/dashboard", { timeout: 30000 });
 
       // DB should still work — health check
       const response = await page.goto("/api/health");

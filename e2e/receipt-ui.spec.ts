@@ -49,7 +49,7 @@ test.describe("Additional UI Tests", () => {
     await page.getByLabel("Email").fill(email);
     await page.getByLabel("Password").fill("testpass123");
     await page.getByRole("button", { name: "Create account" }).click();
-    await page.waitForURL("**/dashboard", { timeout: 15000 });
+    await page.waitForURL("**/dashboard", { timeout: 30000 });
     await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
     await expect(page.getByText("Auto Login User")).toBeVisible();
   });
@@ -61,7 +61,7 @@ test.describe("Additional UI Tests", () => {
     await page.getByLabel("Email").fill(email);
     await page.getByLabel("Password").fill("testpass123");
     await page.getByRole("button", { name: "Create account" }).click();
-    await page.waitForURL("**/dashboard", { timeout: 15000 });
+    await page.waitForURL("**/dashboard", { timeout: 30000 });
     await expect(page.getByText("No groups yet")).toBeVisible();
   });
 

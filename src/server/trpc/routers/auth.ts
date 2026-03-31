@@ -24,7 +24,8 @@ export const authRouter = createTRPCRouter({
         typeof ((ctx as Record<string, unknown>).headers as Headers | undefined)?.get === "function"
           ? ((ctx as Record<string, unknown>).headers as Headers).get("x-forwarded-for") ?? "global"
           : "global";
-      const { allowed } = checkRateLimit(`register:${ip}`, 10, 60 * 60 * 1000);
+      const maxRegAttempts = parseInt(process.env.REGISTER_RATE_LIMIT_MAX ?? "10");
+      const { allowed } = checkRateLimit(`register:${ip}`, maxRegAttempts, 60 * 60 * 1000);
       if (!allowed) {
         throw new TRPCError({
           code: "TOO_MANY_REQUESTS",
