@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { formatCents, centsToDecimal, parseToCents } from "@/lib/money";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,12 @@ export function ItemAssignment({
   const [paidById, setPaidById] = useState("");
   const [tipOverride, setTipOverride] = useState<string>("");
   const [showImage, setShowImage] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStart = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
+  const lastTouchDist = useRef<number | null>(null);
+  const imageContainerRef = useRef<HTMLDivElement>(null);
   const [editingItem, setEditingItem] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<{ name: string; quantity: string; totalPrice: string }>({ name: "", quantity: "", totalPrice: "" });
   const [addingItem, setAddingItem] = useState(false);
@@ -58,6 +64,24 @@ export function ItemAssignment({
       utils.receipts.getReceiptItems.invalidate({ receiptId });
     },
   });
+
+  // Reset zoom/pan when image is hidden
+  useEffect(() => {
+    if (!showImage) { setZoom(1); setPan({ x: 0, y: 0 }); }
+  }, [showImage]);
+
+  // Wheel zoom — must be non-passive to call preventDefault
+  useEffect(() => {
+    const el = imageContainerRef.current;
+    if (!el || !showImage) return;
+    const handler = (e: WheelEvent) => {
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+      setZoom((z) => Math.min(Math.max(z * factor, 1), 5));
+    };
+    el.addEventListener("wheel", handler, { passive: false });
+    return () => el.removeEventListener("wheel", handler);
+  }, [showImage]);
 
   // Initialize title from merchant name when data loads
   useMemo(() => {
@@ -221,12 +245,82 @@ export function ItemAssignment({
 
       {showImage && receipt.imagePath && (
         <Card>
-          <CardContent className="py-3">
-            <img
-              src={`/api/uploads/${receipt.imagePath}`}
-              alt="Receipt"
-              className="mx-auto max-h-[500px] rounded-md object-contain"
-            />
+          <CardContent className="p-0 overflow-hidden rounded-lg">
+            <div
+              ref={imageContainerRef}
+              className="relative overflow-hidden rounded-t-lg bg-muted/30"
+              style={{
+                height: 400,
+                cursor: isDragging ? "grabbing" : "grab",
+                touchAction: "none",
+                userSelect: "none",
+              }}
+              onMouseDown={(e) => {
+                setIsDragging(true);
+                dragStart.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
+              }}
+              onMouseMove={(e) => {
+                if (!isDragging || !dragStart.current) return;
+                setPan({
+                  x: dragStart.current.panX + e.clientX - dragStart.current.x,
+                  y: dragStart.current.panY + e.clientY - dragStart.current.y,
+                });
+              }}
+              onMouseUp={() => { setIsDragging(false); dragStart.current = null; }}
+              onMouseLeave={() => { setIsDragging(false); dragStart.current = null; }}
+              onDoubleClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}
+              onTouchStart={(e) => {
+                if (e.touches.length === 2) {
+                  const dx = e.touches[0].clientX - e.touches[1].clientX;
+                  const dy = e.touches[0].clientY - e.touches[1].clientY;
+                  lastTouchDist.current = Math.sqrt(dx * dx + dy * dy);
+                } else {
+                  dragStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, panX: pan.x, panY: pan.y };
+                }
+              }}
+              onTouchMove={(e) => {
+                if (e.touches.length === 2 && lastTouchDist.current !== null) {
+                  const dx = e.touches[0].clientX - e.touches[1].clientX;
+                  const dy = e.touches[0].clientY - e.touches[1].clientY;
+                  const dist = Math.sqrt(dx * dx + dy * dy);
+                  const factor = dist / lastTouchDist.current;
+                  setZoom((z) => Math.min(Math.max(z * factor, 1), 5));
+                  lastTouchDist.current = dist;
+                } else if (e.touches.length === 1 && dragStart.current) {
+                  setPan({
+                    x: dragStart.current.panX + e.touches[0].clientX - dragStart.current.x,
+                    y: dragStart.current.panY + e.touches[0].clientY - dragStart.current.y,
+                  });
+                }
+              }}
+              onTouchEnd={() => { lastTouchDist.current = null; dragStart.current = null; }}
+            >
+              <img
+                src={`/api/uploads/${receipt.imagePath}`}
+                alt="Receipt"
+                draggable={false}
+                className="h-full w-full object-contain pointer-events-none"
+                style={{
+                  transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                  transformOrigin: "center center",
+                  transition: isDragging ? "none" : "transform 0.05s ease-out",
+                }}
+              />
+            </div>
+            {zoom > 1 && (
+              <div className="flex items-center justify-between px-3 py-1.5 text-xs text-muted-foreground border-t">
+                <span>{Math.round(zoom * 100)}%</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                  onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}
+                >
+                  Reset view
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
