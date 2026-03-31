@@ -32,10 +32,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const parsed = loginSchema.safeParse(credentials);
         if (!parsed.success) return null;
 
-        // Rate limit: 5 attempts per 15 minutes per email
+        // Rate limit login attempts (configurable for CI/testing)
+        const maxLoginAttempts = parseInt(process.env.AUTH_RATE_LIMIT_MAX ?? "5");
         const { allowed } = checkRateLimit(
           `login:${parsed.data.email}`,
-          5,
+          maxLoginAttempts,
           15 * 60 * 1000
         );
         if (!allowed) {

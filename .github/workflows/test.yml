@@ -72,6 +72,7 @@ jobs:
           AUTH_TRUST_HOST: "true"
           NEXTAUTH_URL: http://localhost:3000
           BASE_URL: http://localhost:3000
+          AUTH_RATE_LIMIT_MAX: "1000"
         run: |
           npm run start &
           npx wait-on http://localhost:3000/api/health --timeout 30000
