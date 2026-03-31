@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Trash2, UserPlus } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2, UserPlus, Check, X } from "lucide-react";
 import Link from "next/link";
 
 export default function GroupSettingsPage({
@@ -25,6 +25,8 @@ export default function GroupSettingsPage({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [placeholderName, setPlaceholderName] = useState("");
+  const [editingPlaceholder, setEditingPlaceholder] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
 
   useEffect(() => {
     if (group.data) {
@@ -51,6 +53,17 @@ export default function GroupSettingsPage({
       setPlaceholderName("");
       utils.groups.get.invalidate({ groupId });
     },
+  });
+
+  const renamePlaceholder = trpc.groups.renamePlaceholder.useMutation({
+    onSuccess: () => {
+      setEditingPlaceholder(null);
+      utils.groups.get.invalidate({ groupId });
+    },
+  });
+
+  const removeMember = trpc.groups.removeMember.useMutation({
+    onSuccess: () => utils.groups.get.invalidate({ groupId }),
   });
 
   function handleSave(e: React.FormEvent) {
@@ -154,12 +167,62 @@ export default function GroupSettingsPage({
                   key={m.user.id}
                   className="flex items-center justify-between rounded-md border border-dashed p-2"
                 >
-                  <span className="text-sm">
-                    {m.user.placeholderName ?? m.user.name}
-                  </span>
-                  <Badge variant="outline" className="text-[10px]">
-                    Pending
-                  </Badge>
+                  {editingPlaceholder === m.user.id ? (
+                    <div className="flex flex-1 items-center gap-2">
+                      <Input
+                        value={editingName}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        className="h-7 text-sm"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") renamePlaceholder.mutate({ groupId, placeholderUserId: m.user.id, name: editingName.trim() });
+                          if (e.key === "Escape") setEditingPlaceholder(null);
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => renamePlaceholder.mutate({ groupId, placeholderUserId: m.user.id, name: editingName.trim() })}
+                        className="text-primary hover:text-primary/80"
+                        disabled={renamePlaceholder.isPending}
+                      >
+                        <Check className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingPlaceholder(null)}
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">{m.user.placeholderName ?? m.user.name}</span>
+                        <Badge variant="outline" className="text-[10px]">Pending</Badge>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => { setEditingPlaceholder(m.user.id); setEditingName(m.user.placeholderName ?? m.user.name ?? ""); }}
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm(`Remove "${m.user.placeholderName ?? m.user.name}"?`)) {
+                              removeMember.mutate({ groupId, userId: m.user.id });
+                            }
+                          }}
+                          className="text-muted-foreground hover:text-destructive"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               ))}
             </div>

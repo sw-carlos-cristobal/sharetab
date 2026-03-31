@@ -233,6 +233,22 @@ export const groupsRouter = createTRPCRouter({
       return { id: user.id, name: user.name, isPlaceholder: true };
     }),
 
+  renamePlaceholder: groupMemberProcedure
+    .input(z.object({ groupId: z.string(), placeholderUserId: z.string(), name: z.string().min(1).max(100) }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.membership.role !== "OWNER" && ctx.membership.role !== "ADMIN") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Only admins and owners can rename placeholder members" });
+      }
+      const user = await ctx.db.user.findUnique({ where: { id: input.placeholderUserId } });
+      if (!user?.isPlaceholder) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "User is not a placeholder" });
+      }
+      return ctx.db.user.update({
+        where: { id: input.placeholderUserId },
+        data: { placeholderName: input.name },
+      });
+    }),
+
   mergePlaceholder: groupMemberProcedure
     .input(
       z.object({
