@@ -23,6 +23,11 @@ mkdir -p "$PGDATA"
 chown postgres:postgres "$PGDATA"
 chmod 700 "$PGDATA"
 
+# Ensure uploads directory exists and is writable by the app user (needed for host bind-mounts)
+UPLOAD_DIR="${UPLOAD_DIR:-/app/uploads}"
+mkdir -p "$UPLOAD_DIR/receipts"
+chown -R nextjs:nodejs "$UPLOAD_DIR"
+
 # Initialize database if needed
 if [ ! -s "$PGDATA/PG_VERSION" ]; then
   echo "Initializing PostgreSQL database..."
