@@ -98,7 +98,7 @@ export default function SettingsPage() {
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 required
-                minLength={6}
+                minLength={8}
               />
             </div>
             <div className="space-y-2">
@@ -109,7 +109,7 @@ export default function SettingsPage() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
-                minLength={6}
+                minLength={8}
               />
               {confirmPassword && newPassword !== confirmPassword && (
                 <p className="text-sm text-red-600">Passwords do not match</p>

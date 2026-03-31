@@ -79,6 +79,14 @@ export const expensesRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      // Validate paidById is a member of the group
+      const paidByMember = await ctx.db.groupMember.findFirst({
+        where: { groupId: input.groupId, userId: input.paidById },
+      });
+      if (!paidByMember) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Paid-by user is not a member of this group" });
+      }
+
       // Validate shares sum equals total
       const sharesSum = input.shares.reduce((sum, s) => sum + s.amount, 0);
       if (sharesSum !== input.amount) {
@@ -149,6 +157,16 @@ export const expensesRouter = createTRPCRouter({
       });
       if (!existing || existing.groupId !== input.groupId) {
         throw new TRPCError({ code: "NOT_FOUND" });
+      }
+
+      // Validate paidById is a member of the group (if provided)
+      if (input.paidById) {
+        const paidByMember = await ctx.db.groupMember.findFirst({
+          where: { groupId: input.groupId, userId: input.paidById },
+        });
+        if (!paidByMember) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Paid-by user is not a member of this group" });
+        }
       }
 
       const { groupId, expenseId, shares, ...data } = input;

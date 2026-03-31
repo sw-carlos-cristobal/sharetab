@@ -65,7 +65,7 @@ export DATABASE_URL="${DATABASE_URL:-postgresql://$DB_USER:$DB_PASSWORD@localhos
 # ── Run Migrations ──────────────────────────────────────────
 
 echo "Running database migrations..."
-NODE_PATH=/prisma-cli/node_modules node /prisma-cli/node_modules/prisma/build/index.js db push --accept-data-loss || \
+NODE_PATH=/prisma-cli/node_modules node /prisma-cli/node_modules/prisma/build/index.js db push || \
 echo "Warning: Could not apply schema"
 
 # ── Start App ───────────────────────────────────────────────

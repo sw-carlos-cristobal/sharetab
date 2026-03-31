@@ -14,7 +14,7 @@ export const authRouter = createTRPCRouter({
       z.object({
         name: z.string().min(1).max(100),
         email: z.string().email(),
-        password: z.string().min(6).max(100),
+        password: z.string().min(8).max(100),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -38,7 +38,7 @@ export const authRouter = createTRPCRouter({
       if (existing) {
         throw new TRPCError({
           code: "CONFLICT",
-          message: "An account with this email already exists",
+          message: "Unable to create account. Please try a different email or sign in.",
         });
       }
 
@@ -58,7 +58,7 @@ export const authRouter = createTRPCRouter({
     .input(
       z.object({
         currentPassword: z.string().min(1),
-        newPassword: z.string().min(6).max(100),
+        newPassword: z.string().min(8).max(100),
       })
     )
     .mutation(async ({ ctx, input }) => {
