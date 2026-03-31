@@ -176,19 +176,89 @@ export const groupsRouter = createTRPCRouter({
         throw new TRPCError({ code: "FORBIDDEN", message: "Cannot remove the owner" });
       }
 
-      await ctx.db.$transaction([
-        ctx.db.groupMember.delete({
-          where: { id: targetMember.id },
-        }),
-        ctx.db.activityLog.create({
-          data: {
-            groupId: input.groupId,
-            userId: ctx.user.id,
-            type: "MEMBER_LEFT",
-            metadata: { removedUserId: input.userId },
-          },
-        }),
-      ]);
+      const targetUser = await ctx.db.user.findUnique({
+        where: { id: input.userId },
+        select: { isPlaceholder: true },
+      });
+
+      if (targetUser?.isPlaceholder) {
+        // Placeholder cleanup: redistribute shares, reassign expenses, then hard-delete the user
+        await ctx.db.$transaction(async (tx) => {
+          // 1. Redistribute expense shares to each expense's payer
+          const shares = await tx.expenseShare.findMany({
+            where: { userId: input.userId, expense: { groupId: input.groupId } },
+            include: { expense: { select: { paidById: true } } },
+          });
+
+          for (const share of shares) {
+            // If the placeholder was the payer, redistribute to the acting admin
+            const payerId =
+              share.expense.paidById === input.userId ? ctx.user.id : share.expense.paidById;
+
+            const existing = await tx.expenseShare.findUnique({
+              where: { expenseId_userId: { expenseId: share.expenseId, userId: payerId } },
+            });
+            if (existing) {
+              await tx.expenseShare.update({
+                where: { id: existing.id },
+                data: { amount: existing.amount + share.amount },
+              });
+            } else {
+              await tx.expenseShare.create({
+                data: { expenseId: share.expenseId, userId: payerId, amount: share.amount },
+              });
+            }
+            await tx.expenseShare.delete({ where: { id: share.id } });
+          }
+
+          // 2. Reassign expenses where the placeholder was payer or creator
+          await tx.expense.updateMany({
+            where: { paidById: input.userId, groupId: input.groupId },
+            data: { paidById: ctx.user.id },
+          });
+          await tx.expense.updateMany({
+            where: { addedById: input.userId, groupId: input.groupId },
+            data: { addedById: ctx.user.id },
+          });
+
+          // 3. Delete settlements involving the placeholder in this group
+          await tx.settlement.deleteMany({
+            where: { groupId: input.groupId, OR: [{ fromId: input.userId }, { toId: input.userId }] },
+          });
+
+          // 4. Delete receipt item assignments for the placeholder
+          await tx.receiptItemAssignment.deleteMany({ where: { userId: input.userId } });
+
+          // 5. Delete any activity log entries for the placeholder
+          await tx.activityLog.deleteMany({ where: { userId: input.userId } });
+
+          // 6. Log the removal before deleting the user
+          await tx.activityLog.create({
+            data: {
+              groupId: input.groupId,
+              userId: ctx.user.id,
+              type: "MEMBER_LEFT",
+              metadata: { removedUserId: input.userId, wasPlaceholder: true },
+            },
+          });
+
+          // 7. Delete the placeholder user record (GroupMember cascades automatically)
+          await tx.user.delete({ where: { id: input.userId } });
+        });
+      } else {
+        // Real user — preserve financial history, just remove the membership
+        await ctx.db.$transaction([
+          ctx.db.groupMember.delete({ where: { id: targetMember.id } }),
+          ctx.db.activityLog.create({
+            data: {
+              groupId: input.groupId,
+              userId: ctx.user.id,
+              type: "MEMBER_LEFT",
+              metadata: { removedUserId: input.userId },
+            },
+          }),
+        ]);
+      }
 
       return { success: true };
     }),
