@@ -164,11 +164,29 @@
     Name="Anthropic API Key"
     Target="ANTHROPIC_API_KEY"
     Default=""
-    Description="API key for Claude (required if AI_PROVIDER=claude)"
+    Description="API key for Claude (required if AI_PROVIDER=claude). Use any value when pointing at a Meridian proxy."
     Type="Variable"
     Display="always"
     Required="false"
     Mask="true"></Config>
+  <Config
+    Name="Anthropic Base URL"
+    Target="ANTHROPIC_BASE_URL"
+    Default=""
+    Description="Override the Anthropic API endpoint. Set to http://192.168.1.x:3456 to point at a Meridian container (Claude Max subscription, ~3-5s scans). Leave blank to use api.anthropic.com."
+    Type="Variable"
+    Display="always"
+    Required="false"
+    Mask="false"></Config>
+  <Config
+    Name="Anthropic Model"
+    Target="ANTHROPIC_MODEL"
+    Default="claude-sonnet-4-6"
+    Description="Claude model for receipt scanning. Options: claude-sonnet-4-6, claude-haiku-4-5-20251001 (fastest), claude-opus-4-6"
+    Type="Variable"
+    Display="always"
+    Required="false"
+    Mask="false">claude-sonnet-4-6</Config>
   <Config
     Name="Anthropic Auth Token"
     Target="ANTHROPIC_AUTH_TOKEN"

@@ -21,8 +21,9 @@ export class ClaudeProvider implements AIProvider {
     const base64 = imageBuffer.toString("base64");
 
     const response = await this.client.messages.create({
-      model: "claude-sonnet-4-6",
+      model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6",
       max_tokens: 4000,
+      stream: false,
       messages: [
         {
           role: "user",
@@ -44,7 +45,7 @@ export class ClaudeProvider implements AIProvider {
       ],
     });
 
-    const textBlock = response.content.find((c) => c.type === "text");
+    const textBlock = response.content?.find((c: { type: string }) => c.type === "text");
     if (!textBlock || textBlock.type !== "text") {
       throw new Error("Claude returned no text response");
     }
