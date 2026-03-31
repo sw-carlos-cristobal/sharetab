@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: process.env.DOCKER_BUILD === "1" ? "standalone" : undefined,
-  serverExternalPackages: ["@anthropic-ai/claude-agent-sdk"],
+  serverExternalPackages: ["@rynfar/meridian", "@anthropic-ai/claude-agent-sdk"],
   async headers() {
     return [
       {

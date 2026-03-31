@@ -11,7 +11,7 @@ export class ClaudeProvider implements AIProvider {
   private client: Anthropic;
 
   constructor(apiKey: string) {
-    this.client = new Anthropic({ apiKey });
+    this.client = new Anthropic({ apiKey, maxRetries: 0 });
   }
 
   async extractReceipt(
@@ -20,10 +20,9 @@ export class ClaudeProvider implements AIProvider {
   ): Promise<ReceiptExtractionResult> {
     const base64 = imageBuffer.toString("base64");
 
-    const response = await this.client.messages.create({
+    const stream = this.client.messages.stream({
       model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6",
       max_tokens: 4000,
-      stream: false,
       messages: [
         {
           role: "user",
@@ -45,12 +44,15 @@ export class ClaudeProvider implements AIProvider {
       ],
     });
 
+    const response = await stream.finalMessage();
+
     const textBlock = response.content?.find((c: { type: string }) => c.type === "text");
     if (!textBlock || textBlock.type !== "text") {
       throw new Error("Claude returned no text response");
     }
 
-    const raw = JSON.parse(textBlock.text);
+    const cleaned = textBlock.text.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "");
+    const raw = JSON.parse(cleaned);
     return receiptExtractionSchema.parse(raw);
   }
 

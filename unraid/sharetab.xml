@@ -65,10 +65,10 @@
     Required="true"
     Mask="false">/mnt/user/appdata/sharetab/uploads</Config>
   <Config
-    Name="Claude Credentials (claude-sdk)"
+    Name="Claude Credentials (meridian)"
     Target="/root/.claude/.credentials.json"
     Default=""
-    Description="Mount your host Claude credentials file so the claude-sdk AI provider auto-refreshes its OAuth token. Typically ~/.claude/.credentials.json. Must be rw so the SDK can write refreshed tokens. Optional — only needed for AI_PROVIDER=claude-sdk."
+    Description="Mount your host Claude credentials file for the meridian AI provider (uses Claude Max subscription). Created by running 'claude login' on the host. Optional — only needed for AI_PROVIDER=meridian."
     Type="Path"
     Display="always"
     Required="false"
@@ -146,7 +146,7 @@
     Name="AI Provider"
     Target="AI_PROVIDER"
     Default="openai"
-    Description="AI provider for receipt scanning: openai | claude | claude-sdk | ollama"
+    Description="AI provider for receipt scanning: openai | claude | meridian | ollama. Meridian uses Claude Max subscription via embedded proxy — no API key needed."
     Type="Variable"
     Display="always"
     Required="false"
@@ -164,38 +164,20 @@
     Name="Anthropic API Key"
     Target="ANTHROPIC_API_KEY"
     Default=""
-    Description="API key for Claude (required if AI_PROVIDER=claude). Use any value when pointing at a Meridian proxy."
+    Description="API key for Claude (required if AI_PROVIDER=claude)"
     Type="Variable"
     Display="always"
     Required="false"
     Mask="true"></Config>
-  <Config
-    Name="Anthropic Base URL"
-    Target="ANTHROPIC_BASE_URL"
-    Default=""
-    Description="Override the Anthropic API endpoint. Set to http://192.168.1.x:3456 to point at a Meridian container (Claude Max subscription, ~3-5s scans). Leave blank to use api.anthropic.com."
-    Type="Variable"
-    Display="always"
-    Required="false"
-    Mask="false"></Config>
   <Config
     Name="Anthropic Model"
     Target="ANTHROPIC_MODEL"
-    Default="claude-sonnet-4-6"
-    Description="Claude model for receipt scanning. Options: claude-sonnet-4-6, claude-haiku-4-5-20251001 (fastest), claude-opus-4-6"
+    Default="claude-opus-4-6"
+    Description="Claude model for receipt scanning (claude/meridian providers). Options: claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5-20251001"
     Type="Variable"
     Display="always"
     Required="false"
-    Mask="false">claude-sonnet-4-6</Config>
-  <Config
-    Name="Anthropic Auth Token"
-    Target="ANTHROPIC_AUTH_TOKEN"
-    Default=""
-    Description="Claude OAuth token for claude-sdk provider (uses Claude Max/Pro subscription). Expires every ~8h."
-    Type="Variable"
-    Display="always"
-    Required="false"
-    Mask="true"></Config>
+    Mask="false">claude-opus-4-6</Config>
   <Config
     Name="Ollama URL"
     Target="OLLAMA_BASE_URL"

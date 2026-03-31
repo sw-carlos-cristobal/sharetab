@@ -39,14 +39,13 @@ COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./
 COPY --from=builder /app/src/generated ./src/generated
-# Copy claude-agent-sdk (dynamically imported, not traced by Next.js bundler)
+# Copy meridian proxy (embedded, dynamically imported — not traced by Next.js bundler)
+COPY --from=builder /app/node_modules/@rynfar/meridian ./node_modules/@rynfar/meridian
 COPY --from=builder /app/node_modules/@anthropic-ai/claude-agent-sdk ./node_modules/@anthropic-ai/claude-agent-sdk
 # Install Prisma CLI in isolated dir to avoid conflict with standalone node_modules
 RUN mkdir -p /prisma-cli && cd /prisma-cli && npm init -y && \
     npm install --legacy-peer-deps prisma dotenv && npm cache clean --force
 
-# Install Claude CLI for claude-sdk AI provider
-RUN npm install -g @anthropic-ai/claude-code --legacy-peer-deps && npm cache clean --force
 COPY docker/entrypoint.sh /app/entrypoint.sh
 
 # Create directories

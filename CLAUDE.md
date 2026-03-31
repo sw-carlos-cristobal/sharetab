@@ -13,7 +13,7 @@ ShareTab — open-source, self-hosted Splitwise alternative with AI receipt scan
 - **ORM:** Prisma 7 + PostgreSQL 16 (via `@prisma/adapter-pg`)
 - **Auth:** NextAuth v5 (email/password + OAuth)
 - **UI:** TailwindCSS 4 + shadcn/ui (v4, uses `@base-ui/react` — use `render` prop instead of `asChild`) + next-themes (dark mode)
-- **AI:** Pluggable providers (OpenAI, Claude, Ollama) via `src/server/ai/`
+- **AI:** Pluggable providers (OpenAI, Claude, Meridian, Ollama) via `src/server/ai/`
 
 ## Commands
 
@@ -121,7 +121,7 @@ docker compose exec sharetab su-exec postgres pg_dump -U sharetab sharetab > bac
 
 ### Phase 4: AI Receipt Scanning — COMPLETE
 - Pluggable AI provider system: `src/server/ai/provider.ts` interface
-- Three implementations: OpenAI (GPT-4o), Claude (Sonnet), Ollama (llava) in `src/server/ai/providers/`
+- Four implementations: OpenAI (GPT-4o), Claude (API key), Meridian (Claude Max subscription, embedded proxy), Ollama (llava) in `src/server/ai/providers/`
 - Provider registry with env-based selection (`AI_PROVIDER` env var)
 - Receipt upload endpoint (`POST /api/upload`) with file validation
 - Receipt processing tRPC router: upload → AI extraction → ReceiptItem creation
@@ -211,4 +211,5 @@ docker compose exec sharetab su-exec postgres pg_dump -U sharetab sharetab > bac
 - **Settle-up From/To fields**: `SettleDialog` now shows explicit From and To dropdowns (pre-populated from debt row); `settlements.create` accepts optional `fromId` (defaults to current user)
 - **Placeholder member edit/delete**: Group settings page has inline rename (pencil icon) and delete (trash icon) for placeholder members; new `groups.renamePlaceholder` tRPC mutation
 - **Settings page pre-population**: Name field now syncs with session via `useEffect` so it's pre-filled on every visit
-- **Docker claude-sdk fix**: Credentials file bind-mount permissions fixed in entrypoint (`chmod o+x /root /root/.claude`, `chmod 644 .credentials.json`, symlink into `/home/nextjs/.claude/`); `@anthropic-ai/claude-agent-sdk` added to `serverExternalPackages` and copied to standalone in Dockerfile
+- **Meridian AI provider**: Embedded `@rynfar/meridian` proxy runs in-process, converting Claude Max subscription into standard Anthropic API (~16s receipt scans with opus). No separate container or API key needed — just mount `~/.claude/.credentials.json`. Set `AI_PROVIDER=meridian`.
+- **Configurable model**: `ANTHROPIC_MODEL` env var (default: `claude-opus-4-6`) for claude/meridian providers

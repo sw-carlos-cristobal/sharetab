@@ -19,9 +19,7 @@ services:
       - AI_PROVIDER=${AI_PROVIDER:-openai}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-}
-      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-4-6}
-      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:-}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-opus-4-6}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       - OLLAMA_MODEL=${OLLAMA_MODEL:-llava}
       - EMAIL_SERVER_HOST=${EMAIL_SERVER_HOST:-}
@@ -41,20 +39,6 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-
-  # Meridian: proxies Claude Max subscription as a standard Anthropic API (~3-5s vs ~22s claude-sdk)
-  # Build once: docker compose --profile meridian build meridian
-  # Run:        docker compose --profile meridian up -d
-  # ShareTab config: AI_PROVIDER=claude, ANTHROPIC_BASE_URL=http://meridian:3456, ANTHROPIC_API_KEY=x
-  meridian:
-    build: https://github.com/rynfar/meridian.git
-    image: meridian:local
-    profiles: [meridian]
-    environment:
-      - MERIDIAN_HOST=0.0.0.0
-    volumes:
-      - ${CLAUDE_DIR:-~/.claude}:/home/claude/.claude:rw
-    restart: unless-stopped
 
 volumes:
   pgdata:

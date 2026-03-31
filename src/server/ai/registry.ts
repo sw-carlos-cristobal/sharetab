@@ -15,9 +15,9 @@ export async function getAIProvider(): Promise<AIProvider> {
       }
       return new ClaudeProvider(process.env.ANTHROPIC_API_KEY);
     }
-    case "claude-sdk": {
-      const { ClaudeSdkProvider } = await import("./providers/claude-sdk");
-      return new ClaudeSdkProvider();
+    case "meridian": {
+      const { MeridianProvider } = await import("./providers/meridian");
+      return new MeridianProvider();
     }
     case "ollama": {
       const { OllamaProvider } = await import("./providers/ollama");
@@ -28,7 +28,7 @@ export async function getAIProvider(): Promise<AIProvider> {
     }
     default:
       throw new Error(
-        `Unknown AI provider: "${name}". Available: openai, claude, claude-sdk, ollama`
+        `Unknown AI provider: "${name}". Available: openai, claude, meridian, ollama`
       );
   }
 }

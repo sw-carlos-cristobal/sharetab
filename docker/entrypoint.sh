@@ -73,17 +73,11 @@ echo "Running database migrations..."
 NODE_PATH=/prisma-cli/node_modules node /prisma-cli/node_modules/prisma/build/index.js db push || \
 echo "Warning: Could not apply schema"
 
-# ── Claude credentials: link into the app user's home ───────
-# The host bind-mounts .credentials.json as root-owned 600; the nextjs
-# user can't read /root directly. Fix permissions and symlink it into
-# /home/nextjs/.claude so the claude CLI finds it under the user's HOME.
+# ── Claude credentials: fix permissions for meridian provider ──
+# The host bind-mounts .credentials.json; ensure it's readable.
 CLAUDE_CREDS="/root/.claude/.credentials.json"
 if [ -f "$CLAUDE_CREDS" ]; then
-  chmod o+x /root /root/.claude
   chmod 644 "$CLAUDE_CREDS"
-  mkdir -p /home/nextjs/.claude/sessions /home/nextjs/.claude/projects
-  chown -R nextjs:nodejs /home/nextjs/.claude
-  ln -sf "$CLAUDE_CREDS" /home/nextjs/.claude/.credentials.json
 fi
 
 # ── Start App ───────────────────────────────────────────────
