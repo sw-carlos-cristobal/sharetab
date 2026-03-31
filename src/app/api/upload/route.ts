@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const uploadDir = resolve(process.env.UPLOAD_DIR ?? "uploads");
+  const uploadDir = /* turbopackIgnore: true */ resolve(process.env.UPLOAD_DIR ?? "uploads");
   const receiptsDir = join(uploadDir, "receipts");
   await mkdir(receiptsDir, { recursive: true });
 

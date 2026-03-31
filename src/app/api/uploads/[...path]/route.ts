@@ -23,8 +23,8 @@ export async function GET(
   const { path } = await params;
   const filePath = path.join("/");
 
-  const uploadDir = resolve(process.env.UPLOAD_DIR ?? "uploads");
-  const fullPath = resolve(uploadDir, filePath);
+  const uploadDir = /* turbopackIgnore: true */ resolve(process.env.UPLOAD_DIR ?? "uploads");
+  const fullPath = /* turbopackIgnore: true */ resolve(uploadDir, filePath);
 
   // Prevent directory traversal by verifying resolved path stays within uploadDir
   if (!fullPath.startsWith(uploadDir + sep) && fullPath !== uploadDir) {
