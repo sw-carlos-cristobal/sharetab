@@ -8,7 +8,7 @@ ShareTab — open-source, self-hosted Splitwise alternative with AI receipt scan
 
 ## Tech Stack
 
-- **Framework:** Next.js 15 (App Router) + TypeScript
+- **Framework:** Next.js 16 (App Router) + TypeScript
 - **API:** tRPC v11 (end-to-end type-safe)
 - **ORM:** Prisma 7 + PostgreSQL 16 (via `@prisma/adapter-pg`)
 - **Auth:** NextAuth v5 (email/password + OAuth)
@@ -93,7 +93,7 @@ docker compose exec sharetab su-exec postgres pg_dump -U sharetab sharetab > bac
 ## Implementation Status
 
 ### Phase 1: Foundation — COMPLETE
-- Next.js 15 + TypeScript + TailwindCSS 4 + shadcn/ui
+- Next.js 16 + TypeScript + TailwindCSS 4 + shadcn/ui
 - Prisma 7 schema (14 models: User, Account, Session, VerificationToken, Group, GroupMember, GroupInvite, Expense, ExpenseShare, Receipt, ReceiptItem, ReceiptItemAssignment, Settlement, ActivityLog)
 - NextAuth v5 with email/password (bcrypt) + optional Google OAuth + optional magic link (Nodemailer)
 - tRPC v11 with 8 routers (auth, groups, expenses, balances, settlements, activity, receipts, guest)
