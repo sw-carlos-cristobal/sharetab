@@ -73,6 +73,12 @@ echo "Running database migrations..."
 NODE_PATH=/prisma-cli/node_modules node /prisma-cli/node_modules/prisma/build/index.js db push || \
 echo "Warning: Could not apply schema"
 
+# ── Claude credentials: make readable by the app user ───────
+CLAUDE_CREDS="/root/.claude/.credentials.json"
+if [ -f "$CLAUDE_CREDS" ]; then
+  chmod 644 "$CLAUDE_CREDS"
+fi
+
 # ── Start App ───────────────────────────────────────────────
 
 echo "Starting ShareTab..."
