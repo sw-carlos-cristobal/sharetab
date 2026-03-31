@@ -17,6 +17,7 @@ import {
   Handshake,
   Camera,
   Tag,
+  Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import { InviteDialog } from "@/components/groups/invite-dialog";
@@ -71,6 +72,9 @@ export default function GroupDetailPage({
   const expenses = trpc.expenses.list.useQuery({ groupId, limit: 10 });
   const debts = trpc.balances.getSimplifiedDebts.useQuery({ groupId });
   const pendingReceipts = trpc.receipts.listPending.useQuery({ groupId });
+  const deletePending = trpc.receipts.deletePending.useMutation({
+    onSuccess: () => pendingReceipts.refetch(),
+  });
 
   if (group.isLoading) {
     return <p className="text-muted-foreground">Loading...</p>;
@@ -221,26 +225,37 @@ export default function GroupDetailPage({
           <h2 className="mb-3 text-lg font-semibold">Pending Receipts</h2>
           <div className="space-y-2">
             {pendingReceipts.data.map((r) => (
-              <Link key={r.id} href={`/groups/${groupId}/scan?receiptId=${r.id}`}>
-                <Card className="transition-colors hover:bg-muted/50">
-                  <CardContent className="flex items-center justify-between py-3">
-                    <div>
-                      <p className="font-medium">
-                        {r.extractedData?.merchantName ?? "Receipt"}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {r.extractedData?.date ?? new Date(r.createdAt).toLocaleDateString()}
-                        {" · "}Saved for later
-                      </p>
-                    </div>
+              <Card key={r.id} className="transition-colors hover:bg-muted/50">
+                <CardContent className="flex items-center justify-between py-3">
+                  <Link href={`/groups/${groupId}/scan?receiptId=${r.id}`} className="flex-1 min-w-0">
+                    <p className="font-medium">
+                      {r.extractedData?.merchantName ?? "Receipt"}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {r.extractedData?.date ?? new Date(r.createdAt).toLocaleDateString()}
+                      {" · "}Saved for later
+                    </p>
+                  </Link>
+                  <div className="flex items-center gap-3 ml-3">
                     <p className="text-lg font-semibold">
                       {r.extractedData
                         ? formatCents(r.extractedData.total, g.currency)
                         : "—"}
                     </p>
-                  </CardContent>
-                </Card>
-              </Link>
+                    <button
+                      type="button"
+                      className="text-muted-foreground hover:text-destructive transition-colors p-1"
+                      onClick={() => {
+                        if (confirm("Delete this pending receipt?")) {
+                          deletePending.mutate({ receiptId: r.id });
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </CardContent>
+              </Card>
             ))}
           </div>
         </div>
