@@ -37,6 +37,8 @@ if [ ! -s "$PGDATA/PG_VERSION" ]; then
 fi
 
 echo "Starting PostgreSQL..."
+# Remove stale PID file left behind by unclean container restarts
+rm -f "$PGDATA/postmaster.pid"
 su-exec postgres pg_ctl -D "$PGDATA" -w start -o "-k /run/postgresql"
 
 # Wait for PostgreSQL to be ready
