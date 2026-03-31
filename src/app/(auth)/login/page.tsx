@@ -92,7 +92,16 @@ export default function LoginPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password">Password</Label>
+                  <button
+                    type="button"
+                    onClick={() => setShowMagicLink(true)}
+                    className="text-xs text-primary hover:text-primary/80 transition-colors"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
                 <Input
                   id="password"
                   type="password"
@@ -134,6 +143,7 @@ export default function LoginPage() {
               )}
               <p className="text-sm text-muted-foreground">
                 We&apos;ll send you a magic link to sign in without a password.
+                You can change your password from Settings once signed in.
               </p>
               <div className="space-y-2">
                 <Label htmlFor="magic-email">Email</Label>
