@@ -7,11 +7,13 @@ ShareTab makes it easy to track shared expenses with friends, roommates, or trav
 ## Features
 
 - **Group expense tracking** with multiple split modes (equal, percentage, shares, exact, item-level)
-- **AI receipt scanning** -- photograph a receipt, AI extracts line items, assign items to group members with proportional tax/tip
+- **AI receipt scanning** -- photograph a receipt, AI extracts line items, assign items to group members with proportional tax/tip; zoomable/pannable receipt viewer
 - **Guest bill splitting** -- no account needed, shareable summary links
-- **Pluggable AI providers** -- OpenAI (GPT-4o), Claude, or local Ollama
+- **Pluggable AI providers** -- OpenAI (GPT-4o), Claude API, Claude SDK (Max/Pro subscription), or local Ollama
 - **Cross-group dashboard** -- see all your balances at a glance, with per-person debt breakdown
 - **Debt simplification** -- minimize the number of payments needed
+- **Settle up** -- record payments between any two group members with explicit From/To fields
+- **Placeholder members** -- add people without accounts; rename or remove them from group settings
 - **Dark mode** -- system-aware with manual toggle
 - **Invite links** -- share a link to add friends to your groups
 - **Magic link auth** -- passwordless email sign-in

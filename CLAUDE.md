@@ -205,3 +205,10 @@ docker compose exec sharetab su-exec postgres pg_dump -U sharetab sharetab > bac
 - **Per-person debt breakdown**: `balances.getOverallDebts` tRPC endpoint aggregates simplified debts across all groups by person, netting cross-group debts
 - Dashboard shows "People who owe you" and "People you owe" cards with avatar initials, names, and amounts
 - **Group search/filter**: Groups page has a search input for client-side filtering by group name
+
+### Recent Improvements — COMPLETE
+- **Receipt image zoom/pan**: `src/components/receipts/item-assignment.tsx` — scroll wheel to zoom (1x–5x), drag to pan, pinch-to-zoom on mobile, double-click to reset; zoom % indicator + Reset button
+- **Settle-up From/To fields**: `SettleDialog` now shows explicit From and To dropdowns (pre-populated from debt row); `settlements.create` accepts optional `fromId` (defaults to current user)
+- **Placeholder member edit/delete**: Group settings page has inline rename (pencil icon) and delete (trash icon) for placeholder members; new `groups.renamePlaceholder` tRPC mutation
+- **Settings page pre-population**: Name field now syncs with session via `useEffect` so it's pre-filled on every visit
+- **Docker claude-sdk fix**: Credentials file bind-mount permissions fixed in entrypoint (`chmod o+x /root /root/.claude`, `chmod 644 .credentials.json`, symlink into `/home/nextjs/.claude/`); `@anthropic-ai/claude-agent-sdk` added to `serverExternalPackages` and copied to standalone in Dockerfile
