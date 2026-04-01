@@ -90,5 +90,43 @@ test.describe("Balances & Settlements", () => {
       await expect(page.getByRole("dialog")).toBeVisible();
       await expect(page.getByText(/Use suggested: \$/)).toBeVisible();
     });
+
+    test("settle dialog pre-populates From, To, and Amount from debt row", async ({ page }) => {
+      await login(page, users.alice.email, users.alice.password);
+      await page.goto("/groups");
+      await page.getByText("Apartment").first().click();
+      await page.waitForURL(/\/groups\/\w+$/);
+
+      await page.getByRole("button", { name: /Bob Smith.*Alice Johnson.*\$/ }).first().click();
+      await expect(page.getByRole("dialog")).toBeVisible();
+
+      const fromText = await page.getByLabel("From").locator("option:checked").textContent();
+      expect(fromText).toBe("Bob Smith");
+
+      const toText = await page.getByLabel("To").locator("option:checked").textContent();
+      expect(toText).toBe("Alice Johnson");
+
+      await expect(page.getByLabel("Amount")).not.toHaveValue("");
+    });
+
+    test("settle dialog resets fields when opened with different debt", async ({ page }) => {
+      await login(page, users.alice.email, users.alice.password);
+      await page.goto("/groups");
+      await page.getByText("Apartment").first().click();
+      await page.waitForURL(/\/groups\/\w+$/);
+
+      await page.getByRole("button", { name: /Bob Smith.*Alice Johnson.*\$/ }).first().click();
+      await expect(page.getByRole("dialog")).toBeVisible();
+      let fromText = await page.getByLabel("From").locator("option:checked").textContent();
+      expect(fromText).toBe("Bob Smith");
+
+      await page.getByRole("button", { name: "Close" }).click();
+      await expect(page.getByRole("dialog")).not.toBeVisible();
+      await page.getByRole("button", { name: /Charlie Brown.*Alice Johnson.*\$/ }).first().click();
+      await expect(page.getByRole("dialog")).toBeVisible();
+
+      fromText = await page.getByLabel("From").locator("option:checked").textContent();
+      expect(fromText).toBe("Charlie Brown");
+    });
   });
 });

@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { users, login } from "./helpers";
+import { users, login, createTestGroup, trpcMutation } from "./helpers";
 
 test.describe("Expenses", () => {
   test.beforeEach(async ({ page }) => {
@@ -124,6 +124,90 @@ test.describe("Expenses", () => {
       await page.getByRole("button", { name: /Shares/ }).click();
 
       await expect(page.getByText(/Total:.*shares/)).toBeVisible();
+    });
+  });
+
+  // ── Split Mode Console Errors ──────────────────────────────
+
+  test.describe("Split Mode Stability", () => {
+    test("no re-render errors when cycling through split modes", async ({ page }) => {
+      const errors: string[] = [];
+      page.on("console", (msg) => {
+        if (msg.type() === "error") errors.push(msg.text());
+      });
+
+      const { groupId, dispose } = await createTestGroup(
+        users.alice.email, users.alice.password, [], "Split Mode Stability"
+      );
+
+      await page.goto(`/groups/${groupId}/expenses/new`);
+      await page.getByLabel("Amount").fill("100.00");
+
+      await page.getByRole("button", { name: /Exact/ }).click();
+      await page.waitForTimeout(300);
+      await page.getByRole("button", { name: /Percentage/ }).click();
+      await page.waitForTimeout(300);
+      await page.getByRole("button", { name: /Shares/ }).click();
+      await page.waitForTimeout(300);
+      await page.getByRole("button", { name: /Equal/ }).click();
+      await page.waitForTimeout(300);
+
+      const maxDepthErrors = errors.filter((e) => e.includes("Maximum update depth"));
+      expect(maxDepthErrors).toHaveLength(0);
+
+      await dispose();
+    });
+
+    test("percentage mode pre-fills equal distribution", async ({ page }) => {
+      const { groupId, dispose } = await createTestGroup(
+        users.alice.email, users.alice.password,
+        [
+          { email: users.bob.email, password: users.bob.password },
+          { email: users.charlie.email, password: users.charlie.password },
+        ],
+        "Pct Pre-fill"
+      );
+
+      await page.goto(`/groups/${groupId}/expenses/new`);
+      await page.getByLabel("Amount").fill("90.00");
+      await page.getByRole("button", { name: /Percentage/ }).click();
+
+      await expect(page.getByText(/Total:.*100/)).toBeVisible();
+      await expect(page.getByText("should be 100%")).not.toBeVisible();
+
+      await dispose();
+    });
+
+    test("switching to percentage on edit page keeps Save enabled", async ({ page }) => {
+      const { owner, groupId, memberIds, dispose } = await createTestGroup(
+        users.alice.email, users.alice.password,
+        [{ email: users.bob.email, password: users.bob.password }],
+        "Pct Edit Save"
+      );
+      const aliceId = memberIds[users.alice.email];
+      const bobId = memberIds[users.bob.email];
+      const expRes = await trpcMutation(owner, "expenses.create", {
+        groupId,
+        title: "Pct Save Test",
+        amount: 5000,
+        splitMode: "EQUAL",
+        paidById: aliceId,
+        shares: [
+          { userId: aliceId, amount: 2500 },
+          { userId: bobId, amount: 2500 },
+        ],
+      });
+      const expense = (await expRes.json()).result?.data?.json;
+
+      await page.goto(`/groups/${groupId}/expenses/${expense.id}/edit`);
+      await expect(page.getByRole("heading", { name: "Edit Expense" })).toBeVisible();
+
+      await page.getByRole("button", { name: /Percentage/ }).click();
+
+      await expect(page.getByRole("button", { name: "Save Changes" })).toBeEnabled();
+      await expect(page.getByText(/Total:.*100/)).toBeVisible();
+
+      await dispose();
     });
   });
 

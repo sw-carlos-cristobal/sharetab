@@ -1,5 +1,5 @@
 import { test, expect, request } from "@playwright/test";
-import { login, uniqueEmail } from "./helpers";
+import { login, uniqueEmail, users, createTestGroup } from "./helpers";
 
 const BASE = process.env.BASE_URL || "http://localhost:3001";
 
@@ -197,5 +197,51 @@ test.describe("Edge Cases & Security", () => {
     expect(["ok", "error"]).toContain(body.status);
     expect(["connected", "disconnected"]).toContain(body.db);
     await ctx.dispose();
+  });
+
+  // ── Not-found pages ──────────────────────────────────────
+
+  test("group not found shows styled empty state with back link", async ({ page }) => {
+    await login(page, users.alice.email, users.alice.password);
+    await page.goto("/groups/nonexistent-group-id");
+
+    await expect(page.getByRole("heading", { name: "Group not found" })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText("doesn't exist or you don't have access")).toBeVisible();
+    const backBtn = page.getByRole("button", { name: "Back to Groups" });
+    await expect(backBtn).toBeVisible();
+    await backBtn.click();
+    await page.waitForURL("**/groups", { timeout: 10000 });
+  });
+
+  test("expense not found shows styled empty state with back link", async ({ page }) => {
+    await login(page, users.alice.email, users.alice.password);
+    const { groupId, dispose } = await createTestGroup(
+      users.alice.email, users.alice.password, [], "Expense Not Found Test"
+    );
+
+    await page.goto(`/groups/${groupId}/expenses/nonexistent-expense-id`);
+
+    await expect(page.getByRole("heading", { name: "Expense not found" })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText("doesn't exist or has been deleted")).toBeVisible();
+    const backBtn = page.getByRole("button", { name: "Back to Group" });
+    await expect(backBtn).toBeVisible();
+    await backBtn.click();
+    await page.waitForURL(/\/groups\/\w+$/, { timeout: 10000 });
+
+    await dispose();
+  });
+
+  test("edit expense not found shows styled empty state", async ({ page }) => {
+    await login(page, users.alice.email, users.alice.password);
+    const { groupId, dispose } = await createTestGroup(
+      users.alice.email, users.alice.password, [], "Edit Not Found Test"
+    );
+
+    await page.goto(`/groups/${groupId}/expenses/nonexistent-expense-id/edit`);
+
+    await expect(page.getByRole("heading", { name: "Expense not found" })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole("button", { name: "Back to Group" })).toBeVisible();
+
+    await dispose();
   });
 });

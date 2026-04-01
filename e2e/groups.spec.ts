@@ -100,6 +100,37 @@ test.describe("Groups", () => {
     });
   });
 
+  // ── Console Errors ────────────────────────────────────────
+
+  test.describe("Console Errors", () => {
+    test("group detail page has no nativeButton or re-render errors", async ({ page }) => {
+      const errors: string[] = [];
+      page.on("console", (msg) => {
+        if (msg.type() === "error") errors.push(msg.text());
+      });
+
+      await page.goto("/groups");
+      await page.getByText("Apartment").first().click();
+      await page.waitForURL(/\/groups\/\w+$/);
+      await page.waitForTimeout(2000);
+
+      const nativeButtonErrors = errors.filter((e) => e.includes("nativeButton"));
+      const maxDepthErrors = errors.filter((e) => e.includes("Maximum update depth"));
+      expect(nativeButtonErrors).toHaveLength(0);
+      expect(maxDepthErrors).toHaveLength(0);
+    });
+  });
+
+  // ── Seed Data ────────────────────────────────────────────
+
+  test.describe("Seed Data", () => {
+    test("seed demo groups exist and are accessible", async ({ page }) => {
+      await page.goto("/groups");
+      await expect(page.getByText("Apartment").first()).toBeVisible();
+      await expect(page.getByText("Japan Trip").first()).toBeVisible();
+    });
+  });
+
   // ── Invites ───────────────────────────────────────────────
 
   test.describe("Invites", () => {
