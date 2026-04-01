@@ -104,7 +104,7 @@ export default function ScanReceiptPage({
   const members =
     group.data?.members.map((m) => ({
       id: m.user.id,
-      name: m.user.placeholderName ?? m.user.name,
+      name: m.user.placeholderName ?? m.user.name ?? m.user.email,
     })) ?? [];
 
   return (

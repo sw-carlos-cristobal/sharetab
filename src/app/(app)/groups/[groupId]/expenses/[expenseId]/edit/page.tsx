@@ -78,7 +78,7 @@ export default function EditExpensePage({
   const members: MemberInfo[] =
     group.data?.members.map((m) => ({
       id: m.user.id,
-      name: m.user.placeholderName ?? m.user.name,
+      name: m.user.placeholderName ?? m.user.name ?? m.user.email,
     })) ?? [];
 
   const amountCents = parseToCents(amountStr);

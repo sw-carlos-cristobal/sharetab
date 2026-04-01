@@ -62,7 +62,7 @@ export default function NewExpensePage({
     () =>
       group.data?.members.map((m) => ({
         id: m.user.id,
-        name: m.user.name,
+        name: m.user.name ?? m.user.email,
       })) ?? [],
     [group.data?.members]
   );

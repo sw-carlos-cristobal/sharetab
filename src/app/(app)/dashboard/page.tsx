@@ -324,6 +324,7 @@ export default function DashboardPage() {
                             const name =
                               member.user.name ??
                               member.user.placeholderName ??
+                              member.user.email ??
                               "?";
                             return member.user.image ? (
                               <Image

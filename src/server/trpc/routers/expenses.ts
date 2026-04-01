@@ -26,9 +26,9 @@ export const expensesRouter = createTRPCRouter({
         ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {}),
         orderBy: { expenseDate: "desc" },
         include: {
-          paidBy: { select: { id: true, name: true, image: true } },
+          paidBy: { select: { id: true, name: true, email: true, image: true } },
           shares: {
-            include: { user: { select: { id: true, name: true, image: true } } },
+            include: { user: { select: { id: true, name: true, email: true, image: true } } },
           },
         },
       });
@@ -48,10 +48,10 @@ export const expensesRouter = createTRPCRouter({
       const expense = await ctx.db.expense.findUnique({
         where: { id: input.expenseId },
         include: {
-          paidBy: { select: { id: true, name: true, image: true } },
-          addedBy: { select: { id: true, name: true, image: true } },
+          paidBy: { select: { id: true, name: true, email: true, image: true } },
+          addedBy: { select: { id: true, name: true, email: true, image: true } },
           shares: {
-            include: { user: { select: { id: true, name: true, image: true } } },
+            include: { user: { select: { id: true, name: true, email: true, image: true } } },
           },
           receipt: true,
         },

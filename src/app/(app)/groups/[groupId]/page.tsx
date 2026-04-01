@@ -224,11 +224,11 @@ export default function GroupDetailPage({
                   }
                 >
                   <span className="truncate text-xs font-medium text-red-600 sm:text-sm dark:text-red-400">
-                    {from?.name ?? "Unknown"}
+                    {from?.name ?? from?.email ?? "Unknown"}
                   </span>
                   <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                   <span className="truncate text-xs font-medium text-emerald-600 sm:text-sm dark:text-emerald-400">
-                    {to?.name ?? "Unknown"}
+                    {to?.name ?? to?.email ?? "Unknown"}
                   </span>
                   <span className="ml-auto shrink-0 font-semibold tabular-nums text-red-600 dark:text-red-400">
                     {formatCents(debt.amount, g.currency)}
@@ -353,7 +353,7 @@ export default function GroupDetailPage({
                   <div className="min-w-0">
                     <p className="font-medium truncate">{expense.title}</p>
                     <p className="text-sm text-muted-foreground">
-                      Paid by {expense.paidBy.name ?? "Unknown"}
+                      Paid by {expense.paidBy.name ?? expense.paidBy.email ?? "Unknown"}
                       {" · "}
                       {new Date(expense.expenseDate).toLocaleDateString()}
                       {expense.category && (
@@ -382,7 +382,7 @@ export default function GroupDetailPage({
 
       <SettleDialog
         groupId={groupId}
-        members={g.members.map((m) => ({ id: m.user.id, name: m.user.name }))}
+        members={g.members.map((m) => ({ id: m.user.id, name: m.user.name ?? m.user.email }))}
         suggestedFrom={settleState.from}
         suggestedTo={settleState.to}
         suggestedAmount={settleState.amount}
