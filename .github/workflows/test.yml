@@ -62,6 +62,7 @@ jobs:
           NEXTAUTH_SECRET: ci-test-secret-not-for-production
           AUTH_SECRET: ci-test-secret-not-for-production
           AUTH_TRUST_HOST: "true"
+          ADMIN_EMAIL: alice@example.com
         run: npm run build
 
       - name: Run tests
@@ -74,6 +75,7 @@ jobs:
           BASE_URL: http://localhost:3000
           AUTH_RATE_LIMIT_MAX: "1000"
           REGISTER_RATE_LIMIT_MAX: "1000"
+          ADMIN_EMAIL: alice@example.com
         run: |
           npm run start &
           npx wait-on http://localhost:3000/api/health --timeout 30000
