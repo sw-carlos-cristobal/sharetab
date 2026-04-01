@@ -83,6 +83,40 @@ if [ -f "$CLAUDE_CREDS" ]; then
   ln -sf "$CLAUDE_CREDS" /home/nextjs/.claude/.credentials.json
 fi
 
+# ── Print config summary ────────────────────────────────────
+
+echo ""
+echo "============================================"
+echo "  ShareTab Configuration"
+echo "============================================"
+echo "  Version:        $(node -e "console.log(require('./package.json').version)" 2>/dev/null || echo 'unknown')"
+echo "  Database:       ${DATABASE_URL%@*}@***"
+echo "  Auth URL:       ${NEXTAUTH_URL:-not set}"
+echo "  Auth Trust:     ${AUTH_TRUST_HOST:-false}"
+echo "  AI Provider:    ${AI_PROVIDER:-not set}"
+if [ "$AI_PROVIDER" = "claude" ] || [ "$AI_PROVIDER" = "meridian" ]; then
+  echo "  AI Model:       ${ANTHROPIC_MODEL:-claude-sonnet-4-6}"
+elif [ "$AI_PROVIDER" = "ollama" ]; then
+  echo "  Ollama URL:     ${OLLAMA_BASE_URL:-not set}"
+  echo "  Ollama Model:   ${OLLAMA_MODEL:-llava}"
+fi
+echo "  Admin Email:    ${ADMIN_EMAIL:-not set}"
+echo "  Upload Dir:     ${UPLOAD_DIR:-/app/uploads}"
+echo "  Max Upload MB:  ${MAX_UPLOAD_SIZE_MB:-10}"
+if [ -n "$EMAIL_SERVER_HOST" ]; then
+  echo "  Magic Link:     enabled (${EMAIL_SERVER_HOST})"
+else
+  echo "  Magic Link:     disabled"
+fi
+if [ -n "$GOOGLE_CLIENT_ID" ]; then
+  echo "  Google OAuth:   enabled"
+else
+  echo "  Google OAuth:   disabled"
+fi
+echo "  Log Level:      ${LOG_LEVEL:-info}"
+echo "============================================"
+echo ""
+
 # ── Start App ───────────────────────────────────────────────
 
 echo "Starting ShareTab..."
