@@ -54,6 +54,7 @@ model User {
   passwordHash    String?
   image           String?
   defaultCurrency String    @default("USD")
+  suspendedAt     DateTime?
   isPlaceholder   Boolean   @default(false)
   placeholderName String?
   createdByUserId String?
@@ -67,6 +68,8 @@ model User {
   settlementsPaid Settlement[]       @relation("SettledBy")
   settlementsFor  Settlement[]       @relation("SettledFor")
   activityLogs    ActivityLog[]
+  adminAuditLogs  AdminAuditLog[] @relation("AdminAuditLogs")
+  systemInvitesUsed SystemInvite[] @relation("SystemInviteUsedBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -288,6 +291,60 @@ enum ActivityType {
   PLACEHOLDER_MERGED
   GROUP_ARCHIVED
   GROUP_UNARCHIVED
+}
+
+// ─── ADMIN ─────────────────────────────────────────────────
+
+model AdminAuditLog {
+  id        String      @id @default(cuid())
+  adminId   String
+  action    AdminAction
+  targetId  String?     // user/group/invite ID affected
+  metadata  Json?       // additional context (e.g., old/new values)
+
+  admin User @relation("AdminAuditLogs", fields: [adminId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([adminId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+enum AdminAction {
+  USER_DELETED
+  USER_SUSPENDED
+  USER_UNSUSPENDED
+  GROUP_DELETED
+  ORPHANS_CLEANED
+  IMPERSONATION_STARTED
+  INVITE_CREATED
+  INVITE_REVOKED
+  ANNOUNCEMENT_SET
+  REGISTRATION_MODE_CHANGED
+  EXPORT_CREATED
+  TEST_EMAIL_SENT
+}
+
+model SystemSetting {
+  key   String @id
+  value String @db.Text
+
+  updatedAt DateTime @updatedAt
+}
+
+model SystemInvite {
+  id        String    @id @default(cuid())
+  code      String    @unique @default(cuid())
+  label     String?   // optional friendly name
+  usedById  String?
+  usedAt    DateTime?
+  expiresAt DateTime?
+  revokedAt DateTime?
+
+  usedBy User? @relation("SystemInviteUsedBy", fields: [usedById], references: [id])
+
+  createdAt DateTime @default(now())
 }
 
 // ─── GUEST SPLITS (no auth required) ──────────────────────

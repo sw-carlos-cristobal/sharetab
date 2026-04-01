@@ -45,21 +45,22 @@ test.describe("Admin page UI", () => {
     ).toBeVisible();
 
     // Should see system health section
-    await expect(
-      page.getByRole("heading", { name: "System Health" })
-    ).toBeVisible();
+    const healthSection = page.locator("section", {
+      has: page.getByRole("heading", { name: "System Health" }),
+    });
+    await expect(healthSection).toBeVisible();
 
-    // Should see database status
-    await expect(page.getByText("Database").first()).toBeVisible();
+    // Should see database status within health section
+    await expect(healthSection.getByText("Database")).toBeVisible();
 
     // Should see AI provider info
-    await expect(page.getByText("AI Provider")).toBeVisible();
+    await expect(healthSection.getByText("AI Provider")).toBeVisible();
 
     // Should see version info
-    await expect(page.getByText("Version")).toBeVisible();
+    await expect(healthSection.getByText("Version")).toBeVisible();
 
     // Should see uptime info
-    await expect(page.getByText("Uptime")).toBeVisible();
+    await expect(healthSection.getByText("Uptime")).toBeVisible();
   });
 
   test("admin page shows user management section", async ({ page }) => {
@@ -87,15 +88,16 @@ test.describe("Admin page UI", () => {
     await login(page, users.alice.email, users.alice.password);
     await page.goto("/admin");
 
-    await expect(
-      page.getByRole("heading", { name: "Storage Stats" })
-    ).toBeVisible();
+    const storageSection = page.locator("section", {
+      has: page.getByRole("heading", { name: "Storage Stats" }),
+    });
+    await expect(storageSection).toBeVisible();
 
-    // Should show receipt count
-    await expect(page.getByText("Receipts")).toBeVisible();
+    // Should show receipt count within storage section
+    await expect(storageSection.getByText("Receipts")).toBeVisible();
 
-    // Should show disk usage
-    await expect(page.getByText("Disk Usage")).toBeVisible();
+    // Should show disk usage within storage section
+    await expect(storageSection.getByText("Disk Usage")).toBeVisible();
   });
 
   test("admin link visible in sidebar for admin user", async ({ page }) => {

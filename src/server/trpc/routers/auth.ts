@@ -9,12 +9,20 @@ export const authRouter = createTRPCRouter({
     return ctx.session;
   }),
 
+  getRegistrationMode: publicProcedure.query(async ({ ctx }) => {
+    const setting = await ctx.db.systemSetting.findUnique({
+      where: { key: "registrationMode" },
+    });
+    return { mode: (setting?.value ?? "open") as "open" | "invite-only" | "closed" };
+  }),
+
   register: publicProcedure
     .input(
       z.object({
         name: z.string().min(1).max(100),
         email: z.string().email(),
         password: z.string().min(8).max(100),
+        inviteCode: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -27,6 +35,44 @@ export const authRouter = createTRPCRouter({
           code: "TOO_MANY_REQUESTS",
           message: "Too many registration attempts. Please try again later.",
         });
+      }
+
+      // Check registration mode
+      const modeSetting = await ctx.db.systemSetting.findUnique({
+        where: { key: "registrationMode" },
+      });
+      const mode = modeSetting?.value ?? "open";
+
+      if (mode === "closed") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Registration is currently closed.",
+        });
+      }
+
+      if (mode === "invite-only") {
+        if (!input.inviteCode) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "An invite code is required to register.",
+          });
+        }
+
+        const invite = await ctx.db.systemInvite.findUnique({
+          where: { code: input.inviteCode },
+        });
+
+        if (
+          !invite ||
+          invite.revokedAt ||
+          invite.usedAt ||
+          (invite.expiresAt && invite.expiresAt < new Date())
+        ) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Invalid or expired invite code.",
+          });
+        }
       }
 
       const existing = await ctx.db.user.findUnique({
@@ -47,6 +93,14 @@ export const authRouter = createTRPCRouter({
           passwordHash,
         },
       });
+
+      // Mark invite as used if provided
+      if (input.inviteCode && mode === "invite-only") {
+        await ctx.db.systemInvite.update({
+          where: { code: input.inviteCode },
+          data: { usedById: user.id, usedAt: new Date() },
+        });
+      }
 
       return { id: user.id, name: user.name, email: user.email };
     }),

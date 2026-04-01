@@ -17,10 +17,14 @@ export default function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const regMode = trpc.auth.getRegistrationMode.useQuery();
   const registerMutation = trpc.auth.register.useMutation();
+
+  const mode = regMode.data?.mode ?? "open";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -28,7 +32,14 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      await registerMutation.mutateAsync({ name, email, password });
+      await registerMutation.mutateAsync({
+        name,
+        email,
+        password,
+        ...(mode === "invite-only" && inviteCode
+          ? { inviteCode }
+          : {}),
+      });
 
       const result = await signIn("credentials", {
         email,
@@ -100,9 +111,31 @@ export default function RegisterPage() {
               minLength={8}
             />
           </div>
-          <Button type="submit" className="w-full rounded-full h-10 text-sm font-medium mt-2" disabled={loading}>
-            {loading ? "Creating account..." : "Create account"}
-          </Button>
+          {mode === "invite-only" && (
+            <div className="space-y-2">
+              <Label htmlFor="inviteCode">Invite Code</Label>
+              <Input
+                id="inviteCode"
+                type="text"
+                placeholder="Enter your invite code"
+                value={inviteCode}
+                onChange={(e) => setInviteCode(e.target.value)}
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                Registration requires an invite code from an administrator.
+              </p>
+            </div>
+          )}
+          {mode === "closed" ? (
+            <div className="rounded-md bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">
+              Registration is currently closed. Please contact an administrator.
+            </div>
+          ) : (
+            <Button type="submit" className="w-full rounded-full h-10 text-sm font-medium mt-2" disabled={loading}>
+              {loading ? "Creating account..." : "Create account"}
+            </Button>
+          )}
         </form>
 
         <div className="relative my-8">

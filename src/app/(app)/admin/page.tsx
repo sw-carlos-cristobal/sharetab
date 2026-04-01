@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { formatCents } from "@/lib/money";
 import { Button } from "@/components/ui/button";
@@ -22,14 +23,23 @@ import {
   Bot,
   Package,
   Clock,
-  Users,
   Trash2,
   FolderOpen,
   HardDrive,
   FileWarning,
   Loader2,
   RefreshCw,
+  Ban,
+  CheckCircle2,
+  UserCheck,
 } from "lucide-react";
+
+import { AuditLogSection } from "@/components/admin/audit-log-section";
+import { RegistrationControlSection } from "@/components/admin/registration-control-section";
+import { AnnouncementSection } from "@/components/admin/announcement-section";
+import { ActivityFeedSection } from "@/components/admin/activity-feed-section";
+import { AIStatsSection } from "@/components/admin/ai-stats-section";
+import { ToolsSection } from "@/components/admin/tools-section";
 
 export default function AdminPage() {
   const { data: session } = useSession();
@@ -49,6 +59,18 @@ export default function AdminPage() {
         <GroupOverviewSection />
         <Separator />
         <StorageStatsSection />
+        <Separator />
+        <RegistrationControlSection />
+        <Separator />
+        <AnnouncementSection />
+        <Separator />
+        <AIStatsSection />
+        <Separator />
+        <ActivityFeedSection />
+        <Separator />
+        <ToolsSection />
+        <Separator />
+        <AuditLogSection />
       </div>
     </div>
   );
@@ -157,12 +179,26 @@ function UserManagementSection({
 }: {
   currentUserEmail?: string | null;
 }) {
+  const router = useRouter();
   const users = trpc.admin.listUsers.useQuery();
   const utils = trpc.useUtils();
   const deleteUser = trpc.admin.deleteUser.useMutation({
     onSuccess: () => {
       utils.admin.listUsers.invalidate();
+      utils.admin.getAuditLog.invalidate();
       setDeleteTarget(null);
+    },
+  });
+  const suspendUser = trpc.admin.suspendUser.useMutation({
+    onSuccess: () => {
+      utils.admin.listUsers.invalidate();
+      utils.admin.getAuditLog.invalidate();
+    },
+  });
+  const unsuspendUser = trpc.admin.unsuspendUser.useMutation({
+    onSuccess: () => {
+      utils.admin.listUsers.invalidate();
+      utils.admin.getAuditLog.invalidate();
     },
   });
   const [deleteTarget, setDeleteTarget] = useState<{
@@ -170,8 +206,26 @@ function UserManagementSection({
     name: string | null;
     email: string;
   } | null>(null);
+  const [impersonating, setImpersonating] = useState(false);
 
   if (users.isLoading) return <SectionSkeleton title="User Management" />;
+
+  const handleImpersonate = async (userId: string) => {
+    setImpersonating(true);
+    try {
+      const res = await fetch("/api/admin/impersonate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      if (res.ok) {
+        router.push("/dashboard");
+        router.refresh();
+      }
+    } finally {
+      setImpersonating(false);
+    }
+  };
 
   return (
     <section>
@@ -190,10 +244,10 @@ function UserManagementSection({
                 <tr className="border-b text-left text-muted-foreground">
                   <th className="px-4 py-3 font-medium">Name</th>
                   <th className="px-4 py-3 font-medium">Email</th>
-                  <th className="px-4 py-3 font-medium">Type</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
                   <th className="px-4 py-3 font-medium text-right">Groups</th>
                   <th className="px-4 py-3 font-medium">Created</th>
-                  <th className="px-4 py-3 font-medium" />
+                  <th className="px-4 py-3 font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -206,31 +260,75 @@ function UserManagementSection({
                       {user.email}
                     </td>
                     <td className="px-4 py-3">
-                      {user.isPlaceholder ? (
-                        <Badge variant="outline">Placeholder</Badge>
-                      ) : (
-                        <Badge variant="secondary">User</Badge>
-                      )}
+                      <div className="flex flex-wrap gap-1">
+                        {user.isPlaceholder ? (
+                          <Badge variant="outline">Placeholder</Badge>
+                        ) : (
+                          <Badge variant="secondary">User</Badge>
+                        )}
+                        {user.isSuspended && (
+                          <Badge variant="destructive">Suspended</Badge>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-right">{user.groupCount}</td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {new Date(user.createdAt).toLocaleDateString()}
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3">
                       {user.email !== currentUserEmail && (
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() =>
-                            setDeleteTarget({
-                              id: user.id,
-                              name: user.name,
-                              email: user.email,
-                            })
-                          }
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          {user.isSuspended ? (
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              title="Unsuspend user"
+                              onClick={() =>
+                                unsuspendUser.mutate({ userId: user.id })
+                              }
+                              disabled={unsuspendUser.isPending}
+                            >
+                              <CheckCircle2 className="h-4 w-4 text-green-600" />
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              title="Suspend user"
+                              onClick={() =>
+                                suspendUser.mutate({ userId: user.id })
+                              }
+                              disabled={suspendUser.isPending}
+                            >
+                              <Ban className="h-4 w-4 text-orange-600" />
+                            </Button>
+                          )}
+                          {!user.isPlaceholder && (
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              title="Impersonate user"
+                              onClick={() => handleImpersonate(user.id)}
+                              disabled={impersonating}
+                            >
+                              <UserCheck className="h-4 w-4 text-purple-600" />
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            title="Delete user"
+                            onClick={() =>
+                              setDeleteTarget({
+                                id: user.id,
+                                name: user.name,
+                                email: user.email,
+                              })
+                            }
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -290,6 +388,7 @@ function GroupOverviewSection() {
   const deleteGroup = trpc.admin.deleteGroup.useMutation({
     onSuccess: () => {
       utils.admin.listGroups.invalidate();
+      utils.admin.getAuditLog.invalidate();
       setDeleteTarget(null);
     },
   });
@@ -428,6 +527,7 @@ function StorageStatsSection() {
   const cleanup = trpc.admin.cleanupOrphans.useMutation({
     onSuccess: () => {
       utils.admin.getStorageStats.invalidate();
+      utils.admin.getAuditLog.invalidate();
     },
   });
 

@@ -250,11 +250,23 @@ docker compose exec sharetab su-exec postgres pg_dump -U sharetab sharetab > bac
 
 ### Admin Dashboard — COMPLETE
 - **Admin access control**: `ADMIN_EMAIL` env var gates access to `/admin` page and all admin tRPC procedures
-- **`adminProcedure`**: Extends `protectedProcedure`, checks `ctx.user.email === process.env.ADMIN_EMAIL`
+- **`adminProcedure`**: Extends `protectedProcedure`, checks `ctx.user.email === process.env.ADMIN_EMAIL`; restores real admin identity during impersonation
 - **System Health**: DB connection status, AI provider name + availability, app version (from package.json), server uptime/start time
-- **User Management**: List all users with name, email, isPlaceholder, group count, created date; delete user (with confirmation, prevents self-delete)
+- **User Management**: List all users with name, email, isPlaceholder, suspended status, group count, created date; suspend/unsuspend users; impersonate users; delete user (with confirmation, prevents self-delete)
 - **Group Overview**: List all groups with member count, expense count, total amount, last activity, archived status; delete group (with confirmation); summary badges for total groups/expenses/settlements
 - **Storage Stats**: Receipt count, disk usage, orphaned file count, cleanup button to delete orphan files
+- **Registration Control**: Three modes (open/invite-only/closed) via `SystemSetting` model; create/list/revoke system invite codes; register page adapts to current mode
+- **Announcement Banner**: Set/clear announcement message via `SystemSetting`; dismissible banner in app layout (localStorage); visible to all authenticated users
+- **AI Usage Statistics**: Total receipts processed, breakdown by status and provider, 7/30 day trends
+- **Global Activity Feed**: Cursor-paginated feed of all `ActivityLog` entries across groups with user/group info
+- **Data Export**: `GET /api/admin/export` streams full JSON export of all tables (excludes password hashes)
+- **Email Test**: Send test email via existing SMTP config to verify email setup
+- **User Impersonation**: Start/stop impersonation via `/api/admin/impersonate`; httpOnly cookie stores impersonation state; red banner shows impersonated user with stop button; admin procedures restore real admin identity; impersonated sessions do NOT have admin privileges
+- **Admin Audit Log**: All admin actions logged to `AdminAuditLog` model with admin ID, action type, target, metadata; cursor-paginated audit log table in UI; `logAdminAction()` reusable helper
 - **Sidebar integration**: Admin link (Shield icon) conditionally shown in sidebar and mobile menu when `session.user.email === ADMIN_EMAIL`
-- tRPC router: `src/server/trpc/routers/admin.ts` with 7 procedures (getSystemHealth, listUsers, deleteUser, listGroups, deleteGroup, getStorageStats, cleanupOrphans)
+- **User Suspend**: `User.suspendedAt DateTime?` field; `protectedProcedure` checks suspension and throws FORBIDDEN
+- Schema: `AdminAuditLog` (with `AdminAction` enum), `SystemSetting` (key/value), `SystemInvite` (code, label, usedBy, expiresAt, revokedAt), `User.suspendedAt`
+- tRPC router: `src/server/trpc/routers/admin.ts` with 22 procedures
+- Admin UI components: `src/components/admin/` (audit-log, registration-control, announcement, activity-feed, ai-stats, tools sections)
+- Layout banners: `src/components/layout/announcement-banner.tsx`, `src/components/layout/impersonation-banner.tsx`
 - Route: `/admin` (authenticated, admin-only)
