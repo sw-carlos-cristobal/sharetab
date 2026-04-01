@@ -26,14 +26,14 @@ export function ImpersonationBanner() {
   };
 
   return (
-    <div className="sticky top-0 z-40 bg-red-500/15 border-b border-red-500/30 px-4 py-2.5 text-sm text-red-800 dark:text-red-200">
+    <div className="sticky top-0 z-40 bg-red-600 dark:bg-red-700 border-b border-red-700 dark:border-red-600 px-4 py-2.5 text-sm text-white">
       <div className="mx-auto flex max-w-5xl items-center gap-3">
         <UserCheck className="h-4 w-4 shrink-0" />
         <span className="flex-1">
           Impersonating{' '}
           <strong>{data.targetName ?? data.targetEmail}</strong>
           {data.targetName && (
-            <span className="text-red-600 dark:text-red-300">
+            <span className="text-red-100">
               {' '}
               ({data.targetEmail})
             </span>
@@ -43,7 +43,7 @@ export function ImpersonationBanner() {
           type="button"
           onClick={handleStop}
           disabled={stopping}
-          className="shrink-0 rounded bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+          className="shrink-0 rounded bg-white/20 px-3 py-1 text-xs font-medium text-white hover:bg-white/30 disabled:opacity-50 transition-colors"
         >
           {stopping ? 'Stopping...' : 'Stop Impersonating'}
         </button>
