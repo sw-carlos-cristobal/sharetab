@@ -7,6 +7,7 @@ import { settlementsRouter } from "./routers/settlements";
 import { activityRouter } from "./routers/activity";
 import { receiptsRouter } from "./routers/receipts";
 import { guestRouter } from "./routers/guest";
+import { adminRouter } from "./routers/admin";
 
 export const appRouter = createTRPCRouter({
   auth: authRouter,
@@ -17,6 +18,7 @@ export const appRouter = createTRPCRouter({
   activity: activityRouter,
   receipts: receiptsRouter,
   guest: guestRouter,
+  admin: adminRouter,
 });
 
 export type AppRouter = typeof appRouter;

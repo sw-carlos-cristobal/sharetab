@@ -9,10 +9,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     redirect("/login");
   }
 
+  const isAdmin =
+    !!process.env.ADMIN_EMAIL &&
+    session.user.email === process.env.ADMIN_EMAIL;
+
   return (
     <div className="min-h-dvh lg:flex lg:h-dvh lg:flex-row">
-      <MobileHeader />
-      <AppSidebar user={session.user} />
+      <MobileHeader isAdmin={isAdmin} />
+      <AppSidebar user={session.user} isAdmin={isAdmin} />
       <main className="@container flex-1 min-w-0 lg:overflow-auto">
         <div className="w-full py-4 px-4 md:py-6 md:px-8 2xl:mx-auto 2xl:max-w-5xl">{children}</div>
       </main>

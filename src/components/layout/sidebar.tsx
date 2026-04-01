@@ -12,6 +12,7 @@ import {
   Receipt,
   LogOut,
   Settings,
+  Shield,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 
@@ -28,7 +29,13 @@ type SidebarUser = {
   image?: string | null;
 };
 
-export function AppSidebar({ user }: { user: SidebarUser }) {
+export function AppSidebar({
+  user,
+  isAdmin,
+}: {
+  user: SidebarUser;
+  isAdmin?: boolean;
+}) {
   const pathname = usePathname();
 
   const initials = user.name
@@ -71,6 +78,21 @@ export function AppSidebar({ user }: { user: SidebarUser }) {
             </Link>
           );
         })}
+        {isAdmin && (
+          <Link href="/admin">
+            <span
+              className={cn(
+                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
+                pathname === "/admin"
+                  ? "border-l-[3px] border-primary bg-primary/10 text-primary shadow-sm"
+                  : "border-l-[3px] border-transparent text-muted-foreground hover:bg-muted/80 hover:text-foreground hover:translate-x-0.5"
+              )}
+            >
+              <Shield className="h-5 w-5 shrink-0" />
+              Admin
+            </span>
+          </Link>
+        )}
       </nav>
 
       {/* User profile section */}

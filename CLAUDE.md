@@ -247,3 +247,14 @@ docker compose exec sharetab su-exec postgres pg_dump -U sharetab sharetab > bac
 - **Settings page pre-population**: Name field now syncs with session via `useEffect` so it's pre-filled on every visit
 - **Meridian AI provider**: Embedded `@rynfar/meridian` proxy runs in-process, converting Claude Max subscription into standard Anthropic API (~16s receipt scans with opus). No separate container or API key needed — just mount `~/.claude/.credentials.json`. Set `AI_PROVIDER=meridian`.
 - **Configurable model**: `ANTHROPIC_MODEL` env var (default: `claude-opus-4-6`) for claude/meridian providers
+
+### Admin Dashboard — COMPLETE
+- **Admin access control**: `ADMIN_EMAIL` env var gates access to `/admin` page and all admin tRPC procedures
+- **`adminProcedure`**: Extends `protectedProcedure`, checks `ctx.user.email === process.env.ADMIN_EMAIL`
+- **System Health**: DB connection status, AI provider name + availability, app version (from package.json), server uptime/start time
+- **User Management**: List all users with name, email, isPlaceholder, group count, created date; delete user (with confirmation, prevents self-delete)
+- **Group Overview**: List all groups with member count, expense count, total amount, last activity, archived status; delete group (with confirmation); summary badges for total groups/expenses/settlements
+- **Storage Stats**: Receipt count, disk usage, orphaned file count, cleanup button to delete orphan files
+- **Sidebar integration**: Admin link (Shield icon) conditionally shown in sidebar and mobile menu when `session.user.email === ADMIN_EMAIL`
+- tRPC router: `src/server/trpc/routers/admin.ts` with 7 procedures (getSystemHealth, listUsers, deleteUser, listGroups, deleteGroup, getStorageStats, cleanupOrphans)
+- Route: `/admin` (authenticated, admin-only)

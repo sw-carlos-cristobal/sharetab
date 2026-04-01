@@ -19,6 +19,7 @@ import {
   Receipt,
   LogOut,
   Settings,
+  Shield,
   Menu,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
@@ -30,7 +31,7 @@ const navItems = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
-export function MobileHeader() {
+export function MobileHeader({ isAdmin }: { isAdmin?: boolean }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -77,6 +78,21 @@ export function MobileHeader() {
                 </Link>
               );
             })}
+            {isAdmin && (
+              <Link href="/admin" onClick={() => setOpen(false)}>
+                <span
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
+                    pathname === "/admin"
+                      ? "border-l-[3px] border-primary bg-primary/10 text-primary shadow-sm"
+                      : "border-l-[3px] border-transparent text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                  )}
+                >
+                  <Shield className="h-5 w-5 shrink-0" />
+                  Admin
+                </span>
+              </Link>
+            )}
             <div className="mt-2 flex w-full items-center gap-2 rounded-lg px-3 py-2">
               <button
                 onClick={() => {
