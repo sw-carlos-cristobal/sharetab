@@ -26,7 +26,7 @@ export function ImpersonationBanner() {
   };
 
   return (
-    <div className="bg-red-500/15 border-b border-red-500/30 px-4 py-2.5 text-sm text-red-800 dark:text-red-200">
+    <div className="sticky top-0 z-40 bg-red-500/15 border-b border-red-500/30 px-4 py-2.5 text-sm text-red-800 dark:text-red-200">
       <div className="mx-auto flex max-w-5xl items-center gap-3">
         <UserCheck className="h-4 w-4 shrink-0" />
         <span className="flex-1">
