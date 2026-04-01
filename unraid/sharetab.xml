@@ -264,6 +264,17 @@
     Required="false"
     Mask="true"></Config>
 
+  <!-- Admin -->
+  <Config
+    Name="Admin Email"
+    Target="ADMIN_EMAIL"
+    Default=""
+    Description="Email address of the admin user. Grants access to the /admin dashboard for managing users, groups, and storage. Leave blank to disable admin features."
+    Type="Variable"
+    Display="always"
+    Required="false"
+    Mask="false"></Config>
+
   <!-- Misc -->
   <Config
     Name="Max Upload Size (MB)"
