@@ -23,6 +23,9 @@ npm run dev:full     # Start embedded PostgreSQL + dev server (all-in-one)
 npm run build        # Production build
 npm run start        # Start production server
 npm run lint         # ESLint
+npm test             # Run unit tests (Vitest)
+npm run test:watch   # Unit tests in watch mode
+npm run test:e2e     # Run Playwright e2e tests
 npx prisma generate  # Regenerate Prisma client after schema changes
 npx prisma db push   # Push schema without migration (dev only)
 ```
@@ -34,7 +37,8 @@ npx prisma db push   # Push schema without migration (dev only)
 - `src/server/auth.ts` — NextAuth v5 config (Credentials + optional Google OAuth)
 - `src/server/trpc/init.ts` — tRPC context, `publicProcedure`, `protectedProcedure`, `groupMemberProcedure`
 - `src/server/trpc/router.ts` — Root app router (exports `AppRouter` type)
-- `src/server/trpc/routers/` — Individual routers: auth, groups, expenses, balances, settlements, activity
+- `src/server/trpc/routers/` — Individual routers: auth, groups, expenses, balances, settlements, activity, receipts, guest
+- `src/server/lib/balance-calculator.ts` — Pure functions for debt simplification and balance computation (extracted for testability)
 - `src/app/` — Next.js App Router pages. `(auth)/` for login/register, `(app)/` for authenticated pages
 - `src/components/` — React components organized by domain
 - `src/components/providers.tsx` — Client-side tRPC + React Query + SessionProvider + ThemeProvider wrapper
@@ -77,10 +81,20 @@ npx prisma db push   # Push schema without migration (dev only)
 
 ## Testing
 
-- Use `BASE_URL=http://localhost:3000 npx playwright test --headed` for visual testing (accurate viewport)
-- Do NOT rely on Chrome DevTools MCP viewport emulation for visual accuracy — it doesn't account for browser chrome
-- Responsive tests cover: static viewport sizes, live resize behavior, horizontal overflow checks, scroll verification
+### Unit Tests (Vitest)
+- `npm test` — run all unit tests (~59 tests, <1s)
+- Tests live co-located with source: `src/**/*.test.ts`
+- Covers: `money.ts`, `split-calculator.ts`, `rate-limit.ts`, `upload-dir.ts`, `balance-calculator.ts`, `ai/registry.ts`
+
+### E2E Tests (Playwright)
+- `BASE_URL=http://localhost:3000 npx playwright test` — run all e2e tests
+- `BASE_URL=http://localhost:3000 npx playwright test --headed` — visual testing
+- `RUN_AI_TESTS=1` — enable AI-dependent tests (requires configured AI provider)
 - Run `npm run dev:full` to start embedded PostgreSQL + dev server for testing
+- Set `AUTH_RATE_LIMIT_MAX=9999` in `.env` to avoid rate limiting during test runs
+- E2e tests use `navigateToGroup(page, name)` helper for pagination-safe group navigation
+- `createTestGroup()` auto-deletes the group on `dispose()` to avoid test pollution
+- Do NOT rely on Chrome DevTools MCP viewport emulation for visual accuracy — it doesn't account for browser chrome
 
 ## Docker
 
@@ -216,6 +230,15 @@ docker compose exec sharetab su-exec postgres pg_dump -U sharetab sharetab > bac
 - **Per-person debt breakdown**: `balances.getOverallDebts` tRPC endpoint aggregates simplified debts across all groups by person, netting cross-group debts
 - Dashboard shows "People who owe you" and "People you owe" cards with avatar initials, names, and amounts
 - **Group search/filter**: Groups page has a search input for client-side filtering by group name
+
+### Receipt Rescan with Corrections — COMPLETE
+- After AI scan, "Rescan with corrections" button expands a textarea for user hints
+- User describes what's wrong (e.g., "The total should be $45.99" or "There are 3 tacos, not 1")
+- AI re-processes same image with correction appended to extraction prompt
+- Available in both authenticated scan page and guest split flow
+- `AIProvider.extractReceipt()` accepts optional `correctionHint` parameter
+- All 4 providers (OpenAI, Claude, Meridian, Ollama) pass hint as `IMPORTANT CORRECTION FROM USER: ...`
+- `processReceipt` mutations clear old items before re-processing
 
 ### Recent Improvements — COMPLETE
 - **Receipt image zoom/pan**: `src/components/receipts/item-assignment.tsx` — scroll wheel to zoom (1x–5x), drag to pan, pinch-to-zoom on mobile, double-click to reset; zoom % indicator + Reset button

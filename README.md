@@ -7,9 +7,10 @@ ShareTab makes it easy to track shared expenses with friends, roommates, or trav
 ## Features
 
 - **Group expense tracking** with multiple split modes (equal, percentage, shares, exact, item-level)
-- **AI receipt scanning** -- photograph a receipt, AI extracts line items, assign items to group members with proportional tax/tip; zoomable/pannable receipt viewer
+- **AI receipt scanning** -- photograph a receipt, AI extracts line items, assign items to group members with proportional tax/tip; zoomable/pannable receipt viewer; rescan with correction prompts
 - **Guest bill splitting** -- no account needed, shareable summary links
-- **Pluggable AI providers** -- OpenAI (GPT-4o), Claude API, Claude SDK (Max/Pro subscription), or local Ollama
+- **Pluggable AI providers** -- OpenAI (GPT-4o), Claude (API key), Meridian (Claude Max subscription), or local Ollama
+- **Group archiving** -- archive inactive groups to declutter your dashboard; toggle archived view on groups page
 - **Cross-group dashboard** -- see all your balances at a glance, with per-person debt breakdown
 - **Debt simplification** -- minimize the number of payments needed
 - **Settle up** -- record payments between any two group members with explicit From/To fields
@@ -65,13 +66,14 @@ All configuration is done through environment variables. Copy `.env.example` to 
 
 | Variable | Description |
 |---|---|
-| `AI_PROVIDER` | One of `openai`, `claude`, `claude-sdk`, or `ollama`. Defaults to `openai`. |
+| `AI_PROVIDER` | One of `openai`, `claude`, `meridian`, or `ollama`. Defaults to `openai`. |
 | `OPENAI_API_KEY` | Required when `AI_PROVIDER=openai`. |
 | `ANTHROPIC_API_KEY` | Required when `AI_PROVIDER=claude`. |
+| `ANTHROPIC_MODEL` | Claude model for receipt scanning. Defaults to `claude-sonnet-4-6`. |
 | `OLLAMA_BASE_URL` | Ollama server URL. Defaults to `http://localhost:11434`. |
 | `OLLAMA_MODEL` | Ollama model name. Defaults to `llava`. |
 
-The `claude-sdk` provider uses a Claude Max/Pro subscription instead of an API key -- run `claude login` first.
+The `meridian` provider uses a Claude Max/Pro subscription via an embedded proxy -- no API key needed, just mount `~/.claude/.credentials.json`.
 
 ### OAuth (optional)
 
@@ -96,8 +98,13 @@ The `claude-sdk` provider uses a Claude Max/Pro subscription instead of an API k
 |---|---|---|
 | `NEXTAUTH_URL` | `http://localhost:3000` | Public URL of your instance. |
 | `AUTH_TRUST_HOST` | `false` | Set to `true` when running on a local network or behind a reverse proxy. |
+| `DB_USER` | `sharetab` | PostgreSQL username (Docker bundled DB). |
+| `DB_PASSWORD` | `sharetab` | PostgreSQL password (Docker bundled DB). |
+| `DB_NAME` | `sharetab` | PostgreSQL database name (Docker bundled DB). |
 | `UPLOAD_DIR` | `./uploads` | Directory for receipt image uploads. |
 | `MAX_UPLOAD_SIZE_MB` | `10` | Maximum upload file size. |
+| `AUTH_RATE_LIMIT_MAX` | `5` | Max login attempts per IP per hour. |
+| `REGISTER_RATE_LIMIT_MAX` | `10` | Max registration attempts per IP per hour. |
 | `LOG_LEVEL` | `info` | Logging verbosity: `debug`, `info`, `warn`, or `error`. |
 
 ## Development
@@ -109,25 +116,38 @@ npm install
 # Generate Prisma client
 npx prisma generate
 
-# Start a dev database (option A: embedded-postgres, no Docker needed)
-node scripts/start-test-db.mjs
+# Copy and configure environment
+cp .env.example .env  # Then edit .env as needed
 
-# Start a dev database (option B: Docker)
-docker compose -f docker/docker-compose.yml up db -d
+# Option A: All-in-one (embedded PostgreSQL + schema push + seed + dev server)
+npm run dev:full
 
-# Push the schema to the database
+# Option B: Manual setup
+docker compose -f docker/docker-compose.yml up db -d  # or use your own PostgreSQL
 npx prisma db push
-
-# Seed demo data (optional)
-npm run db:seed
-
-# Start dev server
+npm run db:seed    # optional — creates demo data
 npm run dev
 ```
 
 Demo accounts after seeding: `alice@example.com`, `bob@example.com`, `charlie@example.com` (password: `password123`).
 
-Note: if you use the embedded-postgres script, the schema push and seed are run automatically.
+### Running Tests
+
+```bash
+# Unit tests (Vitest)
+npm test
+
+# E2E tests (requires dev server running)
+BASE_URL=http://localhost:3000 npx playwright test
+
+# E2E with visible browser
+BASE_URL=http://localhost:3000 npx playwright test --headed
+
+# Include AI-dependent tests (requires configured AI provider)
+BASE_URL=http://localhost:3000 RUN_AI_TESTS=1 npx playwright test
+```
+
+Set `AUTH_RATE_LIMIT_MAX=9999` in `.env` to avoid rate limiting during repeated test runs.
 
 ## Contributing
 
