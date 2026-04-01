@@ -41,13 +41,18 @@ test.describe("Groups Search & Filter", () => {
 
     // Filter to one group
     await searchInput.fill("Apartment");
+    await expect(page.getByText("Apartment").first()).toBeVisible();
     await expect(page.getByText("Japan Trip")).not.toBeVisible();
 
-    // Clear search — groups page paginates, so verify via search that both exist
+    // Clear search — more groups should appear than just the filtered one
     await searchInput.fill("");
-    await expect(page.getByText("Apartment").first()).toBeVisible();
+    // Verify multiple group cards are visible (pagination shows at least GROUPS_PER_PAGE)
+    const groupCards = page.locator('a[href^="/groups/"]');
+    await expect(groupCards.first()).toBeVisible();
+    const count = await groupCards.count();
+    expect(count).toBeGreaterThan(1);
 
-    // Verify Japan Trip is accessible by searching for it
+    // Verify both seed groups are still accessible via search
     await searchInput.fill("Japan Trip");
     await expect(page.getByText("Japan Trip").first()).toBeVisible();
   });

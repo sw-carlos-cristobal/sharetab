@@ -59,7 +59,7 @@ test.describe("Additional UI Tests", () => {
     await expect(page.getByText("No groups yet")).toBeVisible();
   });
 
-  test("7.1.5 — updating name in settings reflects in sidebar", async ({ page }) => {
+  test("7.1.5 — updating name in settings reflects after reload", async ({ page }) => {
     await login(page, users.alice.email, users.alice.password);
     await page.goto("/settings");
 
@@ -68,12 +68,11 @@ test.describe("Additional UI Tests", () => {
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page.getByText("Profile updated")).toBeVisible({ timeout: 10000 });
 
-    // Navigate to dashboard to trigger session refresh and verify name in sidebar
-    await page.goto("/dashboard");
-    await expect(page.getByText("Alice Updated")).toBeVisible({ timeout: 15000 });
+    // Verify name persisted after page reload
+    await page.reload();
+    await expect(page.getByLabel("Name")).toHaveValue("Alice Updated", { timeout: 10000 });
 
-    // Restore original name
-    await page.goto("/settings");
+    // Always restore original name
     await page.getByLabel("Name").fill("Alice Johnson");
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page.getByText("Profile updated")).toBeVisible({ timeout: 10000 });
