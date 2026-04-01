@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Loader2, Camera, Bookmark } from "lucide-react";
+import { ArrowLeft, Loader2, Camera, Bookmark, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { ItemAssignment } from "@/components/receipts/item-assignment";
 import { loadingMessages } from "@/lib/loading-messages";
@@ -30,6 +30,8 @@ export default function ScanReceiptPage({
   const [errorMessage, setErrorMessage] = useState("");
   const [uploading, setUploading] = useState(false);
   const [loadingMsgIdx, setLoadingMsgIdx] = useState(0);
+  const [correctionHint, setCorrectionHint] = useState("");
+  const [showRescan, setShowRescan] = useState(false);
 
   // Rotate loading messages while processing
   useEffect(() => {
@@ -172,15 +174,65 @@ export default function ScanReceiptPage({
             members={members}
             onComplete={handleExpenseCreated}
           />
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={handleSaveForLater}
-            disabled={saveForLater.isPending}
-          >
-            <Bookmark className="mr-2 h-4 w-4" />
-            {saveForLater.isPending ? "Saving..." : "Save for Later"}
-          </Button>
+          <div className="space-y-2">
+            {!showRescan ? (
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setShowRescan(true)}
+                >
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Rescan with corrections
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={handleSaveForLater}
+                  disabled={saveForLater.isPending}
+                >
+                  <Bookmark className="mr-2 h-4 w-4" />
+                  {saveForLater.isPending ? "Saving..." : "Save for Later"}
+                </Button>
+              </div>
+            ) : (
+              <Card>
+                <CardContent className="space-y-3 pt-4">
+                  <p className="text-sm text-muted-foreground">
+                    Describe what needs to be corrected and AI will re-scan the receipt.
+                  </p>
+                  <textarea
+                    placeholder='e.g., "The total should be $45.99, not $54.99" or "There are 3 tacos, not 1"'
+                    value={correctionHint}
+                    onChange={(e) => setCorrectionHint(e.target.value)}
+                    rows={3}
+                    className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      className="flex-1"
+                      onClick={() => {
+                        if (!correctionHint.trim()) return;
+                        setStep("processing");
+                        setShowRescan(false);
+                        processReceipt.mutate({ receiptId, groupId, correctionHint: correctionHint.trim() });
+                      }}
+                      disabled={!correctionHint.trim()}
+                    >
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Rescan
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => { setShowRescan(false); setCorrectionHint(""); }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         </>
       )}
 

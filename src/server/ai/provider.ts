@@ -11,7 +11,8 @@ export interface AIProvider {
    */
   extractReceipt(
     imageBuffer: Buffer,
-    mimeType: string
+    mimeType: string,
+    correctionHint?: string
   ): Promise<ReceiptExtractionResult>;
 
   /**

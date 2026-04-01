@@ -15,9 +15,13 @@ export class OllamaProvider implements AIProvider {
 
   async extractReceipt(
     imageBuffer: Buffer,
-    mimeType: string
+    mimeType: string,
+    correctionHint?: string
   ): Promise<ReceiptExtractionResult> {
     const base64 = imageBuffer.toString("base64");
+    const prompt = correctionHint
+      ? `${RECEIPT_EXTRACTION_PROMPT}\n\nIMPORTANT CORRECTION FROM USER: ${correctionHint}`
+      : RECEIPT_EXTRACTION_PROMPT;
 
     const response = await fetch(`${this.baseUrl}/api/chat`, {
       method: "POST",
@@ -27,7 +31,7 @@ export class OllamaProvider implements AIProvider {
         messages: [
           {
             role: "user",
-            content: RECEIPT_EXTRACTION_PROMPT,
+            content: prompt,
             images: [base64],
           },
         ],

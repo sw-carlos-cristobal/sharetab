@@ -14,7 +14,7 @@ import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Camera, Loader2, Plus, Trash2, Check, Users, ArrowLeft, ArrowRight,
-  Share2, Copy, Pencil, Image as ImageIcon,
+  Share2, Copy, Pencil, Image as ImageIcon, RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -55,6 +55,8 @@ export default function GuestSplitPage() {
   const [tipOverride, setTipOverride] = useState("");
   const [imagePath, setImagePath] = useState<string | null>(null);
   const [showImage, setShowImage] = useState(false);
+  const [correctionHint, setCorrectionHint] = useState("");
+  const [showRescan, setShowRescan] = useState(false);
 
   // Editing
   const [editingItem, setEditingItem] = useState<number | null>(null);
@@ -457,7 +459,7 @@ export default function GuestSplitPage() {
 
           {/* Next button - sticky bottom */}
           <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t">
-            <div className="mx-auto max-w-lg">
+            <div className="mx-auto max-w-lg space-y-3">
               <Button
                 className="w-full h-14 text-lg"
                 disabled={validPeople.length < 1}
@@ -466,6 +468,74 @@ export default function GuestSplitPage() {
                 Next: Assign Items
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
+              {!showRescan ? (
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setShowRescan(true)}
+                >
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Rescan with corrections
+                </Button>
+              ) : (
+                <Card>
+                  <CardContent className="space-y-3 pt-4">
+                    <p className="text-sm text-muted-foreground">
+                      Describe what needs to be corrected and AI will re-scan the receipt.
+                    </p>
+                    <textarea
+                      placeholder='e.g., "The total should be $45.99" or "There are 3 tacos, not 1"'
+                      value={correctionHint}
+                      onChange={(e) => setCorrectionHint(e.target.value)}
+                      rows={3}
+                      className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        className="flex-1"
+                        onClick={() => {
+                          if (!correctionHint.trim() || !receiptId) return;
+                          setStep("processing");
+                          setShowRescan(false);
+                          processReceipt.mutate(
+                            { receiptId, correctionHint: correctionHint.trim() },
+                            {
+                              onSuccess: (data) => {
+                                setItems([]); // will be refetched
+                                setExtracted({
+                                  merchantName: data.merchantName ?? undefined,
+                                  date: data.date ?? undefined,
+                                  subtotal: data.subtotal,
+                                  tax: data.tax,
+                                  tip: data.tip,
+                                  total: data.total,
+                                  currency: data.currency,
+                                });
+                                setAssignments({});
+                                setStep("people");
+                              },
+                              onError: (err) => {
+                                setErrorMessage(err.message);
+                                setStep("people");
+                              },
+                            }
+                          );
+                        }}
+                        disabled={!correctionHint.trim()}
+                      >
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        Rescan
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => { setShowRescan(false); setCorrectionHint(""); }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           </div>
         </div>

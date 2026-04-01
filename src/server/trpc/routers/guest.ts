@@ -8,7 +8,7 @@ import { calculateSplitTotals } from "@/lib/split-calculator";
 
 export const guestRouter = createTRPCRouter({
   processReceipt: publicProcedure
-    .input(z.object({ receiptId: z.string() }))
+    .input(z.object({ receiptId: z.string(), correctionHint: z.string().max(500).optional() }))
     .mutation(async ({ ctx, input }) => {
       // Rate limit: 3 processing attempts per receipt per hour
       const { allowed } = checkRateLimit(
@@ -30,6 +30,13 @@ export const guestRouter = createTRPCRouter({
         throw new TRPCError({ code: "NOT_FOUND", message: "Receipt not found" });
       }
 
+      // If re-processing with corrections, clear old items first
+      if (input.correctionHint) {
+        await ctx.db.receiptItem.deleteMany({
+          where: { receiptId: input.receiptId },
+        });
+      }
+
       await ctx.db.receipt.update({
         where: { id: input.receiptId },
         data: { status: "PROCESSING" },
@@ -47,9 +54,10 @@ export const guestRouter = createTRPCRouter({
           receiptId: input.receiptId,
           provider: provider.name,
           imageSize: imageBuffer.length,
+          correctionHint: input.correctionHint ?? null,
         });
         const start = Date.now();
-        const result = await provider.extractReceipt(imageBuffer, receipt.mimeType);
+        const result = await provider.extractReceipt(imageBuffer, receipt.mimeType, input.correctionHint);
         logger.info("guest.receipt.extracted", {
           receiptId: input.receiptId,
           provider: provider.name,

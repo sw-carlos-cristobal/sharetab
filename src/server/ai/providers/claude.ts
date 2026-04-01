@@ -16,9 +16,13 @@ export class ClaudeProvider implements AIProvider {
 
   async extractReceipt(
     imageBuffer: Buffer,
-    mimeType: string
+    mimeType: string,
+    correctionHint?: string
   ): Promise<ReceiptExtractionResult> {
     const base64 = imageBuffer.toString("base64");
+    const prompt = correctionHint
+      ? `${RECEIPT_EXTRACTION_PROMPT}\n\nIMPORTANT CORRECTION FROM USER: ${correctionHint}`
+      : RECEIPT_EXTRACTION_PROMPT;
 
     const stream = this.client.messages.stream({
       model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6",
@@ -37,7 +41,7 @@ export class ClaudeProvider implements AIProvider {
             },
             {
               type: "text",
-              text: RECEIPT_EXTRACTION_PROMPT,
+              text: prompt,
             },
           ],
         },

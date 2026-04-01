@@ -55,11 +55,15 @@ export class MeridianProvider implements AIProvider {
 
   async extractReceipt(
     imageBuffer: Buffer,
-    mimeType: string
+    mimeType: string,
+    correctionHint?: string
   ): Promise<ReceiptExtractionResult> {
     const client = await this.getClient();
     const base64 = imageBuffer.toString("base64");
     const start = Date.now();
+    const prompt = correctionHint
+      ? `${RECEIPT_EXTRACTION_PROMPT}\n\nIMPORTANT CORRECTION FROM USER: ${correctionHint}`
+      : RECEIPT_EXTRACTION_PROMPT;
 
     const stream = client.messages.stream({
       model: process.env.ANTHROPIC_MODEL || "claude-opus-4-6",
@@ -78,7 +82,7 @@ export class MeridianProvider implements AIProvider {
             },
             {
               type: "text",
-              text: RECEIPT_EXTRACTION_PROMPT,
+              text: prompt,
             },
           ],
         },

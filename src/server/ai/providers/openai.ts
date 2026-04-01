@@ -14,9 +14,13 @@ export class OpenAIProvider implements AIProvider {
 
   async extractReceipt(
     imageBuffer: Buffer,
-    mimeType: string
+    mimeType: string,
+    correctionHint?: string
   ): Promise<ReceiptExtractionResult> {
     const base64 = imageBuffer.toString("base64");
+    const prompt = correctionHint
+      ? `${RECEIPT_EXTRACTION_PROMPT}\n\nIMPORTANT CORRECTION FROM USER: ${correctionHint}`
+      : RECEIPT_EXTRACTION_PROMPT;
 
     const response = await this.client.chat.completions.create({
       model: "gpt-4o",
@@ -24,7 +28,7 @@ export class OpenAIProvider implements AIProvider {
         {
           role: "user",
           content: [
-            { type: "text", text: RECEIPT_EXTRACTION_PROMPT },
+            { type: "text", text: prompt },
             {
               type: "image_url",
               image_url: {

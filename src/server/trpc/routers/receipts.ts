@@ -20,11 +20,22 @@ async function verifyReceiptAccess(db: any, receiptId: string, userId: string) {
 
 export const receiptsRouter = createTRPCRouter({
   processReceipt: protectedProcedure
-    .input(z.object({ receiptId: z.string(), groupId: z.string().optional() }))
+    .input(z.object({
+      receiptId: z.string(),
+      groupId: z.string().optional(),
+      correctionHint: z.string().max(500).optional(),
+    }))
     .mutation(async ({ ctx, input }) => {
       const receipt = await verifyReceiptAccess(ctx.db, input.receiptId, ctx.user.id);
       if (!receipt) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Receipt not found" });
+      }
+
+      // If re-processing with corrections, clear old items first
+      if (input.correctionHint) {
+        await ctx.db.receiptItem.deleteMany({
+          where: { receiptId: input.receiptId },
+        });
       }
 
       await ctx.db.receipt.update({
@@ -47,9 +58,10 @@ export const receiptsRouter = createTRPCRouter({
           receiptId: input.receiptId,
           provider: provider.name,
           imageSize: imageBuffer.length,
+          correctionHint: input.correctionHint ?? null,
         });
         const start = Date.now();
-        const result = await provider.extractReceipt(imageBuffer, receipt.mimeType);
+        const result = await provider.extractReceipt(imageBuffer, receipt.mimeType, input.correctionHint);
         logger.info("receipt.extracted", {
           receiptId: input.receiptId,
           provider: provider.name,
