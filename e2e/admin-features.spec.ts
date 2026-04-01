@@ -159,6 +159,107 @@ test.describe("Registration control", () => {
 
     await ctx.dispose();
   });
+
+  test("invite-only mode blocks registration without code", async ({ page }) => {
+    const ctx = await authedContext(users.alice.email, users.alice.password);
+
+    // Set registration mode to invite-only
+    await trpcMutation(ctx, "admin.setRegistrationMode", {
+      mode: "invite-only",
+    });
+
+    try {
+      // Try to register without an invite code
+      await page.goto("/register");
+
+      // Invite code field should be visible
+      await expect(page.getByLabel("Invite Code")).toBeVisible();
+
+      // Fill in registration without invite code
+      await page.getByLabel("Name").fill("No Code User");
+      await page.getByLabel("Email").fill("nocode@test.com");
+      await page.getByLabel("Password").fill("password123");
+      await page.getByLabel("Invite Code").fill("invalid-code-123");
+      await page.getByRole("button", { name: "Create account" }).click();
+
+      // Should show an error
+      await expect(page.getByText("Invalid or expired invite code")).toBeVisible({ timeout: 10000 });
+
+      // Should NOT navigate to dashboard
+      expect(page.url()).toContain("/register");
+    } finally {
+      // Always restore open registration
+      await trpcMutation(ctx, "admin.setRegistrationMode", {
+        mode: "open",
+      });
+      await ctx.dispose();
+    }
+  });
+
+  test("invite-only mode allows registration with valid code", async ({ page }) => {
+    const ctx = await authedContext(users.alice.email, users.alice.password);
+
+    // Set registration mode to invite-only
+    await trpcMutation(ctx, "admin.setRegistrationMode", {
+      mode: "invite-only",
+    });
+
+    // Create a valid invite
+    const createRes = await trpcMutation(ctx, "admin.createSystemInvite", {
+      label: "E2E test invite",
+      expiresInDays: 1,
+    });
+    const invite = (await createRes.json()).result.data.json;
+
+    try {
+      const testEmail = `invite-test-${Date.now()}@test.com`;
+
+      await page.goto("/register");
+      await page.getByLabel("Name").fill("Invited User");
+      await page.getByLabel("Email").fill(testEmail);
+      await page.getByLabel("Password").fill("password123");
+      await page.getByLabel("Invite Code").fill(invite.code);
+      await page.getByRole("button", { name: "Create account" }).click();
+
+      // Should navigate to dashboard on success
+      await page.waitForURL("**/dashboard", { timeout: 15000 });
+    } finally {
+      // Restore open registration
+      await trpcMutation(ctx, "admin.setRegistrationMode", {
+        mode: "open",
+      });
+      await ctx.dispose();
+    }
+  });
+
+  test("closed mode prevents registration entirely", async ({ page }) => {
+    const ctx = await authedContext(users.alice.email, users.alice.password);
+
+    // Set registration mode to closed
+    await trpcMutation(ctx, "admin.setRegistrationMode", {
+      mode: "closed",
+    });
+
+    try {
+      await page.goto("/register");
+
+      // Should show closed message
+      await expect(
+        page.getByText("Registration is currently closed")
+      ).toBeVisible();
+
+      // Create account button should not be visible
+      await expect(
+        page.getByRole("button", { name: "Create account" })
+      ).not.toBeVisible();
+    } finally {
+      // Always restore open registration
+      await trpcMutation(ctx, "admin.setRegistrationMode", {
+        mode: "open",
+      });
+      await ctx.dispose();
+    }
+  });
 });
 
 test.describe("Announcement banner", () => {
