@@ -65,6 +65,24 @@ test.describe("Additional UI Tests", () => {
     await expect(page.getByText("No groups yet")).toBeVisible();
   });
 
+  test("7.1.5 — updating name in settings reflects in sidebar", async ({ page }) => {
+    await login(page, users.alice.email, users.alice.password);
+    await page.goto("/settings");
+
+    const nameInput = page.getByLabel("Name");
+    await nameInput.fill("Alice Updated");
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByText("Profile updated")).toBeVisible({ timeout: 10000 });
+
+    // Sidebar should reflect the updated name without a manual reload
+    await expect(page.locator("aside").getByText("Alice Updated")).toBeVisible({ timeout: 10000 });
+
+    // Restore original name
+    await nameInput.fill("Alice Johnson");
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByText("Profile updated")).toBeVisible({ timeout: 10000 });
+  });
+
   test("7.6.4 — mobile sign out", async ({ page }) => {
     // Use mobile viewport
     await page.setViewportSize({ width: 390, height: 844 });
