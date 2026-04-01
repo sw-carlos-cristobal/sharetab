@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +11,7 @@ import { Label } from "@/components/ui/label";
 
 export default function SettingsPage() {
   const { data: session, update } = useSession();
+  const router = useRouter();
   const [name, setName] = useState(session?.user?.name ?? "");
 
   useEffect(() => {
@@ -20,8 +22,9 @@ export default function SettingsPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
 
   const updateProfile = trpc.auth.updateProfile.useMutation({
-    onSuccess: () => {
-      update();
+    onSuccess: async () => {
+      await update();
+      router.refresh();
     },
   });
 

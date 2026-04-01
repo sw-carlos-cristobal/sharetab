@@ -90,12 +90,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.id = user.id;
         token.name = user.name;
       }
-      if (trigger === "update") {
+      // Refresh name from DB if missing or on explicit update
+      if (!token.name || trigger === "update") {
         const fresh = await db.user.findUnique({
           where: { id: token.id as string },
           select: { name: true },
         });
-        if (fresh) token.name = fresh.name;
+        if (fresh?.name) token.name = fresh.name;
       }
       return token;
     },
