@@ -40,6 +40,7 @@ import { AnnouncementSection } from "@/components/admin/announcement-section";
 import { ActivityFeedSection } from "@/components/admin/activity-feed-section";
 import { AIStatsSection } from "@/components/admin/ai-stats-section";
 import { ToolsSection } from "@/components/admin/tools-section";
+import { ServerLogsSection } from "@/components/admin/server-logs-section";
 
 export default function AdminPage() {
   const { data: session } = useSession();
@@ -69,6 +70,8 @@ export default function AdminPage() {
         <ActivityFeedSection />
         <Separator />
         <ToolsSection />
+        <Separator />
+        <ServerLogsSection />
         <Separator />
         <AuditLogSection />
       </div>

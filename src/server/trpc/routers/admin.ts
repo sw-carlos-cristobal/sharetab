@@ -10,6 +10,7 @@ import {
 import nodemailer from "nodemailer";
 import fs from "fs";
 import path from "path";
+import { getRecentLogs } from "@/server/lib/logger";
 
 const serverStartTime = new Date();
 
@@ -825,6 +826,25 @@ export const adminRouter = createTRPCRouter({
       freedBytesFormatted: formatBytes(freedBytes),
     };
   }),
+  // ─── Server Logs ─────────────────────────────────────────
+
+  getLogs: adminProcedure
+    .input(
+      z.object({
+        minLevel: z.enum(["debug", "info", "warn", "error"]).optional(),
+        search: z.string().max(200).optional(),
+        limit: z.number().min(1).max(500).default(200),
+        afterId: z.number().optional(),
+      })
+    )
+    .query(({ input }) => {
+      return getRecentLogs({
+        minLevel: input.minLevel,
+        search: input.search || undefined,
+        limit: input.limit,
+        afterId: input.afterId,
+      });
+    }),
 });
 
 function formatBytes(bytes: number): string {

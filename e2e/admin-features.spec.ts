@@ -280,6 +280,46 @@ test.describe("Admin tools", () => {
   });
 });
 
+test.describe("Server logs", () => {
+  test("admin page shows server logs section", async ({ page }) => {
+    await login(page, users.alice.email, users.alice.password);
+    await page.goto("/admin");
+
+    await expect(
+      page.getByRole("heading", { name: "Server Logs" })
+    ).toBeVisible();
+
+    // Should show the log viewer with level filter buttons
+    await expect(page.getByRole("button", { name: "debug" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "info" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "warn" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "error" })).toBeVisible();
+  });
+
+  test("server logs API returns entries", async () => {
+    const ctx = await authedContext(users.alice.email, users.alice.password);
+    const data = await trpcResult(
+      await trpcQuery(ctx, "admin.getLogs", { limit: 50 })
+    );
+    expect(data.entries).toBeInstanceOf(Array);
+    expect(typeof data.latestId).toBe("number");
+    await ctx.dispose();
+  });
+
+  test("server logs API supports level filtering", async () => {
+    const ctx = await authedContext(users.alice.email, users.alice.password);
+    const data = await trpcResult(
+      await trpcQuery(ctx, "admin.getLogs", { minLevel: "warn", limit: 50 })
+    );
+    expect(data.entries).toBeInstanceOf(Array);
+    // All entries should be warn or error level
+    for (const entry of data.entries) {
+      expect(["warn", "error"]).toContain(entry.level);
+    }
+    await ctx.dispose();
+  });
+});
+
 test.describe("User impersonation", () => {
   test("admin page shows impersonate button for non-admin users", async ({
     page,
