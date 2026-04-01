@@ -8,7 +8,8 @@ import { UserCheck } from 'lucide-react';
 export function ImpersonationBanner() {
   const router = useRouter();
   const { data } = trpc.admin.getImpersonationStatus.useQuery(undefined, {
-    staleTime: 30_000,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
   const [stopping, setStopping] = useState(false);
 
