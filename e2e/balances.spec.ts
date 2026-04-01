@@ -76,7 +76,7 @@ test.describe("Balances & Settlements", () => {
       await page.getByRole("button", { name: "Settle up" }).click();
       await expect(page.getByRole("dialog")).toBeVisible();
       await expect(page.getByRole("heading", { name: "Record a payment" })).toBeVisible();
-      await expect(page.getByLabel("To")).toBeVisible();
+      await expect(page.getByLabel("To", { exact: true })).toBeVisible();
       await expect(page.getByLabel("Amount")).toBeVisible();
     });
 
