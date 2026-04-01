@@ -50,11 +50,16 @@ const t = initTRPC.context<TRPCContext>().create({
   transformer: superjson,
 });
 
+// Procedures that poll frequently and would spam the log buffer
+const QUIET_PATHS = new Set(["admin.getLogs", "admin.getImpersonationStatus"]);
+
 const loggingMiddleware = t.middleware(async ({ path, type, next, ctx }) => {
   const start = Date.now();
   const userId = ctx.session?.user?.id;
 
   const result = await next();
+
+  if (QUIET_PATHS.has(path)) return result;
 
   const durationMs = Date.now() - start;
   const ok = result.ok;
