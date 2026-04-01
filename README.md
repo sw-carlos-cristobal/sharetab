@@ -1,8 +1,70 @@
-# ShareTab
+<p align="center">
+  <img src="public/icons/icon.svg" width="80" alt="ShareTab logo" />
+</p>
 
-A self-hosted, open-source alternative to Splitwise with AI-powered receipt scanning.
+<h1 align="center">ShareTab</h1>
+
+<p align="center">
+  A self-hosted, open-source alternative to Splitwise with AI-powered receipt scanning.
+</p>
+
+<p align="center">
+  <a href="#quick-start">Quick Start</a> &bull;
+  <a href="#features">Features</a> &bull;
+  <a href="#screenshots">Screenshots</a> &bull;
+  <a href="#configuration">Configuration</a> &bull;
+  <a href="#development">Development</a>
+</p>
+
+---
 
 ShareTab makes it easy to track shared expenses with friends, roommates, or travel groups. Snap a photo of a receipt, let AI extract the line items, and assign them to group members -- taxes and tips are split proportionally. Deploy it on your own server with a single Docker command.
+
+## Screenshots
+
+### Dashboard -- see all your balances at a glance
+
+<p align="center">
+  <img src="docs/screenshots/dashboard-light.png" width="100%" alt="Dashboard showing balance summary, who owes you, and group cards" />
+</p>
+
+### Dark mode -- toggle with one click
+
+<p align="center">
+  <img src="docs/screenshots/dark-mode-toggle.gif" width="100%" alt="Dark mode toggle animation" />
+</p>
+
+### Group detail -- members, balances, and expenses
+
+<p align="center">
+  <img src="docs/screenshots/group-detail.png" width="100%" alt="Group detail page with member avatars, simplified debts, and expense list" />
+</p>
+
+### Settle up -- click a debt to pre-fill the payment dialog
+
+<p align="center">
+  <img src="docs/screenshots/settle-dialog.png" width="100%" alt="Settle up dialog with From, To, and Amount pre-populated" />
+</p>
+
+### Add expense -- 4 split modes
+
+<p align="center">
+  <img src="docs/screenshots/add-expense.png" width="100%" alt="Add expense form with equal, exact, percentage, and shares split modes" />
+</p>
+
+### Guest bill splitting -- no account needed
+
+<p align="center">
+  <img src="docs/screenshots/guest-split.png" width="100%" alt="Guest split page with camera upload and gallery options" />
+</p>
+
+### Mobile-first design
+
+<p align="center">
+  <img src="docs/screenshots/mobile-dashboard.png" width="280" alt="Mobile dashboard" />
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/mobile-split.png" width="280" alt="Mobile guest split" />
+</p>
 
 ## Features
 
@@ -107,6 +169,18 @@ The `meridian` provider uses a Claude Max/Pro subscription via an embedded proxy
 | `REGISTER_RATE_LIMIT_MAX` | `10` | Max registration attempts per IP per hour. |
 | `LOG_LEVEL` | `info` | Logging verbosity: `debug`, `info`, `warn`, or `error`. |
 
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | [Next.js 16](https://nextjs.org) (App Router) + TypeScript |
+| API | [tRPC v11](https://trpc.io) (end-to-end type-safe) |
+| Database | [Prisma 7](https://www.prisma.io) + PostgreSQL 16 |
+| Auth | [NextAuth v5](https://authjs.dev) (credentials + OAuth + magic link) |
+| UI | [TailwindCSS 4](https://tailwindcss.com) + [shadcn/ui](https://ui.shadcn.com) + [next-themes](https://github.com/pacocoursey/next-themes) |
+| AI | Pluggable providers: OpenAI, Claude, Meridian, Ollama |
+| Testing | [Vitest](https://vitest.dev) (unit) + [Playwright](https://playwright.dev) (e2e) |
+
 ## Development
 
 ```bash
@@ -125,7 +199,7 @@ npm run dev:full
 # Option B: Manual setup
 docker compose -f docker/docker-compose.yml up db -d  # or use your own PostgreSQL
 npx prisma db push
-npm run db:seed    # optional — creates demo data
+npm run db:seed    # optional -- creates demo data
 npm run dev
 ```
 
