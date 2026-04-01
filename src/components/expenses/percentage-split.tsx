@@ -16,7 +16,11 @@ export function PercentageSplit({
   totalCents: number;
   onChange: (shares: ShareEntry[]) => void;
 }) {
-  const [percentages, setPercentages] = useState<Record<string, string>>({});
+  const [percentages, setPercentages] = useState<Record<string, string>>(() => {
+    // Pre-fill equal percentages so switching from Equal mode isn't jarring
+    const pct = members.length > 0 ? (100 / members.length).toFixed(2) : "0";
+    return Object.fromEntries(members.map((m) => [m.id, pct]));
+  });
 
   useEffect(() => {
     const shares: ShareEntry[] = [];
@@ -91,13 +95,13 @@ export function PercentageSplit({
       })}
       <p
         className={`text-xs ${
-          Math.abs(totalPct - 100) < 0.01
+          Math.abs(totalPct - 100) < 0.05
             ? "text-green-600"
             : "text-amber-600"
         }`}
       >
         Total: {totalPct.toFixed(1)}%
-        {Math.abs(totalPct - 100) >= 0.01 && ` (should be 100%)`}
+        {Math.abs(totalPct - 100) >= 0.05 && ` (should be 100%)`}
       </p>
     </div>
   );

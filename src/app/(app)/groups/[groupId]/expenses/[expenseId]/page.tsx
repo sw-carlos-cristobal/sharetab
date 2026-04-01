@@ -25,7 +25,20 @@ export default function ExpenseDetailPage({
   });
 
   if (expense.isLoading) return <p className="text-muted-foreground">Loading...</p>;
-  if (!expense.data) return <p className="text-destructive">Expense not found.</p>;
+  if (!expense.data) {
+    return (
+      <div className="mx-auto max-w-md py-16 text-center">
+        <Trash2 className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+        <h2 className="mb-2 text-lg font-semibold">Expense not found</h2>
+        <p className="mb-4 text-sm text-muted-foreground">
+          This expense doesn&apos;t exist or has been deleted.
+        </p>
+        <Button nativeButton={false} render={<Link href={`/groups/${groupId}`} />}>
+          Back to Group
+        </Button>
+      </div>
+    );
+  }
 
   const e = expense.data;
 

@@ -89,12 +89,9 @@ export default function NewExpensePage({
   return (
     <div className="mx-auto max-w-lg space-y-6">
       <div className="flex items-center gap-2">
-        <a
-          href={`/groups/${groupId}`}
-          className="inline-flex shrink-0 items-center justify-center rounded-lg size-8 hover:bg-muted hover:text-foreground transition-all [&_svg]:pointer-events-none"
-        >
+        <Button variant="ghost" size="icon" nativeButton={false} render={<Link href={`/groups/${groupId}`} />}>
           <ArrowLeft className="h-4 w-4" />
-        </a>
+        </Button>
         <h1 className="text-2xl font-bold">Add Expense</h1>
       </div>
 

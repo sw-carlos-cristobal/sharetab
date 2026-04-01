@@ -81,7 +81,18 @@ export default function GroupDetailPage({
   }
 
   if (!group.data) {
-    return <p className="text-destructive">Group not found.</p>;
+    return (
+      <div className="mx-auto max-w-md py-16 text-center">
+        <Receipt className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+        <h2 className="mb-2 text-lg font-semibold">Group not found</h2>
+        <p className="mb-4 text-sm text-muted-foreground">
+          This group doesn&apos;t exist or you don&apos;t have access to it.
+        </p>
+        <Button nativeButton={false} render={<Link href="/groups" />}>
+          Back to Groups
+        </Button>
+      </div>
+    );
   }
 
   const g = group.data;

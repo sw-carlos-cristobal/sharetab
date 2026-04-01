@@ -103,7 +103,18 @@ export default function EditExpensePage({
     return <p className="text-muted-foreground">Loading...</p>;
   }
   if (!expense.data) {
-    return <p className="text-destructive">Expense not found.</p>;
+    return (
+      <div className="mx-auto max-w-md py-16 text-center">
+        <ArrowLeft className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+        <h2 className="mb-2 text-lg font-semibold">Expense not found</h2>
+        <p className="mb-4 text-sm text-muted-foreground">
+          This expense doesn&apos;t exist or has been deleted.
+        </p>
+        <Button nativeButton={false} render={<Link href={`/groups/${groupId}`} />}>
+          Back to Group
+        </Button>
+      </div>
+    );
   }
 
   const isItemSplit = expense.data.splitMode === "ITEM";
@@ -111,12 +122,9 @@ export default function EditExpensePage({
   return (
     <div className="mx-auto max-w-lg space-y-6">
       <div className="flex items-center gap-2">
-        <a
-          href={`/groups/${groupId}/expenses/${expenseId}`}
-          className="inline-flex shrink-0 items-center justify-center rounded-lg size-8 hover:bg-muted hover:text-foreground transition-all [&_svg]:pointer-events-none"
-        >
+        <Button variant="ghost" size="icon" nativeButton={false} render={<Link href={`/groups/${groupId}/expenses/${expenseId}`} />}>
           <ArrowLeft className="h-4 w-4" />
-        </a>
+        </Button>
         <h1 className="text-2xl font-bold">Edit Expense</h1>
       </div>
 
