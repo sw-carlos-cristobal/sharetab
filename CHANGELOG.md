@@ -1,5 +1,13 @@
 # Changelog
 
+## [v0.3.0] - 2026-04-01
+
+### Features
+- add server logs viewer to admin dashboard (1f9f84f)
+
+**Full Changelog**: https://github.com/sw-carlos-cristobal/sharetab/compare/v0.2.0...v0.3.0
+
+
 ## [v0.2.0] - 2026-04-01
 
 ### Features
