@@ -107,6 +107,7 @@ export default function DashboardPage() {
   const dashboard = trpc.balances.getDashboard.useQuery();
   const overallDebts = trpc.balances.getOverallDebts.useQuery();
   const groups = trpc.groups.list.useQuery();
+  const archivedGroups = trpc.groups.listArchived.useQuery();
   const [showAllGroups, setShowAllGroups] = useState(false);
 
   const visibleGroups = showAllGroups
@@ -383,6 +384,17 @@ export default function DashboardPage() {
             >
               Show all {groups.data?.length} groups
             </Button>
+          </div>
+        )}
+
+        {(archivedGroups.data?.length ?? 0) > 0 && (
+          <div className="mt-3 text-center">
+            <Link
+              href="/groups?archived=1"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {archivedGroups.data?.length} archived group{archivedGroups.data?.length !== 1 ? "s" : ""}
+            </Link>
           </div>
         )}
       </div>

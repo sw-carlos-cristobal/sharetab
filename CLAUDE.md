@@ -151,6 +151,16 @@ docker compose exec sharetab su-exec postgres pg_dump -U sharetab sharetab > bac
 - Dockerfile hardened: `--omit=dev`, cache clean, HEALTHCHECK directive, `.dockerignore`
 - All 19 routes building and type-checking clean
 
+### Group Archiving — COMPLETE
+- **Archive/unarchive groups** via group settings (OWNER or ADMIN only)
+- Archived groups hidden from dashboard balances and active groups list
+- Groups page: "Archived" toggle button + search; archived cards show dashed border + badge
+- Dashboard: "N archived groups" link when archived groups exist
+- Group detail: amber banner when archived, Add Expense/Scan Receipt buttons hidden
+- Settings: archive/unarchive buttons in Danger Zone, archived state banner with unarchive action
+- URL support: `/groups?archived=1` opens groups page with archived filter active
+- Schema: `Group.archivedAt DateTime?`, `ActivityType.GROUP_ARCHIVED/GROUP_UNARCHIVED`
+
 ### Pending Receipts & Placeholder Members — COMPLETE
 - **Placeholder members**: Add people to groups without accounts (`User.isPlaceholder`)
   - Created via group settings with just a name

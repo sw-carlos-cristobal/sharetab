@@ -17,6 +17,7 @@ import {
   Handshake,
   Camera,
   Tag,
+  Archive,
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
@@ -170,6 +171,22 @@ export default function GroupDetailPage({
         ))}
       </div>
 
+      {g.archivedAt && (
+        <div className="flex items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-200">
+          <Archive className="h-4 w-4 shrink-0" />
+          <span>This group is archived. Expenses cannot be added.</span>
+          <Button
+            variant="link"
+            size="sm"
+            className="ml-auto h-auto p-0 text-amber-800 dark:text-amber-200"
+            nativeButton={false}
+            render={<Link href={`/groups/${groupId}/settings`} />}
+          >
+            Manage
+          </Button>
+        </div>
+      )}
+
       <Separator />
 
       {/* Simplified Debts */}
@@ -277,21 +294,23 @@ export default function GroupDetailPage({
       <div>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Expenses</h2>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              nativeButton={false}
-              render={<Link href={`/groups/${groupId}/scan`} />}
-            >
-              <Camera className="mr-2 h-4 w-4" />
-              Scan Receipt
-            </Button>
-            <Button size="sm" nativeButton={false} render={<Link href={`/groups/${groupId}/expenses/new`} />}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Expense
-            </Button>
-          </div>
+          {!g.archivedAt && (
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                nativeButton={false}
+                render={<Link href={`/groups/${groupId}/scan`} />}
+              >
+                <Camera className="mr-2 h-4 w-4" />
+                Scan Receipt
+              </Button>
+              <Button size="sm" nativeButton={false} render={<Link href={`/groups/${groupId}/expenses/new`} />}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Expense
+              </Button>
+            </div>
+          )}
         </div>
 
         {expenses.isLoading && <p className="text-muted-foreground">Loading...</p>}

@@ -40,7 +40,7 @@ export const balancesRouter = createTRPCRouter({
 
   getOverallDebts: protectedProcedure.query(async ({ ctx }) => {
     const groups = await ctx.db.group.findMany({
-      where: { members: { some: { userId: ctx.user.id } } },
+      where: { members: { some: { userId: ctx.user.id } }, archivedAt: null },
       include: {
         expenses: { include: { shares: true } },
         settlements: true,
@@ -111,7 +111,7 @@ export const balancesRouter = createTRPCRouter({
 
   getDashboard: protectedProcedure.query(async ({ ctx }) => {
     const groups = await ctx.db.group.findMany({
-      where: { members: { some: { userId: ctx.user.id } } },
+      where: { members: { some: { userId: ctx.user.id } }, archivedAt: null },
       include: {
         expenses: { include: { shares: true } },
         settlements: true,

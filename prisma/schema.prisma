@@ -79,6 +79,7 @@ model Group {
   currency      String  @default("USD")
   emoji         String? @default("💰")
   simplifyDebts Boolean @default(true)
+  archivedAt    DateTime?
 
   members      GroupMember[]
   expenses     Expense[]
@@ -284,6 +285,8 @@ enum ActivityType {
   GROUP_UPDATED
   PLACEHOLDER_CREATED
   PLACEHOLDER_MERGED
+  GROUP_ARCHIVED
+  GROUP_UNARCHIVED
 }
 
 // ─── GUEST SPLITS (no auth required) ──────────────────────

@@ -8,6 +8,7 @@ export const groupsRouter = createTRPCRouter({
     const groups = await ctx.db.group.findMany({
       where: {
         members: { some: { userId: ctx.user.id } },
+        archivedAt: null,
       },
       include: {
         members: {
@@ -16,6 +17,23 @@ export const groupsRouter = createTRPCRouter({
         _count: { select: { expenses: true } },
       },
       orderBy: { updatedAt: "desc" },
+    });
+    return groups;
+  }),
+
+  listArchived: protectedProcedure.query(async ({ ctx }) => {
+    const groups = await ctx.db.group.findMany({
+      where: {
+        members: { some: { userId: ctx.user.id } },
+        archivedAt: { not: null },
+      },
+      include: {
+        members: {
+          include: { user: { select: { id: true, name: true, email: true, image: true, isPlaceholder: true, placeholderName: true } } },
+        },
+        _count: { select: { expenses: true } },
+      },
+      orderBy: { archivedAt: "desc" },
     });
     return groups;
   }),
@@ -90,6 +108,48 @@ export const groupsRouter = createTRPCRouter({
       }
       await ctx.db.group.delete({ where: { id: input.groupId } });
       return { success: true };
+    }),
+
+  archive: groupMemberProcedure
+    .input(z.object({ groupId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.membership.role === "MEMBER") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Only admins and owners can archive groups" });
+      }
+      const group = await ctx.db.group.update({
+        where: { id: input.groupId },
+        data: { archivedAt: new Date() },
+      });
+      await ctx.db.activityLog.create({
+        data: {
+          groupId: input.groupId,
+          userId: ctx.user.id,
+          type: "GROUP_ARCHIVED",
+          metadata: { name: group.name },
+        },
+      });
+      return group;
+    }),
+
+  unarchive: groupMemberProcedure
+    .input(z.object({ groupId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.membership.role === "MEMBER") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Only admins and owners can unarchive groups" });
+      }
+      const group = await ctx.db.group.update({
+        where: { id: input.groupId },
+        data: { archivedAt: null },
+      });
+      await ctx.db.activityLog.create({
+        data: {
+          groupId: input.groupId,
+          userId: ctx.user.id,
+          type: "GROUP_UNARCHIVED",
+          metadata: { name: group.name },
+        },
+      });
+      return group;
     }),
 
   createInvite: groupMemberProcedure

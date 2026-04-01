@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Pencil, Trash2, UserPlus, Check, X } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowLeft, Pencil, Trash2, UserPlus, Check, X } from "lucide-react";
 import Link from "next/link";
 
 export default function GroupSettingsPage({
@@ -45,6 +45,22 @@ export default function GroupSettingsPage({
   const deleteGroup = trpc.groups.delete.useMutation({
     onSuccess: () => {
       router.push("/groups");
+    },
+  });
+
+  const archiveGroup = trpc.groups.archive.useMutation({
+    onSuccess: () => {
+      utils.groups.list.invalidate();
+      utils.groups.listArchived.invalidate();
+      router.push("/groups");
+    },
+  });
+
+  const unarchiveGroup = trpc.groups.unarchive.useMutation({
+    onSuccess: () => {
+      utils.groups.get.invalidate({ groupId });
+      utils.groups.list.invalidate();
+      utils.groups.listArchived.invalidate();
     },
   });
 
@@ -95,6 +111,27 @@ export default function GroupSettingsPage({
         </Button>
         <h1 className="text-2xl font-bold">Group Settings</h1>
       </div>
+
+      {group.data.archivedAt && (
+        <div className="flex items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-200">
+          <Archive className="h-5 w-5 shrink-0" />
+          <div className="flex-1">
+            <p className="font-medium">This group is archived</p>
+            <p className="text-amber-700 dark:text-amber-300">
+              Archived on {new Date(group.data.archivedAt).toLocaleDateString()}. Expenses cannot be added.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => unarchiveGroup.mutate({ groupId })}
+            disabled={unarchiveGroup.isPending}
+          >
+            <ArchiveRestore className="mr-2 h-4 w-4" />
+            Unarchive
+          </Button>
+        </div>
+      )}
 
       <Card>
         <CardHeader>
@@ -236,10 +273,30 @@ export default function GroupSettingsPage({
         <CardHeader>
           <CardTitle className="text-destructive">Danger Zone</CardTitle>
         </CardHeader>
-        <CardContent>
-          <p className="mb-4 text-sm text-muted-foreground">
-            Deleting a group removes all expenses, settlements, and member data permanently.
-          </p>
+        <CardContent className="space-y-6">
+          {!group.data.archivedAt && (
+            <div>
+              <p className="mb-2 text-sm text-muted-foreground">
+                Archive this group to hide it from your dashboard. You can unarchive it at any time.
+              </p>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (confirm("Archive this group? It will be hidden from your dashboard.")) {
+                    archiveGroup.mutate({ groupId });
+                  }
+                }}
+                disabled={archiveGroup.isPending}
+              >
+                <Archive className="mr-2 h-4 w-4" />
+                {archiveGroup.isPending ? "Archiving..." : "Archive group"}
+              </Button>
+            </div>
+          )}
+          <div>
+            <p className="mb-2 text-sm text-muted-foreground">
+              Deleting a group removes all expenses, settlements, and member data permanently.
+            </p>
           <Button
             variant="destructive"
             onClick={() => {
@@ -252,6 +309,7 @@ export default function GroupSettingsPage({
             <Trash2 className="mr-2 h-4 w-4" />
             {deleteGroup.isPending ? "Deleting..." : "Delete group"}
           </Button>
+          </div>
         </CardContent>
       </Card>
     </div>
