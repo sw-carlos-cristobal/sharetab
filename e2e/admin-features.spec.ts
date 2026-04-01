@@ -473,6 +473,38 @@ test.describe("User impersonation", () => {
     await ctx.dispose();
   });
 
+  test("impersonation banner appears immediately after clicking impersonate", async ({
+    page,
+  }) => {
+    await login(page, users.alice.email, users.alice.password);
+    await page.goto("/admin");
+
+    // Click impersonate on Bob
+    const userSection = page.locator("section", {
+      has: page.getByRole("heading", { name: "User Management" }),
+    });
+    const bobRow = userSection
+      .locator("table")
+      .first()
+      .locator("tr", { hasText: "bob@example.com" });
+    await bobRow.getByTitle("Impersonate user").click();
+
+    // Should redirect to dashboard
+    await page.waitForURL("**/dashboard", { timeout: 10000 });
+
+    // Banner should appear WITHOUT a manual refresh
+    const banner = page.getByText("Impersonating Bob Smith");
+    await expect(banner).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole("button", { name: "Stop Impersonating" })).toBeVisible();
+
+    // Stop impersonation to clean up
+    await page.getByRole("button", { name: "Stop Impersonating" }).click();
+    await page.waitForURL("**/admin", { timeout: 10000 });
+
+    // Banner should be gone
+    await expect(banner).not.toBeVisible({ timeout: 5000 });
+  });
+
   test("impersonation API rejects non-admin users", async () => {
     const ctx = await authedContext(users.bob.email, users.bob.password);
     const res = await ctx.post("/api/admin/impersonate", {
