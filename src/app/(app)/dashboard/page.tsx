@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { formatCents } from "@/lib/money";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +16,8 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+
+const GROUPS_PER_PAGE = 6;
 
 function getInitials(name: string): string {
   return name
@@ -104,6 +107,12 @@ export default function DashboardPage() {
   const dashboard = trpc.balances.getDashboard.useQuery();
   const overallDebts = trpc.balances.getOverallDebts.useQuery();
   const groups = trpc.groups.list.useQuery();
+  const [showAllGroups, setShowAllGroups] = useState(false);
+
+  const visibleGroups = showAllGroups
+    ? groups.data
+    : groups.data?.slice(0, GROUPS_PER_PAGE);
+  const hasMoreGroups = (groups.data?.length ?? 0) > GROUPS_PER_PAGE;
 
   return (
     <div className="space-y-8">
@@ -287,7 +296,7 @@ export default function DashboardPage() {
         )}
 
         <div className="grid gap-4 @2xl:grid-cols-2">
-          {groups.data?.map((group) => {
+          {visibleGroups?.map((group) => {
             const balance = dashboard.data?.perGroup.find(
               (g) => g.groupId === group.id
             );
@@ -364,6 +373,18 @@ export default function DashboardPage() {
             );
           })}
         </div>
+
+        {hasMoreGroups && !showAllGroups && (
+          <div className="mt-4 text-center">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowAllGroups(true)}
+            >
+              Show all {groups.data?.length} groups
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

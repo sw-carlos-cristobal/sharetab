@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { users, login } from "./helpers";
+import { users, login, navigateToGroup } from "./helpers";
 
 test.describe("Placeholder Members UI", () => {
   test.beforeEach(async ({ page }) => {
@@ -56,9 +56,7 @@ test.describe("Pending Receipts UI", () => {
     await login(page, users.alice.email, users.alice.password);
 
     // Navigate to an existing group's scan page
-    await page.goto("/groups");
-    await page.getByText("Apartment").click();
-    await page.waitForURL(/\/groups\/\w+$/);
+    await navigateToGroup(page, "Apartment");
     const groupUrl = page.url();
 
     await page.goto(groupUrl + "/scan");
@@ -69,9 +67,7 @@ test.describe("Pending Receipts UI", () => {
 
   test("scan page supports resume via query param", async ({ page }) => {
     await login(page, users.alice.email, users.alice.password);
-    await page.goto("/groups");
-    await page.getByText("Apartment").click();
-    await page.waitForURL(/\/groups\/\w+$/);
+    await navigateToGroup(page, "Apartment");
     const groupUrl = page.url();
 
     // Navigate to scan with a fake receiptId — should go to assign step

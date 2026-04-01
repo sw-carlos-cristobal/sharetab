@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { users, login } from "./helpers";
+import { users, login, navigateToGroup } from "./helpers";
 
 test.describe("Receipt Scanning UI", () => {
   test.beforeEach(async ({ page }) => {
@@ -7,9 +7,7 @@ test.describe("Receipt Scanning UI", () => {
   });
 
   test("7.5.1 — scan page shows upload form", async ({ page }) => {
-    await page.goto("/groups");
-    await page.getByText("Apartment").click();
-    await page.waitForURL(/\/groups\/\w+$/);
+    await navigateToGroup(page, "Apartment");
     const groupUrl = page.url();
     await page.goto(groupUrl + "/scan");
 
@@ -20,9 +18,7 @@ test.describe("Receipt Scanning UI", () => {
   });
 
   test("7.3.7 — Add Expense link navigates correctly", async ({ page }) => {
-    await page.goto("/groups");
-    await page.getByText("Apartment").click();
-    await page.waitForURL(/\/groups\/\w+$/);
+    await navigateToGroup(page, "Apartment");
     const groupUrl = page.url();
 
     // Navigate directly since render prop links may not work via click
@@ -31,9 +27,7 @@ test.describe("Receipt Scanning UI", () => {
   });
 
   test("7.3.8 — Scan Receipt link navigates correctly", async ({ page }) => {
-    await page.goto("/groups");
-    await page.getByText("Apartment").click();
-    await page.waitForURL(/\/groups\/\w+$/);
+    await navigateToGroup(page, "Apartment");
     const groupUrl = page.url();
 
     await page.goto(groupUrl + "/scan");

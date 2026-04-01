@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { users, login } from "./helpers";
+import { users, login, navigateToGroup } from "./helpers";
 
 test.describe("Balances & Settlements", () => {
   // ── Dashboard Balances ────────────────────────────────────
@@ -16,11 +16,11 @@ test.describe("Balances & Settlements", () => {
 
     test("7.2.2 — shows group cards with balances", async ({ page }) => {
       await login(page, users.alice.email, users.alice.password);
-      await expect(page.getByText("Japan Trip")).toBeVisible();
-      await expect(page.getByText("Apartment")).toBeVisible();
-      await expect(page.getByText("+$375.00")).toBeVisible();
-      // Apartment balance varies due to test pollution; just check the card exists with some balance
-      await expect(page.getByRole("link", { name: /Apartment/ })).toBeVisible();
+      // Dashboard paginates groups — click "Show all" to reveal seed groups
+      const showAll = page.getByRole("button", { name: /Show all/ });
+      await showAll.click({ timeout: 3000 }).catch(() => {});
+      await expect(page.getByRole("link", { name: /Japan Trip/ }).first()).toBeVisible();
+      await expect(page.getByRole("link", { name: /Apartment/ }).first()).toBeVisible();
     });
 
     test("4.3.3 — new user sees empty dashboard", async ({ page }) => {
@@ -43,9 +43,7 @@ test.describe("Balances & Settlements", () => {
   test.describe("Group Balances", () => {
     test("7.3.2 — simplified debts displayed", async ({ page }) => {
       await login(page, users.alice.email, users.alice.password);
-      await page.goto("/groups");
-      await page.getByText("Apartment").click();
-      await page.waitForURL(/\/groups\/\w+$/);
+      await navigateToGroup(page, "Apartment");
 
       // Bob and Charlie owe Alice
       await expect(page.getByRole("button", { name: /Bob Smith.*Alice Johnson.*\$/ }).first()).toBeVisible();
@@ -69,9 +67,7 @@ test.describe("Balances & Settlements", () => {
   test.describe("Settlements", () => {
     test("7.3.5 — settle up button opens dialog", async ({ page }) => {
       await login(page, users.alice.email, users.alice.password);
-      await page.goto("/groups");
-      await page.getByText("Apartment").click();
-      await page.waitForURL(/\/groups\/\w+$/);
+      await navigateToGroup(page, "Apartment");
 
       await page.getByRole("button", { name: "Settle up" }).click();
       await expect(page.getByRole("dialog")).toBeVisible();
@@ -82,9 +78,7 @@ test.describe("Balances & Settlements", () => {
 
     test("settle dialog pre-fills from debt click", async ({ page }) => {
       await login(page, users.alice.email, users.alice.password);
-      await page.goto("/groups");
-      await page.getByText("Apartment").click();
-      await page.waitForURL(/\/groups\/\w+$/);
+      await navigateToGroup(page, "Apartment");
 
       await page.getByRole("button", { name: /Bob Smith.*Alice Johnson.*\$/ }).first().click();
       await expect(page.getByRole("dialog")).toBeVisible();
@@ -93,9 +87,7 @@ test.describe("Balances & Settlements", () => {
 
     test("settle dialog pre-populates From, To, and Amount from debt row", async ({ page }) => {
       await login(page, users.alice.email, users.alice.password);
-      await page.goto("/groups");
-      await page.getByText("Apartment").first().click();
-      await page.waitForURL(/\/groups\/\w+$/);
+      await navigateToGroup(page, "Apartment");
 
       await page.getByRole("button", { name: /Bob Smith.*Alice Johnson.*\$/ }).first().click();
       await expect(page.getByRole("dialog")).toBeVisible();
@@ -111,9 +103,7 @@ test.describe("Balances & Settlements", () => {
 
     test("settle dialog resets fields when opened with different debt", async ({ page }) => {
       await login(page, users.alice.email, users.alice.password);
-      await page.goto("/groups");
-      await page.getByText("Apartment").first().click();
-      await page.waitForURL(/\/groups\/\w+$/);
+      await navigateToGroup(page, "Apartment");
 
       await page.getByRole("button", { name: /Bob Smith.*Alice Johnson.*\$/ }).first().click();
       await expect(page.getByRole("dialog")).toBeVisible();

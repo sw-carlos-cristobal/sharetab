@@ -328,11 +328,9 @@ export default function GroupDetailPage({
                 }`}
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  {expense.category && (
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent">
-                      <Tag className="h-3.5 w-3.5 text-accent-foreground" />
-                    </div>
-                  )}
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent">
+                    <Tag className="h-3.5 w-3.5 text-accent-foreground" />
+                  </div>
                   <div className="min-w-0">
                     <p className="font-medium truncate">{expense.title}</p>
                     <p className="text-sm text-muted-foreground">

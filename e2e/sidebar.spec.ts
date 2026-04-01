@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { users, login } from "./helpers";
+import { users, login, navigateToGroup } from "./helpers";
 
 test.describe("Sidebar", () => {
   test.beforeEach(async ({ page }) => {
@@ -158,9 +158,7 @@ test.describe("Live viewport resize", () => {
   test("page remains scrollable after resize", async ({ page }) => {
     // Navigate to group detail which has more content
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto("/groups");
-    await page.getByText("Apartment").click();
-    await page.waitForURL(/\/groups\//);
+    await navigateToGroup(page, "Apartment");
 
     // Resize to small viewport where content exceeds viewport
     await page.setViewportSize({ width: 375, height: 500 });

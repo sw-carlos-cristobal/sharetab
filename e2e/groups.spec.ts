@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { users, login, uniqueEmail, register } from "./helpers";
+import { users, login, uniqueEmail, register, navigateToGroup } from "./helpers";
 
 test.describe("Groups", () => {
   test.beforeEach(async ({ page }) => {
@@ -37,9 +37,7 @@ test.describe("Groups", () => {
 
   test.describe("Group Detail", () => {
     test("7.3.1 — shows member chips with roles", async ({ page }) => {
-      await page.goto("/groups");
-      await page.getByText("Apartment").click();
-      await page.waitForURL(/\/groups\/\w+$/);
+      await navigateToGroup(page, "Apartment");
       await expect(page.getByText("Alice Johnson").first()).toBeVisible();
       await expect(page.getByText("Owner")).toBeVisible();
       await expect(page.getByText("Bob Smith").first()).toBeVisible();
@@ -47,9 +45,7 @@ test.describe("Groups", () => {
     });
 
     test("7.3.2 — shows simplified debts", async ({ page }) => {
-      await page.goto("/groups");
-      await page.getByText("Apartment").click();
-      await page.waitForURL(/\/groups\/\w+$/);
+      await navigateToGroup(page, "Apartment");
       await expect(page.getByText("Balances")).toBeVisible();
       // Verify at least one debt row exists (amounts vary due to test pollution)
       await expect(
@@ -58,9 +54,7 @@ test.describe("Groups", () => {
     });
 
     test("7.3.6 — shows expense list", async ({ page }) => {
-      await page.goto("/groups");
-      await page.getByText("Apartment").click();
-      await page.waitForURL(/\/groups\/\w+$/);
+      await navigateToGroup(page, "Apartment");
       // Verify at least one expense link is visible (specific titles may be
       // pushed off the visible list by expenses created in other test suites)
       await expect(
@@ -69,9 +63,7 @@ test.describe("Groups", () => {
     });
 
     test("7.3.4 — clicking debt row opens settle dialog", async ({ page }) => {
-      await page.goto("/groups");
-      await page.getByText("Apartment").click();
-      await page.waitForURL(/\/groups\/\w+$/);
+      await navigateToGroup(page, "Apartment");
       // Click any debt row between Bob Smith and Alice Johnson
       await page.getByRole("button", { name: /Bob Smith.*Alice Johnson.*\$/ }).first().click();
       await expect(page.getByRole("dialog")).toBeVisible();
@@ -109,9 +101,7 @@ test.describe("Groups", () => {
         if (msg.type() === "error") errors.push(msg.text());
       });
 
-      await page.goto("/groups");
-      await page.getByText("Apartment").first().click();
-      await page.waitForURL(/\/groups\/\w+$/);
+      await navigateToGroup(page, "Apartment");
       await page.waitForTimeout(2000);
 
       const nativeButtonErrors = errors.filter((e) => e.includes("nativeButton"));
@@ -126,7 +116,9 @@ test.describe("Groups", () => {
   test.describe("Seed Data", () => {
     test("seed demo groups exist and are accessible", async ({ page }) => {
       await page.goto("/groups");
+      await page.getByPlaceholder("Search groups...").fill("Apartment");
       await expect(page.getByText("Apartment").first()).toBeVisible();
+      await page.getByPlaceholder("Search groups...").fill("Japan Trip");
       await expect(page.getByText("Japan Trip").first()).toBeVisible();
     });
   });
@@ -135,9 +127,7 @@ test.describe("Groups", () => {
 
   test.describe("Invites", () => {
     test("2.4.1 — generate invite link", async ({ page }) => {
-      await page.goto("/groups");
-      await page.getByText("Apartment").click();
-      await page.waitForURL(/\/groups\/\w+$/);
+      await navigateToGroup(page, "Apartment");
       await page.getByRole("button", { name: "Invite" }).click();
       await expect(page.getByRole("dialog")).toBeVisible();
       await expect(page.getByText("Generate invite link")).toBeVisible();

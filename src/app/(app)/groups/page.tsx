@@ -8,9 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Plus, Search } from "lucide-react";
 import Link from "next/link";
 
+const GROUPS_PER_PAGE = 12;
+
 export default function GroupsPage() {
   const groups = trpc.groups.list.useQuery();
   const [search, setSearch] = useState("");
+  const [showAll, setShowAll] = useState(false);
 
   const hasGroups = (groups.data?.length ?? 0) > 0;
 
@@ -69,7 +72,7 @@ export default function GroupsPage() {
       )}
 
       <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(280px,1fr))]">
-        {filteredGroups?.map((group) => (
+        {(search || showAll ? filteredGroups : filteredGroups?.slice(0, GROUPS_PER_PAGE))?.map((group) => (
           <Link key={group.id} href={`/groups/${group.id}`}>
             <Card className="border-l-[3px] border-l-primary/60 transition-all duration-200 hover:-translate-y-px hover:shadow-md hover:border-l-primary">
               <CardHeader className="pb-2">
@@ -94,6 +97,18 @@ export default function GroupsPage() {
           </Link>
         ))}
       </div>
+
+      {!search && !showAll && (filteredGroups?.length ?? 0) > GROUPS_PER_PAGE && (
+        <div className="text-center">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowAll(true)}
+          >
+            Show all {filteredGroups?.length} groups
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

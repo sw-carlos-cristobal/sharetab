@@ -107,6 +107,17 @@ export async function trpcError(res: { json: () => Promise<any> }): Promise<any>
 }
 
 /**
+ * Navigate to a group by name via the groups page search.
+ * Handles pagination by using the search filter.
+ */
+export async function navigateToGroup(page: Page, groupName: string) {
+  await page.goto("/groups");
+  await page.getByPlaceholder("Search groups...").fill(groupName);
+  await page.getByText(groupName).first().click();
+  await page.waitForURL(/\/groups\/\w+$/, { timeout: 15000 });
+}
+
+/**
  * Create an isolated group with specified members and return IDs.
  */
 export async function createTestGroup(
@@ -140,6 +151,12 @@ export async function createTestGroup(
   }
 
   return { owner, memberContexts, groupId, memberIds, dispose: async () => {
+    // Clean up: delete the test group to avoid polluting the database
+    try {
+      await trpcMutation(owner, "groups.delete", { groupId });
+    } catch {
+      // Ignore — group may already be deleted by the test
+    }
     await owner.dispose();
     for (const c of memberContexts) await c.dispose();
   }};
