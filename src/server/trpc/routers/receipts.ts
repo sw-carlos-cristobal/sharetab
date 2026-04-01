@@ -103,9 +103,17 @@ export const receiptsRouter = createTRPCRouter({
         }
       );
 
-      const receiptWithItems = receipt as typeof receipt & {
-        items: { id: string; name: string; quantity: number; unitPrice: number; totalPrice: number; sortOrder: number; assignments: { id: string; receiptItemId: string; userId: string; shareOfItem: number }[] }[];
+      type ReceiptItem = {
+        id: string;
+        name: string;
+        quantity: number;
+        unitPrice: number;
+        totalPrice: number;
+        sortOrder: number;
+        assignments: { id: string; receiptItemId: string; userId: string; shareOfItem: number }[];
       };
+
+      const receiptWithItems = receipt as typeof receipt & { items: ReceiptItem[] };
 
       return {
         receipt: {
@@ -122,7 +130,7 @@ export const receiptsRouter = createTRPCRouter({
             currency: string;
           } | null,
         },
-        items: receiptWithItems.items,
+        items: receiptWithItems.items as ReceiptItem[],
       };
     }),
 
