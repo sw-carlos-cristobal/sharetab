@@ -77,7 +77,7 @@ echo "Warning: Could not apply schema"
 CLAUDE_CREDS="/root/.claude/.credentials.json"
 if [ -f "$CLAUDE_CREDS" ]; then
   chmod o+x /root /root/.claude
-  chmod 644 "$CLAUDE_CREDS"
+  chmod 666 "$CLAUDE_CREDS"
   mkdir -p /home/nextjs/.claude
   chown nextjs:nodejs /home/nextjs/.claude
   ln -sf "$CLAUDE_CREDS" /home/nextjs/.claude/.credentials.json
