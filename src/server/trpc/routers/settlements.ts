@@ -30,6 +30,26 @@ export const settlementsRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const effectiveFromId = input.fromId ?? ctx.user.id;
 
+      // Block settlements on archived groups
+      const group = await ctx.db.group.findUnique({
+        where: { id: input.groupId },
+        select: { archivedAt: true },
+      });
+      if (group?.archivedAt) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Cannot create settlements in an archived group",
+        });
+      }
+
+      // Cannot settle with yourself
+      if (effectiveFromId === input.toId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Cannot settle a debt with yourself",
+        });
+      }
+
       // Security: non-admin members can only create settlements from themselves
       if (
         ctx.membership.role === "MEMBER" &&

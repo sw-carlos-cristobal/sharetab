@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { login, users, createTestGroup, trpcMutation, authedContext } from "./helpers";
+import { login, users, createTestGroup, trpcMutation, trpcError, authedContext } from "./helpers";
 
 test.describe("Group Archiving", () => {
   // ── API-level tests ──────────────────────────────────────
@@ -93,6 +93,80 @@ test.describe("Group Archiving", () => {
       const res = await trpcMutation(memberContexts[0], "groups.unarchive", { groupId });
       const body = await res.json();
       expect(body.error).toBeDefined();
+
+      await dispose();
+    });
+
+    test("cannot create expense on archived group", async () => {
+      const { owner, groupId, memberIds, dispose } = await createTestGroup(
+        users.alice.email, users.alice.password, [], "Archive Expense Block"
+      );
+
+      await trpcMutation(owner, "groups.archive", { groupId });
+
+      const res = await trpcMutation(owner, "expenses.create", {
+        groupId,
+        title: "Should Fail",
+        amount: 1000,
+        paidById: memberIds[users.alice.email],
+        splitMode: "EQUAL",
+        shares: [{ userId: memberIds[users.alice.email], amount: 1000 }],
+      });
+      const error = await trpcError(res);
+      expect(error?.data?.code).toBe("BAD_REQUEST");
+      expect(error?.message).toContain("archived");
+
+      await dispose();
+    });
+
+    test("cannot create settlement on archived group", async () => {
+      const { owner, groupId, memberIds, memberContexts, dispose } = await createTestGroup(
+        users.alice.email, users.alice.password,
+        [{ email: users.bob.email, password: users.bob.password }],
+        "Archive Settle Block"
+      );
+
+      await trpcMutation(owner, "groups.archive", { groupId });
+
+      const res = await trpcMutation(owner, "settlements.create", {
+        groupId,
+        fromId: memberIds[users.alice.email],
+        toId: memberIds[users.bob.email],
+        amount: 500,
+      });
+      const error = await trpcError(res);
+      expect(error?.data?.code).toBe("BAD_REQUEST");
+      expect(error?.message).toContain("archived");
+
+      await dispose();
+    });
+
+    test("cannot update expense on archived group", async () => {
+      const { owner, groupId, memberIds, dispose } = await createTestGroup(
+        users.alice.email, users.alice.password, [], "Archive Edit Block"
+      );
+
+      // Create expense before archiving
+      const expRes = await trpcMutation(owner, "expenses.create", {
+        groupId,
+        title: "Before Archive",
+        amount: 1000,
+        paidById: memberIds[users.alice.email],
+        splitMode: "EQUAL",
+        shares: [{ userId: memberIds[users.alice.email], amount: 1000 }],
+      });
+      const expense = (await expRes.json()).result?.data?.json;
+
+      await trpcMutation(owner, "groups.archive", { groupId });
+
+      const res = await trpcMutation(owner, "expenses.update", {
+        groupId,
+        expenseId: expense.id,
+        title: "Should Fail",
+      });
+      const error = await trpcError(res);
+      expect(error?.data?.code).toBe("BAD_REQUEST");
+      expect(error?.message).toContain("archived");
 
       await dispose();
     });

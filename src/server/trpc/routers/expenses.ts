@@ -79,6 +79,18 @@ export const expensesRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      // Block expenses on archived groups
+      const group = await ctx.db.group.findUnique({
+        where: { id: input.groupId },
+        select: { archivedAt: true },
+      });
+      if (group?.archivedAt) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Cannot add expenses to an archived group",
+        });
+      }
+
       // Validate paidById is a member of the group
       const paidByMember = await ctx.db.groupMember.findFirst({
         where: { groupId: input.groupId, userId: input.paidById },
@@ -164,6 +176,18 @@ export const expensesRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      // Block updates on archived groups
+      const groupCheck = await ctx.db.group.findUnique({
+        where: { id: input.groupId },
+        select: { archivedAt: true },
+      });
+      if (groupCheck?.archivedAt) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Cannot modify expenses in an archived group",
+        });
+      }
+
       const existing = await ctx.db.expense.findUnique({
         where: { id: input.expenseId },
       });

@@ -1,5 +1,5 @@
 import { test, expect, request } from "@playwright/test";
-import { login, uniqueEmail, users, createTestGroup } from "./helpers";
+import { login, uniqueEmail, users, createTestGroup, trpcError } from "./helpers";
 
 const BASE = process.env.BASE_URL || "http://localhost:3001";
 
@@ -197,6 +197,46 @@ test.describe("Edge Cases & Security", () => {
     expect(["ok", "error"]).toContain(body.status);
     expect(["connected", "disconnected"]).toContain(body.db);
     await ctx.dispose();
+  });
+
+  // ── Self-settlement ─────────────────────────────────────
+
+  test("self-settlement is rejected", async () => {
+    const { owner, groupId, memberIds, dispose } = await createTestGroup(
+      users.alice.email, users.alice.password,
+      [{ email: users.bob.email, password: users.bob.password }],
+      "Self Settle Test"
+    );
+
+    const aliceId = memberIds[users.alice.email];
+    const res = await trpcMutation(owner, "settlements.create", {
+      groupId,
+      fromId: aliceId,
+      toId: aliceId,
+      amount: 100,
+    });
+    const error = await trpcError(res);
+    expect(error?.data?.code).toBe("BAD_REQUEST");
+    expect(error?.message).toContain("yourself");
+
+    await dispose();
+  });
+
+  // ── Non-member group access ─────────────────────────────
+
+  test("non-member cannot view another user's group", async ({ page }) => {
+    // Create a group as Bob that Alice is not in
+    const { groupId, dispose } = await createTestGroup(
+      users.bob.email, users.bob.password, [], "Bobs Private Group"
+    );
+
+    await login(page, users.alice.email, users.alice.password);
+    await page.goto(`/groups/${groupId}`);
+
+    await expect(page.getByText("Group not found")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("doesn't exist or you don't have access")).toBeVisible();
+
+    await dispose();
   });
 
   // ── Not-found pages ──────────────────────────────────────

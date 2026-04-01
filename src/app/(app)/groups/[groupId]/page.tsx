@@ -77,7 +77,7 @@ export default function GroupDetailPage({
     onSuccess: () => pendingReceipts.refetch(),
   });
 
-  if (group.isLoading) {
+  if (group.isLoading && !group.isError) {
     return <p className="text-muted-foreground">Loading...</p>;
   }
 
