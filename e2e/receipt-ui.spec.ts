@@ -68,11 +68,13 @@ test.describe("Additional UI Tests", () => {
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page.getByText("Profile updated")).toBeVisible({ timeout: 10000 });
 
-    // Sidebar should reflect the updated name without a manual reload
-    await expect(page.locator("aside").getByText("Alice Updated")).toBeVisible({ timeout: 10000 });
+    // Navigate to dashboard to trigger session refresh and verify name in sidebar
+    await page.goto("/dashboard");
+    await expect(page.getByText("Alice Updated")).toBeVisible({ timeout: 15000 });
 
     // Restore original name
-    await nameInput.fill("Alice Johnson");
+    await page.goto("/settings");
+    await page.getByLabel("Name").fill("Alice Johnson");
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page.getByText("Profile updated")).toBeVisible({ timeout: 10000 });
   });

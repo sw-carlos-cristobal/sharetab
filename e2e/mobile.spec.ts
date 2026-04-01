@@ -51,8 +51,12 @@ test.describe("Mobile Responsive", () => {
   test("mobile layout stacks cards vertically", async ({ page }) => {
     await login(page, users.alice.email, users.alice.password);
 
+    // Dashboard paginates groups — click "Show all" if needed to reveal seed groups
+    const showAll = page.getByRole("button", { name: /Show all/ });
+    await showAll.click({ timeout: 3000 }).catch(() => {});
+
     // Group cards should be visible in single column
-    await expect(page.getByText("Japan Trip")).toBeVisible();
-    await expect(page.getByText("Apartment")).toBeVisible();
+    await expect(page.getByText("Japan Trip").first()).toBeVisible();
+    await expect(page.getByText("Apartment").first()).toBeVisible();
   });
 });
