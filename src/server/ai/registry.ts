@@ -26,9 +26,13 @@ export async function getAIProvider(): Promise<AIProvider> {
         process.env.OLLAMA_MODEL ?? "llava"
       );
     }
+    case "mock": {
+      const { MockProvider } = await import("./providers/mock");
+      return new MockProvider();
+    }
     default:
       throw new Error(
-        `Unknown AI provider: "${name}". Available: openai, claude, meridian, ollama`
+        `Unknown AI provider: "${name}". Available: openai, claude, meridian, ollama, mock`
       );
   }
 }
