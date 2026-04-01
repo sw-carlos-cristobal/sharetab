@@ -87,6 +87,18 @@ export const expensesRouter = createTRPCRouter({
         throw new TRPCError({ code: "BAD_REQUEST", message: "Paid-by user is not a member of this group" });
       }
 
+      // Validate all share userIds are group members
+      const shareUserIds = input.shares.map((s) => s.userId);
+      const memberCount = await ctx.db.groupMember.count({
+        where: { groupId: input.groupId, userId: { in: shareUserIds } },
+      });
+      if (memberCount !== new Set(shareUserIds).size) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "One or more share users are not members of this group",
+        });
+      }
+
       // Validate shares sum equals total
       const sharesSum = input.shares.reduce((sum, s) => sum + s.amount, 0);
       if (sharesSum !== input.amount) {
@@ -171,12 +183,25 @@ export const expensesRouter = createTRPCRouter({
 
       const { groupId, expenseId, shares, ...data } = input;
 
-      if (shares && data.amount) {
-        const sharesSum = shares.reduce((sum, s) => sum + s.amount, 0);
-        if (sharesSum !== data.amount) {
+      if (shares) {
+        // Validate all share userIds are group members
+        const shareUserIds = shares.map((s) => s.userId);
+        const memberCount = await ctx.db.groupMember.count({
+          where: { groupId, userId: { in: shareUserIds } },
+        });
+        if (memberCount !== new Set(shareUserIds).size) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: `Shares sum (${sharesSum}) does not equal expense amount (${data.amount})`,
+            message: "One or more share users are not members of this group",
+          });
+        }
+
+        const expectedAmount = data.amount ?? existing.amount;
+        const sharesSum = shares.reduce((sum, s) => sum + s.amount, 0);
+        if (sharesSum !== expectedAmount) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Shares sum (${sharesSum}) does not equal expense amount (${expectedAmount})`,
           });
         }
       }

@@ -21,7 +21,7 @@ export class ClaudeProvider implements AIProvider {
   ): Promise<ReceiptExtractionResult> {
     const base64 = imageBuffer.toString("base64");
     const prompt = correctionHint
-      ? `${RECEIPT_EXTRACTION_PROMPT}\n\nIMPORTANT CORRECTION FROM USER: ${correctionHint}`
+      ? `${RECEIPT_EXTRACTION_PROMPT}\n\nThe user has provided a correction. Apply it to improve accuracy:\n<user_correction>${correctionHint}</user_correction>`
       : RECEIPT_EXTRACTION_PROMPT;
 
     const stream = this.client.messages.stream({

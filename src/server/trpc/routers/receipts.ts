@@ -5,10 +5,15 @@ import { createTRPCRouter, protectedProcedure, groupMemberProcedure } from "../i
 import { getAIProvider } from "../../ai/registry";
 import { logger } from "../../lib/logger";
 
-async function verifyReceiptAccess(db: any, receiptId: string, userId: string) {
+async function verifyReceiptAccess(
+  db: any,
+  receiptId: string,
+  userId: string,
+  include?: Record<string, unknown>
+) {
   const receipt = await db.receipt.findUnique({
     where: { id: receiptId },
-    include: { group: { include: { members: true } } },
+    include: { group: { include: { members: true } }, ...include },
   });
   if (!receipt) throw new TRPCError({ code: "NOT_FOUND" });
   if (receipt.group) {
@@ -42,7 +47,7 @@ export const receiptsRouter = createTRPCRouter({
         where: { id: input.receiptId },
         data: {
           status: "PROCESSING",
-          ...(input.groupId ? { groupId: input.groupId, savedById: ctx.session!.user!.id } : {}),
+          ...(input.groupId ? { groupId: input.groupId, savedById: ctx.user.id } : {}),
         },
       });
 
@@ -136,20 +141,17 @@ export const receiptsRouter = createTRPCRouter({
   getReceiptItems: protectedProcedure
     .input(z.object({ receiptId: z.string() }))
     .query(async ({ ctx, input }) => {
-      await verifyReceiptAccess(ctx.db, input.receiptId, ctx.user.id);
-
-      const receipt = await ctx.db.receipt.findUnique({
-        where: { id: input.receiptId },
-        include: {
+      const receipt = await verifyReceiptAccess(
+        ctx.db,
+        input.receiptId,
+        ctx.user.id,
+        {
           items: {
             orderBy: { sortOrder: "asc" },
             include: { assignments: true },
           },
-        },
-      });
-      if (!receipt) {
-        throw new TRPCError({ code: "NOT_FOUND" });
-      }
+        }
+      );
 
       return {
         receipt: {
@@ -488,7 +490,7 @@ export const receiptsRouter = createTRPCRouter({
         throw new TRPCError({ code: "NOT_FOUND" });
       }
       // Only the person who saved it can delete it
-      if (receipt.savedById && receipt.savedById !== ctx.session!.user!.id) {
+      if (receipt.savedById && receipt.savedById !== ctx.user.id) {
         throw new TRPCError({ code: "FORBIDDEN" });
       }
       // Can't delete if already linked to expense

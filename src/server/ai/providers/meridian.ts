@@ -62,7 +62,7 @@ export class MeridianProvider implements AIProvider {
     const base64 = imageBuffer.toString("base64");
     const start = Date.now();
     const prompt = correctionHint
-      ? `${RECEIPT_EXTRACTION_PROMPT}\n\nIMPORTANT CORRECTION FROM USER: ${correctionHint}`
+      ? `${RECEIPT_EXTRACTION_PROMPT}\n\nThe user has provided a correction. Apply it to improve accuracy:\n<user_correction>${correctionHint}</user_correction>`
       : RECEIPT_EXTRACTION_PROMPT;
 
     const stream = client.messages.stream({

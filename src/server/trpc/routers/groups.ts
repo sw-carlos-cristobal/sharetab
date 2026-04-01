@@ -399,6 +399,19 @@ export const groupsRouter = createTRPCRouter({
         throw new TRPCError({ code: "BAD_REQUEST", message: "Not a placeholder user" });
       }
 
+      // Verify realUserId is a member of the same group
+      const realUserMember = await ctx.db.groupMember.findUnique({
+        where: {
+          userId_groupId: { userId: input.realUserId, groupId: input.groupId },
+        },
+      });
+      if (!realUserMember) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Target user is not a member of this group",
+        });
+      }
+
       await mergePlaceholderIntoUser(ctx.db, input.placeholderUserId, input.realUserId, input.groupId);
 
       return { success: true };

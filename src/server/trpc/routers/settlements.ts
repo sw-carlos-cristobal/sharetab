@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, groupMemberProcedure } from "../init";
 
 export const settlementsRouter = createTRPCRouter({
@@ -27,10 +28,38 @@ export const settlementsRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const effectiveFromId = input.fromId ?? ctx.user.id;
+
+      // Security: non-admin members can only create settlements from themselves
+      if (
+        ctx.membership.role === "MEMBER" &&
+        input.fromId &&
+        input.fromId !== ctx.user.id
+      ) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You can only record payments from yourself",
+        });
+      }
+
+      // Validate both fromId and toId are members of the group
+      const memberCount = await ctx.db.groupMember.count({
+        where: {
+          groupId: input.groupId,
+          userId: { in: [effectiveFromId, input.toId] },
+        },
+      });
+      if (memberCount < (effectiveFromId === input.toId ? 1 : 2)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Both the payer and recipient must be members of this group",
+        });
+      }
+
       const settlement = await ctx.db.settlement.create({
         data: {
           groupId: input.groupId,
-          fromId: input.fromId ?? ctx.user.id,
+          fromId: effectiveFromId,
           toId: input.toId,
           amount: input.amount,
           currency: input.currency,

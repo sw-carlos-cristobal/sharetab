@@ -178,12 +178,12 @@ export const guestRouter = createTRPCRouter({
         quantity: z.number().int().min(1),
         unitPrice: z.number().int(),
         totalPrice: z.number().int(),
-      })),
-      people: z.array(z.object({ name: z.string() })).min(1),
+      })).max(100),
+      people: z.array(z.object({ name: z.string() })).min(1).max(100),
       assignments: z.array(z.object({
         itemIndex: z.number().int(),
         personIndices: z.array(z.number().int()),
-      })),
+      })).max(1000),
       paidByIndex: z.number().int().default(0),
       tipOverride: z.number().int().min(0).optional(),
     }))

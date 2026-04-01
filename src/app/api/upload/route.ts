@@ -71,7 +71,13 @@ export async function POST(req: NextRequest) {
   const receiptsDir = join(uploadDir, "receipts");
   await mkdir(receiptsDir, { recursive: true });
 
-  const ext = file.name.split(".").pop() ?? "jpg";
+  const MIME_TO_EXT: Record<string, string> = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/heic": "heic",
+  };
+  const ext = MIME_TO_EXT[file.type] ?? "jpg";
   const filename = `${randomUUID()}.${ext}`;
   const filepath = join(receiptsDir, filename);
 
