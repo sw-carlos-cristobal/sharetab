@@ -145,6 +145,10 @@ export const balancesRouter = createTRPCRouter({
         }
       }
 
+      // Settlements are modeled as virtual expenses: the payer (fromId) "paid"
+      // and the receiver (toId) "owes", which correctly adjusts net balances.
+      // e.g., if Alice pays Bob $50, Alice's paid goes up and Bob's owes goes up,
+      // reducing Bob's net balance (what others owe him) by $50.
       for (const settlement of group.settlements) {
         if (settlement.fromId === ctx.user.id) paid += settlement.amount;
         if (settlement.toId === ctx.user.id) owes += settlement.amount;

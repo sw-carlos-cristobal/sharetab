@@ -19,11 +19,7 @@ export const authRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       // Rate limit: 10 registrations per hour per IP (fall back to global key)
-      const ip =
-        (ctx as Record<string, unknown>).headers &&
-        typeof ((ctx as Record<string, unknown>).headers as Headers | undefined)?.get === "function"
-          ? ((ctx as Record<string, unknown>).headers as Headers).get("x-forwarded-for") ?? "global"
-          : "global";
+      const ip = ctx.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "global";
       const maxRegAttempts = parseInt(process.env.REGISTER_RATE_LIMIT_MAX ?? "10");
       const { allowed } = checkRateLimit(`register:${ip}`, maxRegAttempts, 60 * 60 * 1000);
       if (!allowed) {

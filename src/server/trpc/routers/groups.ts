@@ -188,6 +188,9 @@ export const groupsRouter = createTRPCRouter({
         },
       });
       if (existing) {
+        // Intentional: invite links are reusable for navigation purposes.
+        // usedAt/usedById only track the first redemption that creates a membership.
+        // An already-member user can still use the link to navigate to the group.
         return { groupId: invite.groupId, alreadyMember: true };
       }
 
@@ -335,7 +338,8 @@ export const groupsRouter = createTRPCRouter({
         throw new TRPCError({ code: "FORBIDDEN", message: "Only admins and owners can add placeholder members" });
       }
 
-      const placeholderEmail = `placeholder-${Date.now()}-${Math.random().toString(36).slice(2, 7)}@placeholder.local`;
+      const { randomUUID } = await import("crypto");
+      const placeholderEmail = `placeholder-${randomUUID()}@placeholder.local`;
 
       const user = await ctx.db.user.create({
         data: {
@@ -375,7 +379,7 @@ export const groupsRouter = createTRPCRouter({
       }
       return ctx.db.user.update({
         where: { id: input.placeholderUserId },
-        data: { placeholderName: input.name },
+        data: { placeholderName: input.name, name: input.name },
       });
     }),
 
@@ -421,14 +425,13 @@ export const groupsRouter = createTRPCRouter({
 /**
  * Merge all references from a placeholder user into a real user, then delete the placeholder.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function mergePlaceholderIntoUser(
-  db: any,
+  db: PrismaClient,
   placeholderUserId: string,
   realUserId: string,
   groupId: string,
 ) {
-  await db.$transaction(async (tx: typeof db) => {
+  await db.$transaction(async (tx) => {
     // Reassign expense shares (skip if real user already has a share on the same expense)
     const shares = await tx.expenseShare.findMany({ where: { userId: placeholderUserId } });
     for (const share of shares) {

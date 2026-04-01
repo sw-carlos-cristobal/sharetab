@@ -84,15 +84,31 @@ export async function POST(req: NextRequest) {
   const buffer = Buffer.from(await file.arrayBuffer());
   await writeFile(filepath, buffer);
 
-  const receipt = await db.receipt.create({
-    data: {
-      imagePath: `receipts/${filename}`,
-      originalName: file.name,
-      mimeType: file.type,
-      fileSize: file.size,
-      status: "PENDING",
-    },
-  });
+  let receipt;
+  try {
+    receipt = await db.receipt.create({
+      data: {
+        imagePath: `receipts/${filename}`,
+        originalName: file.name,
+        mimeType: file.type,
+        fileSize: file.size,
+        status: "PENDING",
+      },
+    });
+  } catch (error) {
+    // Clean up the written file if DB record creation fails
+    try {
+      const { unlink } = await import("fs/promises");
+      await unlink(filepath);
+    } catch {
+      // Best-effort cleanup
+    }
+    logger.error("upload.dbFailed", {
+      error: error instanceof Error ? error.message : "Unknown",
+      filepath,
+    });
+    return Response.json({ error: "Failed to create receipt record" }, { status: 500 });
+  }
 
   logger.info("upload.receipt", {
     receiptId: receipt.id,

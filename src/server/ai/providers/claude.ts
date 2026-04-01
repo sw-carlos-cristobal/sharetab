@@ -56,13 +56,30 @@ export class ClaudeProvider implements AIProvider {
     }
 
     const cleaned = textBlock.text.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "");
-    const raw = JSON.parse(cleaned);
-    return receiptExtractionSchema.parse(raw);
+    let raw: unknown;
+    try {
+      raw = JSON.parse(cleaned);
+    } catch (jsonError) {
+      throw new Error(
+        `Claude returned invalid JSON. Raw text (first 500 chars): ${cleaned.slice(0, 500)}`,
+        { cause: jsonError }
+      );
+    }
+    try {
+      return receiptExtractionSchema.parse(raw);
+    } catch (zodError) {
+      throw new Error(
+        `Claude returned valid JSON but it doesn't match the expected schema. Parsed keys: ${Object.keys(raw as Record<string, unknown>).join(", ")}`,
+        { cause: zodError }
+      );
+    }
   }
 
   async isAvailable(): Promise<boolean> {
     try {
-      return !!this.client;
+      // Make a lightweight API call to verify credentials and connectivity
+      await this.client.models.list({ limit: 1 });
+      return true;
     } catch {
       return false;
     }

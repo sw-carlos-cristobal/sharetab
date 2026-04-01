@@ -5,9 +5,10 @@ import { auth } from "../auth";
 import { db } from "../db";
 import { logger } from "../lib/logger";
 
-export const createTRPCContext = async () => {
+export const createTRPCContext = async (opts?: { req?: Request }) => {
   const session = await auth();
-  return { session, db };
+  const headers = opts?.req?.headers ?? new Headers();
+  return { session, db, headers };
 };
 
 export type TRPCContext = Awaited<ReturnType<typeof createTRPCContext>>;

@@ -1,15 +1,22 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { Prisma } from "@/generated/prisma/client";
+import type { PrismaClient } from "@/generated/prisma/client";
 import { createTRPCRouter, protectedProcedure, groupMemberProcedure } from "../init";
-import { getAIProvider } from "../../ai/registry";
+import { processReceiptImage } from "../../lib/receipt-processor";
 import { logger } from "../../lib/logger";
 
+/**
+ * Verify that a receipt exists and the user has access to it (via group membership).
+ * When additional `include` fields are passed, the return type is widened since
+ * Prisma cannot statically infer dynamic includes -- callers should cast as needed.
+ */
 async function verifyReceiptAccess(
-  db: any,
+  db: PrismaClient,
   receiptId: string,
   userId: string,
-  include?: Record<string, unknown>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  include?: Record<string, any>
 ) {
   const receipt = await db.receipt.findUnique({
     where: { id: receiptId },
@@ -17,7 +24,7 @@ async function verifyReceiptAccess(
   });
   if (!receipt) throw new TRPCError({ code: "NOT_FOUND" });
   if (receipt.group) {
-    const isMember = receipt.group.members.some((m: any) => m.userId === userId);
+    const isMember = receipt.group.members.some((m: { userId: string }) => m.userId === userId);
     if (!isMember) throw new TRPCError({ code: "FORBIDDEN" });
   }
   return receipt;
@@ -52,70 +59,13 @@ export const receiptsRouter = createTRPCRouter({
       });
 
       try {
-        const { readFile } = await import("fs/promises");
-        const { join } = await import("path");
-        const { getUploadDir } = await import("../../lib/upload-dir");
-        const filepath = join(getUploadDir(), receipt.imagePath);
-        const imageBuffer = await readFile(filepath);
-
-        const provider = await getAIProvider();
-        logger.info("receipt.processing", {
+        return await processReceiptImage({
+          db: ctx.db,
           receiptId: input.receiptId,
-          provider: provider.name,
-          imageSize: imageBuffer.length,
-          correctionHint: input.correctionHint ?? null,
+          receipt,
+          correctionHint: input.correctionHint,
+          logPrefix: "receipt",
         });
-        const start = Date.now();
-        const result = await provider.extractReceipt(imageBuffer, receipt.mimeType, input.correctionHint);
-        logger.info("receipt.extracted", {
-          receiptId: input.receiptId,
-          provider: provider.name,
-          items: result.items.length,
-          total: result.total,
-          durationMs: Date.now() - start,
-        });
-
-        // Create receipt items in DB
-        await ctx.db.receiptItem.createMany({
-          data: result.items.map((item, i) => ({
-            receiptId: input.receiptId,
-            name: item.name,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            totalPrice: item.totalPrice,
-            sortOrder: i,
-          })),
-        });
-
-        await ctx.db.receipt.update({
-          where: { id: input.receiptId },
-          data: {
-            status: "COMPLETED",
-            aiProvider: provider.name,
-            rawResponse: JSON.parse(JSON.stringify(result)),
-            extractedData: JSON.parse(JSON.stringify({
-              merchantName: result.merchantName,
-              date: result.date,
-              subtotal: result.subtotal,
-              tax: result.tax,
-              tip: result.tip,
-              total: result.total,
-              currency: result.currency,
-            })),
-          },
-        });
-
-        return {
-          status: "COMPLETED" as const,
-          merchantName: result.merchantName,
-          date: result.date,
-          subtotal: result.subtotal,
-          tax: result.tax,
-          tip: result.tip,
-          total: result.total,
-          currency: result.currency,
-          itemCount: result.items.length,
-        };
       } catch (error) {
         logger.error("receipt.failed", {
           receiptId: input.receiptId,
@@ -125,9 +75,9 @@ export const receiptsRouter = createTRPCRouter({
           where: { id: input.receiptId },
           data: {
             status: "FAILED",
-            rawResponse: JSON.parse(JSON.stringify({
+            rawResponse: {
               error: error instanceof Error ? error.message : "Unknown error",
-            })),
+            } as unknown as Prisma.InputJsonValue,
           },
         });
 
@@ -153,12 +103,16 @@ export const receiptsRouter = createTRPCRouter({
         }
       );
 
+      const receiptWithItems = receipt as typeof receipt & {
+        items: { id: string; name: string; quantity: number; unitPrice: number; totalPrice: number; sortOrder: number; assignments: { id: string; receiptItemId: string; userId: string; shareOfItem: number }[] }[];
+      };
+
       return {
         receipt: {
-          id: receipt.id,
-          status: receipt.status,
-          imagePath: receipt.imagePath,
-          extractedData: receipt.extractedData as {
+          id: receiptWithItems.id,
+          status: receiptWithItems.status,
+          imagePath: receiptWithItems.imagePath,
+          extractedData: receiptWithItems.extractedData as {
             merchantName?: string;
             date?: string;
             subtotal: number;
@@ -168,7 +122,7 @@ export const receiptsRouter = createTRPCRouter({
             currency: string;
           } | null,
         },
-        items: receipt.items,
+        items: receiptWithItems.items,
       };
     }),
 
@@ -262,7 +216,7 @@ export const receiptsRouter = createTRPCRouter({
 
       await ctx.db.receipt.update({
         where: { id: input.receiptId },
-        data: { extractedData: JSON.parse(JSON.stringify(updated)) },
+        data: { extractedData: updated as unknown as Prisma.InputJsonValue },
       });
       return { success: true };
     }),
@@ -503,6 +457,22 @@ export const receiptsRouter = createTRPCRouter({
 
       await ctx.db.receiptItem.deleteMany({ where: { receiptId: input.receiptId } });
       await ctx.db.receipt.delete({ where: { id: input.receiptId } });
+
+      // Clean up the uploaded image file
+      try {
+        const { unlink } = await import("fs/promises");
+        const { join } = await import("path");
+        const { getUploadDir } = await import("../../lib/upload-dir");
+        const filepath = join(getUploadDir(), receipt.imagePath);
+        await unlink(filepath);
+      } catch {
+        // Non-fatal: file may already be missing
+        logger.warn("receipt.delete.fileCleanupFailed", {
+          receiptId: input.receiptId,
+          imagePath: receipt.imagePath,
+        });
+      }
+
       return { success: true };
     }),
 });

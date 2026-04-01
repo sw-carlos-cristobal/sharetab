@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
+import type { Prisma } from "@/generated/prisma/client";
 import { createTRPCRouter, publicProcedure } from "../init";
-import { getAIProvider } from "../../ai/registry";
+import { processReceiptImage } from "../../lib/receipt-processor";
 import { logger } from "../../lib/logger";
 import { checkRateLimit } from "../../lib/rate-limit";
 import { calculateSplitTotals } from "@/lib/split-calculator";
@@ -43,70 +44,13 @@ export const guestRouter = createTRPCRouter({
       });
 
       try {
-        const { readFile } = await import("fs/promises");
-        const { join } = await import("path");
-        const { getUploadDir } = await import("../../lib/upload-dir");
-        const filepath = join(getUploadDir(), receipt.imagePath);
-        const imageBuffer = await readFile(filepath);
-
-        const provider = await getAIProvider();
-        logger.info("guest.receipt.processing", {
+        return await processReceiptImage({
+          db: ctx.db,
           receiptId: input.receiptId,
-          provider: provider.name,
-          imageSize: imageBuffer.length,
-          correctionHint: input.correctionHint ?? null,
+          receipt,
+          correctionHint: input.correctionHint,
+          logPrefix: "guest.receipt",
         });
-        const start = Date.now();
-        const result = await provider.extractReceipt(imageBuffer, receipt.mimeType, input.correctionHint);
-        logger.info("guest.receipt.extracted", {
-          receiptId: input.receiptId,
-          provider: provider.name,
-          items: result.items.length,
-          total: result.total,
-          durationMs: Date.now() - start,
-        });
-
-        // Create receipt items in DB
-        await ctx.db.receiptItem.createMany({
-          data: result.items.map((item, i) => ({
-            receiptId: input.receiptId,
-            name: item.name,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            totalPrice: item.totalPrice,
-            sortOrder: i,
-          })),
-        });
-
-        await ctx.db.receipt.update({
-          where: { id: input.receiptId },
-          data: {
-            status: "COMPLETED",
-            aiProvider: provider.name,
-            rawResponse: JSON.parse(JSON.stringify(result)),
-            extractedData: JSON.parse(JSON.stringify({
-              merchantName: result.merchantName,
-              date: result.date,
-              subtotal: result.subtotal,
-              tax: result.tax,
-              tip: result.tip,
-              total: result.total,
-              currency: result.currency,
-            })),
-          },
-        });
-
-        return {
-          status: "COMPLETED" as const,
-          merchantName: result.merchantName,
-          date: result.date,
-          subtotal: result.subtotal,
-          tax: result.tax,
-          tip: result.tip,
-          total: result.total,
-          currency: result.currency,
-          itemCount: result.items.length,
-        };
       } catch (error) {
         logger.error("guest.receipt.failed", {
           receiptId: input.receiptId,
@@ -116,9 +60,9 @@ export const guestRouter = createTRPCRouter({
           where: { id: input.receiptId },
           data: {
             status: "FAILED",
-            rawResponse: JSON.parse(JSON.stringify({
+            rawResponse: {
               error: error instanceof Error ? error.message : "Unknown error",
-            })),
+            } as unknown as Prisma.InputJsonValue,
           },
         });
 
@@ -209,15 +153,30 @@ export const guestRouter = createTRPCRouter({
       const guestSplit = await ctx.db.guestSplit.create({
         data: {
           receiptId: input.receiptId,
-          receiptData: JSON.parse(JSON.stringify({ ...input.receiptData, tip })),
-          items: JSON.parse(JSON.stringify(input.items)),
-          people: JSON.parse(JSON.stringify(input.people)),
-          assignments: JSON.parse(JSON.stringify(input.assignments)),
-          summary: JSON.parse(JSON.stringify(summaryWithNames)),
+          receiptData: { ...input.receiptData, tip } as unknown as Prisma.InputJsonValue,
+          items: input.items as unknown as Prisma.InputJsonValue,
+          people: input.people as unknown as Prisma.InputJsonValue,
+          assignments: input.assignments as unknown as Prisma.InputJsonValue,
+          summary: summaryWithNames as unknown as Prisma.InputJsonValue,
           paidByIndex: input.paidByIndex,
           expiresAt,
         },
       });
+
+      // Opportunistic cleanup: delete expired GuestSplit records to prevent unbounded growth.
+      // Piggybacked on createSplit to avoid needing a separate cron job.
+      ctx.db.guestSplit
+        .deleteMany({ where: { expiresAt: { lt: new Date() } } })
+        .then((result) => {
+          if (result.count > 0) {
+            logger.info("guest.split.cleanup", { deletedCount: result.count });
+          }
+        })
+        .catch((err) => {
+          logger.warn("guest.split.cleanup.failed", {
+            error: err instanceof Error ? err.message : "Unknown",
+          });
+        });
 
       logger.info("guest.split.created", {
         splitId: guestSplit.id,

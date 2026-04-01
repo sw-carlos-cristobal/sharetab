@@ -149,7 +149,6 @@ model Expense {
   addedBy User          @relation("AddedBy", fields: [addedById], references: [id])
   shares ExpenseShare[]
   receipt Receipt?      @relation(fields: [receiptId], references: [id])
-  activityLogs ActivityLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -263,12 +262,14 @@ model ActivityLog {
   groupId  String
   userId   String
   type     ActivityType
+  // Polymorphic reference: entityId may point to an Expense, Settlement, or other entity
+  // depending on the ActivityType. No Prisma relation is defined because a single FK
+  // cannot represent multiple target tables.
   entityId String?
   metadata Json?
 
-  group   Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  user    User     @relation(fields: [userId], references: [id])
-  expense Expense? @relation(fields: [entityId], references: [id])
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id])
 
   createdAt DateTime @default(now())
 
