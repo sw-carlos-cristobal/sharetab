@@ -52,12 +52,13 @@ npx prisma db push   # Push schema without migration (dev only)
 - `protectedProcedure` requires auth; `groupMemberProcedure` requires group membership
 - AI providers implement the `AIProvider` interface in `src/server/ai/provider.ts`
 - `src/middleware.ts` — NextAuth middleware protecting authenticated routes
-- `prisma/seed.ts` — Demo data seed script (run with `npm run db:seed`)
+- `prisma/seed.ts` — Demo data seed script (run with `npm run db:seed`); idempotent — skips if data already exists
 - Prisma v7: datasource URL is configured in `prisma.config.ts`, not in `schema.prisma`
 - Prisma v7: PrismaClient requires `@prisma/adapter-pg` adapter in constructor
 - Prisma v7: import from `@/generated/prisma/client` (not `@/generated/prisma` — no index.ts)
 - shadcn/ui v4: Button uses `render` prop for polymorphism, NOT `asChild`
-- shadcn/ui v4: When rendering Button as a Link, add `nativeButton={false}`
+- shadcn/ui v4: When rendering Button as a Link, add `nativeButton={false}` — **every** `render={<Link>}` needs this
+- Split components (`equal-split`, `exact-split`, `percentage-split`, `shares-split`): `useEffect` deps must only include user-controlled state (`selected`, `amounts`, etc.) and `totalCents` — never `members` or `onChange` (causes infinite re-renders)
 - Dark mode: class-based via `next-themes` ThemeProvider; toggle in sidebar and mobile menu
 - Theme: emerald/teal accent color (OKLCH), neutral backgrounds — defined in `globals.css`
 - `scripts/dev.mjs` — All-in-one dev script: starts embedded-postgres + Next.js dev server

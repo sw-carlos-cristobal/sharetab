@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { parseToCents, formatCents } from "@/lib/money";
 import {
@@ -41,6 +41,15 @@ export function SettleDialog({
     suggestedAmount ? (suggestedAmount / 100).toFixed(2) : ""
   );
   const [note, setNote] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setFromId(suggestedFrom ?? "");
+      setToId(suggestedTo ?? "");
+      setAmountStr(suggestedAmount ? (suggestedAmount / 100).toFixed(2) : "");
+      setNote("");
+    }
+  }, [open, suggestedFrom, suggestedTo, suggestedAmount]);
 
   const utils = trpc.useUtils();
   const settle = trpc.settlements.create.useMutation({

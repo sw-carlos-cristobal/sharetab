@@ -109,6 +109,7 @@ export default function GroupDetailPage({
           <Button
             variant="outline"
             size="sm"
+            nativeButton={false}
             render={<Link href={`/groups/${groupId}/settings`} />}
           >
             <Settings className="h-4 w-4" />
@@ -269,12 +270,13 @@ export default function GroupDetailPage({
             <Button
               size="sm"
               variant="outline"
+              nativeButton={false}
               render={<Link href={`/groups/${groupId}/scan`} />}
             >
               <Camera className="mr-2 h-4 w-4" />
               Scan Receipt
             </Button>
-            <Button size="sm" render={<Link href={`/groups/${groupId}/expenses/new`} />}>
+            <Button size="sm" nativeButton={false} render={<Link href={`/groups/${groupId}/expenses/new`} />}>
               <Plus className="mr-2 h-4 w-4" />
               Add Expense
             </Button>
@@ -291,6 +293,7 @@ export default function GroupDetailPage({
               <Button
                 className="mt-4"
                 size="sm"
+                nativeButton={false}
                 render={<Link href={`/groups/${groupId}/expenses/new`} />}
               >
                 <Plus className="mr-2 h-4 w-4" />

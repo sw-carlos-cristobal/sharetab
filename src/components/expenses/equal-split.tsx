@@ -35,7 +35,8 @@ export function EqualSplit({
     }));
 
     onChange(shares);
-  }, [selected, totalCents, members, onChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, totalCents]);
 
   function toggle(id: string) {
     setSelected((prev) => {

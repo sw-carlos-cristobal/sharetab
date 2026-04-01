@@ -47,7 +47,8 @@ export function SharesSplit({
     });
 
     onChange(shares);
-  }, [shareUnits, totalCents, members, onChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shareUnits, totalCents]);
 
   function setUnits(id: string, value: string) {
     setShareUnits((prev) => ({ ...prev, [id]: value }));

@@ -44,7 +44,15 @@ async function main() {
 
   console.log("Created users: Alice, Bob, Charlie (password: password123)");
 
-  // Create a demo group
+  // Create a demo group (skip if already exists)
+  const existingApartment = await prisma.group.findFirst({
+    where: { name: "Apartment", members: { some: { userId: alice.id } } },
+  });
+  if (existingApartment) {
+    console.log("Seed data already exists, skipping.");
+    return;
+  }
+
   const group = await prisma.group.create({
     data: {
       name: "Apartment",

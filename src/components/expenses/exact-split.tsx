@@ -27,7 +27,8 @@ export function ExactSplit({
       }
     }
     onChange(shares);
-  }, [amounts, members, onChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [amounts]);
 
   function setAmount(id: string, value: string) {
     setAmounts((prev) => ({ ...prev, [id]: value }));

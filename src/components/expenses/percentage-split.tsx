@@ -48,7 +48,8 @@ export function PercentageSplit({
     }
 
     onChange(shares);
-  }, [percentages, totalCents, members, onChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [percentages, totalCents]);
 
   function setPct(id: string, value: string) {
     setPercentages((prev) => ({ ...prev, [id]: value }));

@@ -32,7 +32,7 @@ export default function ExpenseDetailPage({
   return (
     <div className="mx-auto max-w-lg space-y-6">
       <div className="flex items-center gap-2">
-        <Button variant="ghost" size="icon" render={<Link href={`/groups/${groupId}`} />}>
+        <Button variant="ghost" size="icon" nativeButton={false} render={<Link href={`/groups/${groupId}`} />}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <h1 className="text-2xl font-bold">{e.title}</h1>
@@ -101,6 +101,7 @@ export default function ExpenseDetailPage({
         <Button
           variant="outline"
           className="flex-1"
+          nativeButton={false}
           render={<Link href={`/groups/${groupId}/expenses/${expenseId}/edit`} />}
         >
           <Pencil className="mr-2 h-4 w-4" />

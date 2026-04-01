@@ -66,7 +66,7 @@ export default function InvitePage({
             {joinGroup.isPending ? "Joining..." : "Accept Invite"}
           </Button>
 
-          <Button variant="ghost" className="w-full" render={<Link href="/dashboard" />}>
+          <Button variant="ghost" className="w-full" nativeButton={false} render={<Link href="/dashboard" />}>
             Go to Dashboard
           </Button>
         </CardContent>
