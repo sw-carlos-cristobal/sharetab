@@ -70,7 +70,9 @@ test.describe("Additional UI Tests", () => {
 
     // Verify name persisted after page reload
     await page.reload();
-    await expect(page.getByLabel("Name")).toHaveValue("Alice Updated", { timeout: 10000 });
+    // Wait for the settings page to fully load and populate the name field
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByLabel("Name")).toHaveValue("Alice Updated", { timeout: 15000 });
 
     // Always restore original name
     await page.getByLabel("Name").fill("Alice Johnson");

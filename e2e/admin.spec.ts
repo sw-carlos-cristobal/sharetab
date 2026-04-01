@@ -21,7 +21,9 @@ test.describe("Admin page access control", () => {
     const body = await res.json();
     // Unauthenticated requests get UNAUTHORIZED or FORBIDDEN depending on middleware
     expect(body[0]?.error).toBeTruthy();
-    expect(["UNAUTHORIZED", "FORBIDDEN"]).toContain(body[0].error.data?.code);
+    // tRPC with superjson wraps errors in .json — check both shapes for resilience
+    const code = body[0].error.json?.data?.code ?? body[0].error.data?.code;
+    expect(["UNAUTHORIZED", "FORBIDDEN"]).toContain(code);
   });
 });
 
