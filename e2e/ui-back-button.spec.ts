@@ -22,8 +22,8 @@ test.describe("Back button navigation", () => {
     await page.goto(`/groups/${groupId}/expenses/${expense.id}/edit`);
     await expect(page.getByRole("heading", { name: "Edit Expense" })).toBeVisible();
 
-    // Click the back link next to heading
-    await page.getByRole("heading", { name: "Edit Expense" }).locator("..").locator("a").first().click();
+    // Click the back button next to heading (Button+Link, not raw <a>)
+    await page.getByRole("heading", { name: "Edit Expense" }).locator("..").getByRole("button").first().click();
 
     // Should navigate to expense detail page
     await expect(page.getByRole("heading", { name: "Test Expense" })).toBeVisible({ timeout: 10000 });
@@ -42,8 +42,8 @@ test.describe("Back button navigation", () => {
     await page.goto(`/groups/${groupId}/expenses/new`);
     await expect(page.getByRole("heading", { name: "Add Expense" })).toBeVisible();
 
-    // Click the back link next to heading
-    await page.getByRole("heading", { name: "Add Expense" }).locator("..").locator("a").first().click();
+    // Click the back button next to heading (Button+Link, not raw <a>)
+    await page.getByRole("heading", { name: "Add Expense" }).locator("..").getByRole("button").first().click();
 
     // Should navigate to group detail page
     await expect(page.getByRole("heading", { name: "Back Button Add Test" })).toBeVisible({ timeout: 10000 });
