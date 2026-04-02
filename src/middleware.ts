@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { getToken } from "next-auth/jwt";
 
-export function middleware(request: NextRequest) {
-  const token =
-    request.cookies.get("authjs.session-token")?.value ||
-    request.cookies.get("__Secure-authjs.session-token")?.value;
+export async function middleware(request: NextRequest) {
+  let token;
+  try {
+    token = await getToken({ req: request });
+  } catch {
+    // Malformed or forged JWT — treat as unauthenticated
+  }
 
   if (!token) {
     const loginUrl = new URL("/login", request.url);

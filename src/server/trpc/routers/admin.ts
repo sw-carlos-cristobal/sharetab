@@ -826,6 +826,34 @@ export const adminRouter = createTRPCRouter({
       freedBytesFormatted: formatBytes(freedBytes),
     };
   }),
+  // ─── Guest Split Cleanup ──────────────────────────────────
+
+  getExpiredSplitCount: adminProcedure.query(async ({ ctx }) => {
+    const expiredCount = await ctx.db.guestSplit.count({
+      where: { expiresAt: { lt: new Date() } },
+    });
+    const totalCount = await ctx.db.guestSplit.count();
+    return { expiredCount, totalCount };
+  }),
+
+  cleanupExpiredSplits: adminProcedure.mutation(async ({ ctx }) => {
+    const result = await ctx.db.guestSplit.deleteMany({
+      where: { expiresAt: { lt: new Date() } },
+    });
+
+    if (result.count > 0) {
+      await logAdminAction(
+        ctx.db,
+        ctx.user.id,
+        "EXPIRED_SPLITS_CLEANED",
+        null,
+        { deletedCount: result.count }
+      );
+    }
+
+    return { deletedCount: result.count };
+  }),
+
   // ─── Server Logs ─────────────────────────────────────────
 
   getLogs: adminProcedure

@@ -11,10 +11,15 @@ import {
   Wrench,
   CheckCircle2,
   AlertCircle,
+  Trash2,
 } from 'lucide-react';
 
 export function ToolsSection() {
   const sendTestEmail = trpc.admin.sendTestEmail.useMutation();
+  const expiredSplits = trpc.admin.getExpiredSplitCount.useQuery();
+  const cleanupSplits = trpc.admin.cleanupExpiredSplits.useMutation({
+    onSuccess: () => expiredSplits.refetch(),
+  });
   const [exporting, setExporting] = useState(false);
   const [exportResult, setExportResult] = useState<string | null>(null);
 
@@ -124,6 +129,46 @@ export function ToolsSection() {
               <p className="flex items-center gap-1 text-sm text-destructive">
                 <AlertCircle className="h-4 w-4" />
                 {sendTestEmail.error.message}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+              <Trash2 className="h-4 w-4" />
+              Guest Split Cleanup
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              {expiredSplits.data
+                ? `${expiredSplits.data.expiredCount} expired of ${expiredSplits.data.totalCount} total guest splits.`
+                : 'Loading...'}
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => cleanupSplits.mutate()}
+              disabled={cleanupSplits.isPending || (expiredSplits.data?.expiredCount ?? 0) === 0}
+            >
+              {cleanupSplits.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="mr-2 h-4 w-4" />
+              )}
+              Purge Expired
+            </Button>
+            {cleanupSplits.isSuccess && (
+              <p className="flex items-center gap-1 text-sm text-green-600">
+                <CheckCircle2 className="h-4 w-4" />
+                Deleted {cleanupSplits.data.deletedCount} expired splits
+              </p>
+            )}
+            {cleanupSplits.isError && (
+              <p className="flex items-center gap-1 text-sm text-destructive">
+                <AlertCircle className="h-4 w-4" />
+                {cleanupSplits.error.message}
               </p>
             )}
           </CardContent>
