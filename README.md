@@ -81,6 +81,7 @@ ShareTab makes it easy to track shared expenses with friends, roommates, or trav
 - **Invite links** -- share a link to add friends to your groups
 - **Magic link auth** -- passwordless email sign-in
 - **PWA** -- installable on mobile with app-like experience
+- **Admin dashboard** -- user management, group overview, storage stats, AI usage, audit log, registration control, announcements, server logs
 - **Self-hosted** -- Docker Compose deployment, designed for Unraid
 
 ## Quick Start
@@ -154,6 +155,12 @@ The `meridian` provider uses a Claude Max/Pro subscription via an embedded proxy
 | `EMAIL_SERVER_PASSWORD` | SMTP password or app password. |
 | `EMAIL_FROM` | From address for sent emails. |
 
+### Admin
+
+| Variable | Description |
+|---|---|
+| `ADMIN_EMAIL` | Email of the admin user. Grants access to `/admin` dashboard for managing users, groups, storage, and system settings. |
+
 ### Other
 
 | Variable | Default | Description |
@@ -225,7 +232,13 @@ Set `AUTH_RATE_LIMIT_MAX=9999` in `.env` to avoid rate limiting during repeated 
 
 ## Contributing
 
-Contributions are welcome. If you find a bug or have a feature request, please [open an issue](../../issues). Pull requests are appreciated -- feel free to pick up any open issue.
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, PR guidelines, and code style.
+
+If you find a bug or have a feature request, please [open an issue](../../issues).
+
+## Security
+
+To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 ## License
 
