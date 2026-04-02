@@ -4,7 +4,6 @@ import { AppSidebar } from "@/components/layout/sidebar";
 import { MobileHeader } from "@/components/layout/mobile-header";
 import { AnnouncementBanner } from "@/components/layout/announcement-banner";
 import { ImpersonationBanner } from "@/components/layout/impersonation-banner";
-import { BugLensWidget } from "@/components/buglens";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -25,7 +24,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <AnnouncementBanner />
         <div className="w-full py-4 px-4 md:py-6 md:px-8 2xl:mx-auto 2xl:max-w-5xl">{children}</div>
       </main>
-      <BugLensWidget />
     </div>
   );
 }
