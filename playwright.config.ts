@@ -9,6 +9,7 @@ export default defineConfig({
   timeout: 60000,
   expect: { timeout: 15000 },
   reporter: process.env.CI ? "github" : "list",
+  outputDir: "./tmp-screenshots",
   use: {
     baseURL: process.env.BASE_URL || "http://localhost:3001",
     trace: "on-first-retry",
