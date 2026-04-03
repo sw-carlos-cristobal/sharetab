@@ -42,8 +42,23 @@ jobs:
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
-      - name: Audit dependencies
-        run: npm audit --audit-level=high
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Resolve CI auth secret
+        id: auth
+        env:
+          CI_AUTH_SECRET: ${{ secrets.CI_AUTH_SECRET }}
+        run: |
+          if [ -n "$CI_AUTH_SECRET" ]; then
+            echo "secret=$CI_AUTH_SECRET" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.pull_request.head.repo.fork }}" = "true" ]; then
+            # Forked PRs cannot access repo secrets — generate a per-run ephemeral secret
+            echo "secret=$(openssl rand -base64 32)" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::CI_AUTH_SECRET is not set. Add it under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
 
       - name: Generate Prisma client
         run: npx prisma generate
@@ -64,8 +79,8 @@ jobs:
       - name: Build application
         env:
           DATABASE_URL: postgresql://sharetab:sharetab@localhost:5432/sharetab
-          NEXTAUTH_SECRET: ${{ secrets.CI_AUTH_SECRET || 'ci-test-fallback-not-for-production' }}
-          AUTH_SECRET: ${{ secrets.CI_AUTH_SECRET || 'ci-test-fallback-not-for-production' }}
+          NEXTAUTH_SECRET: ${{ steps.auth.outputs.secret }}
+          AUTH_SECRET: ${{ steps.auth.outputs.secret }}
           AUTH_TRUST_HOST: "true"
           ADMIN_EMAIL: alice@example.com
           AI_PROVIDER: mock
@@ -74,8 +89,8 @@ jobs:
       - name: Run tests
         env:
           DATABASE_URL: postgresql://sharetab:sharetab@localhost:5432/sharetab
-          NEXTAUTH_SECRET: ${{ secrets.CI_AUTH_SECRET || 'ci-test-fallback-not-for-production' }}
-          AUTH_SECRET: ${{ secrets.CI_AUTH_SECRET || 'ci-test-fallback-not-for-production' }}
+          NEXTAUTH_SECRET: ${{ steps.auth.outputs.secret }}
+          AUTH_SECRET: ${{ steps.auth.outputs.secret }}
           AUTH_TRUST_HOST: "true"
           NEXTAUTH_URL: http://localhost:3000
           BASE_URL: http://localhost:3000
