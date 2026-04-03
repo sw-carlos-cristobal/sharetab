@@ -34,10 +34,10 @@ npx prisma db push   # Push schema without migration (dev only)
 
 - `src/server/` — Backend: auth config, Prisma client, tRPC routers, AI providers, pure calculation libs
 - `src/server/db.ts` — Prisma client singleton (uses `@prisma/adapter-pg` with `PrismaPg`)
-- `src/server/auth.ts` — NextAuth v5 config (Credentials + optional Google OAuth)
+- `src/server/auth.ts` — NextAuth v5 config (Credentials + optional Google OAuth + optional Nodemailer magic link)
 - `src/server/trpc/init.ts` — tRPC context, `publicProcedure`, `protectedProcedure`, `groupMemberProcedure`
 - `src/server/trpc/router.ts` — Root app router (exports `AppRouter` type)
-- `src/server/trpc/routers/` — Individual routers: auth, groups, expenses, balances, settlements, activity, receipts, guest
+- `src/server/trpc/routers/` — Individual routers: auth, groups, expenses, balances, settlements, activity, receipts, guest, admin
 - `src/server/lib/balance-calculator.ts` — Pure functions for debt simplification and balance computation (extracted for testability)
 - `src/app/` — Next.js App Router pages. `(auth)/` for login/register, `(app)/` for authenticated pages
 - `src/components/` — React components organized by domain
@@ -82,7 +82,7 @@ npx prisma db push   # Push schema without migration (dev only)
 ## Testing
 
 ### Unit Tests (Vitest)
-- `npm test` — run all unit tests (~59 tests, <1s)
+- `npm test` — run all unit tests (~67 tests, <1s)
 - Tests live co-located with source: `src/**/*.test.ts`
 - Covers: `money.ts`, `split-calculator.ts`, `rate-limit.ts`, `upload-dir.ts`, `balance-calculator.ts`, `ai/registry.ts`
 

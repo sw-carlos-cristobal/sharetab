@@ -132,7 +132,7 @@ All configuration is done through environment variables. Copy `.env.example` to 
 | `AI_PROVIDER` | One of `openai`, `claude`, `meridian`, or `ollama`. Defaults to `openai`. |
 | `OPENAI_API_KEY` | Required when `AI_PROVIDER=openai`. |
 | `ANTHROPIC_API_KEY` | Required when `AI_PROVIDER=claude`. |
-| `ANTHROPIC_MODEL` | Claude model for receipt scanning. Defaults to `claude-sonnet-4-6`. |
+| `ANTHROPIC_MODEL` | Claude model for receipt scanning. Defaults to `claude-sonnet-4-6` (claude provider) or `claude-opus-4-6` (meridian provider). |
 | `OLLAMA_BASE_URL` | Ollama server URL. Defaults to `http://localhost:11434`. |
 | `OLLAMA_MODEL` | Ollama model name. Defaults to `llava`. |
 
