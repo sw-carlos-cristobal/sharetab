@@ -64,6 +64,8 @@ test.describe("Additional UI Tests", () => {
     await page.goto("/settings");
 
     const nameInput = page.getByLabel("Name");
+    // Wait for React to populate the field before clearing + typing
+    await expect(nameInput).not.toHaveValue("", { timeout: 10000 });
     await nameInput.fill("Alice Updated");
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page.getByText("Profile updated")).toBeVisible({ timeout: 10000 });
