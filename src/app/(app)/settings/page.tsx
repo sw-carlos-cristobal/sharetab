@@ -13,16 +13,22 @@ export default function SettingsPage() {
   const { data: session, update } = useSession();
   const router = useRouter();
   const [name, setName] = useState(session?.user?.name ?? "");
+  const [hasSaved, setHasSaved] = useState(false);
 
   useEffect(() => {
-    if (session?.user?.name) setName(session.user.name);
-  }, [session?.user?.name]);
+    // Only sync from session on initial load, not after a save
+    // (the session JWT may still have the stale name)
+    if (session?.user?.name && !hasSaved) {
+      setName(session.user.name);
+    }
+  }, [session?.user?.name, hasSaved]);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
   const updateProfile = trpc.auth.updateProfile.useMutation({
     onSuccess: async () => {
+      setHasSaved(true);
       await update();
       router.refresh();
     },

@@ -8,6 +8,9 @@ import {
   trpcResult,
 } from "./helpers";
 
+// Mutates global state (registration mode, user suspension, announcements)
+test.describe.configure({ mode: "serial" });
+
 test.describe("Admin audit log", () => {
   test("admin can view audit log section", async ({ page }) => {
     await login(page, users.alice.email, users.alice.password);

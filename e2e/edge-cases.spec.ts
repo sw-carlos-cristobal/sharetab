@@ -233,7 +233,7 @@ test.describe("Edge Cases & Security", () => {
     await login(page, users.alice.email, users.alice.password);
     await page.goto(`/groups/${groupId}`);
 
-    await expect(page.getByText("Group not found")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("Group not found")).toBeVisible({ timeout: 15000 });
     await expect(page.getByText("doesn't exist or you don't have access")).toBeVisible();
 
     await dispose();

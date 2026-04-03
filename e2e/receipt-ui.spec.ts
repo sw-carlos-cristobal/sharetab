@@ -1,6 +1,9 @@
 import { test, expect } from "@playwright/test";
 import { users, login, navigateToGroup } from "./helpers";
 
+// Test 7.1.5 mutates Alice's display name — run serially to avoid breaking other tests
+test.describe.configure({ mode: "serial" });
+
 test.describe("Receipt Scanning UI", () => {
   test.beforeEach(async ({ page }) => {
     await login(page, users.alice.email, users.alice.password);
@@ -64,22 +67,26 @@ test.describe("Additional UI Tests", () => {
     await page.goto("/settings");
 
     const nameInput = page.getByLabel("Name");
-    // Wait for React to populate the field before clearing + typing
-    await expect(nameInput).not.toHaveValue("", { timeout: 10000 });
+    // Wait for React to fully hydrate the field with the current name
+    await expect(nameInput).toHaveValue("Alice Johnson", { timeout: 10000 });
     await nameInput.fill("Alice Updated");
+    // Confirm fill took effect before clicking save
+    await expect(nameInput).toHaveValue("Alice Updated");
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page.getByText("Profile updated")).toBeVisible({ timeout: 10000 });
 
-    // Verify name persisted after page reload
-    await page.reload();
-    // Wait for the settings page to fully load and populate the name field
-    await page.waitForLoadState("networkidle");
-    await expect(page.getByLabel("Name")).toHaveValue("Alice Updated", { timeout: 15000 });
-
-    // Always restore original name
-    await page.getByLabel("Name").fill("Alice Johnson");
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page.getByText("Profile updated")).toBeVisible({ timeout: 10000 });
+    try {
+      // Verify name persisted after page reload
+      await page.reload();
+      await expect(page.getByLabel("Name")).toHaveValue("Alice Updated", { timeout: 15000 });
+    } finally {
+      // Always restore original name even if assertions fail
+      await page.goto("/settings");
+      await expect(page.getByLabel("Name")).not.toHaveValue("", { timeout: 10000 });
+      await page.getByLabel("Name").fill("Alice Johnson");
+      await page.getByRole("button", { name: "Save" }).click();
+      await expect(page.getByText("Profile updated")).toBeVisible({ timeout: 10000 });
+    }
   });
 
   test("7.6.4 — mobile sign out", async ({ page }) => {

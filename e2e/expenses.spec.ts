@@ -1,6 +1,9 @@
 import { test, expect } from "@playwright/test";
 import { users, login, createTestGroup, trpcMutation, navigateToGroup } from "./helpers";
 
+// Creates expenses on seed "Apartment" group — run serially to avoid balance assertion conflicts
+test.describe.configure({ mode: "serial" });
+
 test.describe("Expenses", () => {
   test.beforeEach(async ({ page }) => {
     await login(page, users.alice.email, users.alice.password);
