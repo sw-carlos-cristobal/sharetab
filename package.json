@@ -1,6 +1,24 @@
 {
   "name": "sharetab",
   "version": "0.3.0",
+  "description": "Self-hosted, open-source Splitwise alternative with AI-powered receipt scanning",
+  "author": "Carlos Cristobal",
+  "license": "MIT",
+  "homepage": "https://github.com/sw-carlos-cristobal/sharetab",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sw-carlos-cristobal/sharetab.git"
+  },
+  "keywords": [
+    "self-hosted",
+    "splitwise-alternative",
+    "expense-tracker",
+    "receipt-scanner",
+    "ai",
+    "nextjs",
+    "docker",
+    "unraid"
+  ],
   "private": true,
   "scripts": {
     "dev": "next dev",
