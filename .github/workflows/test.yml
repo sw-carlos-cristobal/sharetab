@@ -42,6 +42,9 @@ jobs:
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
+
       - name: Generate Prisma client
         run: npx prisma generate
 
@@ -61,8 +64,8 @@ jobs:
       - name: Build application
         env:
           DATABASE_URL: postgresql://sharetab:sharetab@localhost:5432/sharetab
-          NEXTAUTH_SECRET: ci-test-secret-not-for-production
-          AUTH_SECRET: ci-test-secret-not-for-production
+          NEXTAUTH_SECRET: ${{ secrets.CI_AUTH_SECRET || 'ci-test-fallback-not-for-production' }}
+          AUTH_SECRET: ${{ secrets.CI_AUTH_SECRET || 'ci-test-fallback-not-for-production' }}
           AUTH_TRUST_HOST: "true"
           ADMIN_EMAIL: alice@example.com
           AI_PROVIDER: mock
@@ -71,8 +74,8 @@ jobs:
       - name: Run tests
         env:
           DATABASE_URL: postgresql://sharetab:sharetab@localhost:5432/sharetab
-          NEXTAUTH_SECRET: ci-test-secret-not-for-production
-          AUTH_SECRET: ci-test-secret-not-for-production
+          NEXTAUTH_SECRET: ${{ secrets.CI_AUTH_SECRET || 'ci-test-fallback-not-for-production' }}
+          AUTH_SECRET: ${{ secrets.CI_AUTH_SECRET || 'ci-test-fallback-not-for-production' }}
           AUTH_TRUST_HOST: "true"
           NEXTAUTH_URL: http://localhost:3000
           BASE_URL: http://localhost:3000
