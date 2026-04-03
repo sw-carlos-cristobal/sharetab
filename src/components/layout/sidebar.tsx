@@ -13,8 +13,34 @@ import {
   LogOut,
   Settings,
   Shield,
+  Heart,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
+
+function SponsorBanner() {
+  return (
+    <div className="shrink-0 px-3 pb-2">
+      <div className="rounded-lg border border-pink-500/20 bg-gradient-to-br from-pink-500/10 via-rose-500/5 to-transparent p-3">
+        <div className="flex items-center gap-2 mb-1.5">
+          <Heart className="h-3.5 w-3.5 text-pink-500 shrink-0" />
+          <span className="text-xs font-semibold text-foreground">Support ShareTab</span>
+        </div>
+        <p className="text-xs text-muted-foreground mb-2.5 leading-relaxed">
+          ShareTab is free and open source. If it saves you time, consider sponsoring development.
+        </p>
+        <a
+          href="https://github.com/sponsors/sw-carlos-cristobal"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center justify-center gap-1.5 w-full rounded-md bg-pink-500/15 hover:bg-pink-500/25 border border-pink-500/20 px-2.5 py-1.5 text-xs font-medium text-pink-600 dark:text-pink-400 transition-colors"
+        >
+          <Heart className="h-3 w-3" />
+          Sponsor on GitHub
+        </a>
+      </div>
+    </div>
+  );
+}
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -94,6 +120,9 @@ export function AppSidebar({
           </Link>
         )}
       </nav>
+
+      {/* Sponsor banner */}
+      <SponsorBanner />
 
       {/* User profile section */}
       <div className="shrink-0 border-t border-transparent [border-image:linear-gradient(to_right,transparent,var(--color-border),transparent)_1] p-3">

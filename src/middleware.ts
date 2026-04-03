@@ -5,7 +5,11 @@ import { getToken } from "next-auth/jwt";
 export async function middleware(request: NextRequest) {
   let token;
   try {
-    token = await getToken({ req: request });
+    token = await getToken({
+      req: request,
+      secret: process.env.AUTH_SECRET,
+      cookieName: "authjs.session-token",
+    });
   } catch {
     // Malformed or forged JWT — treat as unauthenticated
   }
