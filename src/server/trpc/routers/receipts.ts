@@ -267,6 +267,12 @@ export const receiptsRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      // Verify group is not archived
+      const group = await ctx.db.group.findUnique({ where: { id: input.groupId } });
+      if (group?.archivedAt) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot create expenses in archived groups" });
+      }
+
       const receipt = await ctx.db.receipt.findUnique({
         where: { id: input.receiptId },
         include: { items: true },
