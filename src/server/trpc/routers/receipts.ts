@@ -305,15 +305,36 @@ export const receiptsRouter = createTRPCRouter({
       const tax = extractedData.tax;
       const tip = input.tipOverride ?? extractedData.tip;
 
-      // Build item map
+      // Verify paidBy and all assignees are members of this group
+      const groupMembers = await ctx.db.groupMember.findMany({
+        where: { groupId: input.groupId },
+        select: { userId: true },
+      });
+      const memberIds = new Set(groupMembers.map((m) => m.userId));
+      if (!memberIds.has(input.paidById)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Payer is not a member of this group" });
+      }
+      for (const a of input.assignments) {
+        for (const uid of a.userIds) {
+          if (!memberIds.has(uid)) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Assignee is not a member of this group" });
+          }
+        }
+      }
+
+      // Build item map and verify all referenced items belong to this receipt
       const itemMap = new Map(receipt.items.map((item) => [item.id, item]));
+      for (const a of input.assignments) {
+        if (!itemMap.has(a.receiptItemId)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Item does not belong to this receipt" });
+        }
+      }
 
       // Calculate per-user item subtotals
       const userSubtotals = new Map<string, number>();
 
       for (const assignment of input.assignments) {
-        const item = itemMap.get(assignment.receiptItemId);
-        if (!item) continue;
+        const item = itemMap.get(assignment.receiptItemId)!;
 
         const perPerson = Math.floor(item.totalPrice / assignment.userIds.length);
         const remainder = item.totalPrice - perPerson * assignment.userIds.length;
