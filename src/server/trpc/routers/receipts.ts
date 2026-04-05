@@ -26,6 +26,11 @@ async function verifyReceiptAccess(
   if (receipt.group) {
     const isMember = receipt.group.members.some((m: { userId: string }) => m.userId === userId);
     if (!isMember) throw new TRPCError({ code: "FORBIDDEN" });
+  } else {
+    // Ungrouped receipt: only the uploader can access it
+    if (receipt.uploadedById !== userId) {
+      throw new TRPCError({ code: "FORBIDDEN" });
+    }
   }
   return receipt;
 }
@@ -274,6 +279,19 @@ export const receiptsRouter = createTRPCRouter({
         throw new TRPCError({ code: "BAD_REQUEST", message: "Receipt not ready" });
       }
 
+      // Verify the caller has access to this receipt
+      if (receipt.groupId) {
+        // If already assigned to a group, it must match the target group
+        if (receipt.groupId !== input.groupId) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Receipt belongs to a different group" });
+        }
+      } else {
+        // Ungrouped receipt: only the uploader can use it
+        if (receipt.uploadedById !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
+      }
+
       const extractedData = receipt.extractedData as {
         subtotal: number;
         tax: number;
@@ -451,8 +469,10 @@ export const receiptsRouter = createTRPCRouter({
       if (!receipt) {
         throw new TRPCError({ code: "NOT_FOUND" });
       }
-      // Only the person who saved it can delete it
-      if (receipt.savedById && receipt.savedById !== ctx.user.id) {
+      // Only the uploader or the person who saved it can delete it
+      const isUploader = receipt.uploadedById === ctx.user.id;
+      const isSaver = receipt.savedById && receipt.savedById === ctx.user.id;
+      if (!isUploader && !isSaver) {
         throw new TRPCError({ code: "FORBIDDEN" });
       }
       // Can't delete if already linked to expense

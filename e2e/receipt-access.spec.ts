@@ -1,0 +1,131 @@
+import { test, expect, request } from "@playwright/test";
+import {
+  authedContext,
+  users,
+  trpcMutation,
+  trpcQuery,
+  trpcError,
+} from "./helpers";
+
+const BASE = process.env.BASE_URL || "http://localhost:3001";
+
+/** Upload a tiny JPEG as an authenticated user and return the receiptId + imagePath. */
+async function uploadReceipt(ctx: Awaited<ReturnType<typeof authedContext>>) {
+  const jpegHeader = Buffer.from([
+    0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
+    0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xff, 0xd9,
+  ]);
+  const res = await ctx.post("/api/upload", {
+    multipart: {
+      file: { name: "receipt.jpg", mimeType: "image/jpeg", buffer: jpegHeader },
+    },
+  });
+  expect(res.status()).toBe(200);
+  return (await res.json()) as { receiptId: string; imagePath: string };
+}
+
+/** Upload a tiny JPEG as a guest and return the receiptId + imagePath. */
+async function uploadGuestReceipt() {
+  const ctx = await request.newContext({ baseURL: BASE });
+  const jpegHeader = Buffer.from([
+    0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
+    0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xff, 0xd9,
+  ]);
+  const res = await ctx.post("/api/upload?guest=true", {
+    multipart: {
+      file: { name: "guest-receipt.jpg", mimeType: "image/jpeg", buffer: jpegHeader },
+    },
+  });
+  expect(res.status()).toBe(200);
+  const body = (await res.json()) as { receiptId: string; imagePath: string };
+  await ctx.dispose();
+  return body;
+}
+
+test.describe("Receipt access control", () => {
+  test("User B cannot getReceiptItems for User A's receipt", async () => {
+    const alice = await authedContext(users.alice.email, users.alice.password);
+    const bob = await authedContext(users.bob.email, users.bob.password);
+
+    const { receiptId } = await uploadReceipt(alice);
+
+    const res = await trpcQuery(bob, "receipts.getReceiptItems", { receiptId });
+    const err = await trpcError(res);
+    expect(err).toBeTruthy();
+    expect(err.data.code).toBe("FORBIDDEN");
+
+    await alice.dispose();
+    await bob.dispose();
+  });
+
+  test("User B cannot processReceipt for User A's receipt", async () => {
+    const alice = await authedContext(users.alice.email, users.alice.password);
+    const bob = await authedContext(users.bob.email, users.bob.password);
+
+    const { receiptId } = await uploadReceipt(alice);
+
+    const res = await trpcMutation(bob, "receipts.processReceipt", { receiptId });
+    const err = await trpcError(res);
+    expect(err).toBeTruthy();
+    expect(err.data.code).toBe("FORBIDDEN");
+
+    await alice.dispose();
+    await bob.dispose();
+  });
+
+  test("User B cannot deletePending for User A's receipt", async () => {
+    const alice = await authedContext(users.alice.email, users.alice.password);
+    const bob = await authedContext(users.bob.email, users.bob.password);
+
+    const { receiptId } = await uploadReceipt(alice);
+
+    const res = await trpcMutation(bob, "receipts.deletePending", { receiptId });
+    const err = await trpcError(res);
+    expect(err).toBeTruthy();
+    expect(err.data.code).toBe("FORBIDDEN");
+
+    await alice.dispose();
+    await bob.dispose();
+  });
+
+  test("Guest-uploaded receipt not accessible via auth endpoints", async () => {
+    const { receiptId } = await uploadGuestReceipt();
+    const alice = await authedContext(users.alice.email, users.alice.password);
+
+    // uploadedById is null for guest receipts, so no authenticated user should match
+    const res = await trpcQuery(alice, "receipts.getReceiptItems", { receiptId });
+    const err = await trpcError(res);
+    expect(err).toBeTruthy();
+    expect(err.data.code).toBe("FORBIDDEN");
+
+    await alice.dispose();
+  });
+
+  test("Auth-uploaded receipt not accessible via guest endpoints", async () => {
+    const alice = await authedContext(users.alice.email, users.alice.password);
+    const { receiptId } = await uploadReceipt(alice);
+
+    // Guest endpoint should reject non-guest receipts
+    const guestCtx = await request.newContext({ baseURL: BASE });
+    const res = await trpcQuery(guestCtx, "guest.getReceiptItems", { receiptId });
+    const err = await trpcError(res);
+    expect(err).toBeTruthy();
+    expect(err.data.code).toBe("NOT_FOUND");
+
+    await alice.dispose();
+    await guestCtx.dispose();
+  });
+
+  test("User B cannot fetch User A's receipt image", async () => {
+    const alice = await authedContext(users.alice.email, users.alice.password);
+    const bob = await authedContext(users.bob.email, users.bob.password);
+
+    const { imagePath } = await uploadReceipt(alice);
+
+    const res = await bob.get(`/api/uploads/${imagePath}`);
+    expect(res.status()).toBe(403);
+
+    await alice.dispose();
+    await bob.dispose();
+  });
+});

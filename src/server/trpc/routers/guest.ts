@@ -30,6 +30,9 @@ export const guestRouter = createTRPCRouter({
       if (!receipt) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Receipt not found" });
       }
+      if (!receipt.isGuest) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Receipt not found" });
+      }
 
       // If re-processing with corrections, clear old items first
       if (input.correctionHint) {
@@ -84,6 +87,9 @@ export const guestRouter = createTRPCRouter({
       });
       if (!receipt) {
         throw new TRPCError({ code: "NOT_FOUND" });
+      }
+      if (!receipt.isGuest) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Receipt not found" });
       }
 
       return {

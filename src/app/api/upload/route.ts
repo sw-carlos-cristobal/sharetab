@@ -93,6 +93,8 @@ export async function POST(req: NextRequest) {
         mimeType: file.type,
         fileSize: file.size,
         status: "PENDING",
+        uploadedById: userId ?? null,
+        isGuest,
       },
     });
   } catch (error) {
