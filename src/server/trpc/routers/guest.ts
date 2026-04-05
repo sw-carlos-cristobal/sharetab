@@ -153,6 +153,21 @@ export const guestRouter = createTRPCRouter({
       tipOverride: z.number().int().min(0).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      // Validate index bounds
+      for (const a of input.assignments) {
+        if (a.itemIndex < 0 || a.itemIndex >= input.items.length) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `Invalid itemIndex: ${a.itemIndex}` });
+        }
+        for (const pi of a.personIndices) {
+          if (pi < 0 || pi >= input.people.length) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: `Invalid personIndex: ${pi}` });
+          }
+        }
+      }
+      if (input.paidByIndex < 0 || input.paidByIndex >= input.people.length) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Invalid paidByIndex: ${input.paidByIndex}` });
+      }
+
       const tip = input.tipOverride ?? input.receiptData.tip;
 
       const summary = calculateSplitTotals({
