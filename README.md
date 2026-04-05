@@ -71,7 +71,7 @@ ShareTab makes it easy to track shared expenses with friends, roommates, or trav
 - **Group expense tracking** with multiple split modes (equal, percentage, shares, exact, item-level)
 - **AI receipt scanning** -- photograph a receipt, AI extracts line items, assign items to group members with proportional tax/tip; zoomable/pannable receipt viewer; rescan with correction prompts
 - **Guest bill splitting** -- no account needed, shareable summary links
-- **Pluggable AI providers** -- OpenAI (GPT-4o), Claude (API key), Meridian (Claude Max subscription), or local Ollama
+- **Pluggable AI providers** -- OpenAI (GPT-4o), Claude (API key), Meridian (Claude Max subscription), local Ollama, or OCR fallback (no API key needed)
 - **Group archiving** -- archive inactive groups to declutter your dashboard; toggle archived view on groups page
 - **Cross-group dashboard** -- see all your balances at a glance, with per-person debt breakdown
 - **Debt simplification** -- minimize the number of payments needed
@@ -129,7 +129,7 @@ All configuration is done through environment variables. Copy `.env.example` to 
 
 | Variable | Description |
 |---|---|
-| `AI_PROVIDER` | One of `openai`, `claude`, `meridian`, or `ollama`. Defaults to `openai`. |
+| `AI_PROVIDER` | One of `openai`, `claude`, `meridian`, `ollama`, or `ocr`. Defaults to `openai`. |
 | `OPENAI_API_KEY` | Required when `AI_PROVIDER=openai`. |
 | `ANTHROPIC_API_KEY` | Required when `AI_PROVIDER=claude`. |
 | `ANTHROPIC_MODEL` | Claude model for receipt scanning. Defaults to `claude-sonnet-4-6` (claude provider) or `claude-opus-4-6` (meridian provider). |
@@ -137,6 +137,8 @@ All configuration is done through environment variables. Copy `.env.example` to 
 | `OLLAMA_MODEL` | Ollama model name. Defaults to `llava`. |
 
 The `meridian` provider uses a Claude Max/Pro subscription via an embedded proxy -- no API key needed, just mount `~/.claude/.credentials.json`.
+
+The `ocr` provider uses Tesseract.js for local text extraction -- no API key or external service needed. It's less accurate than AI providers but works as a free fallback. If the configured AI provider is unavailable, receipt scanning automatically falls back to OCR.
 
 ### OAuth (optional)
 

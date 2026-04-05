@@ -47,6 +47,13 @@ describe("getAIProvider", () => {
     expect(provider.constructor.name).toBe("OllamaProvider");
   });
 
+  test("selects ocr provider", async () => {
+    process.env.AI_PROVIDER = "ocr";
+    const { getAIProvider } = await import("./registry");
+    const provider = await getAIProvider();
+    expect(provider.constructor.name).toBe("OcrProvider");
+  });
+
   test("throws for unknown provider", async () => {
     process.env.AI_PROVIDER = "gpt-5-turbo-ultra";
     const { getAIProvider } = await import("./registry");
@@ -56,6 +63,14 @@ describe("getAIProvider", () => {
   test("error message lists available providers", async () => {
     process.env.AI_PROVIDER = "invalid";
     const { getAIProvider } = await import("./registry");
-    await expect(getAIProvider()).rejects.toThrow("openai, claude, meridian, ollama");
+    await expect(getAIProvider()).rejects.toThrow("openai, claude, meridian, ollama, ocr");
+  });
+
+  test("fallback returns OCR when primary provider unavailable", async () => {
+    process.env.AI_PROVIDER = "claude";
+    delete process.env.ANTHROPIC_API_KEY;
+    const { getAIProviderWithFallback } = await import("./registry");
+    const provider = await getAIProviderWithFallback();
+    expect(provider.constructor.name).toBe("OcrProvider");
   });
 });

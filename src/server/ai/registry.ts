@@ -26,13 +26,35 @@ export async function getAIProvider(): Promise<AIProvider> {
         process.env.OLLAMA_MODEL ?? "llava"
       );
     }
+    case "ocr": {
+      const { OcrProvider } = await import("./providers/ocr");
+      return new OcrProvider();
+    }
     case "mock": {
       const { MockProvider } = await import("./providers/mock");
       return new MockProvider();
     }
     default:
       throw new Error(
-        `Unknown AI provider: "${name}". Available: openai, claude, meridian, ollama, mock`
+        `Unknown AI provider: "${name}". Available: openai, claude, meridian, ollama, ocr, mock`
       );
   }
+}
+
+/**
+ * Get the configured AI provider, falling back to OCR if unavailable.
+ * Use this instead of getAIProvider() when you want graceful degradation.
+ */
+export async function getAIProviderWithFallback(): Promise<AIProvider> {
+  try {
+    const provider = await getAIProvider();
+    if (await provider.isAvailable()) {
+      return provider;
+    }
+  } catch {
+    // Primary provider failed to initialize — fall through to OCR
+  }
+
+  const { OcrProvider } = await import("./providers/ocr");
+  return new OcrProvider();
 }

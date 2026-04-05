@@ -13,7 +13,7 @@ ShareTab — open-source, self-hosted Splitwise alternative with AI receipt scan
 - **ORM:** Prisma 7 + PostgreSQL 16 (via `@prisma/adapter-pg`)
 - **Auth:** NextAuth v5 (email/password + OAuth)
 - **UI:** TailwindCSS 4 + shadcn/ui (v4, uses `@base-ui/react` — use `render` prop instead of `asChild`) + next-themes (dark mode)
-- **AI:** Pluggable providers (OpenAI, Claude, Meridian, Ollama) via `src/server/ai/`
+- **AI:** Pluggable providers (OpenAI, Claude, Meridian, Ollama, OCR fallback) via `src/server/ai/`
 
 ## Commands
 

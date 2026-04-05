@@ -130,12 +130,16 @@ export const adminRouter = createTRPCRouter({
     // AI provider info
     let aiProvider = "unknown";
     let aiAvailable = false;
+    let ocrFallback = false;
     try {
       const provider = await getAIProvider();
       aiProvider = provider.name;
       aiAvailable = await provider.isAvailable();
     } catch {
       aiProvider = process.env.AI_PROVIDER ?? "not configured";
+    }
+    if (!aiAvailable) {
+      ocrFallback = true;
     }
 
     // App version
@@ -152,6 +156,7 @@ export const adminRouter = createTRPCRouter({
       dbStatus,
       aiProvider,
       aiAvailable,
+      ocrFallback,
       version,
       serverStartTime: serverStartTime.toISOString(),
       uptime: Math.floor((Date.now() - serverStartTime.getTime()) / 1000),
