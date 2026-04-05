@@ -98,7 +98,6 @@ jobs:
           REGISTER_RATE_LIMIT_MAX: "1000"
           ADMIN_EMAIL: alice@example.com
           AI_PROVIDER: mock
-          RUN_AI_TESTS: "1"
           EMAIL_SERVER_HOST: localhost
           EMAIL_SERVER_PORT: "2525"
         run: |
