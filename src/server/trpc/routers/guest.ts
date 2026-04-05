@@ -153,34 +153,51 @@ export const guestRouter = createTRPCRouter({
       tipOverride: z.number().int().min(0).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      // Validate index bounds
-      for (const a of input.assignments) {
+      // Filter out blank-name people and remap indices
+      const indexMap = new Map<number, number>();
+      const filteredPeople = input.people.filter((p, i) => {
+        if (!p.name.trim()) return false;
+        indexMap.set(i, indexMap.size);
+        return true;
+      });
+      if (filteredPeople.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "At least one person with a name is required" });
+      }
+      const remappedAssignments = input.assignments
+        .map((a) => ({
+          itemIndex: a.itemIndex,
+          personIndices: a.personIndices
+            .filter((pi) => indexMap.has(pi))
+            .map((pi) => indexMap.get(pi)!),
+        }))
+        .filter((a) => a.personIndices.length > 0);
+      const remappedPaidBy = indexMap.get(input.paidByIndex) ?? 0;
+
+      // Validate index bounds (against filtered arrays)
+      for (const a of remappedAssignments) {
         if (a.itemIndex < 0 || a.itemIndex >= input.items.length) {
           throw new TRPCError({ code: "BAD_REQUEST", message: `Invalid itemIndex: ${a.itemIndex}` });
         }
         for (const pi of a.personIndices) {
-          if (pi < 0 || pi >= input.people.length) {
+          if (pi < 0 || pi >= filteredPeople.length) {
             throw new TRPCError({ code: "BAD_REQUEST", message: `Invalid personIndex: ${pi}` });
           }
         }
-      }
-      if (input.paidByIndex < 0 || input.paidByIndex >= input.people.length) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: `Invalid paidByIndex: ${input.paidByIndex}` });
       }
 
       const tip = input.tipOverride ?? input.receiptData.tip;
 
       const summary = calculateSplitTotals({
         items: input.items,
-        assignments: input.assignments,
+        assignments: remappedAssignments,
         tax: input.receiptData.tax,
         tip,
-        peopleCount: input.people.length,
+        peopleCount: filteredPeople.length,
       });
 
       const summaryWithNames = summary.map((s) => ({
         ...s,
-        name: input.people[s.personIndex]?.name ?? `Person ${s.personIndex + 1}`,
+        name: filteredPeople[s.personIndex]?.name ?? `Person ${s.personIndex + 1}`,
       }));
 
       const expiresAt = new Date();
@@ -191,10 +208,10 @@ export const guestRouter = createTRPCRouter({
           receiptId: input.receiptId,
           receiptData: { ...input.receiptData, tip } as unknown as Prisma.InputJsonValue,
           items: input.items as unknown as Prisma.InputJsonValue,
-          people: input.people as unknown as Prisma.InputJsonValue,
-          assignments: input.assignments as unknown as Prisma.InputJsonValue,
+          people: filteredPeople as unknown as Prisma.InputJsonValue,
+          assignments: remappedAssignments as unknown as Prisma.InputJsonValue,
           summary: summaryWithNames as unknown as Prisma.InputJsonValue,
-          paidByIndex: input.paidByIndex,
+          paidByIndex: remappedPaidBy,
           expiresAt,
         },
       });
