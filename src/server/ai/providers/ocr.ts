@@ -39,14 +39,20 @@ interface OcrWorkerResult {
 }
 
 async function runOcrWorker(imageBuffer: Buffer): Promise<OcrWorkerResult> {
-  const { execFile } = await import("child_process");
-  const { resolve } = await import("path");
+  // Use eval("require") to completely bypass Turbopack/webpack module tracing.
+  // These are Node.js built-ins used at runtime only — they should not be bundled.
+  // eslint-disable-next-line no-eval
+  const _require = eval("require") as NodeRequire;
+  const { execFile } = _require("child_process") as typeof import("child_process");
+  const { join } = _require("path") as typeof import("path");
 
-  const workerPath = resolve(/* turbopackIgnore: true */ process.cwd(), "src/server/ai/providers/ocr-worker.mjs");
+  // Build worker path dynamically to prevent bundler from tracing it
+  const workerFile = ["src", "server", "ai", "providers", "ocr-worker.mjs"].join("/");
+  const workerPath = join(process.cwd(), workerFile);
   const base64 = imageBuffer.toString("base64");
 
   return new Promise<OcrWorkerResult>((res, rej) => {
-    const child = execFile("node", [workerPath], { timeout: 60000 }, (err, stdout, stderr) => {
+    const child = execFile("node", [workerPath], { timeout: 60000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
       if (err) return rej(new Error(`OCR worker failed: ${err.message}${stderr ? ` — ${stderr}` : ""}`));
       if (!stdout.trim()) return rej(new Error("OCR could not extract any text from the image"));
 

@@ -168,6 +168,43 @@ test.describe("OCR Image Receipt Tests", () => {
     expect(names.some(n => n.includes("suggested"))).toBe(false);
   });
 
+  // ── Distorted receipts (challenging OCR conditions) ────────────
+
+  test.describe("Distorted receipts", () => {
+    // All distorted images are variants of the coffee-shop receipt
+    // (5 items, subtotal $21.20, tax $1.75, total $22.95)
+
+    test("rotated 5 degrees — still extracts items", async () => {
+      const { result } = await uploadAndProcess("distorted-rotated-5deg.png");
+      expect(result.itemCount).toBeGreaterThanOrEqual(3);
+      expect(result.total).toBeGreaterThan(0);
+    });
+
+    test("rotated 10 degrees — still extracts items", async () => {
+      const { result } = await uploadAndProcess("distorted-rotated-10deg.png");
+      expect(result.itemCount).toBeGreaterThanOrEqual(2);
+      expect(result.total).toBeGreaterThan(0);
+    });
+
+    test("perspective skewed — still extracts items", async () => {
+      const { result } = await uploadAndProcess("distorted-skewed.png");
+      expect(result.itemCount).toBeGreaterThanOrEqual(3);
+      expect(result.total).toBeGreaterThan(0);
+    });
+
+    test("faded thermal receipt — preprocessing recovers text", async () => {
+      const { result } = await uploadAndProcess("distorted-faded.png");
+      expect(result.itemCount).toBeGreaterThanOrEqual(3);
+      expect(result.total).toBeGreaterThan(0);
+    });
+
+    test("noisy background — still extracts items", async () => {
+      const { result } = await uploadAndProcess("distorted-noisy.png");
+      expect(result.itemCount).toBeGreaterThanOrEqual(3);
+      expect(result.total).toBeGreaterThan(0);
+    });
+  });
+
   // ── Original test receipt (The Golden Fork) ───────────────────
 
   test("golden-fork receipt — 18 items from original test image", async () => {

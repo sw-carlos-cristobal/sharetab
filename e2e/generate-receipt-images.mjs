@@ -278,8 +278,75 @@ async function main() {
     await page.close();
   }
 
+  // ── Generate distorted versions of existing receipts ──────────────
+
+  const distortions = {
+    // Slightly rotated (common when photographing on a table)
+    "rotated-5deg": (html) => html.replace(
+      '<div class="receipt',
+      '<div style="transform: rotate(3deg); transform-origin: center;" class="receipt'
+    ),
+    // Rotated more aggressively
+    "rotated-10deg": (html) => html.replace(
+      '<div class="receipt',
+      '<div style="transform: rotate(-7deg); transform-origin: center;" class="receipt'
+    ),
+    // Slight perspective skew (phone held at angle)
+    "skewed": (html) => html.replace(
+      '<div class="receipt',
+      '<div style="transform: perspective(800px) rotateY(8deg) rotateX(3deg); transform-origin: center;" class="receipt'
+    ),
+    // Low contrast (faded thermal receipt)
+    "faded": (html) => html.replace(
+      'color: #111',
+      'color: #999'
+    ).replace(
+      'background: #fefefe',
+      'background: #f0ece0'
+    ).replace(
+      'background: #f9f5ee',
+      'background: #f0ece0'
+    ),
+    // Noisy background (dirty receipt / textured surface)
+    "noisy": (html) => html.replace(
+      '</style>',
+      `.receipt::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4'%3E%3Crect x='0' y='0' width='1' height='1' fill='%23ddd' opacity='0.3'/%3E%3Crect x='2' y='1' width='1' height='1' fill='%23ccc' opacity='0.2'/%3E%3Crect x='1' y='3' width='1' height='1' fill='%23bbb' opacity='0.25'/%3E%3C/svg%3E");
+        pointer-events: none;
+        z-index: 1;
+      }
+      .receipt { position: relative; }
+      </style>`
+    ),
+  };
+
+  // Apply each distortion to the coffee-shop receipt (short, easy to verify)
+  const baseReceipt = receipts["coffee-shop"];
+  for (const [distName, distFn] of Object.entries(distortions)) {
+    const distorted = distFn(baseReceipt);
+    const page = await context.newPage();
+    await page.setContent(distorted, { waitUntil: "networkidle" });
+
+    const height = await page.evaluate(() => {
+      const el = document.querySelector(".receipt");
+      if (!el) return 800;
+      const rect = el.getBoundingClientRect();
+      return Math.ceil(rect.height + rect.top + 40);
+    });
+    await page.setViewportSize({ width: 500, height: Math.max(height + 80, 400) });
+
+    const screenshot = await page.screenshot({ type: "png", fullPage: true });
+    const outPath = resolve(OUT_DIR, `distorted-${distName}.png`);
+    writeFileSync(outPath, screenshot);
+    console.log(`Generated: ${outPath} (${(screenshot.length / 1024).toFixed(1)} KB)`);
+    await page.close();
+  }
+
   await browser.close();
-  console.log(`\nDone! Generated ${Object.keys(receipts).length} receipt images.`);
+  console.log(`\nDone! Generated ${Object.keys(receipts).length + Object.keys(distortions).length} receipt images.`);
 }
 
 main().catch(console.error);
