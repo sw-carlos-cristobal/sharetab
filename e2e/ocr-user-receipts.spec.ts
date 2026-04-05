@@ -13,6 +13,7 @@ const OCR_TIMEOUT = 90000;
  * receipt formats (grocery, cafe, gas station, takeout, pharmacy, restaurant).
  */
 test.describe("Photorealistic Receipt OCR", () => {
+  test.skip(!process.env.RUN_AI_TESTS, "Set RUN_AI_TESTS=1 to enable");
   test.setTimeout(120000);
 
   async function uploadAndProcess(filename: string) {
