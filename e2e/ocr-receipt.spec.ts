@@ -16,7 +16,9 @@ const BASE = process.env.BASE_URL || "http://localhost:3001";
 const OCR_TIMEOUT = 90000; // Tesseract can be slow on first run (downloads WASM + lang data)
 
 test.describe("OCR Receipt Scanning", () => {
-  test.skip(!process.env.RUN_AI_TESTS, "Set RUN_AI_TESTS=1 to enable");
+  test.beforeEach(({}, testInfo) => {
+    if (!process.env.RUN_AI_TESTS) testInfo.skip(true, "Set RUN_AI_TESTS=1 to enable");
+  });
   test.setTimeout(120000);
 
   // ── API Tests ───────────────────────────────────────────────

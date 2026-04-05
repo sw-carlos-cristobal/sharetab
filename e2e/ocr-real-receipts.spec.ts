@@ -24,7 +24,9 @@ const OCR_TIMEOUT = 90000;
  * We verify the pipeline doesn't crash and extracts reasonable data.
  */
 test.describe("Real-World Receipt OCR", () => {
-  test.skip(!process.env.RUN_AI_TESTS, "Set RUN_AI_TESTS=1 to enable");
+  test.beforeEach(({}, testInfo) => {
+    if (!process.env.RUN_AI_TESTS) testInfo.skip(true, "Set RUN_AI_TESTS=1 to enable");
+  });
   test.setTimeout(120000);
 
   const receiptDir = resolve("e2e/receipts");

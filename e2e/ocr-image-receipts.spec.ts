@@ -13,7 +13,9 @@ const OCR_TIMEOUT = 90000;
  */
 test.describe("OCR Image Receipt Tests", () => {
   // These tests require a real AI/OCR provider (not mock)
-  test.skip(!process.env.RUN_AI_TESTS, "Set RUN_AI_TESTS=1 to enable");
+  test.beforeEach(({}, testInfo) => {
+    if (!process.env.RUN_AI_TESTS) testInfo.skip(true, "Set RUN_AI_TESTS=1 to enable");
+  });
   test.setTimeout(120000);
 
   async function uploadAndProcess(receiptFile: string) {
