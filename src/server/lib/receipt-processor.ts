@@ -50,6 +50,9 @@ export async function processReceiptImage({
     durationMs: Date.now() - start,
   });
 
+  // Delete any existing items before (re-)creating — prevents duplicates on reprocess
+  await db.receiptItem.deleteMany({ where: { receiptId } });
+
   // Create receipt items in DB
   await db.receiptItem.createMany({
     data: result.items.map((item, i) => ({

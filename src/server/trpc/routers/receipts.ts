@@ -48,12 +48,8 @@ export const receiptsRouter = createTRPCRouter({
         throw new TRPCError({ code: "NOT_FOUND", message: "Receipt not found" });
       }
 
-      // If re-processing with corrections, clear old items first
-      if (input.correctionHint) {
-        await ctx.db.receiptItem.deleteMany({
-          where: { receiptId: input.receiptId },
-        });
-      }
+      // Note: old items are NOT deleted here — processReceiptImage handles
+      // delete + recreate atomically, so if the AI provider fails the old items remain.
 
       await ctx.db.receipt.update({
         where: { id: input.receiptId },
@@ -302,7 +298,6 @@ export const receiptsRouter = createTRPCRouter({
 
       const tax = extractedData.tax;
       const tip = input.tipOverride ?? extractedData.tip;
-      const subtotal = extractedData.subtotal;
 
       // Build item map
       const itemMap = new Map(receipt.items.map((item) => [item.id, item]));
@@ -324,11 +319,14 @@ export const receiptsRouter = createTRPCRouter({
         }
       }
 
-      // Proportionally distribute tax and tip
+      // Proportionally distribute tax and tip using receipt subtotal as denominator.
+      // This ensures each assigned item gets its fair share of tax/tip relative to
+      // the full receipt subtotal, even when not all items are assigned.
       const actualSubtotal = Array.from(userSubtotals.values()).reduce(
         (a, b) => a + b,
         0
       );
+      const receiptSubtotal = extractedData.subtotal > 0 ? extractedData.subtotal : actualSubtotal;
       const totalAmount = actualSubtotal + tax + tip;
 
       const userTotals = new Map<string, number>();
@@ -337,7 +335,7 @@ export const receiptsRouter = createTRPCRouter({
 
       for (let i = 0; i < userEntries.length; i++) {
         const [userId, itemTotal] = userEntries[i];
-        const proportion = actualSubtotal > 0 ? itemTotal / actualSubtotal : 0;
+        const proportion = receiptSubtotal > 0 ? itemTotal / receiptSubtotal : 0;
 
         let userTax: number;
         let userTip: number;
