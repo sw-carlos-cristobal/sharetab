@@ -5,8 +5,11 @@ export async function getAIProvider(): Promise<AIProvider> {
 
   switch (name) {
     case "openai": {
+      if (!process.env.OPENAI_API_KEY) {
+        throw new Error("OpenAI provider requires OPENAI_API_KEY");
+      }
       const { OpenAIProvider } = await import("./providers/openai");
-      return new OpenAIProvider(process.env.OPENAI_API_KEY!);
+      return new OpenAIProvider(process.env.OPENAI_API_KEY);
     }
     case "claude": {
       const { ClaudeProvider } = await import("./providers/claude");

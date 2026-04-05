@@ -40,6 +40,13 @@ describe("getAIProvider", () => {
     await expect(getAIProvider()).rejects.toThrow("ANTHROPIC_API_KEY");
   });
 
+  test("openai provider throws without API key", async () => {
+    process.env.AI_PROVIDER = "openai";
+    delete process.env.OPENAI_API_KEY;
+    const { getAIProvider } = await import("./registry");
+    await expect(getAIProvider()).rejects.toThrow("OPENAI_API_KEY");
+  });
+
   test("selects ollama provider", async () => {
     process.env.AI_PROVIDER = "ollama";
     const { getAIProvider } = await import("./registry");
