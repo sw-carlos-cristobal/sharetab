@@ -165,9 +165,10 @@ function normalizeOcrArtifacts(text: string): string {
   // Replace S followed by digits (misread $) -> $
   result = result.replace(/\bS(\d{1,6}[.,]\d{2})/g, "$$$1");
 
-  // Replace O adjacent to digits -> 0 (e.g. "1O.99" -> "10.99", "O.99" -> "0.99")
-  result = result.replace(/(\d)O/g, "$10");
-  result = result.replace(/O(\d)/g, "0$1");
+  // Replace O adjacent to digits ONLY in price context (near decimal point)
+  // e.g. "1O.99" -> "10.99", "O.99" -> "0.99", but NOT "ORE-IDA 5oz"
+  result = result.replace(/(\d)O([.,]\d{2})/g, "$10$2");  // 1O.99 → 10.99
+  result = result.replace(/O([.,]\d{2})\b/g, "0$1");       // O.99 → 0.99
 
   // Remove spaces inside price patterns: "12. 99" -> "12.99"
   result = result.replace(/(\d+)\.\s+(\d{2})/g, "$1.$2");

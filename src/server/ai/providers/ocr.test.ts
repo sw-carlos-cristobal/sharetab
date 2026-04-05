@@ -291,6 +291,12 @@ describe("edge cases", () => {
     expect(result.items[0].totalPrice).toBe(1050);
   });
 
+  test("O in item names is NOT corrupted by OCR normalization", () => {
+    const result = parseReceiptText("ORE-IDA 5oz  3.99\nTotal  3.99");
+    expect(result.items[0].name).toContain("ORE-IDA");
+    expect(result.items[0].name).toContain("5oz");
+  });
+
   test("spaces in prices are normalized", () => {
     const result = parseReceiptText("SOUP  12. 99\nTotal  12. 99");
     expect(result.items[0].totalPrice).toBe(1299);
