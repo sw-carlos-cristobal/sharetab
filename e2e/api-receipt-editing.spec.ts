@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { resolve } from "path";
 import { readFileSync } from "fs";
-import { users, authedContext, trpcMutation, trpcQuery, trpcResult, trpcError } from "./helpers";
+import { users, authedContext, trpcMutation, trpcQuery, trpcResult, trpcError , FAKE_JPEG } from "./helpers";
 
 const BASE = process.env.BASE_URL || "http://localhost:3001";
 
@@ -139,7 +139,7 @@ test.describe("Receipt Item Editing (no AI)", () => {
     // Upload a receipt
     const uploadRes = await ctx.post(`${BASE}/api/upload`, {
       multipart: {
-        file: { name: "items.jpg", mimeType: "image/jpeg", buffer: Buffer.alloc(50, 0xFF) },
+        file: { name: "items.jpg", mimeType: "image/jpeg", buffer: FAKE_JPEG },
       },
     });
     const { receiptId } = await uploadRes.json();
@@ -194,7 +194,7 @@ test.describe("Receipt Item Editing (no AI)", () => {
 
     const uploadRes = await ctx.post(`${BASE}/api/upload`, {
       multipart: {
-        file: { name: "tax.jpg", mimeType: "image/jpeg", buffer: Buffer.alloc(50, 0xFF) },
+        file: { name: "tax.jpg", mimeType: "image/jpeg", buffer: FAKE_JPEG },
       },
     });
     const { receiptId } = await uploadRes.json();

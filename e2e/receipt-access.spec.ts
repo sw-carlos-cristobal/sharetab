@@ -5,19 +5,16 @@ import {
   trpcMutation,
   trpcQuery,
   trpcError,
+  FAKE_JPEG,
 } from "./helpers";
 
 const BASE = process.env.BASE_URL || "http://localhost:3001";
 
 /** Upload a tiny JPEG as an authenticated user and return the receiptId + imagePath. */
 async function uploadReceipt(ctx: Awaited<ReturnType<typeof authedContext>>) {
-  const jpegHeader = Buffer.from([
-    0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
-    0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xff, 0xd9,
-  ]);
   const res = await ctx.post("/api/upload", {
     multipart: {
-      file: { name: "receipt.jpg", mimeType: "image/jpeg", buffer: jpegHeader },
+      file: { name: "receipt.jpg", mimeType: "image/jpeg", buffer: FAKE_JPEG },
     },
   });
   expect(res.status()).toBe(200);
@@ -27,13 +24,9 @@ async function uploadReceipt(ctx: Awaited<ReturnType<typeof authedContext>>) {
 /** Upload a tiny JPEG as a guest and return the receiptId + imagePath. */
 async function uploadGuestReceipt() {
   const ctx = await request.newContext({ baseURL: BASE });
-  const jpegHeader = Buffer.from([
-    0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
-    0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xff, 0xd9,
-  ]);
   const res = await ctx.post("/api/upload?guest=true", {
     multipart: {
-      file: { name: "guest-receipt.jpg", mimeType: "image/jpeg", buffer: jpegHeader },
+      file: { name: "guest-receipt.jpg", mimeType: "image/jpeg", buffer: FAKE_JPEG },
     },
   });
   expect(res.status()).toBe(200);

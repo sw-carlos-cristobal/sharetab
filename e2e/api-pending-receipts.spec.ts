@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { resolve } from "path";
 import { readFileSync } from "fs";
-import { users, authedContext, trpcMutation, trpcQuery, trpcResult, trpcError, createTestGroup } from "./helpers";
+import { users, authedContext, trpcMutation, trpcQuery, trpcResult, trpcError, createTestGroup , FAKE_JPEG } from "./helpers";
 
 const BASE = process.env.BASE_URL || "http://localhost:3001";
 
@@ -15,7 +15,7 @@ test.describe("Pending Receipts", () => {
     // Upload a receipt image
     const uploadRes = await owner.post(`${BASE}/api/upload`, {
       multipart: {
-        file: { name: "receipt.jpg", mimeType: "image/jpeg", buffer: Buffer.alloc(100, 0xFF) },
+        file: { name: "receipt.jpg", mimeType: "image/jpeg", buffer: FAKE_JPEG },
       },
     });
     const { receiptId } = await uploadRes.json();
@@ -59,7 +59,7 @@ test.describe("Pending Receipts", () => {
     // Upload a receipt
     const uploadRes = await owner.post(`${BASE}/api/upload`, {
       multipart: {
-        file: { name: "delete-me.jpg", mimeType: "image/jpeg", buffer: Buffer.alloc(50, 0xFF) },
+        file: { name: "delete-me.jpg", mimeType: "image/jpeg", buffer: FAKE_JPEG },
       },
     });
     const { receiptId } = await uploadRes.json();
