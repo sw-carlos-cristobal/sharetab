@@ -1,0 +1,11 @@
+BEANTOWN COFFEE
+01/22/2025
+
+Latte Grande            5.75
+Cappuccino              4.50
+Blueberry Muffin        3.25
+Croissant               2.95
+
+Subtotal               16.45
+Tax                     1.32
+Total                  17.77

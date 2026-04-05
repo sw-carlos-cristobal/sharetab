@@ -17,13 +17,13 @@ export class OcrProvider implements AIProvider {
     imageBuffer: Buffer,
     _mimeType: string,
   ): Promise<ReceiptExtractionResult> {
-    const text = await runOcrWorker(imageBuffer);
+    const workerResult = await runOcrWorker(imageBuffer);
 
-    if (!text.trim()) {
+    if (!workerResult.text.trim()) {
       throw new Error("OCR could not extract any text from the image");
     }
 
-    return parseReceiptText(text);
+    return parseReceiptText(workerResult.text, workerResult.confidence);
   }
 
   async isAvailable(): Promise<boolean> {
@@ -33,18 +33,31 @@ export class OcrProvider implements AIProvider {
 
 // ── Tesseract child process runner ──────────────────────────────────
 
-async function runOcrWorker(imageBuffer: Buffer): Promise<string> {
+interface OcrWorkerResult {
+  text: string;
+  confidence: number;
+}
+
+async function runOcrWorker(imageBuffer: Buffer): Promise<OcrWorkerResult> {
   const { execFile } = await import("child_process");
   const { resolve } = await import("path");
 
   const workerPath = resolve(process.cwd(), "src/server/ai/providers/ocr-worker.mjs");
   const base64 = imageBuffer.toString("base64");
 
-  return new Promise<string>((res, rej) => {
+  return new Promise<OcrWorkerResult>((res, rej) => {
     const child = execFile("node", [workerPath], { timeout: 60000 }, (err, stdout, stderr) => {
       if (err) return rej(new Error(`OCR worker failed: ${err.message}${stderr ? ` — ${stderr}` : ""}`));
       if (!stdout.trim()) return rej(new Error("OCR could not extract any text from the image"));
-      res(stdout);
+
+      // Parse the JSON output from the worker
+      try {
+        const result = JSON.parse(stdout) as OcrWorkerResult;
+        res(result);
+      } catch {
+        // Fallback: treat as plain text (backwards compatibility)
+        res({ text: stdout, confidence: 0.4 });
+      }
     });
     child.stdin!.write(base64);
     child.stdin!.end();
@@ -53,26 +66,63 @@ async function runOcrWorker(imageBuffer: Buffer): Promise<string> {
 
 // ── Receipt text parser ─────────────────────────────────────────────
 
-const PRICE_RE = /\$?\s*(\d{1,6}[.,]\d{2})\s*$/; // match price at end of line
-const LINE_PRICE_RE = /^(.+?)\s+\$?\s*(\d{1,6}[.,]\d{2})\s*$/;
+const LINE_PRICE_RE = /^(.+?)\s+\$?\s*(\d{1,6}[.,]\d{2})\s*-?\s*$/;
 const QTY_PREFIX_RE = /^(\d+)\s*[xX@]\s+/;
 // OCR often reads "1x" as "Ix" or "lx" — normalize before parsing
 const OCR_QTY_RE = /^[Il1]\s*[xX]\s+/;
-const DATE_RE = /\b(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})\b/;
 
-const TAX_KEYWORDS = ["tax", "hst", "gst", "pst", "vat", "txbl"];
+// Stricter date regex: same separator between parts, day/month 1-2 digits, year 2-4 digits
+// Avoids matching SKU numbers like 041-06-0812 (3-digit first group)
+const DATE_RE = /\b(\d{1,2})([\/.\-])(\d{1,2})\2(\d{2,4})\b/;
+
+const TAX_KEYWORDS = ["tax", "hst", "gst", "pst", "vat", "txbl", "tva", "mwst", "iva"];
 const TIP_KEYWORDS = ["tip", "gratuity"];
-const TOTAL_KEYWORDS = ["total", "amount due", "balance due", "grand total"];
-const SUBTOTAL_KEYWORDS = ["subtotal", "sub-total", "sub total"];
+const TOTAL_KEYWORDS = [
+  "total", "amount due", "balance due", "grand total",
+  "total ttc", "gesamtbetrag", "montant",
+];
+const SUBTOTAL_KEYWORDS = [
+  "subtotal", "sub-total", "sub total",
+  "sous-total", "sous total", "zwischensumme",
+];
 const SKIP_KEYWORDS = [
   ...TAX_KEYWORDS, ...TIP_KEYWORDS, ...TOTAL_KEYWORDS, ...SUBTOTAL_KEYWORDS,
   "change", "cash", "credit", "debit", "visa", "mastercard", "amex",
   "card", "payment", "thank", "receipt", "order", "check", "table",
   "server", "guest", "store", "phone", "tel", "fax", "www", "http",
+  // Fee keywords
+  "delivery fee", "service fee", "processing fee", "convenience fee",
+  // Loyalty / reward keywords
+  "extrabucks", "earned", "reward", "points earned",
+  "savings", "you saved", "save", "discount", "coupon", "promo",
+  "loyalty", "rollback", "bogo", "reg price", "cartwheel", "redcard",
+  // Misc non-item keywords
+  "split", "survey", "receipt id", "barcode", "sku",
 ];
 
+// Discount-related keywords — lines containing these with a price are skipped
+const DISCOUNT_KEYWORDS = ["save", "discount", "off", "coupon", "promo", "savings", "you saved"];
+
+// Fee and reward keywords — lines with these are always skipped, even with a price
+const FEE_REWARD_KEYWORDS = [
+  "delivery fee", "service fee", "processing fee", "convenience fee",
+  "extrabucks", "earned", "reward", "points earned",
+  "you saved", "savings", "loyalty", "rollback", "bogo",
+  "reg price", "cartwheel", "redcard",
+];
+
+// Address indicator words (used to skip address lines for merchant detection)
+const STREET_WORDS = ["st", "ave", "blvd", "rd", "dr", "ln", "ct", "way", "pkwy", "hwy", "street", "avenue", "boulevard", "road", "drive", "lane", "court"];
+const PHONE_RE = /(\(?\d{3}\)?[\s\-.]?\d{3}[\s\-.]?\d{4}|tel|phone)/i;
+
+/**
+ * Convert a price string to cents. Handles trailing `-` (negative/discount indicator)
+ * and comma decimals (European format).
+ */
 function toCents(str: string): number {
-  return Math.round(parseFloat(str.replace(",", ".")) * 100);
+  // Strip trailing dash (discount indicator like "4.40-")
+  const cleaned = str.replace(/-$/, "").trim();
+  return Math.round(parseFloat(cleaned.replace(",", ".")) * 100);
 }
 
 function matchesKeyword(line: string, keywords: string[]): boolean {
@@ -84,14 +134,96 @@ function extractPrice(line: string): number | null {
   // Find all price-like patterns and use the last one (rightmost)
   const matches = [...line.matchAll(/\$?\s*(\d{1,6}[.,]\d{2})/g)];
   if (matches.length === 0) return null;
-  return toCents(matches[matches.length - 1][1]);
+  const cents = toCents(matches[matches.length - 1][1]);
+  if (isNaN(cents)) return null;
+  return cents;
 }
 
-function parseReceiptText(text: string): ReceiptExtractionResult {
-  const lines = text
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0);
+/**
+ * Normalize common OCR misreads in the price portion of a line.
+ * - `S` at start of price area -> `$` (then stripped normally)
+ * - `O` adjacent to digits -> `0`
+ * - Spaces inside prices like `12. 99` -> `12.99`
+ */
+function normalizeOcrArtifacts(text: string): string {
+  let result = text;
+
+  // Replace S followed by digits (misread $) -> $
+  result = result.replace(/\bS(\d{1,6}[.,]\d{2})/g, "$$$1");
+
+  // Replace O adjacent to digits -> 0 (e.g. "1O.99" -> "10.99", "O.99" -> "0.99")
+  result = result.replace(/(\d)O/g, "$10");
+  result = result.replace(/O(\d)/g, "0$1");
+
+  // Remove spaces inside price patterns: "12. 99" -> "12.99"
+  result = result.replace(/(\d+)\.\s+(\d{2})/g, "$1.$2");
+  result = result.replace(/(\d+),\s+(\d{2})/g, "$1,$2");
+
+  return result;
+}
+
+/**
+ * Check if a line looks like an address.
+ */
+function isAddressLine(line: string): boolean {
+  const lower = line.toLowerCase();
+  // Must contain a number and a street-type word
+  if (!/\d/.test(line)) return false;
+  return STREET_WORDS.some((w) => {
+    const re = new RegExp(`\\b${w}\\b`, "i");
+    return re.test(lower);
+  });
+}
+
+/**
+ * Check if a line looks like a phone number line.
+ */
+function isPhoneLine(line: string): boolean {
+  return PHONE_RE.test(line);
+}
+
+/**
+ * Check if a line is a discount/negative line that should be skipped.
+ */
+function isDiscountLine(line: string): boolean {
+  // Lines ending with `-` (e.g. "SAVE 2.00-")
+  if (/\d[.,]\d{2}\s*-\s*$/.test(line)) return true;
+  // Lines containing discount keywords with a price
+  const hasPrice = /\d{1,6}[.,]\d{2}/.test(line);
+  if (hasPrice && matchesKeyword(line, DISCOUNT_KEYWORDS)) return true;
+  return false;
+}
+
+/**
+ * Check if a line is a modifier/continuation line (indented, no price).
+ * e.g. "  NO CROUTONS" or "  2% MILK"
+ */
+function isModifierLine(originalLine: string): boolean {
+  // Must start with 2+ spaces (indented) and have no price
+  if (!/^\s{2,}/.test(originalLine)) return false;
+  if (/\d{1,6}[.,]\d{2}/.test(originalLine)) return false;
+  return true;
+}
+
+/**
+ * Check if an indented line is an add-on with a price starting with +.
+ * e.g. "  + Extra cheese  1.50"
+ */
+function isAddOnLine(originalLine: string): boolean {
+  if (!/^\s{2,}/.test(originalLine)) return false;
+  const trimmed = originalLine.trim();
+  return /^\+/.test(trimmed) && /\d{1,6}[.,]\d{2}/.test(trimmed);
+}
+
+// ── Main parser (exported for unit testing) ─────────────────────────
+
+export function parseReceiptText(text: string, ocrConfidence?: number): ReceiptExtractionResult {
+  // Normalize OCR artifacts before parsing
+  const normalizedText = normalizeOcrArtifacts(text);
+
+  // Keep original lines (with leading whitespace) for modifier detection
+  const originalLines = normalizedText.split("\n");
+  const lines = originalLines.map((l) => l.trim()).filter((l) => l.length > 0);
 
   const items: { name: string; quantity: number; unitPrice: number; totalPrice: number }[] = [];
   let subtotal = 0;
@@ -101,27 +233,49 @@ function parseReceiptText(text: string): ReceiptExtractionResult {
   let merchantName: string | undefined;
   let date: string | undefined;
 
-  // First non-empty line is often the merchant name
-  if (lines.length > 0 && !PRICE_RE.test(lines[0])) {
-    merchantName = lines[0].replace(/[^a-zA-Z0-9\s&'.\-]/g, "").trim();
-    if (merchantName.length < 2) merchantName = undefined;
-  }
-
-  // Scan for date
+  // ── Merchant name: first qualifying non-price line ──
+  // Skip lines that are addresses, phone numbers, very short, or contain prices
   for (const line of lines) {
-    const dateMatch = line.match(DATE_RE);
-    if (dateMatch) {
-      date = dateMatch[1];
+    if (/\d{1,6}[.,]\d{2}/.test(line)) continue; // has a price
+    if (line.length < 3) continue; // too short
+    if (isAddressLine(line)) continue;
+    if (isPhoneLine(line)) continue;
+    if (/^[-=*_#]+$/.test(line)) continue; // separator line
+    // Looks like a good merchant name candidate
+    const cleaned = line.replace(/[^a-zA-Z0-9\s&'.\-]/g, "").trim();
+    if (cleaned.length >= 2) {
+      merchantName = cleaned;
       break;
     }
   }
 
-  // Parse each line
+  // ── Scan for date ──
   for (const line of lines) {
-    const lower = line.toLowerCase();
+    const dateMatch = line.match(DATE_RE);
+    if (dateMatch) {
+      date = dateMatch[0];
+      break;
+    }
+  }
 
-    // Skip non-item lines
+  // ── Parse each line ──
+  for (let i = 0; i < originalLines.length; i++) {
+    const originalLine = originalLines[i];
+    const line = originalLine.trim();
+    if (line.length === 0) continue;
+
+    // Skip modifier/continuation lines (indented, no price)
+    if (isModifierLine(originalLine)) continue;
+
+    // Skip discount/negative lines
+    if (isDiscountLine(line)) continue;
+
+    // Skip non-item lines that match skip keywords (no price → always skip)
     if (matchesKeyword(line, SKIP_KEYWORDS) && !LINE_PRICE_RE.test(line)) {
+      continue;
+    }
+    // Skip fee/reward/loyalty lines even if they have a price
+    if (matchesKeyword(line, FEE_REWARD_KEYWORDS)) {
       continue;
     }
 
@@ -147,17 +301,38 @@ function parseReceiptText(text: string): ReceiptExtractionResult {
       continue;
     }
 
+    // Handle add-on lines (indented + prefix with a price)
+    if (isAddOnLine(originalLine)) {
+      const addOnLine = line.replace(/^\+\s*/, "");
+      const itemMatch = addOnLine.match(LINE_PRICE_RE);
+      if (itemMatch) {
+        let itemName = itemMatch[1].trim();
+        const totalPrice = toCents(itemMatch[2]);
+        if (!isNaN(totalPrice) && totalPrice > 0) {
+          itemName = itemName.replace(/[^\w\s&'.\-\/()]/g, "").trim();
+          if (itemName.length >= 1) {
+            items.push({ name: itemName, quantity: 1, unitPrice: totalPrice, totalPrice });
+          }
+        }
+      }
+      continue;
+    }
+
     // Try to parse as a line item: "Item name   $12.99"
     const itemMatch = line.match(LINE_PRICE_RE);
     if (itemMatch) {
       let itemName = itemMatch[1].trim();
       const totalPrice = toCents(itemMatch[2]);
 
+      // Skip if NaN
+      if (isNaN(totalPrice)) continue;
+
       // Skip if it looks like a non-item line
+      const lower = line.toLowerCase();
       if (lower.includes("change") || lower.includes("payment")) continue;
       if (totalPrice <= 0) continue;
 
-      // Normalize OCR artifacts: "Ix" or "lx" → "1x"
+      // Normalize OCR artifacts: "Ix" or "lx" -> "1x"
       itemName = itemName.replace(OCR_QTY_RE, "1x ");
 
       // Check for quantity prefix: "2x Coffee" or "3 House Red Wine"
@@ -187,9 +362,10 @@ function parseReceiptText(text: string): ReceiptExtractionResult {
   // If we couldn't find items, try a more aggressive parse
   if (items.length === 0) {
     for (const line of lines) {
+      if (isDiscountLine(line)) continue;
       const price = extractPrice(line);
-      if (price && price > 0 && !matchesKeyword(line, SKIP_KEYWORDS)) {
-        const name = line.replace(PRICE_RE, "").replace(/[^\w\s&'.\-\/()]/g, "").trim();
+      if (price && price > 0 && !isNaN(price) && !matchesKeyword(line, SKIP_KEYWORDS)) {
+        const name = line.replace(/\$?\s*\d{1,6}[.,]\d{2}\s*-?\s*$/, "").replace(/[^\w\s&'.\-\/()]/g, "").trim();
         if (name.length >= 2) {
           items.push({ name, quantity: 1, unitPrice: price, totalPrice: price });
         }
@@ -220,6 +396,9 @@ function parseReceiptText(text: string): ReceiptExtractionResult {
   if (!subtotal) subtotal = itemsTotal;
   if (!total) total = subtotal + tax + tip;
 
+  // Use actual OCR confidence if available, otherwise default
+  const confidence = ocrConfidence != null && ocrConfidence > 0 ? ocrConfidence : 0.4;
+
   return receiptExtractionSchema.parse({
     merchantName,
     date,
@@ -229,6 +408,6 @@ function parseReceiptText(text: string): ReceiptExtractionResult {
     tip,
     total,
     currency: "USD",
-    confidence: 0.4, // OCR is significantly less reliable than AI
+    confidence,
   });
 }

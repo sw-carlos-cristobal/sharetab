@@ -1,0 +1,17 @@
+QUIKSTOP GAS N GO
+4501 Highway 9
+Austin TX 78701
+
+02/28/2025  14:23
+
+UNLEADED 12.5GAL       41.24
+WINDSHIELD FLUID        4.99
+ENERGY DRINK            2.79
+BEEF JERKY              5.49
+GUM SPEARMINT           1.89
+
+Subtotal               56.40
+Tax                     2.82
+Total                  59.22
+
+DEBIT *7733

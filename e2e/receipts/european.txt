@@ -1,0 +1,15 @@
+BRASSERIE LE PARIS
+15 Rue de Rivoli
+75001 Paris
+
+12.03.2025
+
+Salade Nicoise         12,50
+Coq au Vin             18,90
+Creme Brulee            9,50
+Vin Rouge (verre)       7,80
+Cafe Allonge            3,20
+
+Sous-total             51,90
+TVA 10%                 5,19
+Total TTC              57,09

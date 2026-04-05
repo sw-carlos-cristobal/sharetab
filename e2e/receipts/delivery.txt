@@ -1,0 +1,19 @@
+UBER EATS ORDER
+Order #UE-88431
+06/20/2025
+
+Chicken Tikka Masala   14.99
+Garlic Naan             3.49
+Samosa 2pc              5.99
+Mango Lassi             4.49
+Raita                   2.49
+
+Subtotal               31.45
+Delivery Fee            3.99
+Service Fee             2.50
+Tax                     2.52
+Tip                     5.00
+Total                  45.46
+
+PROMO CODE: SAVE5
+You Saved 5.00
