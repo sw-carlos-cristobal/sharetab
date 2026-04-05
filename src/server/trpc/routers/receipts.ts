@@ -233,21 +233,34 @@ export const receiptsRouter = createTRPCRouter({
   retryProcessing: protectedProcedure
     .input(z.object({ receiptId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await verifyReceiptAccess(ctx.db, input.receiptId, ctx.user.id);
+      const receipt = await verifyReceiptAccess(ctx.db, input.receiptId, ctx.user.id);
 
-      // Delete old items before retrying
-      await ctx.db.receiptItem.deleteMany({
-        where: { receiptId: input.receiptId },
-      });
+      // Reset status to PROCESSING and re-run extraction
       await ctx.db.receipt.update({
         where: { id: input.receiptId },
-        data: {
-          status: "PENDING",
-          rawResponse: Prisma.JsonNull,
-          extractedData: Prisma.JsonNull,
-        },
+        data: { status: "PROCESSING" },
       });
-      return { success: true };
+
+      try {
+        return await processReceiptImage({
+          db: ctx.db,
+          receiptId: input.receiptId,
+          receipt: { imagePath: receipt.imagePath, mimeType: receipt.mimeType },
+          logPrefix: "receipt.retry",
+        });
+      } catch (error) {
+        await ctx.db.receipt.update({
+          where: { id: input.receiptId },
+          data: {
+            status: "FAILED",
+            rawResponse: { error: error instanceof Error ? error.message : "Unknown error" } as unknown as Prisma.InputJsonValue,
+          },
+        });
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Reprocessing failed",
+        });
+      }
     }),
 
   assignItemsAndCreateExpense: groupMemberProcedure
