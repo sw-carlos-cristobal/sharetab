@@ -42,7 +42,7 @@ async function runOcrWorker(imageBuffer: Buffer): Promise<OcrWorkerResult> {
   const { execFile } = await import("child_process");
   const { resolve } = await import("path");
 
-  const workerPath = resolve(process.cwd(), "src/server/ai/providers/ocr-worker.mjs");
+  const workerPath = resolve(/* turbopackIgnore: true */ process.cwd(), "src/server/ai/providers/ocr-worker.mjs");
   const base64 = imageBuffer.toString("base64");
 
   return new Promise<OcrWorkerResult>((res, rej) => {
@@ -103,12 +103,16 @@ const SKIP_KEYWORDS = [
 // Discount-related keywords — lines containing these with a price are skipped
 const DISCOUNT_KEYWORDS = ["save", "discount", "off", "coupon", "promo", "savings", "you saved"];
 
-// Fee and reward keywords — lines with these are always skipped, even with a price
+// Fee, reward, and payment keywords — lines with these are always skipped, even with a price
 const FEE_REWARD_KEYWORDS = [
   "delivery fee", "service fee", "processing fee", "convenience fee",
   "extrabucks", "earned", "reward", "points earned",
   "you saved", "savings", "loyalty", "rollback", "bogo",
   "reg price", "cartwheel", "redcard",
+  // Payment method lines (often have the total amount repeated)
+  "visa", "mastercard", "amex", "discover", "debit", "credit",
+  "apple pay", "google pay", "contactless", "cash tend", "change due",
+  "amount charged", "amount due",
 ];
 
 // Address indicator words (used to skip address lines for merchant detection)
@@ -158,6 +162,16 @@ function normalizeOcrArtifacts(text: string): string {
   // Remove spaces inside price patterns: "12. 99" -> "12.99"
   result = result.replace(/(\d+)\.\s+(\d{2})/g, "$1.$2");
   result = result.replace(/(\d+),\s+(\d{2})/g, "$1,$2");
+
+  // Colon misread as decimal separator: "3:79" -> "3.79" (only in price context at end of line)
+  result = result.replace(/(\d+):(\d{2})\s*$/gm, "$1.$2");
+
+  // Dash as decimal separator: "7-99" -> "7.99" (only for single-digit before dash, 2-digit after)
+  result = result.replace(/\b(\d{1,2})-(\d{2})\b/g, (match, a, b) => {
+    // Only convert if it looks like a price (not a date or SKU)
+    if (parseInt(a) <= 99 && parseInt(b) <= 99) return `${a}.${b}`;
+    return match;
+  });
 
   return result;
 }

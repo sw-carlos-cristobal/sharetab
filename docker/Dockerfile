@@ -39,6 +39,10 @@ COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./
 COPY --from=builder /app/src/generated ./src/generated
+# Copy OCR worker script (runs in child process, not bundled by Next.js)
+COPY --from=builder /app/src/server/ai/providers/ocr-worker.mjs ./src/server/ai/providers/ocr-worker.mjs
+# Copy tesseract.js for OCR fallback
+COPY --from=builder /app/node_modules/tesseract.js ./node_modules/tesseract.js
 # Copy meridian proxy (embedded, dynamically imported — not traced by Next.js bundler)
 COPY --from=builder /app/node_modules/@rynfar/meridian ./node_modules/@rynfar/meridian
 COPY --from=builder /app/node_modules/@anthropic-ai/claude-agent-sdk ./node_modules/@anthropic-ai/claude-agent-sdk
