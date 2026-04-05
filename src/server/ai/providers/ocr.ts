@@ -6,6 +6,9 @@ import { receiptExtractionSchema } from "../schema";
  * OCR-based receipt parser using Tesseract.js.
  * Works without any API keys or external services.
  * Less accurate than AI providers but a useful free fallback.
+ *
+ * Tesseract runs in a child process to avoid WASM/Worker conflicts
+ * with Next.js bundlers (Turbopack/webpack).
  */
 export class OcrProvider implements AIProvider {
   readonly name = "ocr";
@@ -14,9 +17,7 @@ export class OcrProvider implements AIProvider {
     imageBuffer: Buffer,
     _mimeType: string,
   ): Promise<ReceiptExtractionResult> {
-    const Tesseract = await import("tesseract.js");
-    const { data } = await Tesseract.recognize(imageBuffer, "eng");
-    const text = data.text;
+    const text = await runOcrWorker(imageBuffer);
 
     if (!text.trim()) {
       throw new Error("OCR could not extract any text from the image");
@@ -30,11 +31,33 @@ export class OcrProvider implements AIProvider {
   }
 }
 
+// ── Tesseract child process runner ──────────────────────────────────
+
+async function runOcrWorker(imageBuffer: Buffer): Promise<string> {
+  const { execFile } = await import("child_process");
+  const { resolve } = await import("path");
+
+  const workerPath = resolve(process.cwd(), "src/server/ai/providers/ocr-worker.mjs");
+  const base64 = imageBuffer.toString("base64");
+
+  return new Promise<string>((res, rej) => {
+    const child = execFile("node", [workerPath], { timeout: 60000 }, (err, stdout, stderr) => {
+      if (err) return rej(new Error(`OCR worker failed: ${err.message}${stderr ? ` — ${stderr}` : ""}`));
+      if (!stdout.trim()) return rej(new Error("OCR could not extract any text from the image"));
+      res(stdout);
+    });
+    child.stdin!.write(base64);
+    child.stdin!.end();
+  });
+}
+
 // ── Receipt text parser ─────────────────────────────────────────────
 
-const PRICE_RE = /\$?\s*(\d{1,6}[.,]\d{2})\b/;
+const PRICE_RE = /\$?\s*(\d{1,6}[.,]\d{2})\s*$/; // match price at end of line
 const LINE_PRICE_RE = /^(.+?)\s+\$?\s*(\d{1,6}[.,]\d{2})\s*$/;
-const QTY_PREFIX_RE = /^(\d+)\s*[xX@]\s*/;
+const QTY_PREFIX_RE = /^(\d+)\s*[xX@]\s+/;
+// OCR often reads "1x" as "Ix" or "lx" — normalize before parsing
+const OCR_QTY_RE = /^[Il1]\s*[xX]\s+/;
 const DATE_RE = /\b(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})\b/;
 
 const TAX_KEYWORDS = ["tax", "hst", "gst", "pst", "vat", "txbl"];
@@ -58,8 +81,10 @@ function matchesKeyword(line: string, keywords: string[]): boolean {
 }
 
 function extractPrice(line: string): number | null {
-  const match = line.match(PRICE_RE);
-  return match ? toCents(match[1]) : null;
+  // Find all price-like patterns and use the last one (rightmost)
+  const matches = [...line.matchAll(/\$?\s*(\d{1,6}[.,]\d{2})/g)];
+  if (matches.length === 0) return null;
+  return toCents(matches[matches.length - 1][1]);
 }
 
 function parseReceiptText(text: string): ReceiptExtractionResult {
@@ -132,12 +157,22 @@ function parseReceiptText(text: string): ReceiptExtractionResult {
       if (lower.includes("change") || lower.includes("payment")) continue;
       if (totalPrice <= 0) continue;
 
-      // Check for quantity prefix: "2x Coffee"
+      // Normalize OCR artifacts: "Ix" or "lx" → "1x"
+      itemName = itemName.replace(OCR_QTY_RE, "1x ");
+
+      // Check for quantity prefix: "2x Coffee" or "3 House Red Wine"
       let quantity = 1;
       const qtyMatch = itemName.match(QTY_PREFIX_RE);
       if (qtyMatch) {
         quantity = parseInt(qtyMatch[1], 10);
         itemName = itemName.replace(QTY_PREFIX_RE, "").trim();
+      } else {
+        // Try plain number prefix: "2 Spring Rolls"
+        const plainQty = itemName.match(/^(\d+)\s+([A-Z])/);
+        if (plainQty) {
+          quantity = parseInt(plainQty[1], 10);
+          itemName = itemName.slice(plainQty[1].length).trim();
+        }
       }
 
       // Clean up the item name
