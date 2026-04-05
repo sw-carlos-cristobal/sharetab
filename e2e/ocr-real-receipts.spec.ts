@@ -33,29 +33,33 @@ test.describe("Real-World Receipt OCR", () => {
 
   async function uploadAndProcess(filename: string) {
     const ctx = await authedContext(users.alice.email, users.alice.password);
-    const buf = readFileSync(resolve(receiptDir, filename));
-    const mimeType = filename.endsWith(".png") ? "image/png" : "image/jpeg";
+    try {
+      const buf = readFileSync(resolve(receiptDir, filename));
+      const mimeType = filename.endsWith(".png") ? "image/png" : "image/jpeg";
 
-    const uploadRes = await ctx.post(`${BASE}/api/upload`, {
-      multipart: {
-        file: { name: filename, mimeType, buffer: buf },
-      },
-    });
-    expect(uploadRes.status()).toBe(200);
-    const { receiptId } = await uploadRes.json();
+      const uploadRes = await ctx.post(`${BASE}/api/upload`, {
+        multipart: {
+          file: { name: filename, mimeType, buffer: buf },
+        },
+      });
+      expect(uploadRes.status()).toBe(200);
+      const { receiptId } = await uploadRes.json();
 
-    const processRes = await trpcMutation(
-      ctx, "receipts.processReceipt", { receiptId }, OCR_TIMEOUT
-    );
-    const body = await processRes.json();
-    await ctx.dispose();
-    return body;
+      const processRes = await trpcMutation(
+        ctx, "receipts.processReceipt", { receiptId }, OCR_TIMEOUT
+      );
+      const body = await processRes.json();
+      return body;
+    } finally {
+      await ctx.dispose();
+    }
   }
 
   // ── SROIE dataset: scanned Malaysian receipts ─────────────────
 
   test.describe("SROIE scanned receipts", () => {
     const sroieImages = readdirSync(receiptDir).filter(f => f.startsWith("real-sroie-"));
+    if (sroieImages.length === 0) throw new Error("No SROIE receipt images found in e2e/receipts/");
 
     for (const img of sroieImages) {
       test(`${img} — processes without crash`, async () => {
@@ -80,6 +84,7 @@ test.describe("Real-World Receipt OCR", () => {
   test.describe("Real phone photos", () => {
     test("Castorama (Polish hardware store) — phone photo", async () => {
       const body = await uploadAndProcess("real-photo-castorama.jpg");
+      expect(body.result || body.error).toBeDefined();
       const result = body.result?.data?.json;
       if (result?.status === "COMPLETED") {
         expect(result.itemCount).toBeGreaterThanOrEqual(1);
@@ -89,6 +94,7 @@ test.describe("Real-World Receipt OCR", () => {
 
     test("Żabka (Polish convenience store) — blurry, textured surface", async () => {
       const body = await uploadAndProcess("real-photo-zabka.jpg");
+      expect(body.result || body.error).toBeDefined();
       const result = body.result?.data?.json;
       // This image is blurry — may fail to extract, that's OK
       if (result?.status === "COMPLETED") {
@@ -98,6 +104,7 @@ test.describe("Real-World Receipt OCR", () => {
 
     test("Lawson (Indonesian store) — clean phone photo on table", async () => {
       const body = await uploadAndProcess("real-photo-lawson.jpg");
+      expect(body.result || body.error).toBeDefined();
       const result = body.result?.data?.json;
       if (result?.status === "COMPLETED") {
         expect(result.itemCount).toBeGreaterThanOrEqual(1);
@@ -107,6 +114,7 @@ test.describe("Real-World Receipt OCR", () => {
 
     test("Kassenbon (German thermal receipt) — high contrast photo", async () => {
       const body = await uploadAndProcess("real-photo-kassenbon.jpg");
+      expect(body.result || body.error).toBeDefined();
       const result = body.result?.data?.json;
       if (result?.status === "COMPLETED") {
         expect(result.itemCount).toBeGreaterThanOrEqual(1);
@@ -116,6 +124,7 @@ test.describe("Real-World Receipt OCR", () => {
     test("German store collage (6 receipts in one photo)", async () => {
       // Multiple receipts in one image — OCR will see mixed text
       const body = await uploadAndProcess("real-photo-german.jpg");
+      expect(body.result || body.error).toBeDefined();
       const result = body.result?.data?.json;
       if (result?.status === "COMPLETED") {
         // Should extract at least some items from any of the receipts
@@ -137,30 +146,33 @@ test.describe("Real-World Receipt OCR", () => {
   test.describe("Known-good SROIE receipts", () => {
     test("sroie-050 (Morganfield's restaurant) — multiple items", async () => {
       const ctx = await authedContext(users.alice.email, users.alice.password);
-      const buf = readFileSync(resolve(receiptDir, "real-sroie-050.jpg"));
+      try {
+        const buf = readFileSync(resolve(receiptDir, "real-sroie-050.jpg"));
 
-      const uploadRes = await ctx.post(`${BASE}/api/upload`, {
-        multipart: { file: { name: "sroie-050.jpg", mimeType: "image/jpeg", buffer: buf } },
-      });
-      const { receiptId } = await uploadRes.json();
-      await trpcMutation(ctx, "receipts.processReceipt", { receiptId }, OCR_TIMEOUT);
+        const uploadRes = await ctx.post(`${BASE}/api/upload`, {
+          multipart: { file: { name: "sroie-050.jpg", mimeType: "image/jpeg", buffer: buf } },
+        });
+        const { receiptId } = await uploadRes.json();
+        await trpcMutation(ctx, "receipts.processReceipt", { receiptId }, OCR_TIMEOUT);
 
-      const itemsRes = await trpcQuery(ctx, "receipts.getReceiptItems", { receiptId });
-      const data = await trpcResult(itemsRes);
+        const itemsRes = await trpcQuery(ctx, "receipts.getReceiptItems", { receiptId });
+        const data = await trpcResult(itemsRes);
 
-      expect(data.receipt.status).toBe("COMPLETED");
-      expect(data.items.length).toBeGreaterThanOrEqual(3);
+        expect(data.receipt.status).toBe("COMPLETED");
+        expect(data.items.length).toBeGreaterThanOrEqual(3);
 
-      for (const item of data.items) {
-        expect(item.name.length).toBeGreaterThan(0);
-        expect(item.totalPrice).toBeGreaterThan(0);
+        for (const item of data.items) {
+          expect(item.name.length).toBeGreaterThan(0);
+          expect(item.totalPrice).toBeGreaterThan(0);
+        }
+      } finally {
+        await ctx.dispose();
       }
-
-      await ctx.dispose();
     });
 
     test("sroie-003 (YONGFATT) — total in reasonable range", async () => {
       const body = await uploadAndProcess("real-sroie-003.jpg");
+      expect(body.result || body.error).toBeDefined();
       const result = body.result?.data?.json;
       if (result?.status === "COMPLETED") {
         expect(result.total).toBeGreaterThan(1000);
@@ -169,6 +181,7 @@ test.describe("Real-World Receipt OCR", () => {
 
     test("sroie-350 (PINGHWAI bulk purchase) — extracts items", async () => {
       const body = await uploadAndProcess("real-sroie-350.jpg");
+      expect(body.result || body.error).toBeDefined();
       const result = body.result?.data?.json;
       if (result?.status === "COMPLETED") {
         // RM 1,007.50 total but OCR may misread digits on this receipt

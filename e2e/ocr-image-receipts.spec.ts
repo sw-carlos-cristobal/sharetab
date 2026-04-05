@@ -20,27 +20,30 @@ test.describe("OCR Image Receipt Tests", () => {
 
   async function uploadAndProcess(receiptFile: string) {
     const ctx = await authedContext(users.alice.email, users.alice.password);
-    const buf = readFileSync(resolve(`e2e/receipts/${receiptFile}`));
+    try {
+      const buf = readFileSync(resolve(`e2e/receipts/${receiptFile}`));
 
-    const uploadRes = await ctx.post(`${BASE}/api/upload`, {
-      multipart: {
-        file: { name: receiptFile, mimeType: "image/png", buffer: buf },
-      },
-    });
-    expect(uploadRes.status()).toBe(200);
-    const { receiptId } = await uploadRes.json();
+      const uploadRes = await ctx.post(`${BASE}/api/upload`, {
+        multipart: {
+          file: { name: receiptFile, mimeType: "image/png", buffer: buf },
+        },
+      });
+      expect(uploadRes.status()).toBe(200);
+      const { receiptId } = await uploadRes.json();
 
-    const processRes = await trpcMutation(
-      ctx, "receipts.processReceipt", { receiptId }, OCR_TIMEOUT
-    );
-    const result = (await processRes.json()).result?.data?.json;
-    expect(result.status).toBe("COMPLETED");
+      const processRes = await trpcMutation(
+        ctx, "receipts.processReceipt", { receiptId }, OCR_TIMEOUT
+      );
+      const result = (await processRes.json()).result?.data?.json;
+      expect(result.status).toBe("COMPLETED");
 
-    const itemsRes = await trpcQuery(ctx, "receipts.getReceiptItems", { receiptId });
-    const data = await trpcResult(itemsRes);
+      const itemsRes = await trpcQuery(ctx, "receipts.getReceiptItems", { receiptId });
+      const data = await trpcResult(itemsRes);
 
-    await ctx.dispose();
-    return { result, items: data.items, receipt: data.receipt };
+      return { result, items: data.items, receipt: data.receipt };
+    } finally {
+      await ctx.dispose();
+    }
   }
 
   // ── Fast Food ─────────────────────────────────────────────────

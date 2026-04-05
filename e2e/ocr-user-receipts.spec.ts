@@ -20,32 +20,35 @@ test.describe("Photorealistic Receipt OCR", () => {
 
   async function uploadAndProcess(filename: string) {
     const ctx = await authedContext(users.alice.email, users.alice.password);
-    const buf = readFileSync(resolve(`e2e/receipts/${filename}`));
-    const mimeType = filename.endsWith(".png") ? "image/png" : "image/jpeg";
+    try {
+      const buf = readFileSync(resolve(`e2e/receipts/${filename}`));
+      const mimeType = filename.endsWith(".png") ? "image/png" : "image/jpeg";
 
-    const uploadRes = await ctx.post(`${BASE}/api/upload`, {
-      multipart: {
-        file: { name: filename, mimeType, buffer: buf },
-      },
-    });
-    expect(uploadRes.status()).toBe(200);
-    const { receiptId } = await uploadRes.json();
+      const uploadRes = await ctx.post(`${BASE}/api/upload`, {
+        multipart: {
+          file: { name: filename, mimeType, buffer: buf },
+        },
+      });
+      expect(uploadRes.status()).toBe(200);
+      const { receiptId } = await uploadRes.json();
 
-    const processRes = await trpcMutation(
-      ctx, "receipts.processReceipt", { receiptId }, OCR_TIMEOUT
-    );
-    const body = await processRes.json();
-    const result = body.result?.data?.json;
+      const processRes = await trpcMutation(
+        ctx, "receipts.processReceipt", { receiptId }, OCR_TIMEOUT
+      );
+      const body = await processRes.json();
+      const result = body.result?.data?.json;
 
-    let items: { name: string; totalPrice: number }[] = [];
-    if (result?.status === "COMPLETED") {
-      const itemsRes = await trpcQuery(ctx, "receipts.getReceiptItems", { receiptId });
-      const data = await trpcResult(itemsRes);
-      items = data.items;
+      let items: { name: string; totalPrice: number }[] = [];
+      if (result?.status === "COMPLETED") {
+        const itemsRes = await trpcQuery(ctx, "receipts.getReceiptItems", { receiptId });
+        const data = await trpcResult(itemsRes);
+        items = data.items;
+      }
+
+      return { result, items };
+    } finally {
+      await ctx.dispose();
     }
-
-    await ctx.dispose();
-    return { result, items };
   }
 
   // ── Synthetic photo receipts ──────────────────────────────────
