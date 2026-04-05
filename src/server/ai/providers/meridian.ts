@@ -15,7 +15,7 @@ async function ensureMeridian(): Promise<number> {
 
   meridianStarting = (async () => {
     const { startProxyServer } = await import("@rynfar/meridian");
-    const port = 3457; // fixed port for in-process proxy
+    const port = parseInt(process.env.MERIDIAN_PORT ?? "3457", 10);
     const instance = await startProxyServer({
       port,
       host: "127.0.0.1",
@@ -104,8 +104,9 @@ export class MeridianProvider implements AIProvider {
 
   async isAvailable(): Promise<boolean> {
     try {
-      await this.getClient();
-      return true;
+      const port = await ensureMeridian();
+      const res = await fetch(`http://127.0.0.1:${port}/health`);
+      return res.ok;
     } catch {
       return false;
     }
