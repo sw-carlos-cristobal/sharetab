@@ -79,6 +79,21 @@ export const guestRouter = createTRPCRouter({
   getReceiptItems: publicProcedure
     .input(z.object({ receiptId: z.string() }))
     .query(async ({ ctx, input }) => {
+      // Rate limit: 10 lookups per receipt per hour to mitigate enumeration.
+      // Guest receipt IDs are CUIDs (25 chars of randomness) making brute force
+      // infeasible, but rate limiting adds defense-in-depth.
+      const { allowed } = checkRateLimit(
+        `guest-items:${input.receiptId}`,
+        10,
+        60 * 60 * 1000
+      );
+      if (!allowed) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: "Too many requests. Please try again later.",
+        });
+      }
+
       const receipt = await ctx.db.receipt.findUnique({
         where: { id: input.receiptId },
         include: {
@@ -186,7 +201,7 @@ export const guestRouter = createTRPCRouter({
 
       logger.info("guest.split.created", {
         splitId: guestSplit.id,
-        shareToken: guestSplit.shareToken,
+        shareToken: guestSplit.shareToken.substring(0, 8) + "...",
         peopleCount: input.people.length,
         itemCount: input.items.length,
       });

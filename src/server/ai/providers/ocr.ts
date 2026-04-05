@@ -1,6 +1,7 @@
 import type { AIProvider } from "../provider";
 import type { ReceiptExtractionResult } from "../schema";
 import { receiptExtractionSchema } from "../schema";
+import { logger } from "@/server/lib/logger";
 
 /**
  * OCR-based receipt parser using Tesseract.js.
@@ -53,7 +54,10 @@ async function runOcrWorker(imageBuffer: Buffer): Promise<OcrWorkerResult> {
 
   return new Promise<OcrWorkerResult>((res, rej) => {
     const child = execFile("node", [workerPath], { timeout: 60000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
-      if (err) return rej(new Error(`OCR worker failed: ${err.message}${stderr ? ` — ${stderr}` : ""}`));
+      if (err) {
+        if (stderr) logger.error("ocr.worker.stderr", { stderr: stderr.substring(0, 500) });
+        return rej(new Error("OCR processing failed"));
+      }
       if (!stdout.trim()) return rej(new Error("OCR could not extract any text from the image"));
 
       // Parse the JSON output from the worker

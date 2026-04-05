@@ -20,7 +20,7 @@ export class OllamaProvider implements AIProvider {
   ): Promise<ReceiptExtractionResult> {
     const base64 = imageBuffer.toString("base64");
     const prompt = correctionHint
-      ? `${RECEIPT_EXTRACTION_PROMPT}\n\nThe user has provided a correction. Apply it to improve accuracy:\n<user_correction>${correctionHint}</user_correction>`
+      ? `${RECEIPT_EXTRACTION_PROMPT}\n\nThe user has provided a correction. Apply it to improve accuracy:\n<user_correction>${correctionHint.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</user_correction>`
       : RECEIPT_EXTRACTION_PROMPT;
 
     const response = await fetch(`${this.baseUrl}/api/chat`, {
