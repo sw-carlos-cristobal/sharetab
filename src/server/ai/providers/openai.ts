@@ -7,9 +7,11 @@ import { RECEIPT_EXTRACTION_PROMPT } from "../prompts/receipt-extraction";
 export class OpenAIProvider implements AIProvider {
   readonly name = "openai";
   private client: OpenAI;
+  private model: string;
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, model?: string) {
     this.client = new OpenAI({ apiKey });
+    this.model = model ?? "gpt-4o";
   }
 
   async extractReceipt(
@@ -23,7 +25,7 @@ export class OpenAIProvider implements AIProvider {
       : RECEIPT_EXTRACTION_PROMPT;
 
     const response = await this.client.chat.completions.create({
-      model: "gpt-4o",
+      model: this.model,
       messages: [
         {
           role: "user",

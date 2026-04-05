@@ -9,7 +9,7 @@ export async function getAIProvider(): Promise<AIProvider> {
         throw new Error("OpenAI provider requires OPENAI_API_KEY");
       }
       const { OpenAIProvider } = await import("./providers/openai");
-      return new OpenAIProvider(process.env.OPENAI_API_KEY);
+      return new OpenAIProvider(process.env.OPENAI_API_KEY, process.env.OPENAI_MODEL);
     }
     case "claude": {
       const { ClaudeProvider } = await import("./providers/claude");
