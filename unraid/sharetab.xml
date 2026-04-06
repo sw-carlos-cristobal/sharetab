@@ -294,6 +294,26 @@
     Mask="false"></Config>
 
 
+  <!-- Rate Limiting -->
+  <Config
+    Name="Login Rate Limit"
+    Target="AUTH_RATE_LIMIT_MAX"
+    Default="5"
+    Description="Max login attempts per IP per hour. Increase for testing."
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false">5</Config>
+  <Config
+    Name="Registration Rate Limit"
+    Target="REGISTER_RATE_LIMIT_MAX"
+    Default="10"
+    Description="Max registration attempts per IP per hour."
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false">10</Config>
+
   <!-- Misc -->
   <Config
     Name="Max Upload Size (MB)"
@@ -304,4 +324,13 @@
     Display="advanced"
     Required="false"
     Mask="false">10</Config>
+  <Config
+    Name="Log Level"
+    Target="LOG_LEVEL"
+    Default="info"
+    Description="Server log verbosity: debug | info | warn | error. Defaults to info."
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false">info</Config>
 </Container>
