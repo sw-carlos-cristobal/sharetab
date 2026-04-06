@@ -44,14 +44,25 @@ export async function getAIProvider(): Promise<AIProvider> {
   }
 }
 
+// Cache for getAIProviderWithFallback — avoids re-checking isAvailable() on every scan
+let cachedProvider: AIProvider | null = null;
+let cacheExpiry = 0;
+const CACHE_TTL_MS = 60_000; // Re-check availability every 60 seconds
+
 /**
  * Get the configured AI provider, falling back to OCR if unavailable.
- * Use this instead of getAIProvider() when you want graceful degradation.
+ * Caches the result for 60s to avoid repeated network checks.
  */
 export async function getAIProviderWithFallback(): Promise<AIProvider> {
+  if (cachedProvider && Date.now() < cacheExpiry) {
+    return cachedProvider;
+  }
+
   try {
     const provider = await getAIProvider();
     if (await provider.isAvailable()) {
+      cachedProvider = provider;
+      cacheExpiry = Date.now() + CACHE_TTL_MS;
       return provider;
     }
   } catch {
@@ -59,5 +70,8 @@ export async function getAIProviderWithFallback(): Promise<AIProvider> {
   }
 
   const { OcrProvider } = await import("./providers/ocr");
-  return new OcrProvider();
+  const ocr = new OcrProvider();
+  cachedProvider = ocr;
+  cacheExpiry = Date.now() + CACHE_TTL_MS;
+  return ocr;
 }
