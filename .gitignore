@@ -57,6 +57,10 @@ next-env.d.ts
 # playwright
 /test-results/
 /playwright-report/
+
+# demo video output
+/demo/*.webm
+/demo/*.mp4
 /blob-report/
 /tmp-screenshots/
 .claude/settings.local.json
