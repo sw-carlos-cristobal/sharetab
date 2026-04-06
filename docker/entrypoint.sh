@@ -89,11 +89,35 @@ echo "  ShareTab Configuration"
 echo "============================================"
 echo "  Version:        $(node -e "console.log(require('./package.json').version)" 2>/dev/null || echo 'unknown')"
 echo "  Database:       ${DATABASE_URL%@*}@***"
+echo "  DB User:        ${DB_USER:-sharetab}"
+echo "  DB Name:        ${DB_NAME:-sharetab}"
 echo "  Auth URL:       ${NEXTAUTH_URL:-not set}"
 echo "  Auth Trust:     ${AUTH_TRUST_HOST:-false}"
 echo "  AI Provider:    ${AI_PROVIDER:-not set}"
-if [ "$AI_PROVIDER" = "claude" ] || [ "$AI_PROVIDER" = "meridian" ]; then
+if [ "$AI_PROVIDER" = "openai" ]; then
+  echo "  OpenAI Model:   ${OPENAI_MODEL:-gpt-4o}"
+  if [ -n "$OPENAI_API_KEY" ]; then
+    echo "  OpenAI Auth:    configured"
+  else
+    echo "  OpenAI Auth:    missing"
+  fi
+elif [ "$AI_PROVIDER" = "claude" ] || [ "$AI_PROVIDER" = "meridian" ]; then
   echo "  AI Model:       ${ANTHROPIC_MODEL:-claude-sonnet-4-6}"
+  if [ "$AI_PROVIDER" = "claude" ]; then
+    if [ -n "$ANTHROPIC_API_KEY" ]; then
+      echo "  Claude Auth:    configured"
+    else
+      echo "  Claude Auth:    missing"
+    fi
+  else
+    echo "  Meridian Port:  ${MERIDIAN_PORT:-3457}"
+    echo "  Claude Data:    ${CLAUDE_DIR:-/app/claude}"
+    if [ -f "${CLAUDE_DIR:-/app/claude}/.credentials.json" ]; then
+      echo "  Claude Login:   detected"
+    else
+      echo "  Claude Login:   missing (run 'claude login')"
+    fi
+  fi
 elif [ "$AI_PROVIDER" = "ollama" ]; then
   echo "  Ollama URL:     ${OLLAMA_BASE_URL:-not set}"
   echo "  Ollama Model:   ${OLLAMA_MODEL:-llava}"
@@ -101,8 +125,13 @@ fi
 echo "  Admin Email:    ${ADMIN_EMAIL:-not set}"
 echo "  Upload Dir:     ${UPLOAD_DIR:-/app/uploads}"
 echo "  Max Upload MB:  ${MAX_UPLOAD_SIZE_MB:-10}"
+echo "  Auth RL Max:    ${AUTH_RATE_LIMIT_MAX:-5}"
+echo "  Register RL:    ${REGISTER_RATE_LIMIT_MAX:-10}"
 if [ -n "$EMAIL_SERVER_HOST" ]; then
-  echo "  Magic Link:     enabled (${EMAIL_SERVER_HOST})"
+  echo "  Magic Link:     enabled"
+  echo "  Email Host:     ${EMAIL_SERVER_HOST}"
+  echo "  Email Port:     ${EMAIL_SERVER_PORT:-587}"
+  echo "  Email From:     ${EMAIL_FROM:-not set}"
 else
   echo "  Magic Link:     disabled"
 fi

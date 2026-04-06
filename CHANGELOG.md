@@ -1,5 +1,13 @@
 # Changelog
 
+## [v0.4.3] - 2026-04-06
+
+### Other Changes
+- docs: expand startup config summary with provider and auth readiness details
+
+**Full Changelog**: https://github.com/sw-carlos-cristobal/sharetab/compare/v0.4.2...v0.4.3
+
+
 ## [v0.4.2] - 2026-04-06
 
 ### Bug Fixes
