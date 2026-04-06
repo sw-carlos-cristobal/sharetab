@@ -153,6 +153,21 @@ export const guestRouter = createTRPCRouter({
       tipOverride: z.number().int().min(0).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      // Validate raw index bounds BEFORE filtering blank names
+      for (const a of input.assignments) {
+        if (a.itemIndex < 0 || a.itemIndex >= input.items.length) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `Invalid itemIndex: ${a.itemIndex}` });
+        }
+        for (const pi of a.personIndices) {
+          if (pi < 0 || pi >= input.people.length) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: `Invalid personIndex: ${pi}` });
+          }
+        }
+      }
+      if (input.paidByIndex < 0 || input.paidByIndex >= input.people.length) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Invalid paidByIndex: ${input.paidByIndex}` });
+      }
+
       // Filter out blank-name people and remap indices
       const indexMap = new Map<number, number>();
       const filteredPeople = input.people.filter((p, i) => {
