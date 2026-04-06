@@ -65,14 +65,14 @@
     Required="true"
     Mask="false">/mnt/user/appdata/sharetab/uploads</Config>
   <Config
-    Name="Claude Credentials (meridian)"
-    Target="/root/.claude/.credentials.json"
-    Default=""
-    Description="Mount your host Claude credentials file for the meridian AI provider (uses Claude Max subscription). Created by running 'claude login' on the host. Optional — only needed for AI_PROVIDER=meridian."
+    Name="Claude Data (meridian)"
+    Target="/app/claude"
+    Default="/mnt/user/appdata/sharetab/claude"
+    Description="Persistent storage for Claude login data used by the meridian AI provider. Optional unless AI_PROVIDER=meridian."
     Type="Path"
-    Display="always"
+    Display="advanced"
     Required="false"
-    Mask="false"></Config>
+    Mask="false">/mnt/user/appdata/sharetab/claude</Config>
 
   <!-- Auth -->
   <Config
@@ -146,7 +146,7 @@
     Name="AI Provider"
     Target="AI_PROVIDER"
     Default="openai"
-    Description="AI provider for receipt scanning: openai | claude | meridian | ollama | ocr. Meridian uses Claude Max subscription via embedded proxy — no API key needed. OCR uses local Tesseract.js (no API key) and is also the automatic fallback."
+    Description="AI provider for receipt scanning: openai | claude | meridian | ollama | ocr. Meridian uses Claude Max subscription via embedded proxy — no API key needed, but you must run 'claude login' once inside the container after startup. OCR uses local Tesseract.js (no API key) and is also the automatic fallback."
     Type="Variable"
     Display="always"
     Required="false"

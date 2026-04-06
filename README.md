@@ -138,7 +138,15 @@ All configuration is done through environment variables. Copy `.env.example` to 
 | `OLLAMA_BASE_URL` | Ollama server URL. Defaults to `http://localhost:11434`. |
 | `OLLAMA_MODEL` | Ollama model name. Defaults to `llava`. |
 
-The `meridian` provider uses a Claude Max/Pro subscription via an embedded proxy -- no API key needed, just mount `~/.claude/.credentials.json`.
+The `meridian` provider uses a Claude Max/Pro subscription via an embedded proxy -- no API key needed. Claude login data lives in `/app/claude`, so if that path is on a persistent volume the login survives restarts and image updates.
+
+After the container is running, log in once:
+
+```bash
+docker exec -it sharetab claude login
+```
+
+The bundled `claude` wrapper runs the login under the `nextjs` user and stores credentials in `/app/claude` for Meridian to use. The bundled Docker Compose setup persists that directory automatically. If you use your own Docker or Unraid template, mount a persistent path to `/app/claude`.
 
 The `ocr` provider uses Tesseract.js for local text extraction -- no API key or external service needed. It's less accurate than AI providers but works as a free fallback. If the configured AI provider is unavailable, receipt scanning automatically falls back to OCR.
 

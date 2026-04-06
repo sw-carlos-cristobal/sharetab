@@ -1,0 +1,20 @@
+#!/bin/sh
+set -e
+
+CLI_PATH="/app/node_modules/@anthropic-ai/claude-agent-sdk/cli.js"
+CLAUDE_HOME="${CLAUDE_HOME:-/home/nextjs}"
+
+if [ ! -f "$CLI_PATH" ]; then
+  echo "Claude CLI not found at $CLI_PATH" >&2
+  exit 1
+fi
+
+if [ "$(id -u)" = "0" ]; then
+  exec su-exec nextjs env HOME="$CLAUDE_HOME" node "$CLI_PATH" "$@"
+fi
+
+if [ -z "$HOME" ] || [ "$HOME" = "/root" ]; then
+  export HOME="$CLAUDE_HOME"
+fi
+
+exec node "$CLI_PATH" "$@"

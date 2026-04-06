@@ -32,7 +32,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - uploads:/app/uploads
-      - ${CLAUDE_CREDENTIALS_PATH:-~/.claude/.credentials.json}:/root/.claude/.credentials.json:rw
+      - claude:/app/claude
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
@@ -43,3 +43,4 @@ services:
 volumes:
   pgdata:
   uploads:
+  claude:

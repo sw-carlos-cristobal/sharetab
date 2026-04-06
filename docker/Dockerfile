@@ -51,12 +51,13 @@ RUN mkdir -p /prisma-cli && cd /prisma-cli && npm init -y && \
     npm install --legacy-peer-deps prisma dotenv && npm cache clean --force
 
 COPY docker/entrypoint.sh /app/entrypoint.sh
+COPY docker/claude /usr/local/bin/claude
 
 # Create directories
 RUN mkdir -p /app/uploads/receipts /var/lib/postgresql/data /run/postgresql && \
     chown -R nextjs:nodejs /app/uploads && \
     chown -R postgres:postgres /var/lib/postgresql/data /run/postgresql && \
-    chmod +x /app/entrypoint.sh
+    chmod +x /app/entrypoint.sh /usr/local/bin/claude
 
 EXPOSE 3000
 ENV PORT=3000
@@ -64,7 +65,7 @@ ENV HOSTNAME="0.0.0.0"
 ENV PGDATA=/var/lib/postgresql/data
 ENV DATABASE_URL="postgresql://sharetab:sharetab@localhost:5432/sharetab"
 
-VOLUME ["/var/lib/postgresql/data", "/app/uploads"]
+VOLUME ["/var/lib/postgresql/data", "/app/uploads", "/app/claude"]
 
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
   CMD wget -qO- http://127.0.0.1:3000/api/health || exit 1
