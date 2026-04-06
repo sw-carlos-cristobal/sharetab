@@ -121,4 +121,38 @@ test.describe("Receipt access control", () => {
     await alice.dispose();
     await bob.dispose();
   });
+
+  test("Authenticated user can fetch guest receipt image", async () => {
+    const { imagePath } = await uploadGuestReceipt();
+    const alice = await authedContext(users.alice.email, users.alice.password);
+
+    const res = await alice.get(`/api/uploads/${imagePath}`);
+    expect(res.status()).toBe(200);
+    expect(res.headers()["content-type"]).toBe("image/jpeg");
+
+    await alice.dispose();
+  });
+
+  test("Unauthenticated user can fetch guest receipt image", async () => {
+    const { imagePath } = await uploadGuestReceipt();
+    const ctx = await request.newContext({ baseURL: BASE });
+
+    const res = await ctx.get(`/api/uploads/${imagePath}`);
+    expect(res.status()).toBe(200);
+    expect(res.headers()["content-type"]).toBe("image/jpeg");
+
+    await ctx.dispose();
+  });
+
+  test("Unauthenticated user cannot fetch auth-uploaded receipt image", async () => {
+    const alice = await authedContext(users.alice.email, users.alice.password);
+    const { imagePath } = await uploadReceipt(alice);
+
+    const ctx = await request.newContext({ baseURL: BASE });
+    const res = await ctx.get(`/api/uploads/${imagePath}`);
+    expect(res.status()).toBe(401);
+
+    await alice.dispose();
+    await ctx.dispose();
+  });
 });
