@@ -73,9 +73,18 @@ describe("getAIProvider", () => {
     await expect(getAIProvider()).rejects.toThrow("openai, claude, meridian, ollama, ocr");
   });
 
-  test("fallback returns OCR when primary provider unavailable", async () => {
+  test("fallback returns OCR when primary provider init throws", async () => {
     process.env.AI_PROVIDER = "claude";
     delete process.env.ANTHROPIC_API_KEY;
+    const { getAIProviderWithFallback } = await import("./registry");
+    const provider = await getAIProviderWithFallback();
+    expect(provider.constructor.name).toBe("OcrProvider");
+  });
+
+  test("fallback returns OCR when primary provider isAvailable() returns false", async () => {
+    // Ollama provider will fail isAvailable() since no Ollama server is running
+    process.env.AI_PROVIDER = "ollama";
+    process.env.OLLAMA_BASE_URL = "http://127.0.0.1:19999"; // non-existent server
     const { getAIProviderWithFallback } = await import("./registry");
     const provider = await getAIProviderWithFallback();
     expect(provider.constructor.name).toBe("OcrProvider");
