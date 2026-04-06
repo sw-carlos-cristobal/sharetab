@@ -1,5 +1,16 @@
 # Changelog
 
+## [v0.4.2] - 2026-04-06
+
+### Bug Fixes
+- add claude wrapper and persistent meridian auth (2a0aacc)
+
+### Other Changes
+- docs: add LOG_LEVEL and rate limit env vars to Unraid template (72a7a32)
+
+**Full Changelog**: https://github.com/sw-carlos-cristobal/sharetab/compare/v0.4.1...v0.4.2
+
+
 ## [v0.4.1] - 2026-04-06
 
 ### Bug Fixes
