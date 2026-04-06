@@ -78,13 +78,45 @@ test.describe("Receipt Scanning Pipeline (5.2-5.3)", () => {
     const { receiptId } = await uploadRes.json();
 
     // retryProcessing now actually reprocesses — may succeed (mock) or fail (OCR on fake)
-    const retryRes = await trpcMutation(ctx, "receipts.retryProcessing", { receiptId }, 60000);
-    const body = await retryRes.json();
+    await trpcMutation(ctx, "receipts.retryProcessing", { receiptId }, 60000);
 
     const itemsRes = await trpcQuery(ctx, "receipts.getReceiptItems", { receiptId });
     const data = await trpcResult(itemsRes);
     // With mock provider: COMPLETED; with real provider on fake image: FAILED
     expect(["COMPLETED", "FAILED"]).toContain(data.receipt.status);
+
+    await ctx.dispose();
+  });
+
+  test("5.2.5 — repeated retryProcessing does not duplicate items (#50)", async () => {
+    const ctx = await authedContext(users.alice.email, users.alice.password);
+
+    const uploadRes = await ctx.post(`${BASE}/api/upload`, {
+      multipart: {
+        file: { name: "retry-dup.jpg", mimeType: "image/jpeg", buffer: FAKE_JPEG },
+      },
+    });
+    const { receiptId } = await uploadRes.json();
+
+    // First retry
+    await trpcMutation(ctx, "receipts.retryProcessing", { receiptId }, 60000);
+    const items1Res = await trpcQuery(ctx, "receipts.getReceiptItems", { receiptId });
+    const data1 = await trpcResult(items1Res);
+    const count1 = data1.items.length;
+
+    // Second retry — item count should not increase
+    await trpcMutation(ctx, "receipts.retryProcessing", { receiptId }, 60000);
+    const items2Res = await trpcQuery(ctx, "receipts.getReceiptItems", { receiptId });
+    const data2 = await trpcResult(items2Res);
+
+    expect(data2.items.length).toBe(count1);
+
+    // Third retry — still stable
+    await trpcMutation(ctx, "receipts.retryProcessing", { receiptId }, 60000);
+    const items3Res = await trpcQuery(ctx, "receipts.getReceiptItems", { receiptId });
+    const data3 = await trpcResult(items3Res);
+
+    expect(data3.items.length).toBe(count1);
 
     await ctx.dispose();
   });

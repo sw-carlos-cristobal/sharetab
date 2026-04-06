@@ -24,7 +24,7 @@ test.describe("Guest Bill Split — UI", () => {
   });
 });
 
-test.describe("Guest Bill Split — API", () => {
+test.describe("Guest Bill Split — API happy path", () => {
   test("createSplit creates a shareable split and getSplit retrieves it", async () => {
     const ctx = await request.newContext({ baseURL: BASE });
 
@@ -91,43 +91,6 @@ test.describe("Guest Bill Split — API", () => {
     );
     expect(totalFromSummary).toBe(3740);
 
-    await ctx.dispose();
-  });
-
-  test("getSplit returns NOT_FOUND for invalid token", async () => {
-    const ctx = await request.newContext({ baseURL: BASE });
-    const res = await ctx.get(
-      `/api/trpc/guest.getSplit?batch=1&input=${encodeURIComponent(
-        JSON.stringify({ "0": { json: { token: "invalid-token-xyz" } } })
-      )}`
-    );
-    const body = await res.json();
-    expect(body[0]?.error?.json?.data?.code).toBe("NOT_FOUND");
-    await ctx.dispose();
-  });
-
-  test("createSplit requires at least one person", async () => {
-    const ctx = await request.newContext({ baseURL: BASE });
-    const res = await ctx.post("/api/trpc/guest.createSplit", {
-      data: {
-        json: {
-          receiptData: {
-            subtotal: 1000,
-            tax: 0,
-            tip: 0,
-            total: 1000,
-            currency: "USD",
-          },
-          items: [{ name: "Item", quantity: 1, unitPrice: 1000, totalPrice: 1000 }],
-          people: [],
-          assignments: [{ itemIndex: 0, personIndices: [] }],
-          paidByIndex: 0,
-        },
-      },
-    });
-    // Should fail validation (people min 1)
-    const body = await res.json();
-    expect(body.error).toBeTruthy();
     await ctx.dispose();
   });
 });

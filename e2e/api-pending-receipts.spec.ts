@@ -20,11 +20,7 @@ test.describe("Pending Receipts", () => {
     });
     const { receiptId } = await uploadRes.json();
 
-    // Manually set status to COMPLETED (skip AI processing for this test)
-    // We'll use processReceipt only if AI is available; otherwise just test the save flow
-    // For now, use retryProcessing to get it to PENDING, then we can test saveForLater validation
-
-    // saveForLater requires COMPLETED status
+    // saveForLater requires COMPLETED status — this receipt is still PENDING
     const saveRes = await trpcMutation(owner, "receipts.saveForLater", {
       groupId, receiptId,
     });
