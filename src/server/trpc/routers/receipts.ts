@@ -395,26 +395,6 @@ export const receiptsRouter = createTRPCRouter({
         }
       }
 
-      // Create expense with ITEM split mode
-      const expense = await ctx.db.expense.create({
-        data: {
-          groupId: input.groupId,
-          title: input.title,
-          amount: totalAmount,
-          currency: extractedData.currency,
-          splitMode: "ITEM",
-          paidById: input.paidById,
-          addedById: ctx.user.id,
-          receiptId: input.receiptId,
-          shares: {
-            create: Array.from(userTotals.entries()).map(([userId, amount]) => ({
-              userId,
-              amount,
-            })),
-          },
-        },
-      });
-
       // Save assignments in a single batch (replaces N×M individual upserts)
       const assignmentData = input.assignments.flatMap((a) =>
         a.userIds.map((userId) => ({
@@ -422,25 +402,48 @@ export const receiptsRouter = createTRPCRouter({
           userId,
         }))
       );
-      const itemIds = [...new Set(input.assignments.map((a) => a.receiptItemId))];
-      await ctx.db.$transaction([
-        ctx.db.receiptItemAssignment.deleteMany({
+
+      // All writes in a single transaction for atomicity
+      const expense = await ctx.db.$transaction(async (tx) => {
+        const exp = await tx.expense.create({
+          data: {
+            groupId: input.groupId,
+            title: input.title,
+            amount: totalAmount,
+            currency: extractedData.currency,
+            splitMode: "ITEM",
+            paidById: input.paidById,
+            addedById: ctx.user.id,
+            receiptId: input.receiptId,
+            shares: {
+              create: Array.from(userTotals.entries()).map(([userId, amount]) => ({
+                userId,
+                amount,
+              })),
+            },
+          },
+        });
+
+        const itemIds = [...new Set(input.assignments.map((a) => a.receiptItemId))];
+        await tx.receiptItemAssignment.deleteMany({
           where: { receiptItemId: { in: itemIds } },
-        }),
-        ctx.db.receiptItemAssignment.createMany({
+        });
+        await tx.receiptItemAssignment.createMany({
           data: assignmentData,
           skipDuplicates: true,
-        }),
-      ]);
+        });
 
-      await ctx.db.activityLog.create({
-        data: {
-          groupId: input.groupId,
-          userId: ctx.user.id,
-          type: "EXPENSE_CREATED",
-          entityId: expense.id,
-          metadata: { title: input.title, amount: totalAmount, fromReceipt: true },
-        },
+        await tx.activityLog.create({
+          data: {
+            groupId: input.groupId,
+            userId: ctx.user.id,
+            type: "EXPENSE_CREATED",
+            entityId: exp.id,
+            metadata: { title: input.title, amount: totalAmount, fromReceipt: true },
+          },
+        });
+
+        return exp;
       });
 
       return expense;
