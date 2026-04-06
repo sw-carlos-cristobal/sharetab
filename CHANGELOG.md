@@ -1,5 +1,19 @@
 # Changelog
 
+## [v0.4.1] - 2026-04-06
+
+### Bug Fixes
+- wrap expense+assignments+activity in single transaction for atomicity (#47) (c6e7213)
+- invalidate AI provider cache on extraction failure and retry (#46) (8e5fc3a)
+
+### Other Changes
+- test: cleanup e2e tests, add guest remapping regression, and retry dedup test (#50, #53, #54, #55, #56, #59) (35c0e4e)
+- test: make registry fallback test deterministic and add cache transition tests (#48, #52, #57) (99bd537)
+- docs: update AI provider docs, add OPENAI_MODEL/MERIDIAN_PORT, and v0.4.0 changelog (#60, #61, #62, #63, #64, #65, #66) (390e47e)
+
+**Full Changelog**: https://github.com/sw-carlos-cristobal/sharetab/compare/v0.4.0...v0.4.1
+
+
 ## [v0.4.0] - 2026-04-05
 
 ### Features
