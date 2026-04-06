@@ -40,7 +40,9 @@ export async function GET(
     return new Response("Not found", { status: 404 });
   }
 
-  if (session?.user?.id) {
+  if (receipt.isGuest) {
+    // Guest receipts are viewable by anyone (authenticated or not)
+  } else if (session?.user?.id) {
     // Authenticated user: must be the uploader or a member of the receipt's group
     const isUploader = receipt.uploadedById === session.user.id;
     const isGroupMember = receipt.group?.members.some(
@@ -50,10 +52,8 @@ export async function GET(
       return new Response("Forbidden", { status: 403 });
     }
   } else {
-    // Unauthenticated: only allow guest receipts
-    if (!receipt.isGuest) {
-      return new Response("Unauthorized", { status: 401 });
-    }
+    // Unauthenticated user trying to access non-guest receipt
+    return new Response("Unauthorized", { status: 401 });
   }
 
   try {
