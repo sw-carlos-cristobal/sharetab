@@ -19,7 +19,7 @@
     Features:
     - Group expense tracking with multiple split modes
     - AI receipt scanning: photograph a receipt, extract items, assign to friends
-    - Pluggable AI providers: OpenAI, Claude, Claude SDK, or local Ollama
+    - Pluggable AI providers: OpenAI, Claude, Meridian (Claude Max), Ollama, or OCR fallback
     - Cross-group dashboard with debt simplification
     - PWA installable on mobile
     - Magic link email authentication (optional)
@@ -30,7 +30,7 @@
   <Icon>https://raw.githubusercontent.com/sw-carlos-cristobal/sharetab/main/public/icons/icon.svg</Icon>
   <ExtraParams>--restart=unless-stopped</ExtraParams>
   <Description>
-    Self-hosted Splitwise alternative with AI receipt scanning. All-in-one container with bundled PostgreSQL — no external database needed. Split expenses with friends using multiple modes (equal, percentage, shares, exact, item-level from receipts). Supports OpenAI, Claude, and local Ollama for receipt extraction.
+    Self-hosted Splitwise alternative with AI receipt scanning. All-in-one container with bundled PostgreSQL — no external database needed. Split expenses with friends using multiple modes (equal, percentage, shares, exact, item-level from receipts). Supports OpenAI, Claude, Meridian (Claude Max), Ollama, and OCR fallback for receipt extraction.
   </Description>
 
   <!-- Ports -->
@@ -146,7 +146,7 @@
     Name="AI Provider"
     Target="AI_PROVIDER"
     Default="openai"
-    Description="AI provider for receipt scanning: openai | claude | meridian | ollama. Meridian uses Claude Max subscription via embedded proxy — no API key needed."
+    Description="AI provider for receipt scanning: openai | claude | meridian | ollama | ocr. Meridian uses Claude Max subscription via embedded proxy — no API key needed. OCR uses local Tesseract.js (no API key) and is also the automatic fallback."
     Type="Variable"
     Display="always"
     Required="false"
@@ -160,6 +160,15 @@
     Display="always"
     Required="false"
     Mask="true"></Config>
+  <Config
+    Name="OpenAI Model"
+    Target="OPENAI_MODEL"
+    Default="gpt-4o"
+    Description="OpenAI model for receipt scanning. Defaults to gpt-4o."
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false">gpt-4o</Config>
   <Config
     Name="Anthropic API Key"
     Target="ANTHROPIC_API_KEY"
@@ -178,6 +187,15 @@
     Display="always"
     Required="false"
     Mask="false">claude-opus-4-6</Config>
+  <Config
+    Name="Meridian Port"
+    Target="MERIDIAN_PORT"
+    Default="3457"
+    Description="Port for the embedded Meridian proxy (only used with AI_PROVIDER=meridian). Change if port 3457 conflicts with another service."
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false">3457</Config>
   <Config
     Name="Ollama URL"
     Target="OLLAMA_BASE_URL"

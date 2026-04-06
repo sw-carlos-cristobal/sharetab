@@ -1,5 +1,47 @@
 # Changelog
 
+## [v0.4.0] - 2026-04-05
+
+### Features
+- add OCR receipt scanning fallback via Tesseract.js — no API key needed (24febc7)
+- comprehensive OCR parser improvements and 50 unit tests (a0ad840)
+- OCR image preprocessing and distorted receipt tests (26596c2)
+- add receipt ownership (uploadedById) to fix cross-user access (9943c71)
+- add mock AI provider and SMTP server for CI testing (7e02ec5)
+
+### Bug Fixes
+- separator-aware date disambiguation and undefined for unparseable dates (#45, #49) (37c75ed)
+- invalidate AI provider cache on extraction failure and retry (#46) (8e5fc3a)
+- wrap expense+assignments+activity in single transaction for atomicity (#47) (c6e7213)
+- normalize receipt dates to ISO YYYY-MM-DD format (#33) (7e8815b)
+- validate assignment indices before blank-name filtering in createSplit (9b1afe6)
+- batch receipt item assignments with deleteMany+createMany in transaction (#30) (7a45f82)
+- make OpenAI model configurable via OPENAI_MODEL env var (#27) (f900245)
+- make Meridian port configurable, validate health in isAvailable (#26) (f3c0b35)
+- retryProcessing now actually reprocesses the receipt (#28) (239d0a0)
+- validate payer, assignees, and item IDs in receipt-to-expense (#17) (ee8b904)
+- filter blank names and remap indices in guest.createSplit (#38) (ee5a937)
+- block receipt-to-expense creation on archived groups (#39) (097b071)
+- scope OCR O→0 normalization to price context only (#32) (2e2e26e)
+- validate OPENAI_API_KEY before constructing provider (#24) (0c1f65f)
+- data integrity — dedup items, preserve on failure, fix tax split, reject negative prices (7f0354d)
+
+### Security
+- fix 6 vulnerabilities in upload, AI, and guest flows (35613f7)
+- address CI audit and secret-handling review feedback (eed32fd)
+
+### Tests
+- add guest API security tests and OCR regression tests (#43, #20) (584c7e0)
+- add 10 photorealistic receipt OCR tests (dbb8bc0)
+- add 22 real-world receipt images for OCR testing (384af46)
+- add fallback test for isAvailable() returning false (#35) (093de26)
+
+### Other Changes
+- refactor: extract normalizeDate to its own module for testability (1526138)
+- perf: cache AI provider with 60s TTL to avoid repeated isAvailable() calls (#31) (ff6258f)
+
+**Full Changelog**: https://github.com/sw-carlos-cristobal/sharetab/compare/v0.3.0...v0.4.0
+
 ## [v0.3.0] - 2026-04-01
 
 ### Features

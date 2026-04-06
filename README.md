@@ -131,8 +131,10 @@ All configuration is done through environment variables. Copy `.env.example` to 
 |---|---|
 | `AI_PROVIDER` | One of `openai`, `claude`, `meridian`, `ollama`, or `ocr`. Defaults to `openai`. |
 | `OPENAI_API_KEY` | Required when `AI_PROVIDER=openai`. |
+| `OPENAI_MODEL` | OpenAI model for receipt scanning. Defaults to `gpt-4o`. |
 | `ANTHROPIC_API_KEY` | Required when `AI_PROVIDER=claude`. |
 | `ANTHROPIC_MODEL` | Claude model for receipt scanning. Defaults to `claude-sonnet-4-6` (claude provider) or `claude-opus-4-6` (meridian provider). |
+| `MERIDIAN_PORT` | Port for the embedded Meridian proxy. Defaults to `3457`. |
 | `OLLAMA_BASE_URL` | Ollama server URL. Defaults to `http://localhost:11434`. |
 | `OLLAMA_MODEL` | Ollama model name. Defaults to `llava`. |
 
@@ -187,7 +189,7 @@ The `ocr` provider uses Tesseract.js for local text extraction -- no API key or 
 | Database | [Prisma 7](https://www.prisma.io) + PostgreSQL 16 |
 | Auth | [NextAuth v5](https://authjs.dev) (credentials + OAuth + magic link) |
 | UI | [TailwindCSS 4](https://tailwindcss.com) + [shadcn/ui](https://ui.shadcn.com) + [next-themes](https://github.com/pacocoursey/next-themes) |
-| AI | Pluggable providers: OpenAI, Claude, Meridian, Ollama |
+| AI | Pluggable providers: OpenAI, Claude, Meridian, Ollama, OCR fallback |
 | Testing | [Vitest](https://vitest.dev) (unit) + [Playwright](https://playwright.dev) (e2e) |
 
 ## Development
