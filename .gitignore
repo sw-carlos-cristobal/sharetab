@@ -69,3 +69,4 @@ next-env.d.ts
 # IDE
 *.code-workspace
 eng.traineddata
+docs/superpowers/

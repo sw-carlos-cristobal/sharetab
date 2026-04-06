@@ -110,7 +110,7 @@ The app will be available at `http://localhost:3000`.
 
 ## Unraid
 
-If you want to run ShareTab on Unraid, this repo includes a ready-made template at [unraid/sharetab.xml](/c:/Users/spart/github/sharetab/unraid/sharetab.xml).
+If you want to run ShareTab on Unraid, this repo includes a ready-made template at `unraid/sharetab.xml`.
 
 To use it:
 
