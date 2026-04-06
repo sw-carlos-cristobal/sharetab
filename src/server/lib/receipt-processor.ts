@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@/generated/prisma/client";
 import type { Prisma } from "@/generated/prisma/client";
-import { getAIProviderWithFallback } from "../ai/registry";
+import { getAIProviderWithFallback, clearProviderCache } from "../ai/registry";
 import { logger } from "./logger";
 import { normalizeDate } from "./normalize-date";
 
@@ -30,7 +30,7 @@ export async function processReceiptImage({
   const filepath = join(getUploadDir(), receipt.imagePath);
   const imageBuffer = await readFile(filepath);
 
-  const provider = await getAIProviderWithFallback();
+  let provider = await getAIProviderWithFallback();
   logger.info(`${logPrefix}.processing`, {
     receiptId,
     provider: provider.name,
@@ -38,11 +38,28 @@ export async function processReceiptImage({
     correctionHint: correctionHint ?? null,
   });
   const start = Date.now();
-  const result = await provider.extractReceipt(
-    imageBuffer,
-    receipt.mimeType,
-    correctionHint
-  );
+  let result;
+  try {
+    result = await provider.extractReceipt(
+      imageBuffer,
+      receipt.mimeType,
+      correctionHint
+    );
+  } catch (err) {
+    // Cached provider may be stale — clear cache and retry once with fresh provider
+    logger.warn(`${logPrefix}.extractFailed`, {
+      receiptId,
+      provider: provider.name,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    clearProviderCache();
+    provider = await getAIProviderWithFallback();
+    result = await provider.extractReceipt(
+      imageBuffer,
+      receipt.mimeType,
+      correctionHint
+    );
+  }
   logger.info(`${logPrefix}.extracted`, {
     receiptId,
     provider: provider.name,

@@ -49,6 +49,12 @@ let cachedProvider: AIProvider | null = null;
 let cacheExpiry = 0;
 const CACHE_TTL_MS = 60_000; // Re-check availability every 60 seconds
 
+/** Clear the cached provider so the next call re-evaluates availability. */
+export function clearProviderCache(): void {
+  cachedProvider = null;
+  cacheExpiry = 0;
+}
+
 /**
  * Get the configured AI provider, falling back to OCR if unavailable.
  * Caches the result for 60s to avoid repeated network checks.

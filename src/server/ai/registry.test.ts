@@ -89,4 +89,21 @@ describe("getAIProvider", () => {
     const provider = await getAIProviderWithFallback();
     expect(provider.constructor.name).toBe("OcrProvider");
   });
+
+  test("clearCache forces re-evaluation on next call", async () => {
+    process.env.AI_PROVIDER = "ocr";
+    const { getAIProviderWithFallback, clearProviderCache } = await import("./registry");
+
+    // Prime the cache
+    const first = await getAIProviderWithFallback();
+    expect(first.constructor.name).toBe("OcrProvider");
+
+    // Clear and get again — should still work (re-evaluates)
+    clearProviderCache();
+    const second = await getAIProviderWithFallback();
+    expect(second.constructor.name).toBe("OcrProvider");
+
+    // They should be different instances (cache was cleared)
+    expect(first).not.toBe(second);
+  });
 });
