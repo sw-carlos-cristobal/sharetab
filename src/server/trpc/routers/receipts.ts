@@ -415,24 +415,23 @@ export const receiptsRouter = createTRPCRouter({
         },
       });
 
-      // Save assignments for reference
-      for (const assignment of input.assignments) {
-        for (const userId of assignment.userIds) {
-          await ctx.db.receiptItemAssignment.upsert({
-            where: {
-              receiptItemId_userId: {
-                receiptItemId: assignment.receiptItemId,
-                userId,
-              },
-            },
-            create: {
-              receiptItemId: assignment.receiptItemId,
-              userId,
-            },
-            update: {},
-          });
-        }
-      }
+      // Save assignments in a single batch (replaces N×M individual upserts)
+      const assignmentData = input.assignments.flatMap((a) =>
+        a.userIds.map((userId) => ({
+          receiptItemId: a.receiptItemId,
+          userId,
+        }))
+      );
+      const itemIds = [...new Set(input.assignments.map((a) => a.receiptItemId))];
+      await ctx.db.$transaction([
+        ctx.db.receiptItemAssignment.deleteMany({
+          where: { receiptItemId: { in: itemIds } },
+        }),
+        ctx.db.receiptItemAssignment.createMany({
+          data: assignmentData,
+          skipDuplicates: true,
+        }),
+      ]);
 
       await ctx.db.activityLog.create({
         data: {
