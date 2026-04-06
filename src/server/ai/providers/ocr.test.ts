@@ -325,3 +325,85 @@ describe("edge cases", () => {
     expect(result.merchantName).toBe("BEST SHOP");
   });
 });
+
+// ── OCR regression — known Golden Fork output (#20) ────────────────
+
+describe("OCR regression — known Golden Fork output", () => {
+  // This is the exact Tesseract output from e2e/test-receipt.png
+  // If the parser regresses, this test catches it specifically
+  let result: ReceiptExtractionResult;
+  beforeAll(() => {
+    result = parseReceiptText(`THE GOLDEN FORK
+123 Wain Street, Austin TX 78701
+Tel: (512) 555-0142
+Date: 03/28/2026 Time: 7:42 Bl
+Server: Maria Table: 14
+Guests: 6
+QTY ITEM PRICE
+Ix Truffle Fries (large) 14.99
+2 Spring Rolls 17.98
+Ix Calamari 12.50
+Ix Ribeye Steak 1202 42.00
+Ix Grilled Salmon 28.50
+Ix Chicken Parmesan 22.00
+1x Mushroom Risotto 19.50
+Ix Fish Tacos (3pc) 18.00
+Ix Lobster Pasta 34.00
+2 Side Salad 13.00
+1x Mac and Cheese 8.50
+Ix Garlic Bread 6.50
+3x House Red Wine 36.00
+2 Craft IPA 16.00
+Ix Sparkling Water 4.50
+Ix Tiranisu 11.00
+Ix Chocolate Lava Cake 13.00
+Ix Cheesecake Slice 10.00
+Subtotal 347.97
+Tax (8.25%) 28.71
+TOTAL 376.68
+Suggested Tip (18%) 62.63
+Suggested Tip (20%) 69.59
+Suggested Tip (26) 76.55
+Thank you for dining with us!
+Please visit us again
+== CUSTUMER COPY ***`);
+  });
+
+  test("extracts merchant name", () => {
+    expect(result.merchantName).toBe("THE GOLDEN FORK");
+  });
+
+  test("extracts at least 15 items", () => {
+    expect(result.items.length).toBeGreaterThanOrEqual(15);
+  });
+
+  test("extracts subtotal as 34797", () => {
+    expect(result.subtotal).toBe(34797);
+  });
+
+  test("extracts tax as 2871", () => {
+    expect(result.tax).toBe(2871);
+  });
+
+  test("extracts total as 37668", () => {
+    expect(result.total).toBe(37668);
+  });
+
+  test("suggested tip lines are not items", () => {
+    const names = result.items.map(i => i.name.toLowerCase());
+    expect(names.some(n => n.includes("suggested"))).toBe(false);
+    expect(names.some(n => n.includes("tip"))).toBe(false);
+  });
+
+  test("Ix prefix normalized to 1x (quantity 1)", () => {
+    const calamari = result.items.find(i => i.name.includes("Calamari"));
+    expect(calamari).toBeDefined();
+    expect(calamari!.quantity).toBe(1);
+  });
+
+  test("plain number prefix parsed as quantity", () => {
+    const salad = result.items.find(i => i.name.includes("Side Salad") || i.name.includes("Salad"));
+    expect(salad).toBeDefined();
+    expect(salad!.quantity).toBe(2);
+  });
+});
