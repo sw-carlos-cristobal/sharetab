@@ -80,7 +80,7 @@ test.describe("Upload & Image Serving API", () => {
     const ctx = await authedContext("alice@example.com", "password123");
     const uploadRes = await ctx.post("/api/upload", {
       multipart: {
-        file: { name: "test-serve.jpg", mimeType: "image/jpeg", buffer: jpegData },
+        file: { name: "test-serve.jpg", mimeType: "image/jpeg", buffer: FAKE_JPEG },
       },
     });
     const { imagePath } = await uploadRes.json();
