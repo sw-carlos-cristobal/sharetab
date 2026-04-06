@@ -1,6 +1,7 @@
-import { describe, test, expect } from "vitest";
+import { describe, test, expect, beforeAll } from "vitest";
 import { readFileSync } from "fs";
 import { resolve } from "path";
+import type { ReceiptExtractionResult } from "../schema";
 import { parseReceiptText } from "./ocr";
 
 function loadReceipt(name: string): string {
@@ -10,7 +11,8 @@ function loadReceipt(name: string): string {
 // ── Grocery receipt ─────────────────────────────────────────────────
 
 describe("grocery receipt", () => {
-  const result = parseReceiptText(loadReceipt("grocery"));
+  let result: ReceiptExtractionResult;
+  beforeAll(() => { result = parseReceiptText(loadReceipt("grocery")); });
 
   test("extracts merchant name", () => {
     expect(result.merchantName).toBe("FRESH MART GROCERY");
@@ -21,8 +23,6 @@ describe("grocery receipt", () => {
   });
 
   test("extracts correct number of items (no discounts)", () => {
-    // 13 real items; SAVE 1.00- and DISCOUNT 0.50- should be excluded
-    // PLU 4011 is a modifier line (indented, no price) and is skipped
     expect(result.items.length).toBe(13);
   });
 
@@ -49,7 +49,8 @@ describe("grocery receipt", () => {
 // ── Restaurant receipt ──────────────────────────────────────────────
 
 describe("restaurant receipt", () => {
-  const result = parseReceiptText(loadReceipt("restaurant"));
+  let result: ReceiptExtractionResult;
+  beforeAll(() => { result = parseReceiptText(loadReceipt("restaurant")); });
 
   test("extracts merchant name", () => {
     expect(result.merchantName).toBe("THE GOLDEN FORK");
@@ -60,7 +61,6 @@ describe("restaurant receipt", () => {
   });
 
   test("extracts correct number of items (no modifiers)", () => {
-    // 6 items; modifier lines (NO CROUTONS, EXTRA SHRIMP, 2% MILK) should be excluded
     expect(result.items.length).toBe(6);
   });
 
@@ -85,7 +85,8 @@ describe("restaurant receipt", () => {
 // ── Cafe receipt ────────────────────────────────────────────────────
 
 describe("cafe receipt", () => {
-  const result = parseReceiptText(loadReceipt("cafe"));
+  let result: ReceiptExtractionResult;
+  beforeAll(() => { result = parseReceiptText(loadReceipt("cafe")); });
 
   test("extracts merchant name", () => {
     expect(result.merchantName).toBe("BEANTOWN COFFEE");
@@ -105,7 +106,8 @@ describe("cafe receipt", () => {
 // ── Gas station receipt ─────────────────────────────────────────────
 
 describe("gas station receipt", () => {
-  const result = parseReceiptText(loadReceipt("gas-station"));
+  let result: ReceiptExtractionResult;
+  beforeAll(() => { result = parseReceiptText(loadReceipt("gas-station")); });
 
   test("extracts merchant name", () => {
     expect(result.merchantName).toBe("QUIKSTOP GAS N GO");
@@ -129,16 +131,14 @@ describe("gas station receipt", () => {
 // ── Pharmacy receipt ────────────────────────────────────────────────
 
 describe("pharmacy receipt", () => {
-  const result = parseReceiptText(loadReceipt("pharmacy"));
+  let result: ReceiptExtractionResult;
+  beforeAll(() => { result = parseReceiptText(loadReceipt("pharmacy")); });
 
   test("extracts merchant name (not address)", () => {
     expect(result.merchantName).toBe("CVS PHARMACY");
   });
 
   test("extracts 5 items (BOGO line excluded)", () => {
-    // BOGO FREE 0.00- is a discount line → skipped
-    // TISSUES 3PK 5.99 should be included (it's before the BOGO line)
-    // 6 priced items minus BOGO = 5 real items? Actually BOGO has 0.00 price so it's skipped anyway
     expect(result.items.length).toBe(6);
   });
 
@@ -158,15 +158,14 @@ describe("pharmacy receipt", () => {
 // ── Bar receipt ─────────────────────────────────────────────────────
 
 describe("bar receipt", () => {
-  const result = parseReceiptText(loadReceipt("bar"));
+  let result: ReceiptExtractionResult;
+  beforeAll(() => { result = parseReceiptText(loadReceipt("bar")); });
 
   test("extracts merchant name", () => {
     expect(result.merchantName).toBe("LUCKY'S TAP HOUSE");
   });
 
   test("extracts items (comped item excluded)", () => {
-    // COMP'D 0.00 has price 0 so should be excluded (totalPrice <= 0)
-    // Real items: IPA, Margarita, 2x Lager, Whiskey Sour, Nachos, Wings = 6
     const names = result.items.map((i) => i.name);
     expect(names.some((n) => n.toLowerCase().includes("comp"))).toBe(false);
     expect(result.items.length).toBe(6);
@@ -186,7 +185,8 @@ describe("bar receipt", () => {
 // ── European receipt ────────────────────────────────────────────────
 
 describe("european receipt", () => {
-  const result = parseReceiptText(loadReceipt("european"));
+  let result: ReceiptExtractionResult;
+  beforeAll(() => { result = parseReceiptText(loadReceipt("european")); });
 
   test("extracts merchant name (not address)", () => {
     expect(result.merchantName).toBe("BRASSERIE LE PARIS");
@@ -219,7 +219,8 @@ describe("european receipt", () => {
 // ── Delivery receipt ────────────────────────────────────────────────
 
 describe("delivery receipt", () => {
-  const result = parseReceiptText(loadReceipt("delivery"));
+  let result: ReceiptExtractionResult;
+  beforeAll(() => { result = parseReceiptText(loadReceipt("delivery")); });
 
   test("extracts 5 food items", () => {
     expect(result.items.length).toBe(5);
@@ -257,7 +258,6 @@ describe("delivery receipt", () => {
 describe("edge cases", () => {
   test("toCents handles trailing dash (NaN fix)", () => {
     const result = parseReceiptText("ITEM ONE  4.40-\nITEM TWO  5.50\nTotal  5.50");
-    // 4.40- is a discount line (ends with -), should be skipped
     expect(result.items.length).toBe(1);
     expect(result.items[0].name).toContain("ITEM TWO");
   });
@@ -277,7 +277,6 @@ describe("edge cases", () => {
     const result = parseReceiptText(
       "SHOP\n041-06-0812 ITEM  3.99\n01/15/2025\nTotal  3.99",
     );
-    // The date should be 01/15/2025, not the SKU
     expect(result.date).toBe("01/15/2025");
   });
 
