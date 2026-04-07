@@ -50,7 +50,8 @@ async function loginAs(context: BrowserContext): Promise<Page> {
 
 async function getApartmentGroupId(page: Page): Promise<string> {
   const data = await page.evaluate(async () => {
-    const r = await fetch("/api/trpc/groups.list?input={}");
+    const query = new URLSearchParams({ input: JSON.stringify({}) }).toString();
+    const r = await fetch(`/api/trpc/groups.list?${query}`);
     return r.json();
   });
   const group = data?.result?.data?.json?.find(

@@ -1,5 +1,6 @@
 import { chromium } from "@playwright/test";
 import path from "path";
+import fs from "fs";
 
 const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 // Use process.cwd() to avoid __dirname path mangling on Windows under tsx
@@ -12,6 +13,7 @@ const PAUSE_MEDIUM = 2000;
 const PAUSE_HERO = 4000;
 
 async function main() {
+  fs.mkdirSync(OUTPUT_DIR, { recursive: true });
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({
     viewport: { width: 1280, height: 720 },
@@ -47,7 +49,8 @@ async function main() {
     // ── Scene 3: Group detail ──
     // Find the Apartment group via API and navigate directly (group may not be on first page)
     const groupsData = await page.evaluate(async () => {
-      const r = await fetch("/api/trpc/groups.list?input={}");
+      const query = new URLSearchParams({ input: JSON.stringify({}) }).toString();
+      const r = await fetch(`/api/trpc/groups.list?${query}`);
       return r.json();
     });
     const apartmentGroup = groupsData?.result?.data?.json?.find(
