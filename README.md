@@ -108,6 +108,30 @@ docker compose up -d
 
 The app will be available at `http://localhost:3000`.
 
+## Unraid
+
+If you want to run ShareTab on Unraid, this repo includes a ready-made template at [unraid/sharetab.xml](unraid/sharetab.xml).
+
+To use it:
+
+```bash
+# On your Unraid server
+mkdir -p /boot/config/plugins/dockerMan/templates-user
+cp /path/to/sharetab/unraid/sharetab.xml /boot/config/plugins/dockerMan/templates-user/sharetab.xml
+```
+
+Then in the Unraid web UI:
+
+1. Open `Docker`.
+2. Click `Add Container`.
+3. Select the `ShareTab` template from the template dropdown.
+4. Fill in the required variables like `AUTH_SECRET`, `NEXTAUTH_SECRET`, and any optional AI settings.
+5. Click `Apply` to create and start the container.
+
+You can also skip the manual copy and paste the raw template URL into Unraid's template install flow:
+
+`https://raw.githubusercontent.com/sw-carlos-cristobal/sharetab/main/unraid/sharetab.xml`
+
 **Backups:**
 
 ```bash
