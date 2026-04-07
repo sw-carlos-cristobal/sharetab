@@ -47,7 +47,8 @@ async function main() {
     // ── Scene 3: Group detail ──
     // Find the Apartment group via API and navigate directly (group may not be on first page)
     const groupsData = await page.evaluate(async () => {
-      const r = await fetch("/api/trpc/groups.list?input={}");
+      const query = new URLSearchParams({ input: JSON.stringify({}) }).toString();
+      const r = await fetch(`/api/trpc/groups.list?${query}`);
       return r.json();
     });
     const apartmentGroup = groupsData?.result?.data?.json?.find(
