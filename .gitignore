@@ -61,6 +61,8 @@ next-env.d.ts
 # demo video output
 /demo/*.webm
 /demo/*.mp4
+/demo/*.gif
+/demo/*.png
 /blob-report/
 /tmp-screenshots/
 .claude/settings.local.json
