@@ -339,6 +339,157 @@ async function recordGuestSplit(browser: Browser): Promise<string> {
   return finalizeRecording(page, context);
 }
 
+async function recordCreateGroup(browser: Browser): Promise<string> {
+  const context = await createRecordingContext(browser, MOBILE);
+  const page = await loginAs(context);
+
+  // Navigate to create group page
+  await page.goto("/groups/new");
+  await page.waitForSelector("text=Create a new group", { timeout: 10000 });
+  await page.waitForTimeout(800);
+
+  // Fill in group name
+  await page.getByLabel("Group name").fill("Weekend Trip");
+  await page.waitForTimeout(400);
+
+  // Fill in description
+  await page.getByLabel("Description").fill("Cabin getaway with friends");
+  await page.waitForTimeout(400);
+
+  // Click the airplane emoji button
+  await page.locator("button", { hasText: "✈️" }).click();
+  await page.waitForTimeout(400);
+
+  // Select EUR currency
+  await page.locator("select#currency").selectOption("EUR");
+  await page.waitForTimeout(PAUSE_MEDIUM);
+
+  // Submit
+  await page.getByRole("button", { name: "Create Group" }).click();
+  await page.waitForURL(/\/groups\/\w+$/, { timeout: 15000 });
+  await page.waitForTimeout(PAUSE_HERO);
+
+  // Clean up: delete the created group via API
+  const groupId = page.url().match(/\/groups\/(\w+)/)?.[1];
+  if (groupId) {
+    await page.evaluate(async (id) => {
+      await fetch("/api/trpc/groups.delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ json: { groupId: id } }),
+      });
+    }, groupId);
+  }
+
+  return finalizeRecording(page, context);
+}
+
+async function recordSplitModes(browser: Browser): Promise<string> {
+  const context = await createRecordingContext(browser, MOBILE);
+  const page = await loginAs(context);
+
+  const groupId = await getApartmentGroupId(page);
+
+  // Navigate to new expense page
+  await page.goto(`/groups/${groupId}/expenses/new`);
+  await page.waitForSelector("select#paidBy", { timeout: 10000 });
+  await page.waitForTimeout(800);
+
+  // Fill in expense details
+  await page.getByLabel("Description").fill("Team dinner");
+  await page.waitForTimeout(400);
+  await page.getByLabel("Amount").fill("120.00");
+  await page.waitForTimeout(400);
+
+  // Select paid by (Alice — first real option)
+  await page.locator("select#paidBy").selectOption({ index: 1 });
+  await page.waitForTimeout(400);
+
+  // Equal split is default — pause to show it
+  await page.waitForTimeout(PAUSE_MEDIUM);
+
+  // Switch to Exact split
+  await page.locator("button", { hasText: "Exact" }).click();
+  await page.waitForTimeout(PAUSE_MEDIUM);
+
+  // Switch to Percentage split
+  await page.locator("button", { hasText: "Percentage" }).click();
+  await page.waitForTimeout(PAUSE_MEDIUM);
+
+  // Switch to Shares split
+  await page.locator("button", { hasText: "Shares" }).click();
+  await page.waitForTimeout(PAUSE_SHORT);
+
+  // Scroll down to show split details
+  await page.evaluate(() => window.scrollTo({ top: 400, behavior: "smooth" }));
+  await page.waitForTimeout(PAUSE_MEDIUM);
+
+  return finalizeRecording(page, context);
+}
+
+async function recordInviteMembers(browser: Browser): Promise<string> {
+  const context = await createRecordingContext(browser, MOBILE);
+  const page = await loginAs(context);
+
+  const groupId = await getApartmentGroupId(page);
+
+  // Navigate to group page
+  await page.goto(`/groups/${groupId}`);
+  await page.waitForSelector("text=Expenses", { timeout: 10000 });
+  await page.waitForTimeout(PAUSE_SHORT);
+
+  // Click the Invite button
+  await page.getByRole("button", { name: "Invite" }).click();
+  await page.waitForTimeout(800);
+
+  // Wait for invite dialog
+  await page.waitForSelector("text=Invite to group", { timeout: 5000 });
+  await page.waitForTimeout(500);
+
+  // Generate invite link
+  await page.getByRole("button", { name: "Generate invite link" }).click();
+  await page.waitForSelector("input[readonly]", { timeout: 10000 });
+  await page.waitForTimeout(PAUSE_SHORT);
+
+  // Click copy button
+  await page.locator("[data-slot='dialog-content'] button:has(svg)").last().click();
+  await page.waitForTimeout(PAUSE_MEDIUM);
+
+  // Close dialog
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(PAUSE_SHORT);
+
+  return finalizeRecording(page, context);
+}
+
+async function recordGroupSettings(browser: Browser): Promise<string> {
+  const context = await createRecordingContext(browser, MOBILE);
+  const page = await loginAs(context);
+
+  const groupId = await getApartmentGroupId(page);
+
+  // Navigate to group settings
+  await page.goto(`/groups/${groupId}/settings`);
+  await page.waitForSelector("text=Group Settings", { timeout: 10000 });
+  await page.waitForTimeout(PAUSE_MEDIUM);
+
+  // Scroll down to show all sections
+  await page.evaluate(() => window.scrollTo({ top: 600, behavior: "smooth" }));
+  await page.waitForTimeout(PAUSE_MEDIUM);
+
+  // Scroll further to show danger zone
+  await page.evaluate(() =>
+    window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }),
+  );
+  await page.waitForTimeout(PAUSE_MEDIUM);
+
+  // Scroll back up
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+  await page.waitForTimeout(PAUSE_SHORT);
+
+  return finalizeRecording(page, context);
+}
+
 // ── Main ──
 
 async function main() {
@@ -353,6 +504,10 @@ async function main() {
     { name: "settle-up", fn: recordSettleUp, desktop: false },
     { name: "dark-mode", fn: recordDarkMode, desktop: false },
     { name: "guest-split", fn: recordGuestSplit, desktop: false },
+    { name: "create-group", fn: recordCreateGroup, desktop: false },
+    { name: "split-modes", fn: recordSplitModes, desktop: false },
+    { name: "invite-members", fn: recordInviteMembers, desktop: false },
+    { name: "group-settings", fn: recordGroupSettings, desktop: false },
   ];
 
   for (const { name, fn, desktop } of features) {
