@@ -25,45 +25,61 @@ ShareTab makes it easy to track shared expenses with friends, roommates, or trav
 ### Dashboard -- see all your balances at a glance
 
 <p align="center">
-  <img src="docs/screenshots/dashboard-light.png" width="100%" alt="Dashboard showing balance summary, who owes you, and group cards" />
+  <img src="demo/dashboard.gif" width="100%" alt="Dashboard showing balance summary, who owes you, and group cards" />
 </p>
 
-### Dark mode -- toggle with one click
+### AI receipt scanning -- snap a photo, assign items to people
 
 <p align="center">
-  <img src="docs/screenshots/dark-mode-toggle.gif" width="100%" alt="Dark mode toggle animation" />
+  <img src="demo/receipt-scan.gif" width="320" alt="Receipt scan: upload photo, AI extracts items, assign to group members" />
 </p>
 
-### Group detail -- members, balances, and expenses
+### Split modes -- equal, exact, percentage, or shares
 
 <p align="center">
-  <img src="docs/screenshots/group-detail.png" width="100%" alt="Group detail page with member avatars, simplified debts, and expense list" />
+  <img src="demo/split-modes.gif" width="320" alt="Switching between equal, exact, percentage, and shares split modes" />
 </p>
 
-### Settle up -- click a debt to pre-fill the payment dialog
+### Add expense -- quick and simple
 
 <p align="center">
-  <img src="docs/screenshots/settle-dialog.png" width="100%" alt="Settle up dialog with From, To, and Amount pre-populated" />
+  <img src="demo/add-expense.gif" width="320" alt="Adding an expense with equal split" />
 </p>
 
-### Add expense -- 4 split modes
+### Create a group -- emoji, currency, and description
 
 <p align="center">
-  <img src="docs/screenshots/add-expense.png" width="100%" alt="Add expense form with equal, exact, percentage, and shares split modes" />
+  <img src="demo/create-group.gif" width="320" alt="Creating a new group with emoji picker and currency selector" />
+</p>
+
+### Settle up -- click a debt to record payment
+
+<p align="center">
+  <img src="demo/settle-up.gif" width="320" alt="Settlement dialog with From, To, and Amount" />
+</p>
+
+### Invite members -- share a link
+
+<p align="center">
+  <img src="demo/invite-members.gif" width="320" alt="Generating and copying an invite link" />
 </p>
 
 ### Guest bill splitting -- no account needed
 
 <p align="center">
-  <img src="docs/screenshots/guest-split.png" width="100%" alt="Guest split page with camera upload and gallery options" />
+  <img src="demo/guest-split.gif" width="320" alt="Guest split: upload receipt, add people, assign items, share results" />
 </p>
 
-### Mobile-first design
+### Group settings
 
 <p align="center">
-  <img src="docs/screenshots/mobile-dashboard.png" width="280" alt="Mobile dashboard" />
-  &nbsp;&nbsp;
-  <img src="docs/screenshots/mobile-split.png" width="280" alt="Mobile guest split" />
+  <img src="demo/group-settings.gif" width="320" alt="Group settings page with member management" />
+</p>
+
+### Dark mode -- toggle with one click
+
+<p align="center">
+  <img src="demo/dark-mode.gif" width="320" alt="Dark mode toggle" />
 </p>
 
 ## Features
