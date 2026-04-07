@@ -97,7 +97,7 @@ export class MeridianProvider implements AIProvider {
       throw new Error("Meridian returned no text response");
     }
 
-    const cleaned = textBlock.text.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "");
+    const cleaned = textBlock.text.trim().replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
     const raw = JSON.parse(cleaned);
     return receiptExtractionSchema.parse(raw);
   }

@@ -57,6 +57,12 @@ next-env.d.ts
 # playwright
 /test-results/
 /playwright-report/
+
+# demo video output
+/demo/*.webm
+/demo/*.mp4
+/demo/*.gif
+/demo/*.png
 /blob-report/
 /tmp-screenshots/
 .claude/settings.local.json
@@ -65,3 +71,4 @@ next-env.d.ts
 # IDE
 *.code-workspace
 eng.traineddata
+docs/superpowers/
