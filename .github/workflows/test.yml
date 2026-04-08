@@ -55,12 +55,9 @@ jobs:
         run: |
           if [ -n "$CI_AUTH_SECRET" ]; then
             echo "secret=$CI_AUTH_SECRET" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.pull_request.head.repo.fork }}" = "true" ]; then
-            # Forked PRs cannot access repo secrets — generate a per-run ephemeral secret
-            echo "secret=$(openssl rand -base64 32)" >> "$GITHUB_OUTPUT"
           else
-            echo "::error::CI_AUTH_SECRET is not set. Add it under Settings → Secrets and variables → Actions."
-            exit 1
+            # Secret unavailable (forked PRs, Dependabot, etc.) — generate an ephemeral one
+            echo "secret=$(openssl rand -base64 32)" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Generate Prisma client
