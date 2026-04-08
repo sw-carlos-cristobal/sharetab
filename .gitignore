@@ -62,6 +62,7 @@ next-env.d.ts
 /demo/*.webm
 /demo/*.mp4
 /demo/*.png
+!/demo/social-preview.png
 /blob-report/
 /tmp-screenshots/
 .claude/settings.local.json
