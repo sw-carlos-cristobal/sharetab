@@ -11,6 +11,17 @@ import nodemailer from "nodemailer";
 import fs from "fs";
 import path from "path";
 import { getRecentLogs } from "@/server/lib/logger";
+import {
+  checkMeridianHealth,
+  sendAuthExpiryEmail,
+} from "@/server/lib/meridian-health-poller";
+import {
+  startLogin,
+  submitCode,
+  cancelLogin,
+  isLoginInProgress,
+} from "@/server/lib/meridian-login";
+import { clearProviderCache } from "@/server/ai/registry";
 
 const serverStartTime = new Date();
 
@@ -877,6 +888,117 @@ export const adminRouter = createTRPCRouter({
         limit: input.limit,
         afterId: input.afterId,
       });
+    }),
+
+  // ─── Meridian Auth ──────────────────────────────────────────
+
+  getMeridianAuthStatus: adminProcedure.query(async () => {
+    if (process.env.AI_PROVIDER !== "meridian") {
+      return { status: "not_applicable" as const };
+    }
+    const health = await checkMeridianHealth();
+    return {
+      ...health,
+      loginInProgress: isLoginInProgress(),
+    };
+  }),
+
+  startMeridianLogin: adminProcedure.mutation(async ({ ctx }) => {
+    if (process.env.AI_PROVIDER !== "meridian") {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Meridian is not the active AI provider",
+      });
+    }
+
+    try {
+      const url = await startLogin();
+
+      // Send email with login URL
+      await sendAuthExpiryEmail(
+        "Re-authentication initiated from admin dashboard",
+        url
+      );
+
+      await logAdminAction(ctx.db, ctx.user.id, "MERIDIAN_LOGIN_STARTED", null, {
+        url,
+      });
+
+      return { url };
+    } catch (err) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: err instanceof Error ? err.message : "Failed to start login",
+      });
+    }
+  }),
+
+  completeMeridianLogin: adminProcedure
+    .input(z.object({ code: z.string().min(1).max(500) }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const result = await submitCode(input.code);
+
+        if (result.success) {
+          clearProviderCache();
+        }
+
+        await logAdminAction(
+          ctx.db,
+          ctx.user.id,
+          result.success ? "MERIDIAN_LOGIN_COMPLETED" : "MERIDIAN_LOGIN_FAILED",
+          null,
+          { success: result.success, error: result.error }
+        );
+
+        return result;
+      } catch (err) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: err instanceof Error ? err.message : "Failed to submit code",
+        });
+      }
+    }),
+
+  cancelMeridianLogin: adminProcedure.mutation(async ({ ctx }) => {
+    cancelLogin();
+    await logAdminAction(ctx.db, ctx.user.id, "MERIDIAN_LOGIN_FAILED", null, {
+      reason: "cancelled",
+    });
+    return { cancelled: true };
+  }),
+
+  getMeridianNotifyPreference: adminProcedure.query(async ({ ctx }) => {
+    const setting = await ctx.db.systemSetting.findUnique({
+      where: { key: "meridianNotifyInterval" },
+    });
+    return {
+      interval: (setting?.value ?? "once") as "once" | "1h" | "6h" | "24h",
+    };
+  }),
+
+  setMeridianNotifyPreference: adminProcedure
+    .input(
+      z.object({
+        interval: z.enum(["once", "1h", "6h", "24h"]),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db.systemSetting.upsert({
+        where: { key: "meridianNotifyInterval" },
+        update: { value: input.interval },
+        create: { key: "meridianNotifyInterval", value: input.interval },
+      });
+
+      await logAdminAction(
+        ctx.db,
+        ctx.user.id,
+        "MERIDIAN_NOTIFY_PREFERENCE_CHANGED",
+        null,
+        { interval: input.interval }
+      );
+
+      return { interval: input.interval };
     }),
 });
 
