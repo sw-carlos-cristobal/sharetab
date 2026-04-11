@@ -23,6 +23,7 @@ export default defineConfig({
       name: "serial",
       testMatch: [
         "admin-features.spec.ts",
+        "admin-meridian.spec.ts",
         "balances.spec.ts",
         "expenses.spec.ts",
         "groups.spec.ts",
@@ -38,6 +39,7 @@ export default defineConfig({
       name: "parallel",
       testIgnore: [
         "admin-features.spec.ts",
+        "admin-meridian.spec.ts",
         "balances.spec.ts",
         "expenses.spec.ts",
         "groups.spec.ts",
