@@ -85,7 +85,7 @@ describe("MeridianHealthPoller", () => {
 
   test("sendAuthExpiryEmail sends email with correct content", async () => {
     const mockSendMail = vi.fn().mockResolvedValue({});
-    vi.mocked(nodemailer.createTransport).mockReturnValue({ sendMail: mockSendMail } as any);
+    vi.mocked(nodemailer.createTransport).mockReturnValue({ sendMail: mockSendMail } as ReturnType<typeof nodemailer.createTransport>);
 
     const { sendAuthExpiryEmail } = await import("./meridian-health-poller");
     await sendAuthExpiryEmail("Not logged in. Run: claude login");
@@ -99,7 +99,7 @@ describe("MeridianHealthPoller", () => {
   test("sendAuthExpiryEmail skips when email is not configured", async () => {
     delete process.env.EMAIL_SERVER_HOST;
     const mockSendMail = vi.fn();
-    vi.mocked(nodemailer.createTransport).mockReturnValue({ sendMail: mockSendMail } as any);
+    vi.mocked(nodemailer.createTransport).mockReturnValue({ sendMail: mockSendMail } as ReturnType<typeof nodemailer.createTransport>);
 
     const { sendAuthExpiryEmail } = await import("./meridian-health-poller");
     await sendAuthExpiryEmail("error");
