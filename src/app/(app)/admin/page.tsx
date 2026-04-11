@@ -41,6 +41,7 @@ import { ActivityFeedSection } from "@/components/admin/activity-feed-section";
 import { AIStatsSection } from "@/components/admin/ai-stats-section";
 import { ToolsSection } from "@/components/admin/tools-section";
 import { ServerLogsSection } from "@/components/admin/server-logs-section";
+import { MeridianAuthSection } from "@/components/admin/meridian-auth-section";
 
 export default function AdminPage() {
   const { data: session } = useSession();
@@ -54,6 +55,7 @@ export default function AdminPage() {
 
       <div className="grid gap-6">
         <SystemHealthSection />
+        <MeridianAuthSection />
         <Separator />
         <UserManagementSection currentUserEmail={session?.user?.email} />
         <Separator />
