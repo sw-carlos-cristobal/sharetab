@@ -28,6 +28,7 @@ let lastStatus: MeridianStatus = "unknown" as MeridianStatus;
 let hasSeenHealthy = false;
 let lastEmailSentAt: number | null = null;
 let pollerInterval: ReturnType<typeof setInterval> | null = null;
+let pollerInitTimeout: ReturnType<typeof setTimeout> | null = null;
 
 const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -185,7 +186,8 @@ export function startPoller(): void {
 
   logger.info("meridian.poller.started");
   // Run first tick after a short delay to let Meridian start
-  setTimeout(() => {
+  pollerInitTimeout = setTimeout(() => {
+    pollerInitTimeout = null;
     pollTick().catch((err) =>
       logger.error("meridian.poller.tickError", { error: String(err) })
     );
@@ -199,11 +201,20 @@ export function startPoller(): void {
 }
 
 export function stopPoller(): void {
+  if (pollerInitTimeout) {
+    clearTimeout(pollerInitTimeout);
+    pollerInitTimeout = null;
+  }
   if (pollerInterval) {
     clearInterval(pollerInterval);
     pollerInterval = null;
     logger.info("meridian.poller.stopped");
   }
+}
+
+/** Run a single poll tick — exported for testing only. */
+export async function _pollTick(): Promise<void> {
+  return pollTick();
 }
 
 /** Reset internal state — for testing only. */
