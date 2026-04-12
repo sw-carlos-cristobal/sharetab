@@ -159,8 +159,8 @@ async function pollTick(): Promise<void> {
     return;
   }
 
-  // Don't alert until we've seen at least one healthy state (prevents startup spam)
-  if (!hasSeenHealthy) {
+  // If proxy isn't running yet (still starting), skip alerting
+  if (!hasSeenHealthy && result.status === "not_running") {
     lastStatus = result.status;
     return;
   }

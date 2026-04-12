@@ -225,12 +225,24 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
     vi.mocked(fetch).mockRejectedValueOnce(new Error("ECONNREFUSED"));
   }
 
-  test("does not send email on first unhealthy if never seen healthy (startup guard)", async () => {
+  test("sends email on first unhealthy even if never seen healthy (auth expired on startup)", async () => {
     const { _pollTick, _resetPollerState } = await import("./meridian-health-poller");
     _resetPollerState();
 
-    // First tick: unhealthy before ever seeing healthy
+    // First tick: proxy is running but auth is expired — should alert immediately
     mockUnhealthy();
+    await _pollTick();
+
+    expect(mockSendMail).toHaveBeenCalledTimes(1);
+    expect(mockSendMail.mock.calls[0][0].subject).toContain("Claude AI authentication expired");
+  });
+
+  test("does not send email on first not_running (startup grace period)", async () => {
+    const { _pollTick, _resetPollerState } = await import("./meridian-health-poller");
+    _resetPollerState();
+
+    // First tick: proxy not running yet (still booting) — no alert
+    mockNotRunning();
     await _pollTick();
 
     expect(mockSendMail).not.toHaveBeenCalled();
