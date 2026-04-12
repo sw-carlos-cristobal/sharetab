@@ -47,13 +47,17 @@ describe("MeridianHealthPoller", () => {
     vi.restoreAllMocks();
   });
 
-  test("checkMeridianHealth returns healthy status", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(
-      new Response(JSON.stringify({
-        status: "healthy",
-        auth: { loggedIn: true, email: "user@test.com" },
-      }), { status: 200 })
-    );
+  test("checkMeridianHealth returns healthy when health + probe succeed", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({
+          status: "healthy",
+          auth: { loggedIn: true, email: "user@test.com" },
+        }), { status: 200 })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: "msg_1", content: [] }), { status: 200 })
+      );
 
     const { checkMeridianHealth } = await import("./meridian-health-poller");
     const result = await checkMeridianHealth();
@@ -61,7 +65,7 @@ describe("MeridianHealthPoller", () => {
     expect(result.email).toBe("user@test.com");
   });
 
-  test("checkMeridianHealth returns unhealthy when not logged in", async () => {
+  test("checkMeridianHealth returns unhealthy when health reports unhealthy", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(
       new Response(JSON.stringify({
         status: "unhealthy",
@@ -75,12 +79,69 @@ describe("MeridianHealthPoller", () => {
     expect(result.error).toBe("Not logged in. Run: claude login");
   });
 
+  test("checkMeridianHealth returns unhealthy when health is ok but probe gets auth error", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({
+          status: "healthy",
+          auth: { loggedIn: true, email: "user@test.com" },
+        }), { status: 200 })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({
+          type: "error",
+          error: { type: "authentication_error", message: "Claude authentication expired" },
+        }), { status: 401 })
+      );
+
+    const { checkMeridianHealth } = await import("./meridian-health-poller");
+    const result = await checkMeridianHealth();
+    expect(result.status).toBe("unhealthy");
+    expect(result.error).toBe("Claude authentication expired");
+  });
+
+  test("checkMeridianHealth returns healthy on non-auth API errors (rate limit, etc.)", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({
+          status: "healthy",
+          auth: { loggedIn: true, email: "user@test.com" },
+        }), { status: 200 })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({
+          type: "error",
+          error: { type: "rate_limit_error", message: "Too many requests" },
+        }), { status: 429 })
+      );
+
+    const { checkMeridianHealth } = await import("./meridian-health-poller");
+    const result = await checkMeridianHealth();
+    expect(result.status).toBe("healthy");
+  });
+
   test("checkMeridianHealth returns not_running on fetch error", async () => {
     vi.mocked(fetch).mockRejectedValueOnce(new Error("ECONNREFUSED"));
 
     const { checkMeridianHealth } = await import("./meridian-health-poller");
     const result = await checkMeridianHealth();
     expect(result.status).toBe("not_running");
+  });
+
+  test("checkMeridianHealth returns degraded when probe times out", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({
+          status: "healthy",
+          auth: { loggedIn: true, email: "user@test.com" },
+        }), { status: 200 })
+      )
+      .mockRejectedValueOnce(new Error("AbortError: signal timed out"));
+
+    const { checkMeridianHealth } = await import("./meridian-health-poller");
+    const result = await checkMeridianHealth();
+    expect(result.status).toBe("degraded");
+    expect(result.error).toBe("Auth verification probe timed out");
   });
 
   test("sendAuthExpiryEmail sends email with correct content", async () => {
@@ -158,18 +219,22 @@ describe("MeridianHealthPoller", () => {
     expect(mockSendMail).not.toHaveBeenCalled();
   });
 
-  test("checkMeridianHealth returns degraded status", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(
-      new Response(JSON.stringify({
-        status: "degraded",
-        error: "Could not verify auth status",
-      }), { status: 200 })
-    );
+  test("checkMeridianHealth returns degraded when health reports degraded and probe succeeds", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({
+          status: "degraded",
+          error: "Could not verify auth status",
+        }), { status: 200 })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: "msg_1", content: [] }), { status: 200 })
+      );
 
     const { checkMeridianHealth } = await import("./meridian-health-poller");
     const result = await checkMeridianHealth();
-    expect(result.status).toBe("degraded");
-    expect(result.error).toBe("Could not verify auth status");
+    // Probe succeeded so auth is fine, but health said degraded — trust the healthy probe
+    expect(result.status).toBe("healthy");
   });
 });
 
@@ -204,21 +269,34 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
   });
 
   function mockHealthy() {
-    vi.mocked(fetch).mockResolvedValueOnce(
-      new Response(JSON.stringify({
-        status: "healthy",
-        auth: { loggedIn: true, email: "user@test.com" },
-      }), { status: 200 })
-    );
+    // /health reports healthy + probe succeeds
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({
+          status: "healthy",
+          auth: { loggedIn: true, email: "user@test.com" },
+        }), { status: 200 })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: "msg_1", content: [] }), { status: 200 })
+      );
   }
 
   function mockUnhealthy(error = "Not logged in. Run: claude login") {
-    vi.mocked(fetch).mockResolvedValueOnce(
-      new Response(JSON.stringify({
-        status: "unhealthy",
-        error,
-      }), { status: 503 })
-    );
+    // /health reports healthy but probe returns auth error
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({
+          status: "healthy",
+          auth: { loggedIn: true, email: "user@test.com" },
+        }), { status: 200 })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({
+          type: "error",
+          error: { type: "authentication_error", message: error },
+        }), { status: 401 })
+      );
   }
 
   function mockNotRunning() {

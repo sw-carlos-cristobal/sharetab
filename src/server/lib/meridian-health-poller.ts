@@ -36,18 +36,79 @@ const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 export async function checkMeridianHealth(): Promise<MeridianHealthResult> {
   const port = process.env.MERIDIAN_PORT ?? "3457";
+  const baseUrl = `http://127.0.0.1:${port}`;
+
+  // Step 1: Check if proxy is running at all
+  let healthData: { status?: string; auth?: { email?: string }; error?: string };
   try {
-    const res = await fetch(`http://127.0.0.1:${port}/health`, {
+    const res = await fetch(`${baseUrl}/health`, {
       signal: AbortSignal.timeout(10_000),
     });
-    const data = await res.json();
-    return {
-      status: data.status === "healthy" ? "healthy" : data.status === "degraded" ? "degraded" : "unhealthy",
-      email: data.auth?.email,
-      error: data.error,
-    };
+    healthData = await res.json();
   } catch {
     return { status: "not_running" };
+  }
+
+  // If /health already reports unhealthy, trust it
+  if (healthData.status !== "healthy" && healthData.status !== "degraded") {
+    return {
+      status: "unhealthy",
+      email: healthData.auth?.email,
+      error: healthData.error,
+    };
+  }
+
+  // Step 2: Verify auth actually works with a minimal API call
+  // The /health endpoint can report "healthy" even with expired tokens,
+  // so we make a real API call to confirm.
+  try {
+    const probeRes = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": "x",
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6",
+        max_tokens: 1,
+        messages: [{ role: "user", content: "hi" }],
+      }),
+      signal: AbortSignal.timeout(30_000),
+    });
+
+    if (probeRes.ok) {
+      // Auth works — discard the response body
+      try { await probeRes.text(); } catch { /* ignore */ }
+      return {
+        status: "healthy",
+        email: healthData.auth?.email,
+      };
+    }
+
+    const probeBody = await probeRes.json().catch(() => null);
+    const errorType = probeBody?.error?.type;
+
+    if (errorType === "authentication_error") {
+      return {
+        status: "unhealthy",
+        email: healthData.auth?.email,
+        error: probeBody?.error?.message ?? "Authentication expired",
+      };
+    }
+
+    // Other API errors (rate limit, overloaded, etc.) — proxy and auth are fine
+    return {
+      status: healthData.status === "degraded" ? "degraded" : "healthy",
+      email: healthData.auth?.email,
+    };
+  } catch {
+    // Probe timed out or failed — proxy is up but something is wrong
+    return {
+      status: "degraded",
+      email: healthData.auth?.email,
+      error: "Auth verification probe timed out",
+    };
   }
 }
 
