@@ -75,9 +75,11 @@ describe("MeridianLoginManager", () => {
     const [url, opts] = vi.mocked(fetch).mock.calls[0];
     expect(url).toBe("https://platform.claude.com/v1/oauth/token");
     expect(opts?.method).toBe("POST");
-    expect(opts?.body).toContain("grant_type=authorization_code");
-    expect(opts?.body).toContain("code=test-auth-code");
-    expect(opts?.body).toContain("code_verifier=");
+    expect(opts?.headers).toEqual({ "Content-Type": "application/json" });
+    const body = JSON.parse(opts?.body as string);
+    expect(body.grant_type).toBe("authorization_code");
+    expect(body.code).toBe("test-auth-code");
+    expect(body.code_verifier).toBeDefined();
 
     expect(mockWriteFileSync).toHaveBeenCalledTimes(1);
     const written = JSON.parse(mockWriteFileSync.mock.calls[0][1]);
