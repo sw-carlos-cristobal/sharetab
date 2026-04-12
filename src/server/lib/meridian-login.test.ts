@@ -10,7 +10,7 @@ describe("MeridianLoginManager", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.useFakeTimers();
-    process.env = { ...originalEnv, CLAUDE_DIR: "/tmp/test-claude" };
+    process.env = { ...originalEnv, CLAUDE_DIR: "/tmp/test-claude", NEXTAUTH_URL: "http://localhost:3000" };
     vi.stubGlobal("fetch", vi.fn());
   });
 
@@ -33,6 +33,8 @@ describe("MeridianLoginManager", () => {
     expect(url).toContain("code_challenge_method=S256");
     expect(url).toContain("client_id=");
     expect(url).toContain("response_type=code");
+    expect(url).toContain("redirect_uri=https%3A%2F%2Fplatform.claude.com");
+    expect(url).not.toContain("code=true");
     cancelLogin();
   });
 

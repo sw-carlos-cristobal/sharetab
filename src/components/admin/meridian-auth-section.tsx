@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,6 +26,8 @@ import {
 
 export function MeridianAuthSection() {
   const utils = trpc.useUtils();
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
   const authStatus = trpc.admin.getMeridianAuthStatus.useQuery(undefined, {
     refetchInterval: 15_000,
@@ -86,6 +89,22 @@ export function MeridianAuthSection() {
     setLoginCode("");
     setLoginError(null);
   }
+
+  // Handle OAuth callback redirect params
+  useEffect(() => {
+    const authResult = searchParams.get("meridian_auth");
+    const authError = searchParams.get("meridian_error");
+    if (authResult === "success") {
+      setLoginState("success");
+      utils.admin.getMeridianAuthStatus.invalidate();
+      utils.admin.getSystemHealth.invalidate();
+      router.replace("/admin");
+    } else if (authError) {
+      setLoginState("error");
+      setLoginError(decodeURIComponent(authError));
+      router.replace("/admin");
+    }
+  }, [searchParams, utils, router]);
 
   // Don't render if not using meridian
   const status = authStatus.data;
@@ -169,8 +188,9 @@ export function MeridianAuthSection() {
 
             {loginState === "waiting_for_code" && loginUrl && (
               <div className="space-y-3 rounded-md border p-3">
-                <p className="text-sm font-medium">
-                  Step 1: Open this link and sign in
+                <p className="text-sm">
+                  <span className="font-semibold">Step 1:</span> Click the link
+                  below to sign in with Claude.
                 </p>
                 <div className="flex items-center gap-2">
                   <a
@@ -199,15 +219,25 @@ export function MeridianAuthSection() {
                     )}
                   </Button>
                 </div>
-
-                <p className="text-sm font-medium">
-                  Step 2: Paste the code you receive
-                </p>
+                <div className="space-y-1">
+                  <p className="text-sm">
+                    <span className="font-semibold">Step 2:</span> After
+                    authorizing, copy the{" "}
+                    <span className="font-semibold text-primary">
+                      URL from your browser&apos;s address bar
+                    </span>{" "}
+                    and paste it below.
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Do not copy the code shown on the page — paste the full URL
+                    starting with https://platform.claude.com/...
+                  </p>
+                </div>
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    className="flex-1 rounded-md border bg-background px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
-                    placeholder="Paste authorization code..."
+                    className="flex-1 rounded-md border px-3 py-1.5 text-sm bg-background"
+                    placeholder="https://platform.claude.com/oauth/code/callback?code=..."
                     value={loginCode}
                     onChange={(e) => setLoginCode(e.target.value)}
                   />

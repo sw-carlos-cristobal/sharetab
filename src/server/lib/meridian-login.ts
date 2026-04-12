@@ -10,7 +10,6 @@ const TOKEN_ENDPOINT = "https://platform.claude.com/v1/oauth/token";
 const AUTHORIZE_ENDPOINT = "https://claude.com/cai/oauth/authorize";
 const REDIRECT_URI = "https://platform.claude.com/oauth/code/callback";
 const SCOPES = [
-  "org:create_api_key",
   "user:profile",
   "user:inference",
   "user:sessions:claude_code",
@@ -78,7 +77,6 @@ export function startLogin(): Promise<string> {
   const state = randomBytes(32).toString("base64url");
 
   const params = new URLSearchParams({
-    code: "true",
     client_id: CLIENT_ID,
     response_type: "code",
     redirect_uri: REDIRECT_URI,
@@ -102,19 +100,42 @@ export function startLogin(): Promise<string> {
 }
 
 /**
+ * Extract the authorization code from either a raw code string or a full
+ * callback URL (e.g. "https://platform.claude.com/oauth/code/callback?code=XXX&state=YYY").
+ */
+function extractCode(input: string): string {
+  const trimmed = input.trim();
+  try {
+    const url = new URL(trimmed);
+    const code = url.searchParams.get("code");
+    if (code) return code;
+  } catch {
+    // Not a URL — treat the whole string as the code
+  }
+  return trimmed;
+}
+
+/**
  * Exchange the authorization code for tokens and write credentials.
+ * Accepts either a raw authorization code or the full callback URL.
  */
 export async function submitCode(
-  code: string
+  codeOrUrl: string
 ): Promise<{ success: boolean; error?: string }> {
   if (!pendingLogin) {
     throw new Error("No login in progress");
   }
 
+  const code = extractCode(codeOrUrl);
   const { codeVerifier, state } = pendingLogin;
 
   try {
-    logger.info("meridian.login.exchangingCode");
+    logger.info("meridian.login.exchangingCode", {
+      codeLength: code.length,
+      codePreview: code.substring(0, 10) + "...",
+      redirectUri: REDIRECT_URI,
+      clientId: CLIENT_ID,
+    });
 
     const res = await fetch(TOKEN_ENDPOINT, {
       method: "POST",
