@@ -77,16 +77,16 @@ test.describe("Meridian login flow", () => {
     await page.getByRole("button", { name: "Re-authenticate" }).click();
 
     await expect(
-      page.getByText("Step 1: Open this link and sign in")
+      page.getByText("Click the link below to sign in with Claude.")
     ).toBeVisible();
     await expect(
-      page.getByText("Step 2: Paste the code you receive")
+      page.getByText("After authorizing, copy the")
     ).toBeVisible();
     await expect(
       page.getByRole("link", { name: "Open authentication page" })
     ).toBeVisible();
     await expect(
-      page.getByPlaceholder("Paste authorization code...")
+      page.getByPlaceholder("https://platform.claude.com/oauth/code/callback?code=...")
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Submit" })
@@ -106,7 +106,7 @@ test.describe("Meridian login flow", () => {
 
     await page.getByRole("button", { name: "Re-authenticate" }).click();
     await page
-      .getByPlaceholder("Paste authorization code...")
+      .getByPlaceholder("https://platform.claude.com/oauth/code/callback?code=...")
       .fill("abc123");
 
     await expect(
@@ -125,7 +125,7 @@ test.describe("Meridian login flow", () => {
 
     await page.getByRole("button", { name: "Re-authenticate" }).click();
     await page
-      .getByPlaceholder("Paste authorization code...")
+      .getByPlaceholder("https://platform.claude.com/oauth/code/callback?code=...")
       .fill("valid-code-123");
     await page.getByRole("button", { name: "Submit" }).click();
 
@@ -148,7 +148,7 @@ test.describe("Meridian login flow", () => {
 
     await page.getByRole("button", { name: "Re-authenticate" }).click();
     await page
-      .getByPlaceholder("Paste authorization code...")
+      .getByPlaceholder("https://platform.claude.com/oauth/code/callback?code=...")
       .fill("bad-code");
     await page.getByRole("button", { name: "Submit" }).click();
 
@@ -171,7 +171,7 @@ test.describe("Meridian login flow", () => {
 
     await page.getByRole("button", { name: "Re-authenticate" }).click();
     await expect(
-      page.getByText("Step 1: Open this link and sign in")
+      page.getByText("Click the link below to sign in with Claude.")
     ).toBeVisible();
 
     await page.getByRole("button", { name: "Cancel" }).click();
