@@ -34,6 +34,13 @@ describe("MeridianLoginManager", () => {
     expect(url).toBeNull();
   });
 
+  test("parseOAuthUrl extracts claude.com URL", async () => {
+    const { parseOAuthUrl } = await import("./meridian-login");
+    const stdout = "If the browser didn't open, visit: https://claude.com/cai/oauth/authorize?code=true&client_id=abc&response_type=code\nmore";
+    const url = parseOAuthUrl(stdout);
+    expect(url).toBe("https://claude.com/cai/oauth/authorize?code=true&client_id=abc&response_type=code");
+  });
+
   test("cancelLogin clears state", async () => {
     const { cancelLogin, isLoginInProgress } = await import("./meridian-login");
     cancelLogin();

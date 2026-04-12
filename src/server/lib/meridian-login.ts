@@ -1,4 +1,6 @@
 import { spawn, type ChildProcess } from "child_process";
+import { unlinkSync } from "fs";
+import { join } from "path";
 import { logger } from "./logger";
 
 // ─── State ────────────────────────────────────────────────
@@ -12,7 +14,7 @@ const LOGIN_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 // ─── URL parsing ──────────────────────────────────────────
 
 export function parseOAuthUrl(text: string): string | null {
-  const match = text.match(/(https:\/\/(?:claude\.ai|platform\.claude\.com)\/[^\s]+)/);
+  const match = text.match(/(https:\/\/(?:claude\.ai|claude\.com|platform\.claude\.com)\/[^\s]+)/);
   return match?.[1] ?? null;
 }
 
@@ -31,11 +33,22 @@ export function startLogin(): Promise<string> {
     throw new Error("A login is already in progress");
   }
 
+  // Clear stale credentials so `claude login` starts a fresh OAuth flow
+  // instead of trying to refresh an expired token (which fails with 401).
+  const claudeHome = process.env.CLAUDE_DIR ?? join(process.env.HOME ?? "/home/nextjs", ".claude");
+  const credPath = join(claudeHome, ".credentials.json");
+  try {
+    unlinkSync(credPath);
+    logger.info("meridian.login.clearedStaleCredentials", { path: credPath });
+  } catch {
+    // File doesn't exist — that's fine
+  }
+
   return new Promise<string>((resolve, reject) => {
     let stdoutBuffer = "";
     let urlResolved = false;
 
-    const proc = spawn("claude", ["login"], {
+    const proc = spawn("claude", ["auth", "login"], {
       stdio: ["pipe", "pipe", "pipe"],
       env: { ...process.env, HOME: process.env.HOME ?? "/home/nextjs" },
     });
