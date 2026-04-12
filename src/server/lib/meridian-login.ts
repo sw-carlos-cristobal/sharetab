@@ -24,6 +24,7 @@ const LOGIN_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 interface PendingLogin {
   codeVerifier: string;
+  state: string;
   timeout: ReturnType<typeof setTimeout>;
 }
 
@@ -94,7 +95,7 @@ export function startLogin(): Promise<string> {
     cancelLogin();
   }, LOGIN_TIMEOUT_MS);
 
-  pendingLogin = { codeVerifier, timeout };
+  pendingLogin = { codeVerifier, state, timeout };
 
   logger.info("meridian.login.started");
   return Promise.resolve(url);
@@ -110,7 +111,7 @@ export async function submitCode(
     throw new Error("No login in progress");
   }
 
-  const { codeVerifier } = pendingLogin;
+  const { codeVerifier, state } = pendingLogin;
 
   try {
     logger.info("meridian.login.exchangingCode");
@@ -124,6 +125,7 @@ export async function submitCode(
         code,
         code_verifier: codeVerifier,
         redirect_uri: REDIRECT_URI,
+        state,
       }),
       signal: AbortSignal.timeout(30_000),
     });
