@@ -175,12 +175,11 @@ All configuration is done through environment variables. Copy `.env.example` to 
 
 | Variable | Description |
 |---|---|
-| `AI_PROVIDER` | One of `openai`, `openai-codex`, `claude`, `meridian`, `ollama`, or `ocr`. Defaults to `openai`. |
-| `AI_PROVIDER_PRIORITY` | Optional comma-separated provider priority list (for example `openai-codex,meridian,openai,ocr`). ShareTab checks providers in order, uses the first available one, and falls through to the next provider if extraction fails. If omitted, ShareTab uses `AI_PROVIDER` and still appends OCR as a final fallback. |
-| `OPENAI_API_KEY` | Required when `AI_PROVIDER=openai`. |
+| `AI_PROVIDER_PRIORITY` | Comma-separated provider priority list (for example `openai-codex,meridian,openai,ocr`). ShareTab checks providers in order, uses the first available one, and falls through to the next provider if extraction fails. If `ocr` is omitted, ShareTab appends OCR as the final fallback. |
+| `OPENAI_API_KEY` | Required when `openai` is included in `AI_PROVIDER_PRIORITY`. |
 | `OPENAI_MODEL` | OpenAI model for receipt scanning. Defaults to `gpt-4o`. |
 | `OPENAI_CODEX_MODEL` | Model for ChatGPT OAuth / Codex backend receipt scanning. Defaults to `gpt-5.4`. |
-| `ANTHROPIC_API_KEY` | Required when `AI_PROVIDER=claude`. |
+| `ANTHROPIC_API_KEY` | Required when `claude` is included in `AI_PROVIDER_PRIORITY`. |
 | `ANTHROPIC_MODEL` | Claude model for receipt scanning. Defaults to `claude-sonnet-4-6` (claude provider) or `claude-opus-4-6` (meridian provider). |
 | `MERIDIAN_PORT` | Port for the embedded Meridian proxy. Defaults to `3457`. |
 | `OLLAMA_BASE_URL` | Ollama server URL. Defaults to `http://localhost:11434`. |
@@ -195,7 +194,7 @@ After the container is running, open the ShareTab admin dashboard and complete t
 3. Authorize with ChatGPT in your browser.
 4. When the flow redirects to `http://localhost:1455/auth/callback`, copy the full URL from the browser address bar and paste it back into ShareTab.
 
-If you use your own Docker or Unraid template, mount a persistent path to `/app/chatgpt` when using `AI_PROVIDER=openai-codex`.
+If you use your own Docker or Unraid template, mount a persistent path to `/app/chatgpt` when `openai-codex` is in `AI_PROVIDER_PRIORITY`.
 
 The `meridian` provider uses a Claude Max/Pro subscription via an embedded proxy -- no API key needed. Claude login data lives in `/app/claude`, so if that path is on a persistent volume the login survives restarts and image updates.
 

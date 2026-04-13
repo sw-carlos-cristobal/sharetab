@@ -83,7 +83,7 @@ jobs:
           AUTH_SECRET: ${{ steps.auth.outputs.secret }}
           AUTH_TRUST_HOST: "true"
           ADMIN_EMAIL: alice@example.com
-          AI_PROVIDER: mock
+          AI_PROVIDER_PRIORITY: mock
         run: npm run build
 
       - name: Run tests
@@ -97,7 +97,7 @@ jobs:
           AUTH_RATE_LIMIT_MAX: "1000"
           REGISTER_RATE_LIMIT_MAX: "1000"
           ADMIN_EMAIL: alice@example.com
-          AI_PROVIDER: mock
+          AI_PROVIDER_PRIORITY: mock
           EMAIL_SERVER_HOST: localhost
           EMAIL_SERVER_PORT: "2525"
         run: |

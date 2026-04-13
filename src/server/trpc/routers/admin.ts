@@ -160,7 +160,7 @@ export const adminRouter = createTRPCRouter({
       aiAvailable = true;
       ocrFallback = active.name === "ocr" && configured[0] !== "ocr";
     } catch {
-      aiProvider = process.env.AI_PROVIDER_PRIORITY ?? process.env.AI_PROVIDER ?? "not configured";
+      aiProvider = process.env.AI_PROVIDER_PRIORITY ?? "not configured";
     }
 
     // App version

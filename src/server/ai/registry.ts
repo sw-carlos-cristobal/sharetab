@@ -12,6 +12,7 @@ const USER_SELECTABLE_PROVIDERS = [
 const ALL_PROVIDERS = [...USER_SELECTABLE_PROVIDERS, "mock"] as const;
 
 type AIProviderName = (typeof ALL_PROVIDERS)[number];
+const DEFAULT_PROVIDER_PRIORITY = "openai,ocr";
 
 function isAIProviderName(value: string): value is AIProviderName {
   return ALL_PROVIDERS.includes(value as AIProviderName);
@@ -43,20 +44,8 @@ function parseProviderPriority(raw: string): AIProviderName[] {
 }
 
 function getConfiguredProviderPriorityInternal(): AIProviderName[] {
-  const rawPriority = process.env.AI_PROVIDER_PRIORITY;
-
-  let priority: AIProviderName[] = [];
-  if (rawPriority && rawPriority.trim()) {
-    priority = parseProviderPriority(rawPriority);
-  }
-
-  if (priority.length === 0) {
-    const single = (process.env.AI_PROVIDER ?? "openai").trim().toLowerCase();
-    if (!isAIProviderName(single)) {
-      throw unknownProviderError(single);
-    }
-    priority = [single];
-  }
+  const rawPriority = process.env.AI_PROVIDER_PRIORITY?.trim() || DEFAULT_PROVIDER_PRIORITY;
+  const priority = parseProviderPriority(rawPriority);
 
   // Preserve existing behavior by always allowing OCR as the final fallback.
   if (!priority.includes("ocr")) {

@@ -36,7 +36,7 @@ describe("MeridianHealthPoller", () => {
     vi.useFakeTimers();
     process.env = {
       ...originalEnv,
-      AI_PROVIDER: "meridian",
+      AI_PROVIDER_PRIORITY: "meridian,ocr",
       MERIDIAN_PORT: "3457",
       ADMIN_EMAIL: "admin@test.com",
       EMAIL_SERVER_HOST: "smtp.test.com",
@@ -255,7 +255,7 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
     vi.useFakeTimers();
     process.env = {
       ...originalEnv,
-      AI_PROVIDER: "meridian",
+      AI_PROVIDER_PRIORITY: "meridian,ocr",
       MERIDIAN_PORT: "3457",
       ADMIN_EMAIL: "admin@test.com",
       EMAIL_SERVER_HOST: "smtp.test.com",
@@ -434,8 +434,7 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
   });
 
   test("startPoller does nothing when meridian is not configured", async () => {
-    process.env.AI_PROVIDER = "openai";
-    delete process.env.AI_PROVIDER_PRIORITY;
+    process.env.AI_PROVIDER_PRIORITY = "openai,ocr";
     const { startPoller, stopPoller } = await import("./meridian-health-poller");
 
     startPoller();
@@ -447,7 +446,6 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
   });
 
   test("startPoller runs when meridian is configured in AI_PROVIDER_PRIORITY", async () => {
-    process.env.AI_PROVIDER = "openai";
     process.env.AI_PROVIDER_PRIORITY = "openai-codex,meridian,ocr";
     const { startPoller, stopPoller } = await import("./meridian-health-poller");
 
