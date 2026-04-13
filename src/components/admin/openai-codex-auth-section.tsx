@@ -52,6 +52,14 @@ export function OpenAICodexAuthSection() {
     onSuccess: () => resetLoginState(),
   });
 
+  const logoutMutation = trpc.admin.logoutOpenAICodex.useMutation({
+    onSuccess: () => {
+      resetLoginState();
+      utils.admin.getOpenAICodexAuthStatus.invalidate();
+      utils.admin.getSystemHealth.invalidate();
+    },
+  });
+
   const [loginState, setLoginState] = useState<
     "idle" | "starting" | "waiting_for_code" | "submitting" | "success" | "error"
   >("idle");
@@ -128,6 +136,24 @@ export function OpenAICodexAuthSection() {
                 </>
               ) : (
                 "Authenticate with ChatGPT"
+              )}
+            </Button>
+          )}
+
+          {isHealthy && loginState === "idle" && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => logoutMutation.mutate()}
+              disabled={logoutMutation.isPending}
+            >
+              {logoutMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                  Logging out...
+                </>
+              ) : (
+                "Log out"
               )}
             </Button>
           )}

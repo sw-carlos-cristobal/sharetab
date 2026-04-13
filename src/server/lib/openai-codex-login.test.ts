@@ -118,4 +118,39 @@ describe("OpenAICodexLogin", () => {
     expect(await refreshIfNeeded()).toBe(true);
     expect(mockWriteFileSync).toHaveBeenCalledTimes(1);
   });
+
+  test("logout clears pending login and removes auth file", async () => {
+    const mockUnlinkSync = vi.fn();
+    vi.doMock("fs", () => ({
+      mkdirSync: vi.fn(),
+      readFileSync: vi.fn(),
+      writeFileSync: vi.fn(),
+      unlinkSync: mockUnlinkSync,
+    }));
+
+    const { startLogin, isLoginInProgress, logout } = await import("./openai-codex-login");
+    await startLogin();
+    expect(isLoginInProgress()).toBe(true);
+
+    const result = logout();
+    expect(result.success).toBe(true);
+    expect(isLoginInProgress()).toBe(false);
+    expect(mockUnlinkSync.mock.calls.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test("logout succeeds when auth file is missing", async () => {
+    vi.doMock("fs", () => ({
+      mkdirSync: vi.fn(),
+      readFileSync: vi.fn(),
+      writeFileSync: vi.fn(),
+      unlinkSync: () => {
+        const err = new Error("ENOENT") as NodeJS.ErrnoException;
+        err.code = "ENOENT";
+        throw err;
+      },
+    }));
+
+    const { logout } = await import("./openai-codex-login");
+    expect(logout()).toEqual({ success: true });
+  });
 });

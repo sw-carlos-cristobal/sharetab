@@ -23,6 +23,7 @@ import {
   startLogin,
   submitCode,
   cancelLogin,
+  logout as logoutMeridian,
   isLoginInProgress,
 } from "@/server/lib/meridian-login";
 import { clearProviderCache } from "@/server/ai/registry";
@@ -31,6 +32,7 @@ import {
   startLogin as startOpenAICodexLogin,
   submitCode as submitOpenAICodexCode,
   cancelLogin as cancelOpenAICodexLogin,
+  logout as logoutOpenAICodex,
   isLoginInProgress as isOpenAICodexLoginInProgress,
 } from "@/server/lib/openai-codex-login";
 
@@ -978,6 +980,29 @@ export const adminRouter = createTRPCRouter({
     return { cancelled: true };
   }),
 
+  logoutMeridian: adminProcedure.mutation(async ({ ctx }) => {
+    if (!isProviderConfigured("meridian")) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Meridian is not configured in AI provider priority",
+      });
+    }
+
+    const result = logoutMeridian();
+    if (!result.success) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: result.error ?? "Failed to log out Meridian",
+      });
+    }
+
+    clearProviderCache();
+    await logAdminAction(ctx.db, ctx.user.id, "MERIDIAN_LOGIN_FAILED", null, {
+      reason: "logged_out",
+    });
+    return { success: true };
+  }),
+
   getMeridianNotifyPreference: adminProcedure.query(async ({ ctx }) => {
     const setting = await ctx.db.systemSetting.findUnique({
       where: { key: "meridianNotifyInterval" },
@@ -1047,6 +1072,26 @@ export const adminRouter = createTRPCRouter({
   cancelOpenAICodexLogin: adminProcedure.mutation(async () => {
     cancelOpenAICodexLogin();
     return { cancelled: true };
+  }),
+
+  logoutOpenAICodex: adminProcedure.mutation(async () => {
+    if (!isProviderConfigured("openai-codex")) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "OpenAI Codex is not configured in AI provider priority",
+      });
+    }
+
+    const result = logoutOpenAICodex();
+    if (!result.success) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: result.error ?? "Failed to log out OpenAI Codex",
+      });
+    }
+
+    clearProviderCache();
+    return { success: true };
   }),
 });
 

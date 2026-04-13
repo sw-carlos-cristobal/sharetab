@@ -351,6 +351,24 @@ export function cancelLogin(): void {
   cleanup();
 }
 
+export function logout(): { success: boolean; error?: string } {
+  cleanup();
+  const path = getCredentialPath();
+  try {
+    unlinkSync(path);
+    logger.info("openaiCodex.logout.success", { path });
+    return { success: true };
+  } catch (err) {
+    const error = err as NodeJS.ErrnoException;
+    if (error.code === "ENOENT") {
+      logger.info("openaiCodex.logout.noCredentials", { path });
+      return { success: true };
+    }
+    logger.error("openaiCodex.logout.error", { path, error: error.message });
+    return { success: false, error: error.message };
+  }
+}
+
 function cleanup(): void {
   if (pendingLogin?.timeout) clearTimeout(pendingLogin.timeout);
   pendingLogin = null;

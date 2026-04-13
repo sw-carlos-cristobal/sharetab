@@ -311,6 +311,27 @@ export function cancelLogin(): void {
   cleanup();
 }
 
+export function logout(): { success: boolean; error?: string } {
+  cleanup();
+  const credPath = getCredentialPath();
+  try {
+    unlinkSync(credPath);
+    logger.info("meridian.logout.success", { path: credPath });
+    return { success: true };
+  } catch (err) {
+    const error = err as NodeJS.ErrnoException;
+    if (error.code === "ENOENT") {
+      logger.info("meridian.logout.noCredentials", { path: credPath });
+      return { success: true };
+    }
+    logger.error("meridian.logout.error", {
+      path: credPath,
+      error: error.message,
+    });
+    return { success: false, error: error.message };
+  }
+}
+
 function cleanup(): void {
   if (pendingLogin?.timeout) {
     clearTimeout(pendingLogin.timeout);

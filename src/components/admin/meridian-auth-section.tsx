@@ -68,6 +68,14 @@ export function MeridianAuthSection() {
     },
   });
 
+  const logoutMutation = trpc.admin.logoutMeridian.useMutation({
+    onSuccess: () => {
+      resetLoginState();
+      utils.admin.getMeridianAuthStatus.invalidate();
+      utils.admin.getSystemHealth.invalidate();
+    },
+  });
+
   const setNotifyPref = trpc.admin.setMeridianNotifyPreference.useMutation({
     onSuccess: () => {
       utils.admin.getMeridianNotifyPreference.invalidate();
@@ -175,6 +183,24 @@ export function MeridianAuthSection() {
                   </>
                 ) : (
                   "Re-authenticate"
+                )}
+              </Button>
+            )}
+
+            {isHealthy && loginState === "idle" && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => logoutMutation.mutate()}
+                disabled={logoutMutation.isPending}
+              >
+                {logoutMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                    Logging out...
+                  </>
+                ) : (
+                  "Log out"
                 )}
               </Button>
             )}

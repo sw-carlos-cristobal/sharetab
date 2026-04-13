@@ -116,6 +116,39 @@ describe("MeridianLoginManager", () => {
     expect(isLoginInProgress()).toBe(false);
   });
 
+  test("logout clears pending login and removes credentials", async () => {
+    const mockUnlinkSync = vi.fn();
+    vi.doMock("fs", () => ({
+      readFileSync: vi.fn(),
+      writeFileSync: vi.fn(),
+      unlinkSync: mockUnlinkSync,
+    }));
+
+    const { startLogin, isLoginInProgress, logout } = await import("./meridian-login");
+    await startLogin();
+    expect(isLoginInProgress()).toBe(true);
+
+    const result = logout();
+    expect(result.success).toBe(true);
+    expect(isLoginInProgress()).toBe(false);
+    expect(mockUnlinkSync.mock.calls.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test("logout succeeds when credentials file is already absent", async () => {
+    vi.doMock("fs", () => ({
+      readFileSync: vi.fn(),
+      writeFileSync: vi.fn(),
+      unlinkSync: () => {
+        const err = new Error("ENOENT") as NodeJS.ErrnoException;
+        err.code = "ENOENT";
+        throw err;
+      },
+    }));
+
+    const { logout } = await import("./meridian-login");
+    expect(logout()).toEqual({ success: true });
+  });
+
   test("refreshIfNeeded refreshes expired token", async () => {
     const expiredCreds = JSON.stringify({
       claudeAiOauth: {
