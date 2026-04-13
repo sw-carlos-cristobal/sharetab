@@ -54,8 +54,9 @@ COPY docker/entrypoint.sh /app/entrypoint.sh
 COPY docker/claude /usr/local/bin/claude
 
 # Create directories
-RUN mkdir -p /app/uploads/receipts /var/lib/postgresql/data /run/postgresql && \
+RUN mkdir -p /app/uploads/receipts /app/chatgpt /var/lib/postgresql/data /run/postgresql && \
     chown -R nextjs:nodejs /app/uploads && \
+    chown -R nextjs:nodejs /app/chatgpt && \
     chown -R postgres:postgres /var/lib/postgresql/data /run/postgresql && \
     chmod +x /app/entrypoint.sh /usr/local/bin/claude
 
@@ -65,7 +66,7 @@ ENV HOSTNAME="0.0.0.0"
 ENV PGDATA=/var/lib/postgresql/data
 ENV DATABASE_URL="postgresql://sharetab:sharetab@localhost:5432/sharetab"
 
-VOLUME ["/var/lib/postgresql/data", "/app/uploads", "/app/claude"]
+VOLUME ["/var/lib/postgresql/data", "/app/uploads", "/app/claude", "/app/chatgpt"]
 
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
   CMD wget -qO- http://127.0.0.1:3000/api/health || exit 1

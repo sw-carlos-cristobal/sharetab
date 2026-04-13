@@ -81,6 +81,11 @@ rm -rf /home/nextjs/.claude
 ln -sfn "$CLAUDE_DIR" /home/nextjs/.claude
 chown -h nextjs:nodejs /home/nextjs/.claude
 
+# ── ChatGPT OAuth credentials: persistent shared dir for openai-codex provider ──
+OPENAI_CODEX_DIR="${OPENAI_CODEX_DIR:-/app/chatgpt}"
+mkdir -p "$OPENAI_CODEX_DIR"
+chown nextjs:nodejs "$OPENAI_CODEX_DIR"
+
 # ── Print config summary ────────────────────────────────────
 
 echo ""
@@ -117,6 +122,14 @@ elif [ "$AI_PROVIDER" = "claude" ] || [ "$AI_PROVIDER" = "meridian" ]; then
     else
       echo "  Claude Login:   missing (run 'claude login')"
     fi
+  fi
+elif [ "$AI_PROVIDER" = "openai-codex" ]; then
+  echo "  OpenAI Model:   ${OPENAI_CODEX_MODEL:-gpt-5.4}"
+  echo "  ChatGPT Data:   ${OPENAI_CODEX_DIR:-/app/chatgpt}"
+  if [ -f "${OPENAI_CODEX_DIR:-/app/chatgpt}/auth.json" ]; then
+    echo "  ChatGPT Login:  detected"
+  else
+    echo "  ChatGPT Login:  missing (complete OAuth from /admin)"
   fi
 elif [ "$AI_PROVIDER" = "ollama" ]; then
   echo "  Ollama URL:     ${OLLAMA_BASE_URL:-not set}"
