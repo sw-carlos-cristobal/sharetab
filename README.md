@@ -176,6 +176,7 @@ All configuration is done through environment variables. Copy `.env.example` to 
 | Variable | Description |
 |---|---|
 | `AI_PROVIDER` | One of `openai`, `openai-codex`, `claude`, `meridian`, `ollama`, or `ocr`. Defaults to `openai`. |
+| `AI_PROVIDER_PRIORITY` | Optional comma-separated provider priority list (for example `openai-codex,meridian,openai,ocr`). ShareTab checks providers in order, uses the first available one, and falls through to the next provider if extraction fails. If omitted, ShareTab uses `AI_PROVIDER` and still appends OCR as a final fallback. |
 | `OPENAI_API_KEY` | Required when `AI_PROVIDER=openai`. |
 | `OPENAI_MODEL` | OpenAI model for receipt scanning. Defaults to `gpt-4o`. |
 | `OPENAI_CODEX_MODEL` | Model for ChatGPT OAuth / Codex backend receipt scanning. Defaults to `gpt-5.4`. |
@@ -207,7 +208,7 @@ After the container is running, open the ShareTab admin dashboard and complete t
 
 The bundled Docker Compose setup persists `/app/claude` automatically. If you use your own Docker or Unraid template, mount a persistent path to `/app/claude`.
 
-The `ocr` provider uses Tesseract.js for local text extraction -- no API key or external service needed. It's less accurate than AI providers but works as a free fallback. If the configured AI provider is unavailable, receipt scanning automatically falls back to OCR.
+The `ocr` provider uses Tesseract.js for local text extraction -- no API key or external service needed. It's less accurate than AI providers but works as a free fallback. In priority mode, OCR can be listed explicitly, and is also appended automatically as a final fallback if omitted.
 
 ### OAuth (optional)
 

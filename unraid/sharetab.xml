@@ -155,11 +155,20 @@
     Name="AI Provider"
     Target="AI_PROVIDER"
     Default="openai"
-    Description="AI provider for receipt scanning: openai | openai-codex | claude | meridian | ollama | ocr. OpenAI Codex uses ChatGPT OAuth via the Codex backend — no API key needed. After startup, open the ShareTab admin dashboard and complete the ChatGPT OAuth flow there. Meridian uses Claude Max via the embedded proxy with a similar admin OAuth flow. OCR uses local Tesseract.js (no API key) and is also the automatic fallback."
+    Description="Primary AI provider for receipt scanning: openai | openai-codex | claude | meridian | ollama | ocr. For multi-provider fallback order, set AI Provider Priority below. OpenAI Codex uses ChatGPT OAuth via the Codex backend (no API key), and Meridian uses Claude Max via the embedded proxy. OCR is local Tesseract.js and remains the final fallback."
     Type="Variable"
     Display="always"
     Required="false"
     Mask="false">openai</Config>
+  <Config
+    Name="AI Provider Priority"
+    Target="AI_PROVIDER_PRIORITY"
+    Default=""
+    Description="Optional comma-separated provider priority chain, for example: openai-codex,meridian,openai,ocr. ShareTab uses the first available provider and falls back to the next provider if extraction fails. Leave empty to use AI_PROVIDER with OCR as final fallback."
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false"></Config>
   <Config
     Name="OpenAI API Key"
     Target="OPENAI_API_KEY"

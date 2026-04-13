@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@/generated/prisma/client";
 import type { Prisma } from "@/generated/prisma/client";
-import { getAIProviderWithFallback, clearProviderCache } from "../ai/registry";
+import type { AIProvider } from "../ai/provider";
+import { getAIProvidersWithFallback, clearProviderCache } from "../ai/registry";
 import { logger } from "./logger";
 import { normalizeDate } from "./normalize-date";
 
@@ -30,36 +31,54 @@ export async function processReceiptImage({
   const filepath = join(getUploadDir(), receipt.imagePath);
   const imageBuffer = await readFile(filepath);
 
-  let provider = await getAIProviderWithFallback();
   logger.info(`${logPrefix}.processing`, {
     receiptId,
-    provider: provider.name,
     imageSize: imageBuffer.length,
     correctionHint: correctionHint ?? null,
   });
+
   const start = Date.now();
-  let result;
-  try {
-    result = await provider.extractReceipt(
-      imageBuffer,
-      receipt.mimeType,
-      correctionHint
-    );
-  } catch (err) {
-    // Cached provider may be stale — clear cache and retry once with fresh provider
-    logger.warn(`${logPrefix}.extractFailed`, {
-      receiptId,
-      provider: provider.name,
-      error: err instanceof Error ? err.message : String(err),
-    });
-    clearProviderCache();
-    provider = await getAIProviderWithFallback();
-    result = await provider.extractReceipt(
-      imageBuffer,
-      receipt.mimeType,
-      correctionHint
+  let provider: AIProvider | null = null;
+  let result: Awaited<ReturnType<AIProvider["extractReceipt"]>> | null = null;
+  let lastError: unknown;
+
+  for (let pass = 0; pass < 2 && !result; pass++) {
+    const providers = await getAIProvidersWithFallback();
+
+    for (const candidate of providers) {
+      try {
+        result = await candidate.extractReceipt(
+          imageBuffer,
+          receipt.mimeType,
+          correctionHint
+        );
+        provider = candidate;
+        break;
+      } catch (err) {
+        lastError = err;
+        logger.warn(`${logPrefix}.extractFailed`, {
+          receiptId,
+          provider: candidate.name,
+          error: err instanceof Error ? err.message : String(err),
+          pass,
+        });
+      }
+    }
+
+    if (!result && pass === 0) {
+      // Cache can become stale after auth expiration; refresh once and retry all providers.
+      clearProviderCache();
+    }
+  }
+
+  if (!result || !provider) {
+    throw new Error(
+      `Receipt extraction failed across configured providers: ${
+        lastError instanceof Error ? lastError.message : String(lastError)
+      }`
     );
   }
+
   logger.info(`${logPrefix}.extracted`, {
     receiptId,
     provider: provider.name,

@@ -77,7 +77,22 @@ describe("getAIProvider", () => {
   test("error message lists available providers", async () => {
     process.env.AI_PROVIDER = "invalid";
     const { getAIProvider } = await import("./registry");
-    await expect(getAIProvider()).rejects.toThrow("openai, openai-codex, claude, meridian, ollama, ocr");
+    await expect(getAIProvider()).rejects.toThrow("openai, openai-codex, claude, meridian, ollama, ocr, mock");
+  });
+
+  test("uses first provider from AI_PROVIDER_PRIORITY", async () => {
+    process.env.AI_PROVIDER_PRIORITY = "openai-codex,openai";
+    delete process.env.OPENAI_API_KEY;
+
+    const { getAIProvider } = await import("./registry");
+    const provider = await getAIProvider();
+    expect(provider.constructor.name).toBe("OpenAICodexProvider");
+  });
+
+  test("throws for unknown provider in AI_PROVIDER_PRIORITY", async () => {
+    process.env.AI_PROVIDER_PRIORITY = "openai,not-a-provider";
+    const { getAIProvider } = await import("./registry");
+    await expect(getAIProvider()).rejects.toThrow('Unknown AI provider: "not-a-provider"');
   });
 });
 
@@ -203,5 +218,20 @@ describe("getAIProviderWithFallback", () => {
     expect(second.constructor.name).toBe("OllamaProvider");
 
     vi.useRealTimers();
+  });
+
+  test("falls through priority list when first provider is unavailable", async () => {
+    process.env.AI_PROVIDER_PRIORITY = "ollama,openai";
+    process.env.OPENAI_API_KEY = "test-key";
+
+    const { OllamaProvider } = await import("./providers/ollama");
+    const { OpenAIProvider } = await import("./providers/openai");
+    vi.spyOn(OllamaProvider.prototype, "isAvailable").mockResolvedValue(false);
+    vi.spyOn(OpenAIProvider.prototype, "isAvailable").mockResolvedValue(true);
+
+    const { getAIProviderWithFallback } = await import("./registry");
+    const provider = await getAIProviderWithFallback();
+
+    expect(provider.constructor.name).toBe("OpenAIProvider");
   });
 });

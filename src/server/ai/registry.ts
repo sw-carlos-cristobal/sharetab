@@ -1,8 +1,72 @@
 import type { AIProvider } from "./provider";
 
-export async function getAIProvider(): Promise<AIProvider> {
-  const name = process.env.AI_PROVIDER ?? "openai";
+const USER_SELECTABLE_PROVIDERS = [
+  "openai",
+  "openai-codex",
+  "claude",
+  "meridian",
+  "ollama",
+  "ocr",
+] as const;
 
+const ALL_PROVIDERS = [...USER_SELECTABLE_PROVIDERS, "mock"] as const;
+
+type AIProviderName = (typeof ALL_PROVIDERS)[number];
+
+function isAIProviderName(value: string): value is AIProviderName {
+  return ALL_PROVIDERS.includes(value as AIProviderName);
+}
+
+function unknownProviderError(name: string): Error {
+  return new Error(
+    `Unknown AI provider: "${name}". Available: ${USER_SELECTABLE_PROVIDERS.join(", ")}, mock`
+  );
+}
+
+function parseProviderPriority(raw: string): AIProviderName[] {
+  const parsed = raw
+    .split(",")
+    .map((name) => name.trim().toLowerCase())
+    .filter(Boolean);
+
+  const deduped: AIProviderName[] = [];
+  for (const name of parsed) {
+    if (!isAIProviderName(name)) {
+      throw unknownProviderError(name);
+    }
+    if (!deduped.includes(name)) {
+      deduped.push(name);
+    }
+  }
+
+  return deduped;
+}
+
+function getConfiguredProviderPriorityInternal(): AIProviderName[] {
+  const rawPriority = process.env.AI_PROVIDER_PRIORITY;
+
+  let priority: AIProviderName[] = [];
+  if (rawPriority && rawPriority.trim()) {
+    priority = parseProviderPriority(rawPriority);
+  }
+
+  if (priority.length === 0) {
+    const single = (process.env.AI_PROVIDER ?? "openai").trim().toLowerCase();
+    if (!isAIProviderName(single)) {
+      throw unknownProviderError(single);
+    }
+    priority = [single];
+  }
+
+  // Preserve existing behavior by always allowing OCR as the final fallback.
+  if (!priority.includes("ocr")) {
+    priority.push("ocr");
+  }
+
+  return priority;
+}
+
+async function createProvider(name: AIProviderName): Promise<AIProvider> {
   switch (name) {
     case "openai": {
       if (!process.env.OPENAI_API_KEY) {
@@ -42,46 +106,72 @@ export async function getAIProvider(): Promise<AIProvider> {
       return new MockProvider();
     }
     default:
-      throw new Error(
-        `Unknown AI provider: "${name}". Available: openai, openai-codex, claude, meridian, ollama, ocr, mock`
-      );
+      throw unknownProviderError(name);
   }
 }
 
-// Cache for getAIProviderWithFallback — avoids re-checking isAvailable() on every scan
-let cachedProvider: AIProvider | null = null;
+export function getConfiguredProviderPriority(): string[] {
+  return getConfiguredProviderPriorityInternal();
+}
+
+export function isProviderConfigured(name: string): boolean {
+  return getConfiguredProviderPriorityInternal().includes(name as AIProviderName);
+}
+
+export async function getAIProvider(): Promise<AIProvider> {
+  const [first] = getConfiguredProviderPriorityInternal();
+  return createProvider(first);
+}
+
+// Cache for provider availability checks — avoids re-checking on every scan.
+let cachedProviders: AIProvider[] | null = null;
 let cacheExpiry = 0;
 const CACHE_TTL_MS = 60_000; // Re-check availability every 60 seconds
 
 /** Clear the cached provider so the next call re-evaluates availability. */
 export function clearProviderCache(): void {
-  cachedProvider = null;
+  cachedProviders = null;
   cacheExpiry = 0;
 }
 
 /**
- * Get the configured AI provider, falling back to OCR if unavailable.
+ * Get all currently available providers in configured priority order.
+ * If none are available/configured, OCR is returned as a safe final fallback.
+ */
+export async function getAIProvidersWithFallback(): Promise<AIProvider[]> {
+  if (cachedProviders && Date.now() < cacheExpiry) {
+    return cachedProviders;
+  }
+
+  const priority = getConfiguredProviderPriorityInternal();
+  const availableProviders: AIProvider[] = [];
+
+  for (const name of priority) {
+    try {
+      const provider = await createProvider(name);
+      if (await provider.isAvailable()) {
+        availableProviders.push(provider);
+      }
+    } catch {
+      // Continue trying lower-priority providers.
+    }
+  }
+
+  if (availableProviders.length === 0) {
+    const ocr = await createProvider("ocr");
+    availableProviders.push(ocr);
+  }
+
+  cachedProviders = availableProviders;
+  cacheExpiry = Date.now() + CACHE_TTL_MS;
+  return availableProviders;
+}
+
+/**
+ * Get the highest-priority available provider.
  * Caches the result for 60s to avoid repeated network checks.
  */
 export async function getAIProviderWithFallback(): Promise<AIProvider> {
-  if (cachedProvider && Date.now() < cacheExpiry) {
-    return cachedProvider;
-  }
-
-  try {
-    const provider = await getAIProvider();
-    if (await provider.isAvailable()) {
-      cachedProvider = provider;
-      cacheExpiry = Date.now() + CACHE_TTL_MS;
-      return provider;
-    }
-  } catch {
-    // Primary provider failed to initialize — fall through to OCR
-  }
-
-  const { OcrProvider } = await import("./providers/ocr");
-  const ocr = new OcrProvider();
-  cachedProvider = ocr;
-  cacheExpiry = Date.now() + CACHE_TTL_MS;
-  return ocr;
+  const [provider] = await getAIProvidersWithFallback();
+  return provider;
 }
