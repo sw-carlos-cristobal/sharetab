@@ -20,7 +20,6 @@ import {
   CheckCircle2,
   XCircle,
   ExternalLink,
-  Bell,
   Copy,
 } from "lucide-react";
 
@@ -32,7 +31,6 @@ export function MeridianAuthSection() {
   const authStatus = trpc.admin.getMeridianAuthStatus.useQuery(undefined, {
     refetchInterval: 15_000,
   });
-  const notifyPref = trpc.admin.getMeridianNotifyPreference.useQuery();
 
   const startLogin = trpc.admin.startMeridianLogin.useMutation({
     onSuccess: (data) => {
@@ -73,13 +71,6 @@ export function MeridianAuthSection() {
       resetLoginState();
       utils.admin.getMeridianAuthStatus.invalidate();
       utils.admin.getSystemHealth.invalidate();
-    },
-  });
-
-  const setNotifyPref = trpc.admin.setMeridianNotifyPreference.useMutation({
-    onSuccess: () => {
-      utils.admin.getMeridianNotifyPreference.invalidate();
-      utils.admin.getAuditLog.invalidate();
     },
   });
 
@@ -140,8 +131,7 @@ export function MeridianAuthSection() {
         <h2 className="text-lg font-semibold">Meridian Authentication</h2>
       </div>
 
-      <div className="grid gap-4 @2xl:grid-cols-2">
-        {/* Auth Status Card */}
+      <div className="grid gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
@@ -321,47 +311,6 @@ export function MeridianAuthSection() {
                 <Button variant="outline" size="sm" onClick={resetLoginState}>
                   Try again
                 </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Notification Preferences Card */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-              <Bell className="h-4 w-4" />
-              Auth Expiry Notifications
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              How often to receive email alerts when Claude authentication
-              expires.
-            </p>
-            <Select
-              value={notifyPref.data?.interval ?? "once"}
-              onValueChange={(value) => {
-                setNotifyPref.mutate({
-                  interval: value as "once" | "1h" | "6h" | "24h",
-                });
-              }}
-              disabled={setNotifyPref.isPending}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="once">Once per incident</SelectItem>
-                <SelectItem value="1h">Every hour</SelectItem>
-                <SelectItem value="6h">Every 6 hours</SelectItem>
-                <SelectItem value="24h">Every 24 hours</SelectItem>
-              </SelectContent>
-            </Select>
-            {setNotifyPref.isPending && (
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                Saving...
               </div>
             )}
           </CardContent>

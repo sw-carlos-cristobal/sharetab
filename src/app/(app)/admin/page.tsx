@@ -41,6 +41,7 @@ import { ActivityFeedSection } from "@/components/admin/activity-feed-section";
 import { AIStatsSection } from "@/components/admin/ai-stats-section";
 import { ToolsSection } from "@/components/admin/tools-section";
 import { ServerLogsSection } from "@/components/admin/server-logs-section";
+import { AuthExpiryNotificationsSection } from "@/components/admin/auth-expiry-notifications-section";
 import { MeridianAuthSection } from "@/components/admin/meridian-auth-section";
 import { OpenAICodexAuthSection } from "@/components/admin/openai-codex-auth-section";
 
@@ -58,6 +59,7 @@ export default function AdminPage() {
         <SystemHealthSection />
         <MeridianAuthSection />
         <OpenAICodexAuthSection />
+        <AuthExpiryNotificationsSection />
         <Separator />
         <UserManagementSection currentUserEmail={session?.user?.email} />
         <Separator />
