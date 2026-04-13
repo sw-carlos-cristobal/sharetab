@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import { db } from "@/server/db";
+import { isProviderConfigured } from "@/server/ai/registry";
 import { logger } from "./logger";
 
 // ─── Types ────────────────────────────────────────────────
@@ -242,7 +243,7 @@ async function pollTick(): Promise<void> {
 // ─── Lifecycle ────────────────────────────────────────────
 
 export function startPoller(): void {
-  if (process.env.AI_PROVIDER !== "meridian") return;
+  if (!isProviderConfigured("meridian")) return;
   if (pollerInterval) return;
 
   logger.info("meridian.poller.started");

@@ -433,14 +433,41 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
     expect(mockSendMail).not.toHaveBeenCalled();
   });
 
-  test("startPoller does nothing when AI_PROVIDER is not meridian", async () => {
+  test("startPoller does nothing when meridian is not configured", async () => {
     process.env.AI_PROVIDER = "openai";
+    delete process.env.AI_PROVIDER_PRIORITY;
     const { startPoller, stopPoller } = await import("./meridian-health-poller");
 
     startPoller();
     // No tick should happen — advance time past the 30s delay + poll interval
     vi.advanceTimersByTime(6 * 60 * 1000);
     expect(fetch).not.toHaveBeenCalled();
+
+    stopPoller();
+  });
+
+  test("startPoller runs when meridian is configured in AI_PROVIDER_PRIORITY", async () => {
+    process.env.AI_PROVIDER = "openai";
+    process.env.AI_PROVIDER_PRIORITY = "openai-codex,meridian,ocr";
+    const { startPoller, stopPoller } = await import("./meridian-health-poller");
+
+    // first delayed tick after 30s, then poll interval continues
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({
+          status: "healthy",
+          auth: { loggedIn: true, email: "user@test.com" },
+        }), { status: 200 })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: "msg_1", content: [] }), { status: 200 })
+      );
+
+    startPoller();
+    vi.advanceTimersByTime(30_000);
+    await Promise.resolve();
+
+    expect(fetch).toHaveBeenCalled();
 
     stopPoller();
   });
