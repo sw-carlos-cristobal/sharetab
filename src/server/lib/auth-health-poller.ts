@@ -1,12 +1,16 @@
 import nodemailer from "nodemailer";
 import { db } from "@/server/db";
 import { isProviderConfigured } from "@/server/ai/registry";
+import { checkOpenAICodexHealth } from "./openai-codex-login";
 import { logger } from "./logger";
 
 // ─── Types ────────────────────────────────────────────────
 
 export type MeridianStatus = "healthy" | "unhealthy" | "degraded" | "not_running";
 export type NotifyInterval = "once" | "1h" | "6h" | "24h";
+type AuthProvider = "meridian" | "openai-codex";
+
+const AUTH_PROVIDERS: AuthProvider[] = ["meridian", "openai-codex"];
 
 export interface MeridianHealthResult {
   status: MeridianStatus;
@@ -25,9 +29,16 @@ const INTERVAL_MS: Record<NotifyInterval, number> = {
 
 // ─── Poller state ─────────────────────────────────────────
 
-let lastStatus: MeridianStatus = "unknown" as MeridianStatus;
-let hasSeenHealthy = false;
-let lastEmailSentAt: number | null = null;
+interface PollerState {
+  lastStatus: string;
+  hasSeenHealthy: boolean;
+  lastEmailSentAt: number | null;
+}
+
+const providerState: Record<AuthProvider, PollerState> = {
+  meridian: { lastStatus: "unknown", hasSeenHealthy: false, lastEmailSentAt: null },
+  "openai-codex": { lastStatus: "unknown", hasSeenHealthy: false, lastEmailSentAt: null },
+};
 let pollerInterval: ReturnType<typeof setInterval> | null = null;
 let pollerInitTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -115,7 +126,11 @@ export async function checkMeridianHealth(): Promise<MeridianHealthResult> {
 
 // ─── Email sending ────────────────────────────────────────
 
-export async function sendAuthExpiryEmail(error: string, loginUrl?: string): Promise<boolean> {
+export async function sendAuthExpiryEmail(
+  error: string,
+  loginUrl?: string,
+  provider: AuthProvider = "meridian"
+): Promise<boolean> {
   const host = process.env.EMAIL_SERVER_HOST;
   const adminEmail = process.env.ADMIN_EMAIL;
   if (!host || !adminEmail) {
@@ -137,6 +152,8 @@ export async function sendAuthExpiryEmail(error: string, loginUrl?: string): Pro
 
   const from = process.env.EMAIL_FROM ?? "ShareTab <noreply@sharetab.local>";
   const dashboardUrl = `${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/admin`;
+  const providerLabel =
+    provider === "openai-codex" ? "ChatGPT OAuth (OpenAI Codex)" : "Claude AI";
 
   const loginSection = loginUrl
     ? `<p><strong>Login URL:</strong><br/><a href="${loginUrl}">${loginUrl}</a></p>`
@@ -145,9 +162,9 @@ export async function sendAuthExpiryEmail(error: string, loginUrl?: string): Pro
   await transport.sendMail({
     from,
     to: adminEmail,
-    subject: "[ShareTab] Claude AI authentication expired",
+    subject: `[ShareTab] ${providerLabel} authentication expired`,
     text: [
-      "ShareTab detected that the Meridian (Claude) authentication has expired.",
+      `ShareTab detected that ${providerLabel} authentication has expired.`,
       "",
       `Error: ${error}`,
       "",
@@ -159,8 +176,8 @@ export async function sendAuthExpiryEmail(error: string, loginUrl?: string): Pro
     ].filter(Boolean).join("\n"),
     html: `
       <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
-        <h2 style="color: #ef4444;">Claude AI Authentication Expired</h2>
-        <p>ShareTab detected that the Meridian (Claude) authentication has expired.</p>
+        <h2 style="color: #ef4444;">${providerLabel} Authentication Expired</h2>
+        <p>ShareTab detected that ${providerLabel} authentication has expired.</p>
         <p><strong>Error:</strong> ${error}</p>
         ${loginSection}
         <p>
@@ -175,7 +192,7 @@ export async function sendAuthExpiryEmail(error: string, loginUrl?: string): Pro
     `,
   });
 
-  logger.info("meridian.poller.emailSent", { to: adminEmail });
+  logger.info("auth.poller.emailSent", { provider, to: adminEmail });
   return true;
 }
 
@@ -207,46 +224,100 @@ async function getNotifyInterval(): Promise<NotifyInterval> {
 
 // ─── Poll tick ────────────────────────────────────────────
 
-async function pollTick(): Promise<void> {
+async function handleMeridianTick(): Promise<void> {
+  const state = providerState.meridian;
   const result = await checkMeridianHealth();
 
-  // On transition to healthy
   if (result.status === "healthy") {
-    if (lastStatus !== "healthy" && lastStatus !== ("unknown" as MeridianStatus)) {
-      logger.info("meridian.poller.recovered", { email: result.email });
+    if (state.lastStatus !== "healthy" && state.lastStatus !== "unknown") {
+      logger.info("auth.poller.recovered", { provider: "meridian", email: result.email });
     }
-    hasSeenHealthy = true;
-    lastEmailSentAt = null; // Reset for next incident
-    lastStatus = "healthy";
+    state.hasSeenHealthy = true;
+    state.lastEmailSentAt = null;
+    state.lastStatus = "healthy";
     return;
   }
 
-  // If proxy isn't running yet (still starting), skip alerting
-  if (!hasSeenHealthy && result.status === "not_running") {
-    lastStatus = result.status;
+  if (!state.hasSeenHealthy && result.status === "not_running") {
+    state.lastStatus = result.status;
     return;
   }
 
-  // Status is unhealthy, degraded, or not_running
   if (result.status === "unhealthy") {
-    logger.warn("meridian.poller.unhealthy", { error: result.error });
+    logger.warn("auth.poller.unhealthy", { provider: "meridian", error: result.error });
     const interval = await getNotifyInterval();
-    if (await shouldSendEmail(lastEmailSentAt, interval)) {
-      const sent = await sendAuthExpiryEmail(result.error ?? "Authentication expired");
-      if (sent) lastEmailSentAt = Date.now();
+    if (await shouldSendEmail(state.lastEmailSentAt, interval)) {
+      const sent = await sendAuthExpiryEmail(
+        result.error ?? "Authentication expired",
+        undefined,
+        "meridian"
+      );
+      if (sent) state.lastEmailSentAt = Date.now();
     }
   }
 
-  lastStatus = result.status;
+  state.lastStatus = result.status;
+}
+
+async function handleOpenAICodexTick(): Promise<void> {
+  const state = providerState["openai-codex"];
+  const result = await checkOpenAICodexHealth();
+
+  if (result.status === "healthy") {
+    if (state.lastStatus !== "healthy" && state.lastStatus !== "unknown") {
+      logger.info("auth.poller.recovered", {
+        provider: "openai-codex",
+        email: result.email,
+      });
+    }
+    state.hasSeenHealthy = true;
+    state.lastEmailSentAt = null;
+    state.lastStatus = "healthy";
+    return;
+  }
+
+  const shouldNotify =
+    result.status === "auth_expired" ||
+    (result.status === "not_authenticated" && state.hasSeenHealthy);
+
+  if (shouldNotify) {
+    logger.warn("auth.poller.unhealthy", {
+      provider: "openai-codex",
+      error: result.error,
+      status: result.status,
+    });
+    const interval = await getNotifyInterval();
+    if (await shouldSendEmail(state.lastEmailSentAt, interval)) {
+      const sent = await sendAuthExpiryEmail(
+        result.error ?? "Authentication expired",
+        undefined,
+        "openai-codex"
+      );
+      if (sent) state.lastEmailSentAt = Date.now();
+    }
+  }
+
+  state.lastStatus = result.status;
+}
+
+async function pollTick(): Promise<void> {
+  if (isProviderConfigured("meridian")) {
+    await handleMeridianTick();
+  }
+
+  if (isProviderConfigured("openai-codex")) {
+    await handleOpenAICodexTick();
+  }
 }
 
 // ─── Lifecycle ────────────────────────────────────────────
 
 export function startPoller(): void {
-  if (!isProviderConfigured("meridian")) return;
+  const shouldRun = AUTH_PROVIDERS.some((provider) => isProviderConfigured(provider));
+  if (!shouldRun) return;
   if (pollerInterval) return;
 
-  logger.info("meridian.poller.started");
+  logger.info("auth.poller.started");
   // Run first tick after a short delay to let Meridian start
   pollerInitTimeout = setTimeout(() => {
     pollerInitTimeout = null;
@@ -270,7 +341,7 @@ export function stopPoller(): void {
   if (pollerInterval) {
     clearInterval(pollerInterval);
     pollerInterval = null;
-    logger.info("meridian.poller.stopped");
+    logger.info("auth.poller.stopped");
   }
 }
 
@@ -281,7 +352,11 @@ export async function _pollTick(): Promise<void> {
 
 /** Reset internal state — for testing only. */
 export function _resetPollerState(): void {
-  lastStatus = "unknown" as MeridianStatus;
-  hasSeenHealthy = false;
-  lastEmailSentAt = null;
+  providerState.meridian.lastStatus = "unknown";
+  providerState.meridian.hasSeenHealthy = false;
+  providerState.meridian.lastEmailSentAt = null;
+
+  providerState["openai-codex"].lastStatus = "unknown";
+  providerState["openai-codex"].hasSeenHealthy = false;
+  providerState["openai-codex"].lastEmailSentAt = null;
 }

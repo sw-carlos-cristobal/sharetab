@@ -18,7 +18,7 @@ import { getRecentLogs } from "@/server/lib/logger";
 import {
   checkMeridianHealth,
   sendAuthExpiryEmail,
-} from "@/server/lib/meridian-health-poller";
+} from "@/server/lib/auth-health-poller";
 import {
   startLogin,
   submitCode,
