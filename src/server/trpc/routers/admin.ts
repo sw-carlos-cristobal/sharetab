@@ -22,6 +22,13 @@ import {
   isLoginInProgress,
 } from "@/server/lib/meridian-login";
 import { clearProviderCache } from "@/server/ai/registry";
+import {
+  checkOpenAICodexHealth,
+  startLogin as startOpenAICodexLogin,
+  submitCode as submitOpenAICodexCode,
+  cancelLogin as cancelOpenAICodexLogin,
+  isLoginInProgress as isOpenAICodexLoginInProgress,
+} from "@/server/lib/openai-codex-login";
 
 const serverStartTime = new Date();
 
@@ -1000,6 +1007,44 @@ export const adminRouter = createTRPCRouter({
 
       return { interval: input.interval };
     }),
+
+  // ─── OpenAI Codex Auth ─────────────────────────────────────
+
+  getOpenAICodexAuthStatus: adminProcedure.query(async () => {
+    if (process.env.AI_PROVIDER !== "openai-codex") {
+      return { status: "not_applicable" as const };
+    }
+    const health = await checkOpenAICodexHealth();
+    return {
+      ...health,
+      loginInProgress: isOpenAICodexLoginInProgress(),
+    };
+  }),
+
+  startOpenAICodexLogin: adminProcedure.mutation(async () => {
+    if (process.env.AI_PROVIDER !== "openai-codex") {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "OpenAI Codex is not the active AI provider",
+      });
+    }
+    return { url: await startOpenAICodexLogin() };
+  }),
+
+  completeOpenAICodexLogin: adminProcedure
+    .input(z.object({ code: z.string().min(1).max(1000) }))
+    .mutation(async ({ input }) => {
+      const result = await submitOpenAICodexCode(input.code);
+      if (result.success) {
+        clearProviderCache();
+      }
+      return result;
+    }),
+
+  cancelOpenAICodexLogin: adminProcedure.mutation(async () => {
+    cancelOpenAICodexLogin();
+    return { cancelled: true };
+  }),
 });
 
 function formatBytes(bytes: number): string {

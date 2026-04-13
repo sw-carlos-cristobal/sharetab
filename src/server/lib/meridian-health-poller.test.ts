@@ -22,6 +22,12 @@ vi.mock("@/server/lib/logger", () => ({
 
 import nodemailer from "nodemailer";
 
+function mockTransporter(sendMail: ReturnType<typeof vi.fn>) {
+  return {
+    sendMail,
+  } as unknown as ReturnType<typeof nodemailer.createTransport>;
+}
+
 describe("MeridianHealthPoller", () => {
   const originalEnv = process.env;
 
@@ -146,7 +152,7 @@ describe("MeridianHealthPoller", () => {
 
   test("sendAuthExpiryEmail sends email with correct content", async () => {
     const mockSendMail = vi.fn().mockResolvedValue({});
-    vi.mocked(nodemailer.createTransport).mockReturnValue({ sendMail: mockSendMail } as ReturnType<typeof nodemailer.createTransport>);
+    vi.mocked(nodemailer.createTransport).mockReturnValue(mockTransporter(mockSendMail));
 
     const { sendAuthExpiryEmail } = await import("./meridian-health-poller");
     await sendAuthExpiryEmail("Not logged in. Run: claude login");
@@ -160,7 +166,7 @@ describe("MeridianHealthPoller", () => {
   test("sendAuthExpiryEmail skips when email is not configured", async () => {
     delete process.env.EMAIL_SERVER_HOST;
     const mockSendMail = vi.fn();
-    vi.mocked(nodemailer.createTransport).mockReturnValue({ sendMail: mockSendMail } as ReturnType<typeof nodemailer.createTransport>);
+    vi.mocked(nodemailer.createTransport).mockReturnValue(mockTransporter(mockSendMail));
 
     const { sendAuthExpiryEmail } = await import("./meridian-health-poller");
     await sendAuthExpiryEmail("error");
@@ -197,7 +203,7 @@ describe("MeridianHealthPoller", () => {
 
   test("sendAuthExpiryEmail includes login URL in email when provided", async () => {
     const mockSendMail = vi.fn().mockResolvedValue({});
-    vi.mocked(nodemailer.createTransport).mockReturnValue({ sendMail: mockSendMail } as ReturnType<typeof nodemailer.createTransport>);
+    vi.mocked(nodemailer.createTransport).mockReturnValue(mockTransporter(mockSendMail));
 
     const { sendAuthExpiryEmail } = await import("./meridian-health-poller");
     await sendAuthExpiryEmail("Auth expired", "https://claude.ai/oauth/authorize?code=true");
@@ -210,7 +216,7 @@ describe("MeridianHealthPoller", () => {
   test("sendAuthExpiryEmail skips when ADMIN_EMAIL is not set", async () => {
     delete process.env.ADMIN_EMAIL;
     const mockSendMail = vi.fn();
-    vi.mocked(nodemailer.createTransport).mockReturnValue({ sendMail: mockSendMail } as ReturnType<typeof nodemailer.createTransport>);
+    vi.mocked(nodemailer.createTransport).mockReturnValue(mockTransporter(mockSendMail));
 
     const { sendAuthExpiryEmail } = await import("./meridian-health-poller");
     const sent = await sendAuthExpiryEmail("error");
@@ -259,7 +265,7 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
     };
     vi.stubGlobal("fetch", vi.fn());
     mockSendMail = vi.fn().mockResolvedValue({});
-    vi.mocked(nodemailer.createTransport).mockReturnValue({ sendMail: mockSendMail } as ReturnType<typeof nodemailer.createTransport>);
+    vi.mocked(nodemailer.createTransport).mockReturnValue(mockTransporter(mockSendMail));
   });
 
   afterEach(() => {

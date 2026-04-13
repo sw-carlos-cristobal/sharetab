@@ -6,6 +6,23 @@ import { users, authedContext, trpcMutation, trpcQuery, trpcResult } from "./hel
 const BASE = process.env.BASE_URL || "http://localhost:3001";
 const OCR_TIMEOUT = 90000;
 
+type OCRReceiptItem = {
+  name: string;
+  totalPrice: number;
+};
+
+type OCRProcessResult = {
+  status: string;
+  itemCount: number;
+  total: number;
+  tax: number;
+  tip: number;
+};
+
+function lowerCaseNames(items: OCRReceiptItem[]) {
+  return items.map(({ name }) => name.toLowerCase());
+}
+
 /**
  * Image-based OCR receipt tests.
  * Each test uploads a generated receipt image, processes it via OCR,
@@ -34,11 +51,14 @@ test.describe("OCR Image Receipt Tests", () => {
       const processRes = await trpcMutation(
         ctx, "receipts.processReceipt", { receiptId }, OCR_TIMEOUT
       );
-      const result = (await processRes.json()).result?.data?.json;
+      const result = (await processRes.json()).result?.data?.json as OCRProcessResult;
       expect(result.status).toBe("COMPLETED");
 
       const itemsRes = await trpcQuery(ctx, "receipts.getReceiptItems", { receiptId });
-      const data = await trpcResult(itemsRes);
+      const data = await trpcResult(itemsRes) as {
+        items: OCRReceiptItem[];
+        receipt: unknown;
+      };
 
       return { result, items: data.items, receipt: data.receipt };
     } finally {
@@ -56,7 +76,7 @@ test.describe("OCR Image Receipt Tests", () => {
     expect(result.tax).toBeGreaterThan(0);
 
     // Verify some known items exist
-    const names = items.map((i: { name: string }) => i.name.toLowerCase());
+    const names = lowerCaseNames(items);
     expect(names.some(n => n.includes("burger") || n.includes("classic"))).toBe(true);
     expect(names.some(n => n.includes("fries"))).toBe(true);
 
@@ -71,7 +91,7 @@ test.describe("OCR Image Receipt Tests", () => {
     expect(result.itemCount).toBeGreaterThanOrEqual(8);
     expect(result.total).toBeGreaterThan(40000); // > $400
 
-    const names = items.map((i: { name: string }) => i.name.toLowerCase());
+    const names = lowerCaseNames(items);
 
     // Should find key items
     expect(names.some(n => n.includes("wellington") || n.includes("beef"))).toBe(true);
@@ -94,7 +114,7 @@ test.describe("OCR Image Receipt Tests", () => {
     expect(result.itemCount).toBeGreaterThanOrEqual(10);
     expect(result.total).toBeGreaterThan(6000); // > $60
 
-    const names = items.map((i: { name: string }) => i.name.toLowerCase());
+    const names = lowerCaseNames(items);
 
     // Should find produce and staples
     expect(names.some(n => n.includes("banana"))).toBe(true);
@@ -118,7 +138,7 @@ test.describe("OCR Image Receipt Tests", () => {
     expect(result.itemCount).toBeGreaterThanOrEqual(3);
     expect(result.total).toBeGreaterThan(2000); // > $20
 
-    const names = items.map((i: { name: string }) => i.name.toLowerCase());
+    const names = lowerCaseNames(items);
     expect(names.some(n => n.includes("latte") || n.includes("cappuccino") || n.includes("coffee"))).toBe(true);
   });
 
@@ -130,7 +150,7 @@ test.describe("OCR Image Receipt Tests", () => {
     expect(result.itemCount).toBeGreaterThanOrEqual(7);
     expect(result.total).toBeGreaterThan(12000); // > $120
 
-    const names = items.map((i: { name: string }) => i.name.toLowerCase());
+    const names = lowerCaseNames(items);
 
     // Should find drinks and food
     expect(names.some(n => n.includes("ipa") || n.includes("draft"))).toBe(true);
@@ -147,7 +167,7 @@ test.describe("OCR Image Receipt Tests", () => {
     expect(result.itemCount).toBeGreaterThanOrEqual(4);
     expect(result.tip).toBeGreaterThan(0); // Tip should be captured
 
-    const names = items.map((i: { name: string }) => i.name.toLowerCase());
+    const names = lowerCaseNames(items);
 
     // Should find pizza items
     expect(names.some(n => n.includes("pepperoni") || n.includes("pizza"))).toBe(true);
@@ -166,7 +186,7 @@ test.describe("OCR Image Receipt Tests", () => {
     expect(result.itemCount).toBeGreaterThanOrEqual(8);
     expect(result.total).toBeGreaterThan(10000); // > $100
 
-    const names = items.map((i: { name: string }) => i.name.toLowerCase());
+    const names = lowerCaseNames(items);
 
     // Should find Asian dishes
     expect(names.some(n => n.includes("kung pao") || n.includes("pad thai") || n.includes("fried rice"))).toBe(true);
@@ -222,7 +242,7 @@ test.describe("OCR Image Receipt Tests", () => {
     expect(result.total).toBeGreaterThan(35000); // > $350
     expect(result.tax).toBeGreaterThan(0);
 
-    const names = items.map((i: { name: string }) => i.name.toLowerCase());
+    const names = lowerCaseNames(items);
 
     // Key items from The Golden Fork
     expect(names.some(n => n.includes("truffle") || n.includes("fries"))).toBe(true);

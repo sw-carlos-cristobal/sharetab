@@ -73,6 +73,15 @@
     Display="advanced"
     Required="false"
     Mask="false">/mnt/user/appdata/sharetab/claude</Config>
+  <Config
+    Name="ChatGPT OAuth Data (openai-codex)"
+    Target="/app/chatgpt"
+    Default="/mnt/user/appdata/sharetab/chatgpt"
+    Description="Persistent storage for ChatGPT OAuth login data used by the openai-codex AI provider. Optional unless AI_PROVIDER=openai-codex."
+    Type="Path"
+    Display="advanced"
+    Required="false"
+    Mask="false">/mnt/user/appdata/sharetab/chatgpt</Config>
 
   <!-- Auth -->
   <Config
@@ -146,7 +155,7 @@
     Name="AI Provider"
     Target="AI_PROVIDER"
     Default="openai"
-    Description="AI provider for receipt scanning: openai | claude | meridian | ollama | ocr. Meridian uses Claude Max subscription via embedded proxy — no API key needed, but you must run 'claude login' once inside the container after startup. OCR uses local Tesseract.js (no API key) and is also the automatic fallback."
+    Description="AI provider for receipt scanning: openai | openai-codex | claude | meridian | ollama | ocr. OpenAI Codex uses ChatGPT OAuth via the Codex backend — no API key needed. After startup, open the ShareTab admin dashboard and complete the ChatGPT OAuth flow there. Meridian uses Claude Max via the embedded proxy with a similar admin OAuth flow. OCR uses local Tesseract.js (no API key) and is also the automatic fallback."
     Type="Variable"
     Display="always"
     Required="false"
@@ -169,6 +178,15 @@
     Display="advanced"
     Required="false"
     Mask="false">gpt-4o</Config>
+  <Config
+    Name="OpenAI Codex Model"
+    Target="OPENAI_CODEX_MODEL"
+    Default="gpt-5.4"
+    Description="Model for receipt scanning when AI_PROVIDER=openai-codex. Defaults to gpt-5.4."
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false">gpt-5.4</Config>
   <Config
     Name="Anthropic API Key"
     Target="ANTHROPIC_API_KEY"
@@ -220,7 +238,7 @@
     Name="Email SMTP Host"
     Target="EMAIL_SERVER_HOST"
     Default=""
-    Description="SMTP server for magic link auth emails. Leave blank to disable magic link sign-in."
+    Description="SMTP server for outgoing emails. Used for magic link sign-in and Meridian auth expiry alerts. Leave blank to disable email sending."
     Type="Variable"
     Display="advanced"
     Required="false"
@@ -287,7 +305,7 @@
     Name="Admin Email"
     Target="ADMIN_EMAIL"
     Default=""
-    Description="Email address of the admin user. Grants access to the /admin dashboard for managing users, groups, and storage. Leave blank to disable admin features."
+    Description="Email address of the admin user. Grants access to the /admin dashboard for managing users, groups, and storage, and receives Meridian auth expiry alerts when email is configured. Leave blank to disable admin features."
     Type="Variable"
     Display="always"
     Required="false"

@@ -1,5 +1,5 @@
 import { randomBytes, createHash } from "crypto";
-import { writeFileSync, unlinkSync } from "fs";
+import { readFileSync, writeFileSync, unlinkSync } from "fs";
 import { join } from "path";
 import { logger } from "./logger";
 
@@ -194,6 +194,105 @@ export async function submitCode(
       success: false,
       error: err instanceof Error ? err.message : "Token exchange failed",
     };
+  }
+}
+
+// ─── Token refresh ───────────────────────────────────────
+
+/** Buffer before expiry — refresh 5 minutes early */
+const EXPIRY_BUFFER_MS = 5 * 60 * 1000;
+
+/**
+ * Read stored credentials and refresh the access token if expired.
+ * Called on app startup so a container restart doesn't require re-login.
+ * Returns true if credentials are valid (refreshed or still fresh).
+ */
+export async function refreshIfNeeded(): Promise<boolean> {
+  const credPath = getCredentialPath();
+
+  let raw: string;
+  try {
+    raw = readFileSync(credPath, "utf8");
+  } catch {
+    // No credentials file — nothing to refresh
+    return false;
+  }
+
+  let creds: {
+    claudeAiOauth?: {
+      accessToken?: string;
+      refreshToken?: string;
+      expiresAt?: number;
+      scopes?: string[];
+      subscriptionType?: string;
+      rateLimitTier?: string;
+    };
+  };
+  try {
+    creds = JSON.parse(raw);
+  } catch {
+    logger.warn("meridian.refresh.invalidCredentials");
+    return false;
+  }
+
+  const oauth = creds.claudeAiOauth;
+  if (!oauth?.refreshToken) {
+    logger.warn("meridian.refresh.noRefreshToken");
+    return false;
+  }
+
+  // Still fresh — no refresh needed
+  if (oauth.expiresAt && oauth.expiresAt - EXPIRY_BUFFER_MS > Date.now()) {
+    logger.info("meridian.refresh.tokenStillValid", {
+      expiresIn: Math.round((oauth.expiresAt - Date.now()) / 1000) + "s",
+    });
+    return true;
+  }
+
+  // Token expired or about to expire — refresh it
+  logger.info("meridian.refresh.refreshing");
+
+  try {
+    const res = await fetch(TOKEN_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        grant_type: "refresh_token",
+        client_id: CLIENT_ID,
+        refresh_token: oauth.refreshToken,
+      }),
+      signal: AbortSignal.timeout(30_000),
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      logger.error("meridian.refresh.failed", {
+        status: res.status,
+        body,
+      });
+      return false;
+    }
+
+    const tokens = await res.json();
+    const updated = {
+      claudeAiOauth: {
+        ...oauth,
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token ?? oauth.refreshToken,
+        expiresAt: Date.now() + tokens.expires_in * 1000,
+      },
+    };
+
+    writeFileSync(credPath, JSON.stringify(updated), { mode: 0o600 });
+    logger.info("meridian.refresh.success", {
+      expiresIn: tokens.expires_in + "s",
+    });
+    return true;
+  } catch (err) {
+    logger.error("meridian.refresh.error", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return false;
   }
 }
 

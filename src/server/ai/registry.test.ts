@@ -25,6 +25,13 @@ describe("getAIProvider", () => {
     expect(provider.constructor.name).toBe("OpenAIProvider");
   });
 
+  test("selects openai codex provider", async () => {
+    process.env.AI_PROVIDER = "openai-codex";
+    const { getAIProvider } = await import("./registry");
+    const provider = await getAIProvider();
+    expect(provider.constructor.name).toBe("OpenAICodexProvider");
+  });
+
   test("selects claude provider with API key", async () => {
     process.env.AI_PROVIDER = "claude";
     process.env.ANTHROPIC_API_KEY = "test-anthropic-key";
@@ -70,7 +77,7 @@ describe("getAIProvider", () => {
   test("error message lists available providers", async () => {
     process.env.AI_PROVIDER = "invalid";
     const { getAIProvider } = await import("./registry");
-    await expect(getAIProvider()).rejects.toThrow("openai, claude, meridian, ollama, ocr");
+    await expect(getAIProvider()).rejects.toThrow("openai, openai-codex, claude, meridian, ollama, ocr");
   });
 });
 

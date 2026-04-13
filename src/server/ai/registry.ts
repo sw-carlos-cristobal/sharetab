@@ -11,6 +11,10 @@ export async function getAIProvider(): Promise<AIProvider> {
       const { OpenAIProvider } = await import("./providers/openai");
       return new OpenAIProvider(process.env.OPENAI_API_KEY, process.env.OPENAI_MODEL);
     }
+    case "openai-codex": {
+      const { OpenAICodexProvider } = await import("./providers/openai-codex");
+      return new OpenAICodexProvider(process.env.OPENAI_CODEX_MODEL);
+    }
     case "claude": {
       const { ClaudeProvider } = await import("./providers/claude");
       if (!process.env.ANTHROPIC_API_KEY) {
@@ -39,7 +43,7 @@ export async function getAIProvider(): Promise<AIProvider> {
     }
     default:
       throw new Error(
-        `Unknown AI provider: "${name}". Available: openai, claude, meridian, ollama, ocr, mock`
+        `Unknown AI provider: "${name}". Available: openai, openai-codex, claude, meridian, ollama, ocr, mock`
       );
   }
 }
