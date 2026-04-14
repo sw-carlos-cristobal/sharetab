@@ -33,6 +33,7 @@ services:
       - pgdata:/var/lib/postgresql/data
       - uploads:/app/uploads
       - claude:/app/claude
+      - chatgpt:/app/chatgpt
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
@@ -44,3 +45,4 @@ volumes:
   pgdata:
   uploads:
   claude:
+  chatgpt:

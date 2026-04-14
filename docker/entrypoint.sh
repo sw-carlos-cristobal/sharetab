@@ -130,7 +130,7 @@ case ",${AI_PROVIDER_PRIORITY}," in
     if [ -f "${CLAUDE_DIR:-/app/claude}/.credentials.json" ]; then
       echo "  Claude Login:   detected"
     else
-      echo "  Claude Login:   missing (run 'claude login')"
+      echo "  Claude Login:   missing (complete OAuth from /admin)"
     fi
     ;;
   esac

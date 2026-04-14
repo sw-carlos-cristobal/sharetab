@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import type { Prisma } from "@/generated/prisma/client";
-import { createTRPCRouter, publicProcedure } from "../init";
+import { createTRPCRouter, publicProcedure, protectedProcedure } from "../init";
 import { processReceiptImage } from "../../lib/receipt-processor";
 import { logger } from "../../lib/logger";
 import { checkRateLimit } from "../../lib/rate-limit";
@@ -11,7 +11,7 @@ import {
 } from "@/server/ai/registry";
 
 export const guestRouter = createTRPCRouter({
-  getScanProviderInfo: publicProcedure.query(async () => {
+  getScanProviderInfo: protectedProcedure.query(async () => {
     try {
       return {
         configuredProviders: getConfiguredProviderPriority(),
