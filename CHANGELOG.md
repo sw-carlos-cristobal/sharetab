@@ -1,5 +1,13 @@
 # Changelog
 
+## [v0.5.12] - 2026-04-14
+
+### Bug Fixes
+- resolve admin mobile overflow and version drift on main (f8800f0)
+- reduce Meridian and OpenAI Codex OAuth auth health check frequency (4e9f442)
+
+**Full Changelog**: https://github.com/sw-carlos-cristobal/sharetab/compare/v0.5.10...v0.5.12
+
 ## [v0.5.10] - 2026-04-13
 
 ### Features
