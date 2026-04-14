@@ -74,7 +74,7 @@ NODE_PATH=/prisma-cli/node_modules node /prisma-cli/node_modules/prisma/build/in
 echo "Warning: Could not apply schema"
 
 # ── Claude credentials: persistent shared dir for meridian provider ──
-CLAUDE_DIR="${CLAUDE_DIR:-/app/claude}"
+export CLAUDE_DIR="${CLAUDE_DIR:-/app/claude}"
 mkdir -p "$CLAUDE_DIR"
 chown nextjs:nodejs "$CLAUDE_DIR"
 rm -rf /home/nextjs/.claude
@@ -180,4 +180,5 @@ echo ""
 # ── Start App ───────────────────────────────────────────────
 
 echo "Starting ShareTab..."
+export HOME=/home/nextjs
 exec su-exec nextjs node server.js
