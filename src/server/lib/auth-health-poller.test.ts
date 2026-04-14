@@ -511,6 +511,20 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
     expect(mockSendMail).not.toHaveBeenCalled();
   });
 
+  test("does not send openai-codex email for degraded backend status", async () => {
+    process.env.AI_PROVIDER_PRIORITY = "openai-codex,ocr";
+    mockCheckOpenAICodexHealth.mockResolvedValueOnce({
+      status: "degraded",
+      error: "Codex backend returned HTTP 503.",
+    });
+
+    const { _pollTick, _resetPollerState } = await import("./auth-health-poller");
+    _resetPollerState();
+    await _pollTick();
+
+    expect(mockSendMail).not.toHaveBeenCalled();
+  });
+
   test("startPoller does not fetch before 30s delay", async () => {
     const { startPoller, stopPoller } = await import("./auth-health-poller");
 

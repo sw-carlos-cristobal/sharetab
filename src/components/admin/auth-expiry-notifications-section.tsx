@@ -25,8 +25,9 @@ export function AuthExpiryNotificationsSection() {
     },
   });
 
-  const meridianEnabled = meridianStatus.data?.status !== "not_applicable";
-  const openAICodexEnabled = openAICodexStatus.data?.status !== "not_applicable";
+  const meridianEnabled = !!meridianStatus.data && meridianStatus.data.status !== "not_applicable";
+  const openAICodexEnabled =
+    !!openAICodexStatus.data && openAICodexStatus.data.status !== "not_applicable";
 
   if (!meridianEnabled && !openAICodexEnabled) {
     return null;

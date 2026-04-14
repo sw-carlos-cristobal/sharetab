@@ -81,8 +81,15 @@ export function OpenAICodexAuthSection() {
   }
 
   const isHealthy = status.status === "healthy";
-  const statusColor = isHealthy ? "bg-green-500" : "bg-red-500";
-  const statusLabel = isHealthy ? "Authenticated" : "Authentication required";
+  const isDegraded = status.status === "degraded";
+  const isWaitingForCode =
+    loginState === "waiting_for_code" || (loginState === "idle" && status.loginInProgress);
+  const statusColor = isHealthy ? "bg-green-500" : isDegraded ? "bg-yellow-500" : "bg-red-500";
+  const statusLabel = isHealthy
+    ? "Authenticated"
+    : isDegraded
+      ? "Service degraded"
+      : "Authentication required";
 
   return (
     <section>
@@ -120,23 +127,15 @@ export function OpenAICodexAuthSection() {
             </p>
           )}
 
-          {!isHealthy && loginState === "idle" && (
+          {!isHealthy && loginState === "idle" && !status.loginInProgress && (
             <Button
               size="sm"
               onClick={() => {
                 setLoginState("starting");
                 startLogin.mutate();
               }}
-              disabled={status.loginInProgress}
             >
-              {status.loginInProgress ? (
-                <>
-                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                  Login in progress...
-                </>
-              ) : (
-                "Authenticate with ChatGPT"
-              )}
+              Authenticate with ChatGPT
             </Button>
           )}
 
@@ -165,39 +164,48 @@ export function OpenAICodexAuthSection() {
             </div>
           )}
 
-          {loginState === "waiting_for_code" && loginUrl && (
+          {isWaitingForCode && (
             <div className="space-y-3 rounded-md border p-3">
               <p className="text-sm">
-                <span className="font-semibold">Step 1:</span> Open the login link
-                and finish the ChatGPT authorization flow.
+                <span className="font-semibold">Step 1:</span>{" "}
+                {loginUrl
+                  ? "Open the login link and finish the ChatGPT authorization flow."
+                  : "Finish the ChatGPT authorization flow you already started."}
               </p>
-              <div className="flex items-center gap-2">
-                <a
-                  href={loginUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-sm text-primary underline break-all"
-                >
-                  <ExternalLink className="h-3 w-3 shrink-0" />
-                  Open authentication page
-                </a>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 w-6 p-0 shrink-0"
-                  onClick={() => {
-                    navigator.clipboard.writeText(loginUrl);
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 2000);
-                  }}
-                >
-                  {copied ? (
-                    <CheckCircle2 className="h-3 w-3 text-green-500" />
-                  ) : (
-                    <Copy className="h-3 w-3" />
-                  )}
-                </Button>
-              </div>
+              {loginUrl ? (
+                <div className="flex items-center gap-2">
+                  <a
+                    href={loginUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-sm text-primary underline break-all"
+                  >
+                    <ExternalLink className="h-3 w-3 shrink-0" />
+                    Open authentication page
+                  </a>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 shrink-0"
+                    onClick={() => {
+                      navigator.clipboard.writeText(loginUrl);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    }}
+                  >
+                    {copied ? (
+                      <CheckCircle2 className="h-3 w-3 text-green-500" />
+                    ) : (
+                      <Copy className="h-3 w-3" />
+                    )}
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  A login is already in progress. If you opened the ChatGPT auth page before
+                  refreshing, paste the callback URL below. Otherwise cancel and start again.
+                </p>
+              )}
               <div className="space-y-1">
                 <p className="text-sm">
                   <span className="font-semibold">Step 2:</span> After login, copy
@@ -237,6 +245,7 @@ export function OpenAICodexAuthSection() {
                 size="sm"
                 className="text-muted-foreground"
                 onClick={() => cancelMutation.mutate()}
+                disabled={cancelMutation.isPending}
               >
                 Cancel
               </Button>

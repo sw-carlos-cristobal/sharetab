@@ -117,6 +117,48 @@ describe("OpenAICodexLogin", () => {
     const { refreshIfNeeded } = await import("./openai-codex-login");
     expect(await refreshIfNeeded()).toBe(true);
     expect(mockWriteFileSync).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const [, init] = vi.mocked(fetch).mock.calls[0];
+    expect(init?.headers).toMatchObject({
+      "Content-Type": "application/x-www-form-urlencoded",
+      originator: "codex_cli_rs",
+    });
+    expect(init?.body).toBeInstanceOf(URLSearchParams);
+  });
+
+  test("checkOpenAICodexHealth returns degraded for backend outages", async () => {
+    const jwt = [
+      "header",
+      Buffer.from(JSON.stringify({
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        "https://api.openai.com/auth": { chatgpt_account_id: "acct_123" },
+      })).toString("base64url"),
+      "sig",
+    ].join(".");
+
+    vi.doMock("fs", () => ({
+      mkdirSync: vi.fn(),
+      readFileSync: () => JSON.stringify({
+        auth_mode: "Chatgpt",
+        tokens: {
+          id_token: jwt,
+          access_token: jwt,
+          refresh_token: "refresh-token",
+          account_id: "acct_123",
+        },
+      }),
+      writeFileSync: vi.fn(),
+      unlinkSync: vi.fn(),
+    }));
+
+    vi.mocked(fetch).mockRejectedValueOnce(new Error("connect ECONNREFUSED"));
+
+    const { checkOpenAICodexHealth } = await import("./openai-codex-login");
+    await expect(checkOpenAICodexHealth()).resolves.toMatchObject({
+      status: "degraded",
+      error: "connect ECONNREFUSED",
+      accountId: "acct_123",
+    });
   });
 
   test("logout clears pending login and removes auth file", async () => {

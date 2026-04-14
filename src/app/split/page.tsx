@@ -394,10 +394,6 @@ export default function GuestSplitPage() {
               Active provider: <span className="font-medium text-foreground">{activeProvider}</span>
               {" · "}Fallback chain: <span className="font-medium text-foreground">{configuredProviderChain}</span>
             </p>
-            <p className="text-xs text-muted-foreground">
-              Using: <span className="font-medium text-foreground">{activeProvider}</span>
-              {" · "}Chain: <span className="font-medium text-foreground">{configuredProviderChain}</span>
-            </p>
           </div>
         </div>
       )}

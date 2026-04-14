@@ -71,7 +71,7 @@ type HealthStatus =
       accountId: string | null;
     }
   | {
-      status: "not_authenticated" | "auth_expired";
+      status: "not_authenticated" | "auth_expired" | "degraded";
       error?: string;
       email?: string | null;
       planType?: string | null;
@@ -184,14 +184,19 @@ async function refreshAuth(force = false): Promise<ParsedStoredAuth | null> {
     return stored;
   }
 
+  const body = new URLSearchParams({
+    client_id: CLIENT_ID,
+    grant_type: "refresh_token",
+    refresh_token: stored.refreshToken,
+  });
+
   const response = await fetch(TOKEN_ENDPOINT, {
     method: "POST",
-    headers: { "Content-Type": "application/json", originator: ORIGINATOR },
-    body: JSON.stringify({
-      client_id: CLIENT_ID,
-      grant_type: "refresh_token",
-      refresh_token: stored.refreshToken,
-    }),
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      originator: ORIGINATOR,
+    },
+    body,
     signal: AbortSignal.timeout(30_000),
   });
 
@@ -425,10 +430,28 @@ export async function checkOpenAICodexHealth(): Promise<HealthStatus> {
           accountId: refreshed.accountId,
         };
       }
+
+      if (retry.status === 401) {
+        return {
+          status: "auth_expired",
+          email: refreshed.email,
+          planType: refreshed.planType,
+          accountId: refreshed.accountId,
+          error: "Stored ChatGPT OAuth token expired and refresh failed.",
+        };
+      }
+
+      return {
+        status: "degraded",
+        email: refreshed.email,
+        planType: refreshed.planType,
+        accountId: refreshed.accountId,
+        error: `Codex backend returned HTTP ${retry.status}.`,
+      };
     }
 
     return {
-      status: "auth_expired",
+      status: "degraded",
       email: stored.email,
       planType: stored.planType,
       accountId: stored.accountId,
@@ -436,7 +459,7 @@ export async function checkOpenAICodexHealth(): Promise<HealthStatus> {
     };
   } catch (error) {
     return {
-      status: "auth_expired",
+      status: "degraded",
       email: stored.email,
       planType: stored.planType,
       accountId: stored.accountId,

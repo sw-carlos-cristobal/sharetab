@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { extractTextFromCodexStream } from "./openai-codex";
+import { extractTextFromCodexStream, isCodexSseResponse } from "./openai-codex";
 
 describe("extractTextFromCodexStream", () => {
   test("returns final message text from streamed events", () => {
@@ -31,5 +31,15 @@ describe("extractTextFromCodexStream", () => {
     ].join("\n");
 
     expect(() => extractTextFromCodexStream(body)).toThrow("token expired");
+  });
+
+  test("detects data-only SSE payloads", () => {
+    const body = [
+      'data: {"type":"response.output_text.delta","delta":"hello"}\n',
+      'data: {"type":"response.completed","response":{"id":"resp_1"}}\n',
+    ].join("\n");
+
+    expect(isCodexSseResponse(body, "text/event-stream")).toBe(true);
+    expect(isCodexSseResponse(body, "application/json")).toBe(true);
   });
 });

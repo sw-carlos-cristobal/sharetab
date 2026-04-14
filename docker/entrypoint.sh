@@ -139,7 +139,7 @@ esac
 
 case ",${AI_PROVIDER_PRIORITY}," in
   *,openai-codex,*)
-  echo "  OpenAI Model:   ${OPENAI_CODEX_MODEL:-gpt-5.4}"
+  echo "  OpenAI Codex Model: ${OPENAI_CODEX_MODEL:-gpt-5.4}"
   echo "  ChatGPT Data:   ${OPENAI_CODEX_DIR:-/app/chatgpt}"
   if [ -f "${OPENAI_CODEX_DIR:-/app/chatgpt}/auth.json" ]; then
     echo "  ChatGPT Login:  detected"

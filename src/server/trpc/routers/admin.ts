@@ -174,7 +174,10 @@ export const adminRouter = createTRPCRouter({
 
       if (configured.includes("openai-codex")) {
         const openAICodexHealth = await checkOpenAICodexHealth();
-        if (openAICodexHealth.status !== "healthy") {
+        if (
+          openAICodexHealth.status === "auth_expired" ||
+          openAICodexHealth.status === "not_authenticated"
+        ) {
           authProvidersNeedingLogin.push("openai-codex");
         }
       }
@@ -1021,7 +1024,7 @@ export const adminRouter = createTRPCRouter({
     }
 
     clearProviderCache();
-    await logAdminAction(ctx.db, ctx.user.id, "MERIDIAN_LOGIN_FAILED", null, {
+    await logAdminAction(ctx.db, ctx.user.id, "MERIDIAN_LOGOUT", null, {
       reason: "logged_out",
     });
     return { success: true };

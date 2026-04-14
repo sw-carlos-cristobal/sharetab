@@ -220,7 +220,7 @@ The `ocr` provider uses Tesseract.js for local text extraction -- no API key or 
 
 | Variable | Description |
 |---|---|
-| `EMAIL_SERVER_HOST` | SMTP host (e.g. `smtp.gmail.com`). Used for magic link sign-in and Meridian auth expiry alerts. |
+| `EMAIL_SERVER_HOST` | SMTP host (e.g. `smtp.gmail.com`). Used for magic link sign-in and OAuth auth expiry alerts (Meridian / ChatGPT OAuth). |
 | `EMAIL_SERVER_PORT` | SMTP port. Use `465` for implicit TLS, `587` for STARTTLS. |
 | `EMAIL_SERVER_USER` | SMTP username / email address. |
 | `EMAIL_SERVER_PASSWORD` | SMTP password or app password. |
@@ -230,7 +230,7 @@ The `ocr` provider uses Tesseract.js for local text extraction -- no API key or 
 
 | Variable | Description |
 |---|---|
-| `ADMIN_EMAIL` | Email of the admin user. Grants access to `/admin` dashboard for managing users, groups, storage, and system settings, and receives Meridian auth expiry alerts when email is configured. |
+| `ADMIN_EMAIL` | Email of the admin user. Grants access to `/admin` dashboard for managing users, groups, storage, and system settings, and receives OAuth auth expiry alerts when email is configured. |
 
 ### Other
 

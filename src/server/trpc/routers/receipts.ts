@@ -41,19 +41,20 @@ async function verifyReceiptAccess(
 
 export const receiptsRouter = createTRPCRouter({
   getScanProviderInfo: protectedProcedure.query(async () => {
-    const configured = getConfiguredProviderPriority();
-    let activeProvider: string | null = null;
     try {
+      const configured = getConfiguredProviderPriority();
       const [active] = await getAIProvidersWithFallback();
-      activeProvider = active?.name ?? null;
+      return {
+        configuredProviders: configured,
+        activeProvider: active?.name ?? null,
+      };
     } catch {
       // Keep response shape stable even if provider checks fail.
+      return {
+        configuredProviders: [],
+        activeProvider: null,
+      };
     }
-
-    return {
-      configuredProviders: configured,
-      activeProvider,
-    };
   }),
 
   processReceipt: protectedProcedure

@@ -166,6 +166,21 @@ export function extractTextFromCodexStream(body: string): string {
   throw new Error("OpenAI Codex stream ended before response.completed");
 }
 
+export function isCodexSseResponse(raw: string, contentType?: string | null): boolean {
+  const normalizedContentType = contentType?.toLowerCase() ?? "";
+  if (normalizedContentType.includes("text/event-stream")) {
+    return true;
+  }
+
+  const trimmed = raw.trim();
+  return (
+    trimmed.startsWith("event:") ||
+    trimmed.includes("\nevent:") ||
+    trimmed.startsWith("data:") ||
+    trimmed.includes("\ndata:")
+  );
+}
+
 async function performRequest(body: object): Promise<string> {
   const auth = await getAccessTokenForApi();
   if (!auth?.accessToken) {
@@ -219,7 +234,7 @@ async function performRequest(body: object): Promise<string> {
     throw new Error("OpenAI Codex returned an empty response body");
   }
 
-  if (trimmed.startsWith("event:") || trimmed.includes("\nevent:")) {
+  if (isCodexSseResponse(trimmed, response.headers.get("content-type"))) {
     return extractTextFromCodexStream(trimmed);
   }
 

@@ -7,25 +7,23 @@ import { logger } from "../../lib/logger";
 import { checkRateLimit } from "../../lib/rate-limit";
 import { calculateSplitTotals } from "@/lib/split-calculator";
 import {
-  getAIProvidersWithFallback,
   getConfiguredProviderPriority,
 } from "@/server/ai/registry";
 
 export const guestRouter = createTRPCRouter({
   getScanProviderInfo: publicProcedure.query(async () => {
-    const configured = getConfiguredProviderPriority();
-    let activeProvider: string | null = null;
     try {
-      const [active] = await getAIProvidersWithFallback();
-      activeProvider = active?.name ?? null;
+      return {
+        configuredProviders: getConfiguredProviderPriority(),
+        activeProvider: null,
+      };
     } catch {
-      // Keep response shape stable even if provider checks fail.
+      // Keep response shape stable even if provider parsing fails.
+      return {
+        configuredProviders: [],
+        activeProvider: null,
+      };
     }
-
-    return {
-      configuredProviders: configured,
-      activeProvider,
-    };
   }),
 
   processReceipt: publicProcedure
