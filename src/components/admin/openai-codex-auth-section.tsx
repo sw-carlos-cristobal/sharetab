@@ -200,13 +200,13 @@ export function OpenAICodexAuthSection() {
               </div>
               <div className="space-y-1">
                 <p className="text-sm">
-                  <span className="font-semibold">Step 2:</span> After login,
-                  copy the final browser URL and paste it below.
+                  <span className="font-semibold">Step 2:</span> After login, copy
+                  the final browser URL and paste it below.
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  The OpenAI flow redirects to <code>localhost:1455</code>. That
-                  callback is expected to fail in the browser here, so copy the
-                  full redirected URL from the address bar.
+                  The OpenAI flow redirects to localhost:1455. That callback is
+                  expected to fail in the browser here, so copy the full redirected
+                  URL from the address bar.
                 </p>
               </div>
               <div className="flex gap-2">

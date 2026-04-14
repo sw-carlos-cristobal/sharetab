@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,8 +24,6 @@ import {
 
 export function MeridianAuthSection() {
   const utils = trpc.useUtils();
-  const searchParams = useSearchParams();
-  const router = useRouter();
 
   const authStatus = trpc.admin.getMeridianAuthStatus.useQuery(undefined, {
     refetchInterval: 15_000,
@@ -89,27 +86,18 @@ export function MeridianAuthSection() {
     setLoginError(null);
   }
 
-  // Handle OAuth callback redirect params
-  useEffect(() => {
-    const authResult = searchParams.get("meridian_auth");
-    const authError = searchParams.get("meridian_error");
-    if (authResult === "success") {
-      setLoginState("success");
-      utils.admin.getMeridianAuthStatus.invalidate();
-      utils.admin.getSystemHealth.invalidate();
-      router.replace("/admin");
-    } else if (authError) {
-      setLoginState("error");
-      setLoginError(decodeURIComponent(authError));
-      router.replace("/admin");
-    }
-  }, [searchParams, utils, router]);
-
   // Don't render if not using meridian
   const status = authStatus.data;
   if (!status || "status" in status && status.status === "not_applicable") {
     return null;
   }
+
+  const normalizedStatusError = status.error
+    ?.replace(
+      /Run ['"`]?claude login['"`]? in your terminal to re-authenticate\.?/gi,
+      'Use "Authenticate with Claude" below.'
+    )
+    .replace(/Run:\s*claude login/gi, 'Use "Authenticate with Claude" below');
 
   const isHealthy = status.status === "healthy";
   const statusColor = isHealthy
@@ -150,9 +138,9 @@ export function MeridianAuthSection() {
               )}
             </div>
 
-            {status.error && (
+            {normalizedStatusError && (
               <p className="text-sm text-red-600 dark:text-red-400">
-                {status.error}
+                {normalizedStatusError}
               </p>
             )}
 
@@ -172,7 +160,7 @@ export function MeridianAuthSection() {
                     Login in progress...
                   </>
                 ) : (
-                  "Re-authenticate"
+                  "Authenticate with Claude"
                 )}
               </Button>
             )}

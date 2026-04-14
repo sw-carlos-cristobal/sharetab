@@ -1,5 +1,5 @@
 import { test, expect, devices } from "@playwright/test";
-import { users, login } from "./helpers";
+import { users, login, createTestGroup } from "./helpers";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -49,14 +49,34 @@ test.describe("Mobile Responsive", () => {
   });
 
   test("mobile layout stacks cards vertically", async ({ page }) => {
+    const groupAName = `Mobile Layout A ${Date.now()}`;
+    const groupBName = `Mobile Layout B ${Date.now()}`;
+    const groupA = await createTestGroup(
+      users.alice.email,
+      users.alice.password,
+      [],
+      groupAName
+    );
+    const groupB = await createTestGroup(
+      users.alice.email,
+      users.alice.password,
+      [],
+      groupBName
+    );
+
     await login(page, users.alice.email, users.alice.password);
 
-    // Dashboard paginates groups — click "Show all" if needed to reveal seed groups
-    const showAll = page.getByRole("button", { name: /Show all/ });
-    await showAll.click({ timeout: 3000 }).catch(() => {});
+    try {
+      // Dashboard paginates groups — click "Show all" if needed to reveal all groups.
+      const showAll = page.getByRole("button", { name: /Show all/ });
+      await showAll.click({ timeout: 3000 }).catch(() => {});
 
-    // Group cards should be visible in single column
-    await expect(page.getByText("Japan Trip").first()).toBeVisible();
-    await expect(page.getByText("Apartment").first()).toBeVisible();
+      // Group cards should be visible in single column.
+      await expect(page.getByRole("link", { name: new RegExp(groupAName) }).first()).toBeVisible();
+      await expect(page.getByRole("link", { name: new RegExp(groupBName) }).first()).toBeVisible();
+    } finally {
+      await groupA.dispose();
+      await groupB.dispose();
+    }
   });
 });

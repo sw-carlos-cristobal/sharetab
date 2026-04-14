@@ -5,6 +5,10 @@ import type { PrismaClient } from "@/generated/prisma/client";
 import { createTRPCRouter, protectedProcedure, groupMemberProcedure } from "../init";
 import { processReceiptImage } from "../../lib/receipt-processor";
 import { logger } from "../../lib/logger";
+import {
+  getAIProvidersWithFallback,
+  getConfiguredProviderPriority,
+} from "@/server/ai/registry";
 
 /**
  * Verify that a receipt exists and the user has access to it (via group membership).
@@ -36,6 +40,22 @@ async function verifyReceiptAccess(
 }
 
 export const receiptsRouter = createTRPCRouter({
+  getScanProviderInfo: protectedProcedure.query(async () => {
+    const configured = getConfiguredProviderPriority();
+    let activeProvider: string | null = null;
+    try {
+      const [active] = await getAIProvidersWithFallback();
+      activeProvider = active?.name ?? null;
+    } catch {
+      // Keep response shape stable even if provider checks fail.
+    }
+
+    return {
+      configuredProviders: configured,
+      activeProvider,
+    };
+  }),
+
   processReceipt: protectedProcedure
     .input(z.object({
       receiptId: z.string(),

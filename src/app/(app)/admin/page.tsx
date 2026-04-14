@@ -20,7 +20,6 @@ import {
 import {
   Shield,
   Database,
-  Bot,
   Package,
   Clock,
   Trash2,
@@ -119,33 +118,6 @@ function SystemHealthSection() {
               <span className="text-sm font-medium capitalize">
                 {data?.dbStatus ?? "unknown"}
               </span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-              <Bot className="h-4 w-4" />
-              AI Provider
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <span
-                className={`h-2.5 w-2.5 rounded-full ${
-                  data?.aiAvailable ? "bg-green-500" : data?.ocrFallback ? "bg-blue-500" : "bg-yellow-500"
-                }`}
-              />
-              <span className="text-sm font-medium">{data?.aiProvider}</span>
-              <Badge variant={data?.aiAvailable ? "default" : "outline"}>
-                {data?.aiAvailable ? "Available" : "Unavailable"}
-              </Badge>
-              {data?.ocrFallback && (
-                <Badge variant="outline" className="text-blue-600 border-blue-300">
-                  OCR fallback
-                </Badge>
-              )}
             </div>
           </CardContent>
         </Card>

@@ -5,7 +5,8 @@ import { logger } from "./logger";
 
 // ─── Constants ───────────────────────────────────────────
 
-const CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
+const CLIENT_ID =
+  process.env.MERIDIAN_CLIENT_ID ?? "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
 const TOKEN_ENDPOINT = "https://platform.claude.com/v1/oauth/token";
 const AUTHORIZE_ENDPOINT = "https://claude.com/cai/oauth/authorize";
 const REDIRECT_URI = "https://platform.claude.com/oauth/code/callback";
@@ -103,16 +104,18 @@ export function startLogin(): Promise<string> {
  * Extract the authorization code from either a raw code string or a full
  * callback URL (e.g. "https://platform.claude.com/oauth/code/callback?code=XXX&state=YYY").
  */
-function extractCode(input: string): string {
+function extractCodeAndState(input: string): { code: string; state: string | null } {
   const trimmed = input.trim();
   try {
     const url = new URL(trimmed);
-    const code = url.searchParams.get("code");
-    if (code) return code;
+    return {
+      code: url.searchParams.get("code") ?? trimmed,
+      state: url.searchParams.get("state"),
+    };
   } catch {
     // Not a URL — treat the whole string as the code
   }
-  return trimmed;
+  return { code: trimmed, state: null };
 }
 
 /**
@@ -126,8 +129,13 @@ export async function submitCode(
     throw new Error("No login in progress");
   }
 
-  const code = extractCode(codeOrUrl);
-  const { codeVerifier, state } = pendingLogin;
+  const { code, state } = extractCodeAndState(codeOrUrl);
+  const { codeVerifier, state: expectedState } = pendingLogin;
+
+  if (state && state !== expectedState) {
+    cleanup();
+    return { success: false, error: "OAuth state mismatch" };
+  }
 
   try {
     logger.info("meridian.login.exchangingCode", {
@@ -146,7 +154,7 @@ export async function submitCode(
         code,
         code_verifier: codeVerifier,
         redirect_uri: REDIRECT_URI,
-        state,
+        state: expectedState,
       }),
       signal: AbortSignal.timeout(30_000),
     });

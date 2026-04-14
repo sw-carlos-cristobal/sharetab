@@ -6,8 +6,28 @@ import { processReceiptImage } from "../../lib/receipt-processor";
 import { logger } from "../../lib/logger";
 import { checkRateLimit } from "../../lib/rate-limit";
 import { calculateSplitTotals } from "@/lib/split-calculator";
+import {
+  getAIProvidersWithFallback,
+  getConfiguredProviderPriority,
+} from "@/server/ai/registry";
 
 export const guestRouter = createTRPCRouter({
+  getScanProviderInfo: publicProcedure.query(async () => {
+    const configured = getConfiguredProviderPriority();
+    let activeProvider: string | null = null;
+    try {
+      const [active] = await getAIProvidersWithFallback();
+      activeProvider = active?.name ?? null;
+    } catch {
+      // Keep response shape stable even if provider checks fail.
+    }
+
+    return {
+      configuredProviders: configured,
+      activeProvider,
+    };
+  }),
+
   processReceipt: publicProcedure
     .input(z.object({ receiptId: z.string(), correctionHint: z.string().max(500).optional() }))
     .mutation(async ({ ctx, input }) => {

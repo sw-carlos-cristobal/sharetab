@@ -28,13 +28,13 @@ test.describe("Meridian auth section — unhealthy", () => {
     await expect(page.getByText("Claude OAuth Status")).toBeVisible();
     await expect(page.getByText("Authentication expired")).toBeVisible();
     await expect(
-      page.getByText("Not logged in. Run: claude login")
+      page.getByText("Not logged in. Use \"Authenticate with Claude\" below")
     ).toBeVisible();
   });
 
-  test("shows Re-authenticate button when unhealthy", async ({ page }) => {
+  test("shows Authenticate with Claude button when unhealthy", async ({ page }) => {
     await expect(
-      page.getByRole("button", { name: "Re-authenticate" })
+      page.getByRole("button", { name: "Authenticate with Claude" })
     ).toBeVisible();
   });
 
@@ -66,7 +66,7 @@ test.describe("Meridian auth section — unhealthy", () => {
 // ─── Meridian login flow (mutation interactions) ──────────
 
 test.describe("Meridian login flow", () => {
-  test("re-authenticate button triggers login flow UI", async ({ page }) => {
+  test("authenticate button triggers login flow UI", async ({ page }) => {
     const mock = new MockProvider(page)
       .usePreset("meridianUnhealthy")
       .setMeridianLoginResult({ url: "https://claude.ai/oauth/authorize?code=test123" });
@@ -74,7 +74,7 @@ test.describe("Meridian login flow", () => {
     await login(page, users.alice.email, users.alice.password);
     await page.goto("/admin");
 
-    await page.getByRole("button", { name: "Re-authenticate" }).click();
+    await page.getByRole("button", { name: "Authenticate with Claude" }).click();
 
     await expect(
       page.getByText("Click the link below to sign in with Claude.")
@@ -104,7 +104,7 @@ test.describe("Meridian login flow", () => {
     await login(page, users.alice.email, users.alice.password);
     await page.goto("/admin");
 
-    await page.getByRole("button", { name: "Re-authenticate" }).click();
+    await page.getByRole("button", { name: "Authenticate with Claude" }).click();
     await page
       .getByPlaceholder("https://platform.claude.com/oauth/code/callback?code=...")
       .fill("abc123");
@@ -123,7 +123,7 @@ test.describe("Meridian login flow", () => {
     await login(page, users.alice.email, users.alice.password);
     await page.goto("/admin");
 
-    await page.getByRole("button", { name: "Re-authenticate" }).click();
+    await page.getByRole("button", { name: "Authenticate with Claude" }).click();
     await page
       .getByPlaceholder("https://platform.claude.com/oauth/code/callback?code=...")
       .fill("valid-code-123");
@@ -146,7 +146,7 @@ test.describe("Meridian login flow", () => {
     await login(page, users.alice.email, users.alice.password);
     await page.goto("/admin");
 
-    await page.getByRole("button", { name: "Re-authenticate" }).click();
+    await page.getByRole("button", { name: "Authenticate with Claude" }).click();
     await page
       .getByPlaceholder("https://platform.claude.com/oauth/code/callback?code=...")
       .fill("bad-code");
@@ -169,7 +169,7 @@ test.describe("Meridian login flow", () => {
     await login(page, users.alice.email, users.alice.password);
     await page.goto("/admin");
 
-    await page.getByRole("button", { name: "Re-authenticate" }).click();
+    await page.getByRole("button", { name: "Authenticate with Claude" }).click();
     await expect(
       page.getByText("Click the link below to sign in with Claude.")
     ).toBeVisible();
@@ -177,7 +177,7 @@ test.describe("Meridian login flow", () => {
     await page.getByRole("button", { name: "Cancel" }).click();
 
     await expect(
-      page.getByRole("button", { name: "Re-authenticate" })
+      page.getByRole("button", { name: "Authenticate with Claude" })
     ).toBeVisible();
   });
 });
@@ -194,10 +194,13 @@ test.describe("Meridian auth section — healthy", () => {
     await expect(
       page.getByRole("heading", { name: "Meridian Authentication" })
     ).toBeVisible();
-    await expect(page.getByText("Authenticated")).toBeVisible();
-    await expect(page.getByText("user@claude.ai")).toBeVisible();
+    const meridianSection = page.locator("section").filter({
+      has: page.getByRole("heading", { name: "Meridian Authentication" }),
+    });
+    await expect(meridianSection.getByText("Authenticated")).toBeVisible();
+    await expect(meridianSection.getByText("user@claude.ai")).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Re-authenticate" })
+      meridianSection.getByRole("button", { name: "Authenticate with Claude" })
     ).not.toBeVisible();
   });
 });
@@ -237,89 +240,9 @@ test.describe("Meridian auth section — not applicable", () => {
   });
 });
 
-// ─── System health — provider state variants ──────────────
+// ─── Provider-specific auth sections ──────────────────────
 
-test.describe("System health — provider states", () => {
-  test("shows OpenAI provider as available", async ({ page }) => {
-    const mock = new MockProvider(page).usePreset("openaiAvailable");
-    await mock.install();
-    await login(page, users.alice.email, users.alice.password);
-    await page.goto("/admin");
-
-    const healthSection = page.locator("section", {
-      has: page.getByRole("heading", { name: "System Health" }),
-    });
-    await expect(healthSection.getByText("openai")).toBeVisible();
-    await expect(healthSection.getByText("Available")).toBeVisible();
-  });
-
-  test("shows OpenAI provider as unavailable with OCR fallback", async ({ page }) => {
-    const mock = new MockProvider(page).usePreset("openaiUnavailable");
-    await mock.install();
-    await login(page, users.alice.email, users.alice.password);
-    await page.goto("/admin");
-
-    const healthSection = page.locator("section", {
-      has: page.getByRole("heading", { name: "System Health" }),
-    });
-    await expect(healthSection.getByText("openai")).toBeVisible();
-    await expect(healthSection.getByText("Unavailable")).toBeVisible();
-    await expect(healthSection.getByText("OCR fallback")).toBeVisible();
-  });
-
-  test("shows Claude API provider as available", async ({ page }) => {
-    const mock = new MockProvider(page).usePreset("claudeAvailable");
-    await mock.install();
-    await login(page, users.alice.email, users.alice.password);
-    await page.goto("/admin");
-
-    const healthSection = page.locator("section", {
-      has: page.getByRole("heading", { name: "System Health" }),
-    });
-    await expect(healthSection.getByText("claude")).toBeVisible();
-    await expect(healthSection.getByText("Available")).toBeVisible();
-  });
-
-  test("shows Ollama provider as available", async ({ page }) => {
-    const mock = new MockProvider(page).usePreset("ollamaAvailable");
-    await mock.install();
-    await login(page, users.alice.email, users.alice.password);
-    await page.goto("/admin");
-
-    const healthSection = page.locator("section", {
-      has: page.getByRole("heading", { name: "System Health" }),
-    });
-    await expect(healthSection.getByText("ollama (llava)")).toBeVisible();
-    await expect(healthSection.getByText("Available")).toBeVisible();
-  });
-
-  test("shows OCR-only mode", async ({ page }) => {
-    const mock = new MockProvider(page).usePreset("ocrOnly");
-    await mock.install();
-    await login(page, users.alice.email, users.alice.password);
-    await page.goto("/admin");
-
-    const healthSection = page.locator("section", {
-      has: page.getByRole("heading", { name: "System Health" }),
-    });
-    await expect(healthSection.getByText("ocr")).toBeVisible();
-    await expect(healthSection.getByText("Available")).toBeVisible();
-  });
-
-  test("shows not configured state", async ({ page }) => {
-    const mock = new MockProvider(page).usePreset("notConfigured");
-    await mock.install();
-    await login(page, users.alice.email, users.alice.password);
-    await page.goto("/admin");
-
-    const healthSection = page.locator("section", {
-      has: page.getByRole("heading", { name: "System Health" }),
-    });
-    await expect(healthSection.getByText("not configured")).toBeVisible();
-    await expect(healthSection.getByText("Unavailable")).toBeVisible();
-    await expect(healthSection.getByText("OCR fallback")).toBeVisible();
-  });
-
+test.describe("provider-specific auth sections", () => {
   test("shows database disconnected state", async ({ page }) => {
     const mock = new MockProvider(page).usePreset("dbDown");
     await mock.install();

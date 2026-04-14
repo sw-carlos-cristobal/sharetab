@@ -3,7 +3,8 @@ import { mkdirSync, readFileSync, writeFileSync, unlinkSync } from "fs";
 import { dirname, join } from "path";
 import { logger } from "./logger";
 
-const CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
+const CLIENT_ID =
+  process.env.OPENAI_CODEX_CLIENT_ID ?? "app_EMoamEEZ73f0CkXaXp7hrann";
 const AUTHORIZE_ENDPOINT = "https://auth.openai.com/oauth/authorize";
 const TOKEN_ENDPOINT = "https://auth.openai.com/oauth/token";
 const CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex";

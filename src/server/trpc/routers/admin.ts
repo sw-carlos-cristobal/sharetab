@@ -155,14 +155,36 @@ export const adminRouter = createTRPCRouter({
     let aiProvider = "unknown";
     let aiAvailable = false;
     let ocrFallback = false;
+    let aiStatus: "available" | "requires_auth" | "unavailable" = "unavailable";
+    let authProvidersNeedingLogin: string[] = [];
     try {
       const configured = getConfiguredProviderPriority();
       const [active] = await getAIProvidersWithFallback();
       aiProvider = configured.join(" -> ");
       aiAvailable = true;
       ocrFallback = active.name === "ocr" && configured[0] !== "ocr";
+
+      // Mark OAuth-backed providers that are configured but not currently usable.
+      if (configured.includes("meridian")) {
+        const meridianHealth = await checkMeridianHealth();
+        if (meridianHealth.status !== "healthy") {
+          authProvidersNeedingLogin.push("meridian");
+        }
+      }
+
+      if (configured.includes("openai-codex")) {
+        const openAICodexHealth = await checkOpenAICodexHealth();
+        if (openAICodexHealth.status !== "healthy") {
+          authProvidersNeedingLogin.push("openai-codex");
+        }
+      }
+
+      aiStatus = authProvidersNeedingLogin.length > 0
+        ? "requires_auth"
+        : "available";
     } catch {
       aiProvider = process.env.AI_PROVIDER_PRIORITY ?? "not configured";
+      aiStatus = "unavailable";
     }
 
     // App version
@@ -180,6 +202,8 @@ export const adminRouter = createTRPCRouter({
       aiProvider,
       aiAvailable,
       ocrFallback,
+      aiStatus,
+      authProvidersNeedingLogin,
       version,
       serverStartTime: serverStartTime.toISOString(),
       uptime: Math.floor((Date.now() - serverStartTime.getTime()) / 1000),
