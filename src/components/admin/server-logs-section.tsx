@@ -159,24 +159,24 @@ export function ServerLogsSection() {
             <div
               ref={scrollRef}
               onScroll={handleScroll}
-              className="h-[400px] overflow-y-auto font-mono text-xs"
+              className="h-[400px] overflow-auto font-mono text-xs"
             >
               {logs.data?.entries.length === 0 ? (
                 <div className="flex items-center justify-center py-12 text-muted-foreground">
                   No log entries found
                 </div>
               ) : (
-                <table className="w-full">
+                <table className="w-full table-fixed">
                   <tbody>
                     {logs.data?.entries.map((entry) => (
                       <tr
                         key={entry.id}
                         className="border-b border-border/50 hover:bg-muted/50"
                       >
-                        <td className="whitespace-nowrap px-3 py-1.5 text-muted-foreground">
+                        <td className="whitespace-nowrap px-3 py-1.5 align-top text-muted-foreground">
                           {formatTime(entry.ts)}
                         </td>
-                        <td className="px-2 py-1.5">
+                        <td className="px-2 py-1.5 align-top">
                           <span
                             className={`inline-block w-14 rounded px-1.5 py-0.5 text-center text-[10px] font-semibold uppercase ${LEVEL_BG[entry.level]}`}
                           >
@@ -184,11 +184,11 @@ export function ServerLogsSection() {
                           </span>
                         </td>
                         <td
-                          className={`px-3 py-1.5 ${LEVEL_COLORS[entry.level]}`}
+                          className={`w-full px-3 py-1.5 align-top break-words ${LEVEL_COLORS[entry.level]}`}
                         >
                           <span className="font-medium">{entry.msg}</span>
                           {entry.data && Object.keys(entry.data).length > 0 && (
-                            <span className="ml-2 text-muted-foreground">
+                            <span className="ml-2 break-all text-muted-foreground">
                               {formatData(entry.data)}
                             </span>
                           )}

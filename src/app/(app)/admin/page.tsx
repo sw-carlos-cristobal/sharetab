@@ -54,7 +54,7 @@ export default function AdminPage() {
         <h1 className="text-2xl font-bold">Admin Dashboard</h1>
       </div>
 
-      <div className="grid gap-6">
+      <div className="grid gap-6 [&>*]:min-w-0">
         <SystemHealthSection />
         <MeridianAuthSection />
         <OpenAICodexAuthSection />
