@@ -1,5 +1,12 @@
 # Changelog
 
+## [v0.5.10] - 2026-04-13
+
+### Features
+- feature/openai codex oauth (#73) (481aad7)
+
+**Full Changelog**: https://github.com/sw-carlos-cristobal/sharetab/compare/v0.5.9...v0.5.10
+
 ## [v0.4.3] - 2026-04-06
 
 ### Other Changes
