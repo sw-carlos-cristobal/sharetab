@@ -66,11 +66,16 @@ export default function GuestSplitPage() {
 
   // tRPC
   const processReceipt = trpc.guest.processReceipt.useMutation();
+  const providerInfo = trpc.guest.getScanProviderInfo.useQuery();
   const receiptData = trpc.guest.getReceiptItems.useQuery(
     { receiptId: receiptId! },
     { enabled: !!receiptId && step === "people" }
   );
   const createSplit = trpc.guest.createSplit.useMutation();
+
+  const configuredProviderChain =
+    providerInfo.data?.configuredProviders?.join(" -> ") ?? "loading...";
+  const activeProvider = providerInfo.data?.activeProvider ?? "checking...";
 
   // Rotate loading messages
   useEffect(() => {
@@ -384,6 +389,10 @@ export default function GuestSplitPage() {
             <p className="font-semibold text-lg">Processing receipt...</p>
             <p className="text-sm text-muted-foreground animate-fade-in">
               {loadingMessages[loadingMsgIdx]}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Active provider: <span className="font-medium text-foreground">{activeProvider}</span>
+              {" · "}Fallback chain: <span className="font-medium text-foreground">{configuredProviderChain}</span>
             </p>
           </div>
         </div>

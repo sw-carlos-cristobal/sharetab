@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,19 +19,15 @@ import {
   CheckCircle2,
   XCircle,
   ExternalLink,
-  Bell,
   Copy,
 } from "lucide-react";
 
 export function MeridianAuthSection() {
   const utils = trpc.useUtils();
-  const searchParams = useSearchParams();
-  const router = useRouter();
 
   const authStatus = trpc.admin.getMeridianAuthStatus.useQuery(undefined, {
     refetchInterval: 15_000,
   });
-  const notifyPref = trpc.admin.getMeridianNotifyPreference.useQuery();
 
   const startLogin = trpc.admin.startMeridianLogin.useMutation({
     onSuccess: (data) => {
@@ -68,10 +63,11 @@ export function MeridianAuthSection() {
     },
   });
 
-  const setNotifyPref = trpc.admin.setMeridianNotifyPreference.useMutation({
+  const logoutMutation = trpc.admin.logoutMeridian.useMutation({
     onSuccess: () => {
-      utils.admin.getMeridianNotifyPreference.invalidate();
-      utils.admin.getAuditLog.invalidate();
+      resetLoginState();
+      utils.admin.getMeridianAuthStatus.invalidate();
+      utils.admin.getSystemHealth.invalidate();
     },
   });
 
@@ -90,27 +86,18 @@ export function MeridianAuthSection() {
     setLoginError(null);
   }
 
-  // Handle OAuth callback redirect params
-  useEffect(() => {
-    const authResult = searchParams.get("meridian_auth");
-    const authError = searchParams.get("meridian_error");
-    if (authResult === "success") {
-      setLoginState("success");
-      utils.admin.getMeridianAuthStatus.invalidate();
-      utils.admin.getSystemHealth.invalidate();
-      router.replace("/admin");
-    } else if (authError) {
-      setLoginState("error");
-      setLoginError(decodeURIComponent(authError));
-      router.replace("/admin");
-    }
-  }, [searchParams, utils, router]);
-
   // Don't render if not using meridian
   const status = authStatus.data;
   if (!status || "status" in status && status.status === "not_applicable") {
     return null;
   }
+
+  const normalizedStatusError = status.error
+    ?.replace(
+      /Run ['"`]?claude login['"`]? in your terminal to re-authenticate\.?/gi,
+      'Use "Authenticate with Claude" below.'
+    )
+    .replace(/Run:\s*claude login/gi, 'Use "Authenticate with Claude" below');
 
   const isHealthy = status.status === "healthy";
   const statusColor = isHealthy
@@ -132,8 +119,7 @@ export function MeridianAuthSection() {
         <h2 className="text-lg font-semibold">Meridian Authentication</h2>
       </div>
 
-      <div className="grid gap-4 @2xl:grid-cols-2">
-        {/* Auth Status Card */}
+      <div className="grid gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
@@ -152,9 +138,9 @@ export function MeridianAuthSection() {
               )}
             </div>
 
-            {status.error && (
+            {normalizedStatusError && (
               <p className="text-sm text-red-600 dark:text-red-400">
-                {status.error}
+                {normalizedStatusError}
               </p>
             )}
 
@@ -174,7 +160,25 @@ export function MeridianAuthSection() {
                     Login in progress...
                   </>
                 ) : (
-                  "Re-authenticate"
+                  "Authenticate with Claude"
+                )}
+              </Button>
+            )}
+
+            {isHealthy && loginState === "idle" && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => logoutMutation.mutate()}
+                disabled={logoutMutation.isPending}
+              >
+                {logoutMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                    Logging out...
+                  </>
+                ) : (
+                  "Log out"
                 )}
               </Button>
             )}
@@ -295,47 +299,6 @@ export function MeridianAuthSection() {
                 <Button variant="outline" size="sm" onClick={resetLoginState}>
                   Try again
                 </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Notification Preferences Card */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-              <Bell className="h-4 w-4" />
-              Auth Expiry Notifications
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              How often to receive email alerts when Claude authentication
-              expires.
-            </p>
-            <Select
-              value={notifyPref.data?.interval ?? "once"}
-              onValueChange={(value) => {
-                setNotifyPref.mutate({
-                  interval: value as "once" | "1h" | "6h" | "24h",
-                });
-              }}
-              disabled={setNotifyPref.isPending}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="once">Once per incident</SelectItem>
-                <SelectItem value="1h">Every hour</SelectItem>
-                <SelectItem value="6h">Every 6 hours</SelectItem>
-                <SelectItem value="24h">Every 24 hours</SelectItem>
-              </SelectContent>
-            </Select>
-            {setNotifyPref.isPending && (
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                Saving...
               </div>
             )}
           </CardContent>

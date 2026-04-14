@@ -116,6 +116,111 @@ describe("MeridianLoginManager", () => {
     expect(isLoginInProgress()).toBe(false);
   });
 
+  test("logout clears pending login and removes credentials", async () => {
+    const mockUnlinkSync = vi.fn();
+    vi.doMock("fs", () => ({
+      readFileSync: vi.fn(),
+      writeFileSync: vi.fn(),
+      unlinkSync: mockUnlinkSync,
+    }));
+
+    const { startLogin, isLoginInProgress, logout } = await import("./meridian-login");
+    await startLogin();
+    expect(isLoginInProgress()).toBe(true);
+
+    const result = logout();
+    expect(result.success).toBe(true);
+    expect(isLoginInProgress()).toBe(false);
+    expect(mockUnlinkSync.mock.calls.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test("logout succeeds when credentials file is already absent", async () => {
+    vi.doMock("fs", () => ({
+      readFileSync: vi.fn(),
+      writeFileSync: vi.fn(),
+      unlinkSync: () => {
+        const err = new Error("ENOENT") as NodeJS.ErrnoException;
+        err.code = "ENOENT";
+        throw err;
+      },
+    }));
+
+    const { logout } = await import("./meridian-login");
+    expect(logout()).toEqual({ success: true });
+  });
+
+  test("refreshIfNeeded refreshes expired token", async () => {
+    const expiredCreds = JSON.stringify({
+      claudeAiOauth: {
+        accessToken: "old-access",
+        refreshToken: "test-refresh-token",
+        expiresAt: Date.now() - 1000, // expired
+      },
+    });
+
+    const mockWriteFileSync = vi.fn();
+    vi.doMock("fs", () => ({
+      readFileSync: () => expiredCreds,
+      writeFileSync: mockWriteFileSync,
+      unlinkSync: vi.fn(),
+    }));
+
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({
+        access_token: "new-access",
+        refresh_token: "new-refresh",
+        expires_in: 3600,
+      }), { status: 200 })
+    );
+
+    const { refreshIfNeeded } = await import("./meridian-login");
+    const result = await refreshIfNeeded();
+    expect(result).toBe(true);
+
+    const [url, opts] = vi.mocked(fetch).mock.calls[0];
+    expect(url).toBe("https://platform.claude.com/v1/oauth/token");
+    const body = JSON.parse(opts?.body as string);
+    expect(body.grant_type).toBe("refresh_token");
+    expect(body.refresh_token).toBe("test-refresh-token");
+
+    const written = JSON.parse(mockWriteFileSync.mock.calls[0][1]);
+    expect(written.claudeAiOauth.accessToken).toBe("new-access");
+    expect(written.claudeAiOauth.refreshToken).toBe("new-refresh");
+  });
+
+  test("refreshIfNeeded skips if token still valid", async () => {
+    const validCreds = JSON.stringify({
+      claudeAiOauth: {
+        accessToken: "valid-access",
+        refreshToken: "test-refresh-token",
+        expiresAt: Date.now() + 60 * 60 * 1000, // 1 hour from now
+      },
+    });
+
+    vi.doMock("fs", () => ({
+      readFileSync: () => validCreds,
+      writeFileSync: vi.fn(),
+      unlinkSync: vi.fn(),
+    }));
+
+    const { refreshIfNeeded } = await import("./meridian-login");
+    const result = await refreshIfNeeded();
+    expect(result).toBe(true);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test("refreshIfNeeded returns false with no credentials file", async () => {
+    vi.doMock("fs", () => ({
+      readFileSync: () => { throw new Error("ENOENT"); },
+      writeFileSync: vi.fn(),
+      unlinkSync: vi.fn(),
+    }));
+
+    const { refreshIfNeeded } = await import("./meridian-login");
+    const result = await refreshIfNeeded();
+    expect(result).toBe(false);
+  });
+
   test("parseOAuthUrl extracts URL from text", async () => {
     const { parseOAuthUrl } = await import("./meridian-login");
     expect(parseOAuthUrl("visit: https://claude.ai/oauth?foo=bar\n")).toBe("https://claude.ai/oauth?foo=bar");

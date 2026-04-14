@@ -68,11 +68,20 @@
     Name="Claude Data (meridian)"
     Target="/app/claude"
     Default="/mnt/user/appdata/sharetab/claude"
-    Description="Persistent storage for Claude login data used by the meridian AI provider. Optional unless AI_PROVIDER=meridian."
+    Description="Persistent storage for Claude login data used by the meridian AI provider. Optional unless meridian is in AI_PROVIDER_PRIORITY."
     Type="Path"
     Display="advanced"
     Required="false"
     Mask="false">/mnt/user/appdata/sharetab/claude</Config>
+  <Config
+    Name="ChatGPT OAuth Data (openai-codex)"
+    Target="/app/chatgpt"
+    Default="/mnt/user/appdata/sharetab/chatgpt"
+    Description="Persistent storage for ChatGPT OAuth login data used by the openai-codex AI provider. Optional unless openai-codex is in AI_PROVIDER_PRIORITY."
+    Type="Path"
+    Display="advanced"
+    Required="false"
+    Mask="false">/mnt/user/appdata/sharetab/chatgpt</Config>
 
   <!-- Auth -->
   <Config
@@ -143,19 +152,19 @@
 
   <!-- AI -->
   <Config
-    Name="AI Provider"
-    Target="AI_PROVIDER"
-    Default="openai"
-    Description="AI provider for receipt scanning: openai | claude | meridian | ollama | ocr. Meridian uses Claude Max subscription via embedded proxy — no API key needed, but you must run 'claude login' once inside the container after startup. OCR uses local Tesseract.js (no API key) and is also the automatic fallback."
+    Name="AI Provider Priority"
+    Target="AI_PROVIDER_PRIORITY"
+    Default="openai,ocr"
+    Description="Comma-separated provider priority chain, for example: openai-codex,meridian,openai,ocr. ShareTab uses the first available provider and falls back to the next provider if extraction fails. If ocr is omitted, it is appended automatically as final fallback."
     Type="Variable"
     Display="always"
     Required="false"
-    Mask="false">openai</Config>
+    Mask="false">openai,ocr</Config>
   <Config
     Name="OpenAI API Key"
     Target="OPENAI_API_KEY"
     Default=""
-    Description="API key for OpenAI (required if AI_PROVIDER=openai)"
+    Description="API key for OpenAI (required when openai is in AI_PROVIDER_PRIORITY)"
     Type="Variable"
     Display="always"
     Required="false"
@@ -170,10 +179,19 @@
     Required="false"
     Mask="false">gpt-4o</Config>
   <Config
+    Name="OpenAI Codex Model"
+    Target="OPENAI_CODEX_MODEL"
+    Default="gpt-5.4"
+    Description="Model for receipt scanning when openai-codex is in AI_PROVIDER_PRIORITY. Defaults to gpt-5.4."
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false">gpt-5.4</Config>
+  <Config
     Name="Anthropic API Key"
     Target="ANTHROPIC_API_KEY"
     Default=""
-    Description="API key for Claude (required if AI_PROVIDER=claude)"
+    Description="API key for Claude (required when claude is in AI_PROVIDER_PRIORITY)"
     Type="Variable"
     Display="always"
     Required="false"
@@ -191,7 +209,7 @@
     Name="Meridian Port"
     Target="MERIDIAN_PORT"
     Default="3457"
-    Description="Port for the embedded Meridian proxy (only used with AI_PROVIDER=meridian). Change if port 3457 conflicts with another service."
+    Description="Port for the embedded Meridian proxy (used when meridian is in AI_PROVIDER_PRIORITY). Change if port 3457 conflicts with another service."
     Type="Variable"
     Display="advanced"
     Required="false"
@@ -200,7 +218,7 @@
     Name="Ollama URL"
     Target="OLLAMA_BASE_URL"
     Default="http://192.168.1.x:11434"
-    Description="Ollama server URL (required if AI_PROVIDER=ollama)"
+    Description="Ollama server URL (required when ollama is in AI_PROVIDER_PRIORITY)"
     Type="Variable"
     Display="always"
     Required="false"
@@ -220,7 +238,7 @@
     Name="Email SMTP Host"
     Target="EMAIL_SERVER_HOST"
     Default=""
-    Description="SMTP server for magic link auth emails. Leave blank to disable magic link sign-in."
+    Description="SMTP server for outgoing emails. Used for magic link sign-in and OAuth auth expiry alerts (Meridian / ChatGPT OAuth). Leave blank to disable email sending."
     Type="Variable"
     Display="advanced"
     Required="false"
@@ -287,7 +305,7 @@
     Name="Admin Email"
     Target="ADMIN_EMAIL"
     Default=""
-    Description="Email address of the admin user. Grants access to the /admin dashboard for managing users, groups, and storage. Leave blank to disable admin features."
+    Description="Email address of the admin user. Grants access to the /admin dashboard for managing users, groups, and storage, and receives OAuth auth expiry alerts when email is configured. Leave blank to disable admin features."
     Type="Variable"
     Display="always"
     Required="false"

@@ -14,6 +14,10 @@ async function ensureMeridian(): Promise<number> {
   if (meridianStarting) return meridianStarting;
 
   meridianStarting = (async () => {
+    // Refresh expired OAuth token before starting the proxy
+    const { refreshIfNeeded } = await import("../../lib/meridian-login");
+    await refreshIfNeeded();
+
     const { startProxyServer } = await import("@rynfar/meridian");
     const port = parseInt(process.env.MERIDIAN_PORT ?? "3457", 10);
     const instance = await startProxyServer({

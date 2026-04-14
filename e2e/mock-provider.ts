@@ -281,14 +281,33 @@ export class MockProvider {
         return;
       }
 
-      const response = await route.fetch();
-      const body = await response.json();
+      let body: unknown[];
+      try {
+        const response = await route.fetch();
+        body = (await response.json()) as unknown[];
+      } catch (error) {
+        // During teardown, in-flight intercepted requests can outlive the page.
+        // Ignore those closure errors so they don't fail otherwise passing tests.
+        const message = error instanceof Error ? error.message : String(error);
+        if (
+          message.includes("Target page, context or browser has been closed") ||
+          message.includes("route.fetch")
+        ) {
+          try {
+            await route.continue();
+          } catch {
+            // No-op: request target is already gone.
+          }
+          return;
+        }
+        throw error;
+      }
 
       const modified = procedures.map((proc, i) => {
         if (proc in mocks) {
           return { result: { data: { json: mocks[proc] } } };
         }
-        return body[i];
+        return body[i] as unknown;
       });
 
       await route.fulfill({

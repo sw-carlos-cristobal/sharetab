@@ -53,9 +53,6 @@ test.describe("Admin page UI", () => {
     // Should see database status within health section
     await expect(healthSection.getByText("Database")).toBeVisible();
 
-    // Should see AI provider info
-    await expect(healthSection.getByText("AI Provider")).toBeVisible();
-
     // Should see version info
     await expect(healthSection.getByText("Version")).toBeVisible();
 

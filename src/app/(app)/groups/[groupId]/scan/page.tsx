@@ -24,6 +24,7 @@ export default function ScanReceiptPage({
   const searchParams = useSearchParams();
   const resumeReceiptId = searchParams.get("receiptId");
   const group = trpc.groups.get.useQuery({ groupId });
+  const providerInfo = trpc.receipts.getScanProviderInfo.useQuery();
 
   const [step, setStep] = useState<Step>(resumeReceiptId ? "assign" : "upload");
   const [receiptId, setReceiptId] = useState<string | null>(resumeReceiptId);
@@ -107,6 +108,10 @@ export default function ScanReceiptPage({
       name: m.user.placeholderName ?? m.user.name ?? m.user.email,
     })) ?? [];
 
+  const configuredProviderChain =
+    providerInfo.data?.configuredProviders?.join(" -> ") ?? "loading...";
+  const activeProvider = providerInfo.data?.activeProvider ?? "checking...";
+
   return (
     <div className="mx-auto max-w-lg space-y-6">
       <div className="flex items-center gap-2">
@@ -128,6 +133,10 @@ export default function ScanReceiptPage({
             <p className="text-sm text-muted-foreground">
               Take a photo or upload an image of your receipt. AI will extract the
               items, tax, and tip so you can assign them to group members.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Active provider: <span className="font-medium text-foreground">{activeProvider}</span>
+              {" · "}Fallback chain: <span className="font-medium text-foreground">{configuredProviderChain}</span>
             </p>
 
             <div className="space-y-2">
@@ -158,6 +167,10 @@ export default function ScanReceiptPage({
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <div className="text-center space-y-2">
               <p className="font-medium">Processing receipt...</p>
+              <p className="text-xs text-muted-foreground">
+                Using: <span className="font-medium text-foreground">{activeProvider}</span>
+                {" · "}Chain: <span className="font-medium text-foreground">{configuredProviderChain}</span>
+              </p>
               <p className="text-sm text-muted-foreground">
                 {loadingMessages[loadingMsgIdx]}
               </p>

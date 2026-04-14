@@ -81,6 +81,11 @@ rm -rf /home/nextjs/.claude
 ln -sfn "$CLAUDE_DIR" /home/nextjs/.claude
 chown -h nextjs:nodejs /home/nextjs/.claude
 
+# ── ChatGPT OAuth credentials: persistent shared dir for openai-codex provider ──
+OPENAI_CODEX_DIR="${OPENAI_CODEX_DIR:-/app/chatgpt}"
+mkdir -p "$OPENAI_CODEX_DIR"
+chown nextjs:nodejs "$OPENAI_CODEX_DIR"
+
 # ── Print config summary ────────────────────────────────────
 
 echo ""
@@ -93,35 +98,63 @@ echo "  DB User:        ${DB_USER:-sharetab}"
 echo "  DB Name:        ${DB_NAME:-sharetab}"
 echo "  Auth URL:       ${NEXTAUTH_URL:-not set}"
 echo "  Auth Trust:     ${AUTH_TRUST_HOST:-false}"
-echo "  AI Provider:    ${AI_PROVIDER:-not set}"
-if [ "$AI_PROVIDER" = "openai" ]; then
+AI_PROVIDER_PRIORITY="${AI_PROVIDER_PRIORITY:-openai,ocr}"
+echo "  AI Providers:   ${AI_PROVIDER_PRIORITY}"
+case ",${AI_PROVIDER_PRIORITY}," in
+  *,openai,*)
   echo "  OpenAI Model:   ${OPENAI_MODEL:-gpt-4o}"
   if [ -n "$OPENAI_API_KEY" ]; then
     echo "  OpenAI Auth:    configured"
   else
     echo "  OpenAI Auth:    missing"
   fi
-elif [ "$AI_PROVIDER" = "claude" ] || [ "$AI_PROVIDER" = "meridian" ]; then
+  ;;
+esac
+
+case ",${AI_PROVIDER_PRIORITY}," in
+  *,claude,*|*,meridian,*)
   echo "  AI Model:       ${ANTHROPIC_MODEL:-claude-sonnet-4-6}"
-  if [ "$AI_PROVIDER" = "claude" ]; then
+  case ",${AI_PROVIDER_PRIORITY}," in
+    *,claude,*)
     if [ -n "$ANTHROPIC_API_KEY" ]; then
       echo "  Claude Auth:    configured"
     else
       echo "  Claude Auth:    missing"
     fi
-  else
+    ;;
+  esac
+  case ",${AI_PROVIDER_PRIORITY}," in
+    *,meridian,*)
     echo "  Meridian Port:  ${MERIDIAN_PORT:-3457}"
     echo "  Claude Data:    ${CLAUDE_DIR:-/app/claude}"
     if [ -f "${CLAUDE_DIR:-/app/claude}/.credentials.json" ]; then
       echo "  Claude Login:   detected"
     else
-      echo "  Claude Login:   missing (run 'claude login')"
+      echo "  Claude Login:   missing (complete OAuth from /admin)"
     fi
+    ;;
+  esac
+  ;;
+esac
+
+case ",${AI_PROVIDER_PRIORITY}," in
+  *,openai-codex,*)
+  echo "  OpenAI Codex Model: ${OPENAI_CODEX_MODEL:-gpt-5.4}"
+  echo "  ChatGPT Data:   ${OPENAI_CODEX_DIR:-/app/chatgpt}"
+  if [ -f "${OPENAI_CODEX_DIR:-/app/chatgpt}/auth.json" ]; then
+    echo "  ChatGPT Login:  detected"
+  else
+    echo "  ChatGPT Login:  missing (complete OAuth from /admin)"
   fi
-elif [ "$AI_PROVIDER" = "ollama" ]; then
+  ;;
+esac
+
+case ",${AI_PROVIDER_PRIORITY}," in
+  *,ollama,*)
   echo "  Ollama URL:     ${OLLAMA_BASE_URL:-not set}"
   echo "  Ollama Model:   ${OLLAMA_MODEL:-llava}"
-fi
+  ;;
+esac
 echo "  Admin Email:    ${ADMIN_EMAIL:-not set}"
 echo "  Upload Dir:     ${UPLOAD_DIR:-/app/uploads}"
 echo "  Max Upload MB:  ${MAX_UPLOAD_SIZE_MB:-10}"

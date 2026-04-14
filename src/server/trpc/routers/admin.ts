@@ -1,7 +1,11 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, publicProcedure, protectedProcedure } from "../init";
-import { getAIProvider } from "@/server/ai/registry";
+import {
+  getAIProvidersWithFallback,
+  getConfiguredProviderPriority,
+  isProviderConfigured,
+} from "@/server/ai/registry";
 import {
   type AdminAction,
   type PrismaClient,
@@ -14,14 +18,23 @@ import { getRecentLogs } from "@/server/lib/logger";
 import {
   checkMeridianHealth,
   sendAuthExpiryEmail,
-} from "@/server/lib/meridian-health-poller";
+} from "@/server/lib/auth-health-poller";
 import {
   startLogin,
   submitCode,
   cancelLogin,
+  logout as logoutMeridian,
   isLoginInProgress,
 } from "@/server/lib/meridian-login";
 import { clearProviderCache } from "@/server/ai/registry";
+import {
+  checkOpenAICodexHealth,
+  startLogin as startOpenAICodexLogin,
+  submitCode as submitOpenAICodexCode,
+  cancelLogin as cancelOpenAICodexLogin,
+  logout as logoutOpenAICodex,
+  isLoginInProgress as isOpenAICodexLoginInProgress,
+} from "@/server/lib/openai-codex-login";
 
 const serverStartTime = new Date();
 
@@ -142,15 +155,39 @@ export const adminRouter = createTRPCRouter({
     let aiProvider = "unknown";
     let aiAvailable = false;
     let ocrFallback = false;
+    let aiStatus: "available" | "requires_auth" | "unavailable" = "unavailable";
+    let authProvidersNeedingLogin: string[] = [];
     try {
-      const provider = await getAIProvider();
-      aiProvider = provider.name;
-      aiAvailable = await provider.isAvailable();
+      const configured = getConfiguredProviderPriority();
+      const [active] = await getAIProvidersWithFallback();
+      aiProvider = configured.join(" -> ");
+      aiAvailable = true;
+      ocrFallback = active.name === "ocr" && configured[0] !== "ocr";
+
+      // Mark OAuth-backed providers that are configured but not currently usable.
+      if (configured.includes("meridian")) {
+        const meridianHealth = await checkMeridianHealth();
+        if (meridianHealth.status !== "healthy") {
+          authProvidersNeedingLogin.push("meridian");
+        }
+      }
+
+      if (configured.includes("openai-codex")) {
+        const openAICodexHealth = await checkOpenAICodexHealth();
+        if (
+          openAICodexHealth.status === "auth_expired" ||
+          openAICodexHealth.status === "not_authenticated"
+        ) {
+          authProvidersNeedingLogin.push("openai-codex");
+        }
+      }
+
+      aiStatus = authProvidersNeedingLogin.length > 0
+        ? "requires_auth"
+        : "available";
     } catch {
-      aiProvider = process.env.AI_PROVIDER ?? "not configured";
-    }
-    if (!aiAvailable) {
-      ocrFallback = true;
+      aiProvider = process.env.AI_PROVIDER_PRIORITY ?? "not configured";
+      aiStatus = "unavailable";
     }
 
     // App version
@@ -168,6 +205,8 @@ export const adminRouter = createTRPCRouter({
       aiProvider,
       aiAvailable,
       ocrFallback,
+      aiStatus,
+      authProvidersNeedingLogin,
       version,
       serverStartTime: serverStartTime.toISOString(),
       uptime: Math.floor((Date.now() - serverStartTime.getTime()) / 1000),
@@ -893,7 +932,7 @@ export const adminRouter = createTRPCRouter({
   // ─── Meridian Auth ──────────────────────────────────────────
 
   getMeridianAuthStatus: adminProcedure.query(async () => {
-    if (process.env.AI_PROVIDER !== "meridian") {
+    if (!isProviderConfigured("meridian")) {
       return { status: "not_applicable" as const };
     }
     const health = await checkMeridianHealth();
@@ -904,10 +943,10 @@ export const adminRouter = createTRPCRouter({
   }),
 
   startMeridianLogin: adminProcedure.mutation(async ({ ctx }) => {
-    if (process.env.AI_PROVIDER !== "meridian") {
+    if (!isProviderConfigured("meridian")) {
       throw new TRPCError({
         code: "PRECONDITION_FAILED",
-        message: "Meridian is not the active AI provider",
+        message: "Meridian is not configured in AI provider priority",
       });
     }
 
@@ -968,6 +1007,29 @@ export const adminRouter = createTRPCRouter({
     return { cancelled: true };
   }),
 
+  logoutMeridian: adminProcedure.mutation(async ({ ctx }) => {
+    if (!isProviderConfigured("meridian")) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Meridian is not configured in AI provider priority",
+      });
+    }
+
+    const result = logoutMeridian();
+    if (!result.success) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: result.error ?? "Failed to log out Meridian",
+      });
+    }
+
+    clearProviderCache();
+    await logAdminAction(ctx.db, ctx.user.id, "MERIDIAN_LOGOUT", null, {
+      reason: "logged_out",
+    });
+    return { success: true };
+  }),
+
   getMeridianNotifyPreference: adminProcedure.query(async ({ ctx }) => {
     const setting = await ctx.db.systemSetting.findUnique({
       where: { key: "meridianNotifyInterval" },
@@ -1000,6 +1062,64 @@ export const adminRouter = createTRPCRouter({
 
       return { interval: input.interval };
     }),
+
+  // ─── OpenAI Codex Auth ─────────────────────────────────────
+
+  getOpenAICodexAuthStatus: adminProcedure.query(async () => {
+    if (!isProviderConfigured("openai-codex")) {
+      return { status: "not_applicable" as const };
+    }
+    const health = await checkOpenAICodexHealth();
+    return {
+      ...health,
+      loginInProgress: isOpenAICodexLoginInProgress(),
+    };
+  }),
+
+  startOpenAICodexLogin: adminProcedure.mutation(async () => {
+    if (!isProviderConfigured("openai-codex")) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "OpenAI Codex is not configured in AI provider priority",
+      });
+    }
+    return { url: await startOpenAICodexLogin() };
+  }),
+
+  completeOpenAICodexLogin: adminProcedure
+    .input(z.object({ code: z.string().min(1).max(1000) }))
+    .mutation(async ({ input }) => {
+      const result = await submitOpenAICodexCode(input.code);
+      if (result.success) {
+        clearProviderCache();
+      }
+      return result;
+    }),
+
+  cancelOpenAICodexLogin: adminProcedure.mutation(async () => {
+    cancelOpenAICodexLogin();
+    return { cancelled: true };
+  }),
+
+  logoutOpenAICodex: adminProcedure.mutation(async () => {
+    if (!isProviderConfigured("openai-codex")) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "OpenAI Codex is not configured in AI provider priority",
+      });
+    }
+
+    const result = logoutOpenAICodex();
+    if (!result.success) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: result.error ?? "Failed to log out OpenAI Codex",
+      });
+    }
+
+    clearProviderCache();
+    return { success: true };
+  }),
 });
 
 function formatBytes(bytes: number): string {

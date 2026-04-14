@@ -101,14 +101,13 @@ test.describe("Mobile Admin Page", () => {
 
     // Wait for data to load (skeleton replaced by real cards)
     await expect(healthSection.getByText("Database")).toBeVisible();
-    await expect(healthSection.getByText("AI Provider")).toBeVisible();
     await expect(healthSection.getByText("Version")).toBeVisible();
     await expect(healthSection.getByText("Uptime")).toBeVisible();
 
     // Use data-slot selectors matching shadcn Card component
     const cards = healthSection.locator("[data-slot='card']");
     const count = await cards.count();
-    expect(count).toBeGreaterThanOrEqual(4);
+    expect(count).toBeGreaterThanOrEqual(3);
 
     const firstBox = await cards.nth(0).boundingBox();
     const secondBox = await cards.nth(1).boundingBox();

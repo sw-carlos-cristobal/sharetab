@@ -8,8 +8,8 @@ describe("getAIProvider", () => {
     process.env = { ...originalEnv };
   });
 
-  test("defaults to openai when AI_PROVIDER is not set", async () => {
-    delete process.env.AI_PROVIDER;
+  test("defaults to openai when AI_PROVIDER_PRIORITY is not set", async () => {
+    delete process.env.AI_PROVIDER_PRIORITY;
     process.env.OPENAI_API_KEY = "test-key";
     const { getAIProvider } = await import("./registry");
     const provider = await getAIProvider();
@@ -18,15 +18,22 @@ describe("getAIProvider", () => {
   });
 
   test("selects openai provider", async () => {
-    process.env.AI_PROVIDER = "openai";
+    process.env.AI_PROVIDER_PRIORITY = "openai";
     process.env.OPENAI_API_KEY = "test-key";
     const { getAIProvider } = await import("./registry");
     const provider = await getAIProvider();
     expect(provider.constructor.name).toBe("OpenAIProvider");
   });
 
+  test("selects openai codex provider", async () => {
+    process.env.AI_PROVIDER_PRIORITY = "openai-codex";
+    const { getAIProvider } = await import("./registry");
+    const provider = await getAIProvider();
+    expect(provider.constructor.name).toBe("OpenAICodexProvider");
+  });
+
   test("selects claude provider with API key", async () => {
-    process.env.AI_PROVIDER = "claude";
+    process.env.AI_PROVIDER_PRIORITY = "claude";
     process.env.ANTHROPIC_API_KEY = "test-anthropic-key";
     const { getAIProvider } = await import("./registry");
     const provider = await getAIProvider();
@@ -34,43 +41,58 @@ describe("getAIProvider", () => {
   });
 
   test("claude provider throws without API key", async () => {
-    process.env.AI_PROVIDER = "claude";
+    process.env.AI_PROVIDER_PRIORITY = "claude";
     delete process.env.ANTHROPIC_API_KEY;
     const { getAIProvider } = await import("./registry");
     await expect(getAIProvider()).rejects.toThrow("ANTHROPIC_API_KEY");
   });
 
   test("openai provider throws without API key", async () => {
-    process.env.AI_PROVIDER = "openai";
+    process.env.AI_PROVIDER_PRIORITY = "openai";
     delete process.env.OPENAI_API_KEY;
     const { getAIProvider } = await import("./registry");
     await expect(getAIProvider()).rejects.toThrow("OPENAI_API_KEY");
   });
 
   test("selects ollama provider", async () => {
-    process.env.AI_PROVIDER = "ollama";
+    process.env.AI_PROVIDER_PRIORITY = "ollama";
     const { getAIProvider } = await import("./registry");
     const provider = await getAIProvider();
     expect(provider.constructor.name).toBe("OllamaProvider");
   });
 
   test("selects ocr provider", async () => {
-    process.env.AI_PROVIDER = "ocr";
+    process.env.AI_PROVIDER_PRIORITY = "ocr";
     const { getAIProvider } = await import("./registry");
     const provider = await getAIProvider();
     expect(provider.constructor.name).toBe("OcrProvider");
   });
 
   test("throws for unknown provider", async () => {
-    process.env.AI_PROVIDER = "gpt-5-turbo-ultra";
+    process.env.AI_PROVIDER_PRIORITY = "gpt-5-turbo-ultra";
     const { getAIProvider } = await import("./registry");
     await expect(getAIProvider()).rejects.toThrow('Unknown AI provider: "gpt-5-turbo-ultra"');
   });
 
   test("error message lists available providers", async () => {
-    process.env.AI_PROVIDER = "invalid";
+    process.env.AI_PROVIDER_PRIORITY = "invalid";
     const { getAIProvider } = await import("./registry");
-    await expect(getAIProvider()).rejects.toThrow("openai, claude, meridian, ollama, ocr");
+    await expect(getAIProvider()).rejects.toThrow("openai, openai-codex, claude, meridian, ollama, ocr, mock");
+  });
+
+  test("uses first provider from AI_PROVIDER_PRIORITY", async () => {
+    process.env.AI_PROVIDER_PRIORITY = "openai-codex,openai";
+    delete process.env.OPENAI_API_KEY;
+
+    const { getAIProvider } = await import("./registry");
+    const provider = await getAIProvider();
+    expect(provider.constructor.name).toBe("OpenAICodexProvider");
+  });
+
+  test("throws for unknown provider in AI_PROVIDER_PRIORITY", async () => {
+    process.env.AI_PROVIDER_PRIORITY = "openai,not-a-provider";
+    const { getAIProvider } = await import("./registry");
+    await expect(getAIProvider()).rejects.toThrow('Unknown AI provider: "not-a-provider"');
   });
 });
 
@@ -83,7 +105,7 @@ describe("getAIProviderWithFallback", () => {
   });
 
   test("fallback returns OCR when primary provider init throws", async () => {
-    process.env.AI_PROVIDER = "claude";
+    process.env.AI_PROVIDER_PRIORITY = "claude";
     delete process.env.ANTHROPIC_API_KEY;
     const { getAIProviderWithFallback } = await import("./registry");
     const provider = await getAIProviderWithFallback();
@@ -92,7 +114,7 @@ describe("getAIProviderWithFallback", () => {
 
   test("fallback returns OCR when primary provider isAvailable() returns false", async () => {
     // Mock the Ollama provider's isAvailable to return false deterministically
-    process.env.AI_PROVIDER = "ollama";
+    process.env.AI_PROVIDER_PRIORITY = "ollama";
     const { OllamaProvider } = await import("./providers/ollama");
     vi.spyOn(OllamaProvider.prototype, "isAvailable").mockResolvedValue(false);
 
@@ -102,7 +124,7 @@ describe("getAIProviderWithFallback", () => {
   });
 
   test("clearCache forces re-evaluation on next call", async () => {
-    process.env.AI_PROVIDER = "ocr";
+    process.env.AI_PROVIDER_PRIORITY = "ocr";
     const { getAIProviderWithFallback, clearProviderCache } = await import("./registry");
 
     // Prime the cache
@@ -121,7 +143,7 @@ describe("getAIProviderWithFallback", () => {
   // ── Cache state transition tests (#57) ──
 
   test("cached provider is returned within TTL without re-checking", async () => {
-    process.env.AI_PROVIDER = "ocr";
+    process.env.AI_PROVIDER_PRIORITY = "ocr";
     const { getAIProviderWithFallback } = await import("./registry");
     const { OcrProvider } = await import("./providers/ocr");
     const spy = vi.spyOn(OcrProvider.prototype, "isAvailable");
@@ -136,7 +158,7 @@ describe("getAIProviderWithFallback", () => {
   });
 
   test("cache expires after TTL and provider is re-evaluated", async () => {
-    process.env.AI_PROVIDER = "ocr";
+    process.env.AI_PROVIDER_PRIORITY = "ocr";
     const { getAIProviderWithFallback } = await import("./registry");
 
     const first = await getAIProviderWithFallback();
@@ -156,7 +178,7 @@ describe("getAIProviderWithFallback", () => {
 
   test("OCR cached after primary failure; primary available before TTL stays pinned to OCR", async () => {
     // Simulate: primary unavailable → OCR cached → primary recovers → still OCR until TTL
-    process.env.AI_PROVIDER = "ollama";
+    process.env.AI_PROVIDER_PRIORITY = "ollama";
     const { OllamaProvider } = await import("./providers/ollama");
     const spy = vi.spyOn(OllamaProvider.prototype, "isAvailable").mockResolvedValue(false);
 
@@ -176,7 +198,7 @@ describe("getAIProviderWithFallback", () => {
   });
 
   test("after TTL expires, recovered primary is selected over OCR", async () => {
-    process.env.AI_PROVIDER = "ollama";
+    process.env.AI_PROVIDER_PRIORITY = "ollama";
     const { OllamaProvider } = await import("./providers/ollama");
     const spy = vi.spyOn(OllamaProvider.prototype, "isAvailable").mockResolvedValue(false);
 
@@ -196,5 +218,20 @@ describe("getAIProviderWithFallback", () => {
     expect(second.constructor.name).toBe("OllamaProvider");
 
     vi.useRealTimers();
+  });
+
+  test("falls through priority list when first provider is unavailable", async () => {
+    process.env.AI_PROVIDER_PRIORITY = "ollama,openai";
+    process.env.OPENAI_API_KEY = "test-key";
+
+    const { OllamaProvider } = await import("./providers/ollama");
+    const { OpenAIProvider } = await import("./providers/openai");
+    vi.spyOn(OllamaProvider.prototype, "isAvailable").mockResolvedValue(false);
+    vi.spyOn(OpenAIProvider.prototype, "isAvailable").mockResolvedValue(true);
+
+    const { getAIProviderWithFallback } = await import("./registry");
+    const provider = await getAIProviderWithFallback();
+
+    expect(provider.constructor.name).toBe("OpenAIProvider");
   });
 });

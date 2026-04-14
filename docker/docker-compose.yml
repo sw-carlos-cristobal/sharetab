@@ -16,7 +16,7 @@ services:
       - AUTH_TRUST_HOST=${AUTH_TRUST_HOST:-false}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
-      - AI_PROVIDER=${AI_PROVIDER:-openai}
+      - AI_PROVIDER_PRIORITY=${AI_PROVIDER_PRIORITY:-openai,ocr}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-opus-4-6}
@@ -33,6 +33,7 @@ services:
       - pgdata:/var/lib/postgresql/data
       - uploads:/app/uploads
       - claude:/app/claude
+      - chatgpt:/app/chatgpt
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
@@ -44,3 +45,4 @@ volumes:
   pgdata:
   uploads:
   claude:
+  chatgpt:

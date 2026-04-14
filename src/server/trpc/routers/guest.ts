@@ -1,13 +1,31 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import type { Prisma } from "@/generated/prisma/client";
-import { createTRPCRouter, publicProcedure } from "../init";
+import { createTRPCRouter, publicProcedure, protectedProcedure } from "../init";
 import { processReceiptImage } from "../../lib/receipt-processor";
 import { logger } from "../../lib/logger";
 import { checkRateLimit } from "../../lib/rate-limit";
 import { calculateSplitTotals } from "@/lib/split-calculator";
+import {
+  getConfiguredProviderPriority,
+} from "@/server/ai/registry";
 
 export const guestRouter = createTRPCRouter({
+  getScanProviderInfo: protectedProcedure.query(async () => {
+    try {
+      return {
+        configuredProviders: getConfiguredProviderPriority(),
+        activeProvider: null,
+      };
+    } catch {
+      // Keep response shape stable even if provider parsing fails.
+      return {
+        configuredProviders: [],
+        activeProvider: null,
+      };
+    }
+  }),
+
   processReceipt: publicProcedure
     .input(z.object({ receiptId: z.string(), correctionHint: z.string().max(500).optional() }))
     .mutation(async ({ ctx, input }) => {

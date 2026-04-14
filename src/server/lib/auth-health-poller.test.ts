@@ -20,7 +20,18 @@ vi.mock("@/server/lib/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+const mockCheckOpenAICodexHealth = vi.fn();
+vi.mock("./openai-codex-login", () => ({
+  checkOpenAICodexHealth: mockCheckOpenAICodexHealth,
+}));
+
 import nodemailer from "nodemailer";
+
+function mockTransporter(sendMail: ReturnType<typeof vi.fn>) {
+  return {
+    sendMail,
+  } as unknown as ReturnType<typeof nodemailer.createTransport>;
+}
 
 describe("MeridianHealthPoller", () => {
   const originalEnv = process.env;
@@ -30,7 +41,7 @@ describe("MeridianHealthPoller", () => {
     vi.useFakeTimers();
     process.env = {
       ...originalEnv,
-      AI_PROVIDER: "meridian",
+      AI_PROVIDER_PRIORITY: "meridian,ocr",
       MERIDIAN_PORT: "3457",
       ADMIN_EMAIL: "admin@test.com",
       EMAIL_SERVER_HOST: "smtp.test.com",
@@ -39,6 +50,8 @@ describe("MeridianHealthPoller", () => {
       NEXTAUTH_URL: "http://localhost:3000",
     };
     vi.stubGlobal("fetch", vi.fn());
+    mockCheckOpenAICodexHealth.mockReset();
+    mockCheckOpenAICodexHealth.mockResolvedValue({ status: "not_authenticated" });
   });
 
   afterEach(() => {
@@ -59,7 +72,7 @@ describe("MeridianHealthPoller", () => {
         new Response(JSON.stringify({ id: "msg_1", content: [] }), { status: 200 })
       );
 
-    const { checkMeridianHealth } = await import("./meridian-health-poller");
+    const { checkMeridianHealth } = await import("./auth-health-poller");
     const result = await checkMeridianHealth();
     expect(result.status).toBe("healthy");
     expect(result.email).toBe("user@test.com");
@@ -73,7 +86,7 @@ describe("MeridianHealthPoller", () => {
       }), { status: 503 })
     );
 
-    const { checkMeridianHealth } = await import("./meridian-health-poller");
+    const { checkMeridianHealth } = await import("./auth-health-poller");
     const result = await checkMeridianHealth();
     expect(result.status).toBe("unhealthy");
     expect(result.error).toBe("Not logged in. Run: claude login");
@@ -94,7 +107,7 @@ describe("MeridianHealthPoller", () => {
         }), { status: 401 })
       );
 
-    const { checkMeridianHealth } = await import("./meridian-health-poller");
+    const { checkMeridianHealth } = await import("./auth-health-poller");
     const result = await checkMeridianHealth();
     expect(result.status).toBe("unhealthy");
     expect(result.error).toBe("Claude authentication expired");
@@ -115,7 +128,7 @@ describe("MeridianHealthPoller", () => {
         }), { status: 429 })
       );
 
-    const { checkMeridianHealth } = await import("./meridian-health-poller");
+    const { checkMeridianHealth } = await import("./auth-health-poller");
     const result = await checkMeridianHealth();
     expect(result.status).toBe("healthy");
   });
@@ -123,7 +136,7 @@ describe("MeridianHealthPoller", () => {
   test("checkMeridianHealth returns not_running on fetch error", async () => {
     vi.mocked(fetch).mockRejectedValueOnce(new Error("ECONNREFUSED"));
 
-    const { checkMeridianHealth } = await import("./meridian-health-poller");
+    const { checkMeridianHealth } = await import("./auth-health-poller");
     const result = await checkMeridianHealth();
     expect(result.status).toBe("not_running");
   });
@@ -138,7 +151,7 @@ describe("MeridianHealthPoller", () => {
       )
       .mockRejectedValueOnce(new Error("AbortError: signal timed out"));
 
-    const { checkMeridianHealth } = await import("./meridian-health-poller");
+    const { checkMeridianHealth } = await import("./auth-health-poller");
     const result = await checkMeridianHealth();
     expect(result.status).toBe("degraded");
     expect(result.error).toBe("Auth verification probe timed out");
@@ -146,9 +159,9 @@ describe("MeridianHealthPoller", () => {
 
   test("sendAuthExpiryEmail sends email with correct content", async () => {
     const mockSendMail = vi.fn().mockResolvedValue({});
-    vi.mocked(nodemailer.createTransport).mockReturnValue({ sendMail: mockSendMail } as ReturnType<typeof nodemailer.createTransport>);
+    vi.mocked(nodemailer.createTransport).mockReturnValue(mockTransporter(mockSendMail));
 
-    const { sendAuthExpiryEmail } = await import("./meridian-health-poller");
+    const { sendAuthExpiryEmail } = await import("./auth-health-poller");
     await sendAuthExpiryEmail("Not logged in. Run: claude login");
 
     expect(mockSendMail).toHaveBeenCalledTimes(1);
@@ -160,36 +173,36 @@ describe("MeridianHealthPoller", () => {
   test("sendAuthExpiryEmail skips when email is not configured", async () => {
     delete process.env.EMAIL_SERVER_HOST;
     const mockSendMail = vi.fn();
-    vi.mocked(nodemailer.createTransport).mockReturnValue({ sendMail: mockSendMail } as ReturnType<typeof nodemailer.createTransport>);
+    vi.mocked(nodemailer.createTransport).mockReturnValue(mockTransporter(mockSendMail));
 
-    const { sendAuthExpiryEmail } = await import("./meridian-health-poller");
+    const { sendAuthExpiryEmail } = await import("./auth-health-poller");
     await sendAuthExpiryEmail("error");
 
     expect(mockSendMail).not.toHaveBeenCalled();
   });
 
   test("shouldSendEmail returns true on first unhealthy with 'once' interval", async () => {
-    const { shouldSendEmail } = await import("./meridian-health-poller");
+    const { shouldSendEmail } = await import("./auth-health-poller");
     const result = await shouldSendEmail(null, "once");
     expect(result).toBe(true);
   });
 
   test("shouldSendEmail returns false on second unhealthy with 'once' interval", async () => {
-    const { shouldSendEmail } = await import("./meridian-health-poller");
+    const { shouldSendEmail } = await import("./auth-health-poller");
     const now = Date.now();
     const result = await shouldSendEmail(now - 60_000, "once");
     expect(result).toBe(false);
   });
 
   test("shouldSendEmail returns true when interval has elapsed", async () => {
-    const { shouldSendEmail } = await import("./meridian-health-poller");
+    const { shouldSendEmail } = await import("./auth-health-poller");
     const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
     const result = await shouldSendEmail(twoHoursAgo, "1h");
     expect(result).toBe(true);
   });
 
   test("shouldSendEmail returns false when interval has not elapsed", async () => {
-    const { shouldSendEmail } = await import("./meridian-health-poller");
+    const { shouldSendEmail } = await import("./auth-health-poller");
     const thirtyMinutesAgo = Date.now() - 30 * 60 * 1000;
     const result = await shouldSendEmail(thirtyMinutesAgo, "1h");
     expect(result).toBe(false);
@@ -197,9 +210,9 @@ describe("MeridianHealthPoller", () => {
 
   test("sendAuthExpiryEmail includes login URL in email when provided", async () => {
     const mockSendMail = vi.fn().mockResolvedValue({});
-    vi.mocked(nodemailer.createTransport).mockReturnValue({ sendMail: mockSendMail } as ReturnType<typeof nodemailer.createTransport>);
+    vi.mocked(nodemailer.createTransport).mockReturnValue(mockTransporter(mockSendMail));
 
-    const { sendAuthExpiryEmail } = await import("./meridian-health-poller");
+    const { sendAuthExpiryEmail } = await import("./auth-health-poller");
     await sendAuthExpiryEmail("Auth expired", "https://claude.ai/oauth/authorize?code=true");
 
     const call = mockSendMail.mock.calls[0][0];
@@ -210,9 +223,9 @@ describe("MeridianHealthPoller", () => {
   test("sendAuthExpiryEmail skips when ADMIN_EMAIL is not set", async () => {
     delete process.env.ADMIN_EMAIL;
     const mockSendMail = vi.fn();
-    vi.mocked(nodemailer.createTransport).mockReturnValue({ sendMail: mockSendMail } as ReturnType<typeof nodemailer.createTransport>);
+    vi.mocked(nodemailer.createTransport).mockReturnValue(mockTransporter(mockSendMail));
 
-    const { sendAuthExpiryEmail } = await import("./meridian-health-poller");
+    const { sendAuthExpiryEmail } = await import("./auth-health-poller");
     const sent = await sendAuthExpiryEmail("error");
 
     expect(sent).toBe(false);
@@ -231,7 +244,7 @@ describe("MeridianHealthPoller", () => {
         new Response(JSON.stringify({ id: "msg_1", content: [] }), { status: 200 })
       );
 
-    const { checkMeridianHealth } = await import("./meridian-health-poller");
+    const { checkMeridianHealth } = await import("./auth-health-poller");
     const result = await checkMeridianHealth();
     // Probe succeeded so auth is fine, but health said degraded — trust the healthy probe
     expect(result.status).toBe("healthy");
@@ -249,7 +262,7 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
     vi.useFakeTimers();
     process.env = {
       ...originalEnv,
-      AI_PROVIDER: "meridian",
+      AI_PROVIDER_PRIORITY: "meridian,ocr",
       MERIDIAN_PORT: "3457",
       ADMIN_EMAIL: "admin@test.com",
       EMAIL_SERVER_HOST: "smtp.test.com",
@@ -258,8 +271,10 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
       NEXTAUTH_URL: "http://localhost:3000",
     };
     vi.stubGlobal("fetch", vi.fn());
+    mockCheckOpenAICodexHealth.mockReset();
+    mockCheckOpenAICodexHealth.mockResolvedValue({ status: "not_authenticated" });
     mockSendMail = vi.fn().mockResolvedValue({});
-    vi.mocked(nodemailer.createTransport).mockReturnValue({ sendMail: mockSendMail } as ReturnType<typeof nodemailer.createTransport>);
+    vi.mocked(nodemailer.createTransport).mockReturnValue(mockTransporter(mockSendMail));
   });
 
   afterEach(() => {
@@ -304,7 +319,7 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
   }
 
   test("sends email on first unhealthy even if never seen healthy (auth expired on startup)", async () => {
-    const { _pollTick, _resetPollerState } = await import("./meridian-health-poller");
+    const { _pollTick, _resetPollerState } = await import("./auth-health-poller");
     _resetPollerState();
 
     // First tick: proxy is running but auth is expired — should alert immediately
@@ -316,7 +331,7 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
   });
 
   test("does not send email on first not_running (startup grace period)", async () => {
-    const { _pollTick, _resetPollerState } = await import("./meridian-health-poller");
+    const { _pollTick, _resetPollerState } = await import("./auth-health-poller");
     _resetPollerState();
 
     // First tick: proxy not running yet (still booting) — no alert
@@ -327,7 +342,7 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
   });
 
   test("sends email on transition from healthy to unhealthy", async () => {
-    const { _pollTick, _resetPollerState } = await import("./meridian-health-poller");
+    const { _pollTick, _resetPollerState } = await import("./auth-health-poller");
     _resetPollerState();
 
     // Tick 1: healthy (establishes baseline)
@@ -343,7 +358,7 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
   });
 
   test("does not send duplicate email with 'once' interval", async () => {
-    const { _pollTick, _resetPollerState } = await import("./meridian-health-poller");
+    const { _pollTick, _resetPollerState } = await import("./auth-health-poller");
     _resetPollerState();
 
     // Tick 1: healthy
@@ -364,7 +379,7 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
   test("sends reminder email when interval elapses with '1h' setting", async () => {
     mockDb.systemSetting.findUnique.mockResolvedValue({ key: "meridianNotifyInterval", value: "1h" });
 
-    const { _pollTick, _resetPollerState } = await import("./meridian-health-poller");
+    const { _pollTick, _resetPollerState } = await import("./auth-health-poller");
     _resetPollerState();
 
     // Tick 1: healthy
@@ -390,7 +405,7 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
   });
 
   test("resets email state on recovery, sends again on next incident", async () => {
-    const { _pollTick, _resetPollerState } = await import("./meridian-health-poller");
+    const { _pollTick, _resetPollerState } = await import("./auth-health-poller");
     _resetPollerState();
 
     // Tick 1: healthy
@@ -414,7 +429,7 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
   });
 
   test("does not send email when Meridian is not_running after healthy", async () => {
-    const { _pollTick, _resetPollerState } = await import("./meridian-health-poller");
+    const { _pollTick, _resetPollerState } = await import("./auth-health-poller");
     _resetPollerState();
 
     // Tick 1: healthy
@@ -427,9 +442,9 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
     expect(mockSendMail).not.toHaveBeenCalled();
   });
 
-  test("startPoller does nothing when AI_PROVIDER is not meridian", async () => {
-    process.env.AI_PROVIDER = "openai";
-    const { startPoller, stopPoller } = await import("./meridian-health-poller");
+  test("startPoller does nothing when meridian is not configured", async () => {
+    process.env.AI_PROVIDER_PRIORITY = "openai,ocr";
+    const { startPoller, stopPoller } = await import("./auth-health-poller");
 
     startPoller();
     // No tick should happen — advance time past the 30s delay + poll interval
@@ -439,8 +454,79 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
     stopPoller();
   });
 
+  test("startPoller runs when meridian is configured in AI_PROVIDER_PRIORITY", async () => {
+    process.env.AI_PROVIDER_PRIORITY = "openai-codex,meridian,ocr";
+    const { startPoller, stopPoller } = await import("./auth-health-poller");
+
+    // first delayed tick after 30s, then poll interval continues
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({
+          status: "healthy",
+          auth: { loggedIn: true, email: "user@test.com" },
+        }), { status: 200 })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: "msg_1", content: [] }), { status: 200 })
+      );
+
+    startPoller();
+    vi.advanceTimersByTime(30_000);
+    await Promise.resolve();
+
+    expect(fetch).toHaveBeenCalled();
+
+    stopPoller();
+  });
+
+  test("sends auth expiry email when openai-codex token expires", async () => {
+    process.env.AI_PROVIDER_PRIORITY = "openai-codex,ocr";
+    mockCheckOpenAICodexHealth.mockResolvedValueOnce({
+      status: "auth_expired",
+      email: "user@test.com",
+      planType: "plus",
+      accountId: "acc_123",
+      error: "Stored ChatGPT OAuth token expired and refresh failed.",
+    });
+
+    const { _pollTick, _resetPollerState } = await import("./auth-health-poller");
+    _resetPollerState();
+    await _pollTick();
+
+    expect(mockSendMail).toHaveBeenCalledTimes(1);
+    const call = mockSendMail.mock.calls[0][0];
+    expect(call.subject).toContain("ChatGPT OAuth (OpenAI Codex) authentication expired");
+  });
+
+  test("does not send openai-codex email before first healthy state", async () => {
+    process.env.AI_PROVIDER_PRIORITY = "openai-codex,ocr";
+    mockCheckOpenAICodexHealth.mockResolvedValueOnce({
+      status: "not_authenticated",
+    });
+
+    const { _pollTick, _resetPollerState } = await import("./auth-health-poller");
+    _resetPollerState();
+    await _pollTick();
+
+    expect(mockSendMail).not.toHaveBeenCalled();
+  });
+
+  test("does not send openai-codex email for degraded backend status", async () => {
+    process.env.AI_PROVIDER_PRIORITY = "openai-codex,ocr";
+    mockCheckOpenAICodexHealth.mockResolvedValueOnce({
+      status: "degraded",
+      error: "Codex backend returned HTTP 503.",
+    });
+
+    const { _pollTick, _resetPollerState } = await import("./auth-health-poller");
+    _resetPollerState();
+    await _pollTick();
+
+    expect(mockSendMail).not.toHaveBeenCalled();
+  });
+
   test("startPoller does not fetch before 30s delay", async () => {
-    const { startPoller, stopPoller } = await import("./meridian-health-poller");
+    const { startPoller, stopPoller } = await import("./auth-health-poller");
 
     startPoller();
 
@@ -452,7 +538,7 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
   });
 
   test("stopPoller prevents future ticks", async () => {
-    const { startPoller, stopPoller } = await import("./meridian-health-poller");
+    const { startPoller, stopPoller } = await import("./auth-health-poller");
 
     startPoller();
     stopPoller();
