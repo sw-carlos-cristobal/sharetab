@@ -161,6 +161,122 @@ describe("OpenAICodexLogin", () => {
     });
   });
 
+  test("checkOpenAICodexHealth caches healthy result for four hours on long-lived tokens", async () => {
+    const jwt = [
+      "header",
+      Buffer.from(JSON.stringify({
+        exp: Math.floor((Date.now() + 12 * 60 * 60 * 1000) / 1000),
+        "https://api.openai.com/profile": { email: "test@example.com" },
+        "https://api.openai.com/auth": {
+          chatgpt_plan_type: "plus",
+          chatgpt_account_id: "acct_123",
+        },
+      })).toString("base64url"),
+      "sig",
+    ].join(".");
+
+    vi.doMock("fs", () => ({
+      mkdirSync: vi.fn(),
+      readFileSync: () => JSON.stringify({
+        auth_mode: "Chatgpt",
+        tokens: {
+          id_token: jwt,
+          access_token: jwt,
+          refresh_token: "refresh-token",
+          account_id: "acct_123",
+        },
+      }),
+      writeFileSync: vi.fn(),
+      unlinkSync: vi.fn(),
+    }));
+
+    vi.mocked(fetch).mockResolvedValueOnce(new Response("[]", { status: 200 }));
+
+    const { checkOpenAICodexHealth } = await import("./openai-codex-login");
+    await checkOpenAICodexHealth();
+    vi.advanceTimersByTime(3 * 60 * 60 * 1000 + 59 * 60 * 1000);
+    await checkOpenAICodexHealth();
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  test("checkOpenAICodexHealth refreshes cache every five minutes when token is near expiry", async () => {
+    const jwt = [
+      "header",
+      Buffer.from(JSON.stringify({
+        exp: Math.floor((Date.now() + 10 * 60 * 1000) / 1000),
+        "https://api.openai.com/profile": { email: "test@example.com" },
+        "https://api.openai.com/auth": {
+          chatgpt_plan_type: "plus",
+          chatgpt_account_id: "acct_123",
+        },
+      })).toString("base64url"),
+      "sig",
+    ].join(".");
+
+    vi.doMock("fs", () => ({
+      mkdirSync: vi.fn(),
+      readFileSync: () => JSON.stringify({
+        auth_mode: "Chatgpt",
+        tokens: {
+          id_token: jwt,
+          access_token: jwt,
+          refresh_token: "refresh-token",
+          account_id: "acct_123",
+        },
+      }),
+      writeFileSync: vi.fn(),
+      unlinkSync: vi.fn(),
+    }));
+
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(new Response("[]", { status: 200 }))
+      .mockResolvedValueOnce(new Response("[]", { status: 200 }));
+
+    const { checkOpenAICodexHealth } = await import("./openai-codex-login");
+    await checkOpenAICodexHealth();
+    vi.advanceTimersByTime(5 * 60 * 1000 + 1);
+    await checkOpenAICodexHealth();
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  test("checkOpenAICodexHealth force option bypasses cache", async () => {
+    const jwt = [
+      "header",
+      Buffer.from(JSON.stringify({
+        exp: Math.floor((Date.now() + 12 * 60 * 60 * 1000) / 1000),
+        "https://api.openai.com/auth": { chatgpt_account_id: "acct_123" },
+      })).toString("base64url"),
+      "sig",
+    ].join(".");
+
+    vi.doMock("fs", () => ({
+      mkdirSync: vi.fn(),
+      readFileSync: () => JSON.stringify({
+        auth_mode: "Chatgpt",
+        tokens: {
+          id_token: jwt,
+          access_token: jwt,
+          refresh_token: "refresh-token",
+          account_id: "acct_123",
+        },
+      }),
+      writeFileSync: vi.fn(),
+      unlinkSync: vi.fn(),
+    }));
+
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(new Response("[]", { status: 200 }))
+      .mockResolvedValueOnce(new Response("[]", { status: 200 }));
+
+    const { checkOpenAICodexHealth } = await import("./openai-codex-login");
+    await checkOpenAICodexHealth();
+    await checkOpenAICodexHealth({ force: true });
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
   test("logout clears pending login and removes auth file", async () => {
     const mockUnlinkSync = vi.fn();
     vi.doMock("fs", () => ({

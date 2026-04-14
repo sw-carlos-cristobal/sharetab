@@ -49,6 +49,47 @@ function getCredentialPath(): string {
   return join(claudeHome, ".credentials.json");
 }
 
+function readStoredOauthCredentials():
+  | {
+      accessToken?: string;
+      refreshToken?: string;
+      expiresAt?: number;
+      scopes?: string[];
+      subscriptionType?: string;
+      rateLimitTier?: string;
+    }
+  | null {
+  const credPath = getCredentialPath();
+
+  let raw: string;
+  try {
+    raw = readFileSync(credPath, "utf8");
+  } catch {
+    return null;
+  }
+
+  try {
+    const creds = JSON.parse(raw) as {
+      claudeAiOauth?: {
+        accessToken?: string;
+        refreshToken?: string;
+        expiresAt?: number;
+        scopes?: string[];
+        subscriptionType?: string;
+        rateLimitTier?: string;
+      };
+    };
+    return creds.claudeAiOauth ?? null;
+  } catch {
+    logger.warn("meridian.credentials.invalidJson");
+    return null;
+  }
+}
+
+export function getStoredMeridianTokenExpiry(): number | null {
+  return readStoredOauthCredentials()?.expiresAt ?? null;
+}
+
 // ─── Login flow ───────────────────────────────────────────
 
 export function isLoginInProgress(): boolean {
@@ -217,33 +258,12 @@ const EXPIRY_BUFFER_MS = 5 * 60 * 1000;
  */
 export async function refreshIfNeeded(): Promise<boolean> {
   const credPath = getCredentialPath();
-
-  let raw: string;
-  try {
-    raw = readFileSync(credPath, "utf8");
-  } catch {
+  const oauth = readStoredOauthCredentials();
+  if (!oauth) {
     // No credentials file — nothing to refresh
     return false;
   }
 
-  let creds: {
-    claudeAiOauth?: {
-      accessToken?: string;
-      refreshToken?: string;
-      expiresAt?: number;
-      scopes?: string[];
-      subscriptionType?: string;
-      rateLimitTier?: string;
-    };
-  };
-  try {
-    creds = JSON.parse(raw);
-  } catch {
-    logger.warn("meridian.refresh.invalidCredentials");
-    return false;
-  }
-
-  const oauth = creds.claudeAiOauth;
   if (!oauth?.refreshToken) {
     logger.warn("meridian.refresh.noRefreshToken");
     return false;

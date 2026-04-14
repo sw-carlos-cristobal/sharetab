@@ -25,6 +25,11 @@ vi.mock("./openai-codex-login", () => ({
   checkOpenAICodexHealth: mockCheckOpenAICodexHealth,
 }));
 
+const mockGetStoredMeridianTokenExpiry = vi.fn();
+vi.mock("./meridian-login", () => ({
+  getStoredMeridianTokenExpiry: mockGetStoredMeridianTokenExpiry,
+}));
+
 import nodemailer from "nodemailer";
 
 function mockTransporter(sendMail: ReturnType<typeof vi.fn>) {
@@ -52,6 +57,8 @@ describe("MeridianHealthPoller", () => {
     vi.stubGlobal("fetch", vi.fn());
     mockCheckOpenAICodexHealth.mockReset();
     mockCheckOpenAICodexHealth.mockResolvedValue({ status: "not_authenticated" });
+    mockGetStoredMeridianTokenExpiry.mockReset();
+    mockGetStoredMeridianTokenExpiry.mockReturnValue(null);
   });
 
   afterEach(() => {
@@ -155,6 +162,108 @@ describe("MeridianHealthPoller", () => {
     const result = await checkMeridianHealth();
     expect(result.status).toBe("degraded");
     expect(result.error).toBe("Auth verification probe timed out");
+  });
+
+  test("checkMeridianHealth caches healthy probe results for repeated callers", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({
+          status: "healthy",
+          auth: { loggedIn: true, email: "user@test.com" },
+        }), { status: 200 })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: "msg_1", content: [] }), { status: 200 })
+      );
+
+    const { checkMeridianHealth } = await import("./auth-health-poller");
+    const first = await checkMeridianHealth();
+    const second = await checkMeridianHealth();
+
+    expect(first.status).toBe("healthy");
+    expect(second.status).toBe("healthy");
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  test("checkMeridianHealth force option bypasses cache", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({
+          status: "healthy",
+          auth: { loggedIn: true, email: "user@test.com" },
+        }), { status: 200 })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: "msg_1", content: [] }), { status: 200 })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({
+          status: "healthy",
+          auth: { loggedIn: true, email: "user@test.com" },
+        }), { status: 200 })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: "msg_2", content: [] }), { status: 200 })
+      );
+
+    const { checkMeridianHealth } = await import("./auth-health-poller");
+    await checkMeridianHealth();
+    await checkMeridianHealth({ force: true });
+
+    expect(fetch).toHaveBeenCalledTimes(4);
+  });
+
+  test("checkMeridianHealth keeps healthy result cached for four hours when token expiry is far away", async () => {
+    mockGetStoredMeridianTokenExpiry.mockReturnValue(Date.now() + 12 * 60 * 60 * 1000);
+
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({
+          status: "healthy",
+          auth: { loggedIn: true, email: "user@test.com" },
+        }), { status: 200 })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: "msg_1", content: [] }), { status: 200 })
+      );
+
+    const { checkMeridianHealth } = await import("./auth-health-poller");
+    await checkMeridianHealth();
+    vi.advanceTimersByTime(3 * 60 * 60 * 1000 + 59 * 60 * 1000);
+    await checkMeridianHealth();
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  test("checkMeridianHealth refreshes healthy result every five minutes when token is near expiry", async () => {
+    mockGetStoredMeridianTokenExpiry.mockReturnValue(Date.now() + 10 * 60 * 1000);
+
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({
+          status: "healthy",
+          auth: { loggedIn: true, email: "user@test.com" },
+        }), { status: 200 })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: "msg_1", content: [] }), { status: 200 })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({
+          status: "healthy",
+          auth: { loggedIn: true, email: "user@test.com" },
+        }), { status: 200 })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: "msg_2", content: [] }), { status: 200 })
+      );
+
+    const { checkMeridianHealth } = await import("./auth-health-poller");
+    await checkMeridianHealth();
+    vi.advanceTimersByTime(15 * 60 * 1000 + 1);
+    await checkMeridianHealth();
+
+    expect(fetch).toHaveBeenCalledTimes(4);
   });
 
   test("sendAuthExpiryEmail sends email with correct content", async () => {
@@ -351,6 +460,7 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
     expect(mockSendMail).not.toHaveBeenCalled();
 
     // Tick 2: unhealthy — should send email
+    vi.advanceTimersByTime(15 * 60 * 1000 + 1);
     mockUnhealthy();
     await _pollTick();
     expect(mockSendMail).toHaveBeenCalledTimes(1);
@@ -366,6 +476,7 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
     await _pollTick();
 
     // Tick 2: unhealthy — sends email
+    vi.advanceTimersByTime(15 * 60 * 1000 + 1);
     mockUnhealthy();
     await _pollTick();
     expect(mockSendMail).toHaveBeenCalledTimes(1);
@@ -387,6 +498,7 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
     await _pollTick();
 
     // Tick 2: unhealthy — sends first email
+    vi.advanceTimersByTime(15 * 60 * 1000 + 1);
     mockUnhealthy();
     await _pollTick();
     expect(mockSendMail).toHaveBeenCalledTimes(1);
@@ -413,15 +525,18 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
     await _pollTick();
 
     // Tick 2: unhealthy — sends email
+    vi.advanceTimersByTime(15 * 60 * 1000 + 1);
     mockUnhealthy();
     await _pollTick();
     expect(mockSendMail).toHaveBeenCalledTimes(1);
 
     // Tick 3: recovered — resets incident
+    vi.advanceTimersByTime(30 * 1000 + 1);
     mockHealthy();
     await _pollTick();
 
     // Tick 4: unhealthy again — should send a NEW email
+    vi.advanceTimersByTime(15 * 60 * 1000 + 1);
     mockUnhealthy("Token revoked");
     await _pollTick();
     expect(mockSendMail).toHaveBeenCalledTimes(2);
@@ -477,6 +592,38 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
     expect(fetch).toHaveBeenCalled();
 
     stopPoller();
+  });
+
+  test("poller reuses a warm healthy Meridian result when token expiry is far away", async () => {
+    mockGetStoredMeridianTokenExpiry.mockReturnValue(Date.now() + 12 * 60 * 60 * 1000);
+
+    const { checkMeridianHealth, _pollTick, _resetPollerState } = await import("./auth-health-poller");
+    _resetPollerState();
+
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({
+          status: "healthy",
+          auth: { loggedIn: true, email: "user@test.com" },
+        }), { status: 200 })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: "msg_1", content: [] }), { status: 200 })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({
+          status: "healthy",
+          auth: { loggedIn: true, email: "user@test.com" },
+        }), { status: 200 })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: "msg_2", content: [] }), { status: 200 })
+      );
+
+    await checkMeridianHealth();
+    await _pollTick();
+
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   test("sends auth expiry email when openai-codex token expires", async () => {

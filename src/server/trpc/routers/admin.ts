@@ -17,6 +17,7 @@ import path from "path";
 import { getRecentLogs } from "@/server/lib/logger";
 import {
   checkMeridianHealth,
+  invalidateMeridianHealthCache,
   sendAuthExpiryEmail,
 } from "@/server/lib/auth-health-poller";
 import {
@@ -29,6 +30,7 @@ import {
 import { clearProviderCache } from "@/server/ai/registry";
 import {
   checkOpenAICodexHealth,
+  invalidateOpenAICodexHealthCache,
   startLogin as startOpenAICodexLogin,
   submitCode as submitOpenAICodexCode,
   cancelLogin as cancelOpenAICodexLogin,
@@ -980,6 +982,7 @@ export const adminRouter = createTRPCRouter({
 
         if (result.success) {
           clearProviderCache();
+          invalidateMeridianHealthCache();
         }
 
         await logAdminAction(
@@ -1024,6 +1027,7 @@ export const adminRouter = createTRPCRouter({
     }
 
     clearProviderCache();
+    invalidateMeridianHealthCache();
     await logAdminAction(ctx.db, ctx.user.id, "MERIDIAN_LOGOUT", null, {
       reason: "logged_out",
     });
@@ -1092,6 +1096,7 @@ export const adminRouter = createTRPCRouter({
       const result = await submitOpenAICodexCode(input.code);
       if (result.success) {
         clearProviderCache();
+        invalidateOpenAICodexHealthCache();
       }
       return result;
     }),
@@ -1118,6 +1123,7 @@ export const adminRouter = createTRPCRouter({
     }
 
     clearProviderCache();
+    invalidateOpenAICodexHealthCache();
     return { success: true };
   }),
 });

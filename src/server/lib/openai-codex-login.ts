@@ -78,7 +78,26 @@ type HealthStatus =
       accountId?: string | null;
     };
 
+interface OpenAICodexHealthCheckOptions {
+  force?: boolean;
+}
+
 let pendingLogin: PendingLogin | null = null;
+let openAICodexHealthCache:
+  | { result: HealthStatus; expiresAt: number }
+  | null = null;
+let openAICodexHealthInFlight: Promise<HealthStatus> | null = null;
+
+const OPENAI_CODEX_HEALTH_CACHE_TTL_MS = {
+  healthyDefault: 15 * 60 * 1000,
+  healthyNearExpiry: 5 * 60 * 1000,
+  healthySoonExpiring: 15 * 60 * 1000,
+  healthyMidLived: 60 * 60 * 1000,
+  healthyLongLived: 4 * 60 * 60 * 1000,
+  degraded: 60 * 1000,
+  auth_expired: 30 * 1000,
+  not_authenticated: 15 * 1000,
+} as const;
 
 function generateCodeVerifier(): string {
   return randomBytes(32).toString("base64url");
@@ -136,6 +155,33 @@ function readStoredAuth(): ParsedStoredAuth | null {
   } catch {
     return null;
   }
+}
+
+export function getStoredOpenAICodexTokenExpiry(): number | null {
+  return readStoredAuth()?.expiresAt ?? null;
+}
+
+function getOpenAICodexHealthCacheTtl(result: HealthStatus): number {
+  if (result.status !== "healthy") {
+    return OPENAI_CODEX_HEALTH_CACHE_TTL_MS[result.status];
+  }
+
+  const expiresAt = getStoredOpenAICodexTokenExpiry();
+  if (!expiresAt) {
+    return OPENAI_CODEX_HEALTH_CACHE_TTL_MS.healthyDefault;
+  }
+
+  const remainingMs = expiresAt - Date.now();
+  if (remainingMs <= 15 * 60 * 1000) {
+    return OPENAI_CODEX_HEALTH_CACHE_TTL_MS.healthyNearExpiry;
+  }
+  if (remainingMs <= 2 * 60 * 60 * 1000) {
+    return OPENAI_CODEX_HEALTH_CACHE_TTL_MS.healthySoonExpiring;
+  }
+  if (remainingMs <= 8 * 60 * 60 * 1000) {
+    return OPENAI_CODEX_HEALTH_CACHE_TTL_MS.healthyMidLived;
+  }
+  return OPENAI_CODEX_HEALTH_CACHE_TTL_MS.healthyLongLived;
 }
 
 function writeStoredAuth(tokens: {
@@ -380,6 +426,10 @@ function cleanup(): void {
   pendingLogin = null;
 }
 
+export function invalidateOpenAICodexHealthCache(): void {
+  openAICodexHealthCache = null;
+}
+
 export async function refreshIfNeeded(): Promise<boolean> {
   return (await refreshAuth(false)) !== null;
 }
@@ -392,7 +442,7 @@ export async function retryAfterUnauthorized(): Promise<ParsedStoredAuth | null>
   return refreshAuth(true);
 }
 
-export async function checkOpenAICodexHealth(): Promise<HealthStatus> {
+async function runOpenAICodexHealthCheck(): Promise<HealthStatus> {
   const stored = await refreshAuth(false);
   if (!stored) {
     return { status: "not_authenticated" };
@@ -466,4 +516,33 @@ export async function checkOpenAICodexHealth(): Promise<HealthStatus> {
       error: error instanceof Error ? error.message : "Health check failed",
     };
   }
+}
+
+export async function checkOpenAICodexHealth(
+  options: OpenAICodexHealthCheckOptions = {}
+): Promise<HealthStatus> {
+  if (!options.force) {
+    if (openAICodexHealthCache && openAICodexHealthCache.expiresAt > Date.now()) {
+      return openAICodexHealthCache.result;
+    }
+    if (openAICodexHealthInFlight) {
+      return openAICodexHealthInFlight;
+    }
+  } else if (openAICodexHealthInFlight) {
+    return openAICodexHealthInFlight;
+  }
+
+  openAICodexHealthInFlight = runOpenAICodexHealthCheck()
+    .then((result) => {
+      openAICodexHealthCache = {
+        result,
+        expiresAt: Date.now() + getOpenAICodexHealthCacheTtl(result),
+      };
+      return result;
+    })
+    .finally(() => {
+      openAICodexHealthInFlight = null;
+    });
+
+  return openAICodexHealthInFlight;
 }

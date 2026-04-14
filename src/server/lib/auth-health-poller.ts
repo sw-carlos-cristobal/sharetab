@@ -2,6 +2,7 @@ import nodemailer from "nodemailer";
 import { db } from "@/server/db";
 import { isProviderConfigured } from "@/server/ai/registry";
 import { checkOpenAICodexHealth } from "./openai-codex-login";
+import { getStoredMeridianTokenExpiry } from "./meridian-login";
 import { logger } from "./logger";
 
 // ─── Types ────────────────────────────────────────────────
@@ -16,6 +17,10 @@ export interface MeridianHealthResult {
   status: MeridianStatus;
   email?: string;
   error?: string;
+}
+
+interface MeridianHealthCheckOptions {
+  force?: boolean;
 }
 
 // ─── Interval mapping ─────────────────────────────────────
@@ -41,12 +46,49 @@ const providerState: Record<AuthProvider, PollerState> = {
 };
 let pollerInterval: ReturnType<typeof setInterval> | null = null;
 let pollerInitTimeout: ReturnType<typeof setTimeout> | null = null;
+let meridianHealthCache:
+  | { result: MeridianHealthResult; expiresAt: number }
+  | null = null;
+let meridianHealthInFlight: Promise<MeridianHealthResult> | null = null;
 
 const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const MERIDIAN_HEALTH_CACHE_TTL_MS = {
+  healthyDefault: 15 * 60 * 1000,
+  healthyNearExpiry: 5 * 60 * 1000,
+  healthySoonExpiring: 15 * 60 * 1000,
+  healthyMidLived: 60 * 60 * 1000,
+  healthyLongLived: 4 * 60 * 60 * 1000,
+  degraded: 60 * 1000,
+  unhealthy: 30 * 1000,
+  not_running: 15 * 1000,
+} as const;
 
 // ─── Health check ─────────────────────────────────────────
 
-export async function checkMeridianHealth(): Promise<MeridianHealthResult> {
+function getMeridianHealthCacheTtl(result: MeridianHealthResult): number {
+  if (result.status !== "healthy") {
+    return MERIDIAN_HEALTH_CACHE_TTL_MS[result.status];
+  }
+
+  const expiresAt = getStoredMeridianTokenExpiry();
+  if (!expiresAt) {
+    return MERIDIAN_HEALTH_CACHE_TTL_MS.healthyDefault;
+  }
+
+  const remainingMs = expiresAt - Date.now();
+  if (remainingMs <= 15 * 60 * 1000) {
+    return MERIDIAN_HEALTH_CACHE_TTL_MS.healthyNearExpiry;
+  }
+  if (remainingMs <= 2 * 60 * 60 * 1000) {
+    return MERIDIAN_HEALTH_CACHE_TTL_MS.healthySoonExpiring;
+  }
+  if (remainingMs <= 8 * 60 * 60 * 1000) {
+    return MERIDIAN_HEALTH_CACHE_TTL_MS.healthyMidLived;
+  }
+  return MERIDIAN_HEALTH_CACHE_TTL_MS.healthyLongLived;
+}
+
+async function runMeridianHealthCheck(): Promise<MeridianHealthResult> {
   const port = process.env.MERIDIAN_PORT ?? "3457";
   const baseUrl = `http://127.0.0.1:${port}`;
 
@@ -122,6 +164,39 @@ export async function checkMeridianHealth(): Promise<MeridianHealthResult> {
       error: "Auth verification probe timed out",
     };
   }
+}
+
+export async function checkMeridianHealth(
+  options: MeridianHealthCheckOptions = {}
+): Promise<MeridianHealthResult> {
+  if (!options.force) {
+    if (meridianHealthCache && meridianHealthCache.expiresAt > Date.now()) {
+      return meridianHealthCache.result;
+    }
+    if (meridianHealthInFlight) {
+      return meridianHealthInFlight;
+    }
+  } else if (meridianHealthInFlight) {
+    return meridianHealthInFlight;
+  }
+
+  meridianHealthInFlight = runMeridianHealthCheck()
+    .then((result) => {
+      meridianHealthCache = {
+        result,
+        expiresAt: Date.now() + getMeridianHealthCacheTtl(result),
+      };
+      return result;
+    })
+    .finally(() => {
+      meridianHealthInFlight = null;
+    });
+
+  return meridianHealthInFlight;
+}
+
+export function invalidateMeridianHealthCache(): void {
+  meridianHealthCache = null;
 }
 
 // ─── Email sending ────────────────────────────────────────
@@ -359,4 +434,7 @@ export function _resetPollerState(): void {
   providerState["openai-codex"].lastStatus = "unknown";
   providerState["openai-codex"].hasSeenHealthy = false;
   providerState["openai-codex"].lastEmailSentAt = null;
+
+  meridianHealthCache = null;
+  meridianHealthInFlight = null;
 }
