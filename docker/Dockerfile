@@ -1,4 +1,9 @@
 FROM node:20-alpine AS base
+ENV NPM_CONFIG_FETCH_RETRIES=5 \
+    NPM_CONFIG_FETCH_RETRY_FACTOR=2 \
+    NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=20000 \
+    NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000 \
+    NPM_CONFIG_FETCH_TIMEOUT=300000
 
 # --- Dependencies ---
 FROM base AS deps
@@ -6,7 +11,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY prisma ./prisma
 COPY prisma.config.ts ./
-RUN npm ci --omit=dev --legacy-peer-deps && npm cache clean --force
+RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev --legacy-peer-deps && npm cache clean --force
 
 # --- Builder ---
 FROM base AS builder
@@ -15,7 +20,7 @@ ENV DOCKER_BUILD=1
 COPY package.json package-lock.json ./
 COPY prisma ./prisma
 COPY prisma.config.ts ./
-RUN npm ci --legacy-peer-deps && npm cache clean --force
+RUN --mount=type=cache,target=/root/.npm npm ci --legacy-peer-deps && npm cache clean --force
 COPY . .
 RUN npx prisma generate
 RUN npm run build
@@ -26,6 +31,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 # Install PostgreSQL
+# hadolint ignore=DL3018
 RUN apk add --no-cache postgresql16 postgresql16-contrib su-exec
 
 # Create users
@@ -47,8 +53,12 @@ COPY --from=builder /app/node_modules/tesseract.js ./node_modules/tesseract.js
 COPY --from=builder /app/node_modules/@rynfar/meridian ./node_modules/@rynfar/meridian
 COPY --from=builder /app/node_modules/@anthropic-ai/claude-agent-sdk ./node_modules/@anthropic-ai/claude-agent-sdk
 # Install Prisma CLI in isolated dir to avoid conflict with standalone node_modules
-RUN mkdir -p /prisma-cli && cd /prisma-cli && npm init -y && \
-    npm install --legacy-peer-deps prisma dotenv && npm cache clean --force
+WORKDIR /prisma-cli
+RUN --mount=type=cache,target=/root/.npm \
+    npm init -y && \
+    npm install --legacy-peer-deps prisma@7.6.0 dotenv@17.3.1 && \
+    npm cache clean --force
+WORKDIR /app
 
 COPY docker/entrypoint.sh /app/entrypoint.sh
 COPY docker/claude /usr/local/bin/claude

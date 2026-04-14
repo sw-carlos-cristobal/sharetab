@@ -261,6 +261,43 @@ The `ocr` provider uses Tesseract.js for local text extraction -- no API key or 
 
 ## Development
 
+### Automation Commands
+
+These commands are intended to be explicit enough for a human or an LLM to use without inferring repo-specific workflow details.
+
+```bash
+# Bump version files on main and update CHANGELOG.md
+npm run version:bump -- patch
+
+# Create a release branch + PR from main
+npm run release:create -- patch
+
+# Create a PR from the current branch
+npm run pr:create -- --title "feat: example change"
+
+# Push the current HEAD to origin/main
+npm run push:main
+
+# Publish a merged release by pushing the version tag
+npm run release:publish -- v1.2.3
+```
+
+Intent mapping:
+
+- "bump the version" -> `npm run version:bump -- <patch|minor|major>`
+- "create a release" -> `npm run release:create -- <patch|minor|major>`
+- "create a PR" -> `npm run pr:create -- [--base main] [--title \"...\"]`
+- "push to main" -> `npm run push:main`
+- "publish the release" -> `npm run release:publish -- [vX.Y.Z]`
+
+Release flow:
+
+1. Run `npm run release:create -- patch` from `main`.
+2. Merge the generated `release/vX.Y.Z` PR.
+3. Run `npm run release:publish -- vX.Y.Z` from `main`.
+
+`release:publish` only creates and pushes the git tag. The actual GitHub release page and semver Docker images are still published by [publish-release.yml](./.github/workflows/publish-release.yml).
+
 ```bash
 # Install dependencies
 npm install
