@@ -1,7 +1,9 @@
 "use client";
 
+import { Suspense } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { usePathname, useRouter } from "@/i18n/navigation";
+import { useSearchParams } from "next/navigation";
 import { locales, languageConfig } from "@/i18n/routing";
 import type { Locale } from "@/i18n/routing";
 import { Globe } from "lucide-react";
@@ -21,9 +23,18 @@ function setLocaleCookie(locale: string) {
 }
 
 export function LanguageSwitcher() {
+  return (
+    <Suspense>
+      <LanguageSwitcherInner />
+    </Suspense>
+  );
+}
+
+function LanguageSwitcherInner() {
   const locale = useLocale() as Locale;
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { data: session } = useSession();
   const t = useTranslations("common");
 
@@ -36,7 +47,9 @@ export function LanguageSwitcher() {
       updateLocale.mutate({ locale: newLocale });
     }
 
-    router.replace(pathname, { locale: newLocale });
+    const qs = searchParams.toString();
+    const href = qs ? `${pathname}?${qs}` : pathname;
+    router.replace(href, { locale: newLocale });
   }
 
   return (

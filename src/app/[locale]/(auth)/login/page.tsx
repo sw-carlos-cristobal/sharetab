@@ -26,7 +26,7 @@ function stripLocalePrefix(path: string): string {
   if (!locale) return path;
 
   const stripped = path.slice(locale.length + 1);
-  return stripped ? `/${stripped}` : "/";
+  return stripped.startsWith("/") ? stripped : `/${stripped}`;
 }
 
 export default function LoginPage() {
