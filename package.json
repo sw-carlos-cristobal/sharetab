@@ -39,7 +39,8 @@
     "test:e2e": "npx playwright test",
     "test:e2e:ui": "npx playwright test --ui",
     "demo": "tsx e2e/demo-video.ts",
-    "demo:gifs": "tsx e2e/demo-gifs.ts"
+    "demo:gifs": "tsx e2e/demo-gifs.ts",
+    "lint:i18n": "npx tsx scripts/check-translations.ts"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"
