@@ -4,14 +4,14 @@
   "new": {
     "title": "Crear un nuevo grupo",
     "name": "Nombre del grupo",
-    "namePlaceholder": "ej. Apartamento, Viaje a París",
+    "namePlaceholder": "p. ej., Apartamento, Viaje a París",
     "currency": "Moneda",
     "submit": "Crear grupo",
     "submitting": "Creando..."
   },
   "detail": {
     "expenses": "Gastos",
-    "balances": "Balances",
+    "balances": "Saldos",
     "addExpense": "Agregar gasto",
     "scanReceipt": "Escanear recibo",
     "settle": "Saldar",
@@ -38,9 +38,9 @@
   "settle": {
     "title": "Saldar",
     "from": "De",
-    "to": "Para",
+    "to": "A",
     "amount": "Monto",
-    "submit": "Registrar pago",
+    "submit": "Registrar liquidación",
     "submitting": "Registrando..."
   },
   "empty": "Sin grupos aún",

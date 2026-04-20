@@ -4,7 +4,7 @@
     "groups": "Grupos",
     "quickSplit": "División rápida",
     "settings": "Configuración",
-    "admin": "Admin",
+    "admin": "Administración",
     "signOut": "Cerrar sesión"
   },
   "actions": {
@@ -22,7 +22,7 @@
   },
   "brand": {
     "name": "ShareTab",
-    "tagline": "División de gastos autoalojada con escaneo de recibos con IA"
+    "tagline": "Reparto de gastos autohospedado con escaneo de recibos mediante IA"
   },
   "sponsor": {
     "title": "Apoya ShareTab",
