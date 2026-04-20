@@ -1,0 +1,23 @@
+{
+  "title": "Settings",
+  "profile": {
+    "title": "Profile",
+    "email": "Email",
+    "name": "Name",
+    "save": "Save",
+    "saving": "Saving...",
+    "saved": "Profile updated!",
+    "language": "Language",
+    "languageDescription": "Choose your preferred language"
+  },
+  "password": {
+    "title": "Change Password",
+    "current": "Current password",
+    "new": "New password",
+    "confirm": "Confirm new password",
+    "mismatch": "Passwords do not match",
+    "submit": "Change password",
+    "submitting": "Changing...",
+    "success": "Password changed!"
+  }
+}

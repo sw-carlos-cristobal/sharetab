@@ -1,0 +1,37 @@
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "groups": "Groups",
+    "quickSplit": "Quick Split",
+    "settings": "Settings",
+    "admin": "Admin",
+    "signOut": "Sign out"
+  },
+  "actions": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "back": "Back",
+    "close": "Close",
+    "confirm": "Confirm",
+    "loading": "Loading...",
+    "saving": "Saving...",
+    "submit": "Submit"
+  },
+  "brand": {
+    "name": "ShareTab",
+    "tagline": "Self-hosted expense splitting with AI receipt scanning"
+  },
+  "sponsor": {
+    "title": "Support ShareTab",
+    "description": "ShareTab is free and open source. If it saves you time, consider sponsoring development.",
+    "cta": "Sponsor on GitHub"
+  },
+  "errors": {
+    "generic": "Something went wrong. Please try again.",
+    "notFound": "Not found",
+    "unauthorized": "You must be signed in to access this page."
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "title": "Dashboard",
+  "youOwe": "You owe",
+  "youAreOwed": "You are owed",
+  "settledUp": "All settled up!",
+  "noGroups": "No groups yet",
+  "noGroupsDescription": "Create a group to start splitting expenses.",
+  "createGroup": "Create group",
+  "viewAll": "View all",
+  "recentActivity": "Recent activity",
+  "noActivity": "No recent activity",
+  "groups": "Groups",
+  "showMore": "Show more",
+  "members": "{count, plural, one {# member} other {# members}}"
+}
