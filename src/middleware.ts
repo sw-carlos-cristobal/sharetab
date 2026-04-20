@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 import createIntlMiddleware from "next-intl/middleware";
 import { routing } from "@/i18n/routing";
+import { isSupportedLocale, withLocalePrefix } from "@/lib/locale-paths";
 
 const intlMiddleware = createIntlMiddleware(routing);
 
@@ -16,18 +17,14 @@ function isPublicPage(pathname: string): boolean {
 
 export async function middleware(request: NextRequest) {
   const intlResponse = intlMiddleware(request);
-
   const pathname = request.nextUrl.pathname;
+  const callbackUrl = `${pathname}${request.nextUrl.search}`;
   const localePrefix = routing.locales.find(
     (locale) => pathname.startsWith(`/${locale}/`) || pathname === `/${locale}`
   );
   const strippedPathname = localePrefix
     ? pathname.replace(`/${localePrefix}`, "") || "/"
     : pathname;
-
-  if (isPublicPage(strippedPathname) || strippedPathname === "/") {
-    return intlResponse;
-  }
 
   const isSecure = request.nextUrl.protocol === "https:";
   const cookieName = isSecure
@@ -45,6 +42,19 @@ export async function middleware(request: NextRequest) {
     // Malformed or forged JWT — treat as unauthenticated
   }
 
+  const tokenLocale =
+    typeof token?.locale === "string" && isSupportedLocale(token.locale)
+      ? token.locale
+      : null;
+
+  if (!localePrefix && tokenLocale) {
+    return NextResponse.redirect(new URL(withLocalePrefix(callbackUrl, tokenLocale), request.url));
+  }
+
+  if (isPublicPage(strippedPathname) || strippedPathname === "/") {
+    return intlResponse;
+  }
+
   if (!token) {
     // For unprefixed routes (e.g. /dashboard), intlMiddleware will redirect to
     // the locale-prefixed URL. Return that redirect so locale is resolved first;
@@ -52,9 +62,9 @@ export async function middleware(request: NextRequest) {
     if (!localePrefix && intlResponse.status >= 300 && intlResponse.status < 400) {
       return intlResponse;
     }
-    const locale = localePrefix ?? routing.defaultLocale;
+    const locale = localePrefix ?? tokenLocale ?? routing.defaultLocale;
     const loginUrl = new URL(`/${locale}/login`, request.url);
-    loginUrl.searchParams.set("callbackUrl", pathname);
+    loginUrl.searchParams.set("callbackUrl", callbackUrl);
     return NextResponse.redirect(loginUrl);
   }
 

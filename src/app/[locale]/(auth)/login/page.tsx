@@ -5,29 +5,17 @@ import { signIn } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { Link, useRouter } from "@/i18n/navigation";
-import { locales } from "@/i18n/routing";
+import type { Locale } from "@/i18n/routing";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Receipt, Mail } from "lucide-react";
-
-function isSafeInternalPath(path: string | null): path is string {
-  return !!path && path.startsWith("/") && !path.startsWith("//");
-}
-
-function hasLocalePrefix(path: string): boolean {
-  return locales.some((locale) => path === `/${locale}` || path.startsWith(`/${locale}/`));
-}
-
-function stripLocalePrefix(path: string): string {
-  const locale = locales.find((l) => path === `/${l}` || path.startsWith(`/${l}/`));
-  if (!locale) return path;
-
-  const stripped = path.slice(locale.length + 1);
-  return stripped.startsWith("/") ? stripped : `/${stripped}`;
-}
+import {
+  normalizeCallbackPath,
+  stripLocalePrefix,
+} from "@/lib/locale-paths";
 
 export default function LoginPage() {
   return (
@@ -39,7 +27,7 @@ export default function LoginPage() {
 
 function LoginForm() {
   const t = useTranslations("auth.login");
-  const locale = useLocale();
+  const locale = useLocale() as Locale;
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
@@ -49,13 +37,9 @@ function LoginForm() {
   const [magicLinkEmail, setMagicLinkEmail] = useState("");
   const [magicLinkSending, setMagicLinkSending] = useState(false);
   const [showMagicLink, setShowMagicLink] = useState(false);
-  const rawCallbackUrl = searchParams.get("callbackUrl");
-  const callbackPath = isSafeInternalPath(rawCallbackUrl)
-    ? hasLocalePrefix(rawCallbackUrl)
-      ? rawCallbackUrl
-      : `/${locale}${rawCallbackUrl}`
-    : `/${locale}/dashboard`;
+  const callbackPath = normalizeCallbackPath(searchParams.get("callbackUrl"), locale);
   const callbackHref = stripLocalePrefix(callbackPath);
+  const registerHref = `/register?callbackUrl=${encodeURIComponent(callbackPath)}`;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -222,7 +206,7 @@ function LoginForm() {
         <div className="text-center space-y-3">
           <p className="text-sm text-muted-foreground">
             {t("noAccount")}{" "}
-            <Link href="/register" className="font-medium text-primary hover:underline">
+            <Link href={registerHref} className="font-medium text-primary hover:underline">
               {t("createAccount")}
             </Link>
           </p>

@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { signIn } from "next-auth/react";
 import { TRPCClientError } from "@trpc/client";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { useSearchParams } from "next/navigation";
 import { Link, useRouter } from "@/i18n/navigation";
+import type { Locale } from "@/i18n/routing";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Receipt } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { normalizeCallbackPath, stripLocalePrefix } from "@/lib/locale-paths";
 
 type RegistrationErrorKey =
   | "emailTaken"
@@ -46,8 +49,18 @@ function getRegistrationErrorKey(error: unknown): RegistrationErrorKey {
 }
 
 export default function RegisterPage() {
+  return (
+    <Suspense>
+      <RegisterForm />
+    </Suspense>
+  );
+}
+
+function RegisterForm() {
   const t = useTranslations("auth.register");
+  const locale = useLocale() as Locale;
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -59,6 +72,9 @@ export default function RegisterPage() {
   const registerMutation = trpc.auth.register.useMutation();
 
   const mode = regMode.data?.mode ?? "open";
+  const callbackPath = normalizeCallbackPath(searchParams.get("callbackUrl"), locale);
+  const callbackHref = stripLocalePrefix(callbackPath);
+  const loginHref = `/login?callbackUrl=${encodeURIComponent(callbackPath)}`;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -79,12 +95,13 @@ export default function RegisterPage() {
         email,
         password,
         redirect: false,
+        callbackUrl: callbackPath,
       });
 
       if (result?.error) {
         setError(t("error.generic"));
       } else {
-        router.push("/dashboard");
+        router.push(callbackHref);
         router.refresh();
       }
     } catch (err: unknown) {
@@ -177,7 +194,7 @@ export default function RegisterPage() {
 
         <p className="text-center text-sm text-muted-foreground">
           {t("hasAccount")}{" "}
-          <Link href="/login" className="font-medium text-primary hover:underline">
+          <Link href={loginHref} className="font-medium text-primary hover:underline">
             {t("signIn")}
           </Link>
         </p>

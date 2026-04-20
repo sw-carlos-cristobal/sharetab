@@ -1,4 +1,4 @@
-import { type Page, expect, request } from "@playwright/test";
+import { type Page, request } from "@playwright/test";
 
 const BASE = process.env.BASE_URL || "http://localhost:3001";
 
@@ -13,23 +13,23 @@ export const users = {
  * Login as a user via the UI.
  */
 export async function login(page: Page, email: string, password: string) {
-  await page.goto("/login");
+  await page.goto("/en/login");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await page.waitForURL("**/dashboard", { timeout: 15000 });
+  await page.waitForURL(/\/en\/dashboard$/, { timeout: 15000 });
 }
 
 /**
  * Register a new user via the UI.
  */
 export async function register(page: Page, name: string, email: string, password: string) {
-  await page.goto("/register");
+  await page.goto("/en/register");
   await page.getByLabel("Name").fill(name);
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Create account" }).click();
-  await page.waitForURL("**/dashboard", { timeout: 15000 });
+  await page.waitForURL(/\/en\/dashboard$/, { timeout: 15000 });
 }
 
 /**
@@ -111,10 +111,10 @@ export async function trpcError(res: { json: () => Promise<any> }): Promise<any>
  * Handles pagination by using the search filter.
  */
 export async function navigateToGroup(page: Page, groupName: string) {
-  await page.goto("/groups");
+  await page.goto("/en/groups");
   await page.getByPlaceholder("Search groups...").fill(groupName);
   await page.getByText(groupName).first().click();
-  await page.waitForURL(/\/groups\/\w+$/, { timeout: 15000 });
+  await page.waitForURL(/\/en\/groups\/\w+$/, { timeout: 15000 });
 }
 
 /**

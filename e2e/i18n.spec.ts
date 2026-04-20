@@ -86,7 +86,7 @@ test.describe("i18n Language Switching", () => {
     await expect(page.getByText("Bienvenido de nuevo")).toBeVisible();
 
     const createLink = page.getByRole("link", { name: "Crear una" });
-    await expect(createLink).toHaveAttribute("href", "/es/register");
+    await expect(createLink).toHaveAttribute("href", /^\/es\/register/);
 
     const splitLink = page.getByRole("link", { name: "Dividir sin cuenta" });
     await expect(splitLink).toHaveAttribute("href", "/es/split");

@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { useLocale } from "next-intl";
 import { useSession } from "next-auth/react";
@@ -17,6 +18,7 @@ export default function InvitePage({
   const { token } = use(params);
   const router = useRouter();
   const locale = useLocale();
+  const t = useTranslations("auth.invite");
   const { data: session, status } = useSession();
 
   const joinGroup = trpc.groups.joinByInvite.useMutation({
@@ -34,7 +36,7 @@ export default function InvitePage({
   if (status === "loading") {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-muted-foreground">Loading...</p>
+        <p className="text-muted-foreground">{t("loading")}</p>
       </div>
     );
   }
@@ -46,12 +48,10 @@ export default function InvitePage({
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <UserPlus className="mx-auto mb-2 h-8 w-8 text-primary" />
-          <CardTitle>Join Group</CardTitle>
+          <CardTitle>{t("title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-center">
-          <p className="text-sm text-muted-foreground">
-            You&apos;ve been invited to join a group on ShareTab.
-          </p>
+          <p className="text-sm text-muted-foreground">{t("description")}</p>
 
           {joinGroup.error && (
             <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
@@ -64,11 +64,11 @@ export default function InvitePage({
             onClick={() => joinGroup.mutate({ token })}
             disabled={joinGroup.isPending}
           >
-            {joinGroup.isPending ? "Joining..." : "Accept Invite"}
+            {joinGroup.isPending ? t("joining") : t("accept")}
           </Button>
 
           <Button variant="ghost" className="w-full" nativeButton={false} render={<Link href="/dashboard" />}>
-            Go to Dashboard
+            {t("dashboard")}
           </Button>
         </CardContent>
       </Card>

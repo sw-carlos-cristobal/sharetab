@@ -5,10 +5,17 @@ import { MobileHeader } from "@/components/layout/mobile-header";
 import { AnnouncementBanner } from "@/components/layout/announcement-banner";
 import { ImpersonationBanner } from "@/components/layout/impersonation-banner";
 
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
+export default async function AppLayout({
+  children,
+  params,
+}: {
+  children: React.ReactNode;
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
   const session = await auth();
   if (!session?.user) {
-    redirect("/login");
+    redirect(`/${locale}/login`);
   }
 
   const isAdmin =
