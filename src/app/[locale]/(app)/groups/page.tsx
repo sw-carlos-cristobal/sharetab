@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { trpc } from "@/lib/trpc";
@@ -13,6 +13,14 @@ import { Archive, ArchiveRestore, Plus, Search } from "lucide-react";
 const GROUPS_PER_PAGE = 12;
 
 export default function GroupsPage() {
+  return (
+    <Suspense>
+      <GroupsContent />
+    </Suspense>
+  );
+}
+
+function GroupsContent() {
   const searchParams = useSearchParams();
   const [showArchived, setShowArchived] = useState(searchParams.get("archived") === "1");
   const [search, setSearch] = useState("");

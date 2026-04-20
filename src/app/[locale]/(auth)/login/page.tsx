@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
@@ -30,6 +30,14 @@ function stripLocalePrefix(path: string): string {
 }
 
 export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const t = useTranslations("auth.login");
   const locale = useLocale();
   const router = useRouter();

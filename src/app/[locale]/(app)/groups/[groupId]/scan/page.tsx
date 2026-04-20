@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, useEffect } from "react";
+import { Suspense, use, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { Link, useRouter } from "@/i18n/navigation";
 import { trpc } from "@/lib/trpc";
@@ -15,6 +15,18 @@ import { loadingMessages } from "@/lib/loading-messages";
 type Step = "upload" | "processing" | "assign" | "error";
 
 export default function ScanReceiptPage({
+  params,
+}: {
+  params: Promise<{ groupId: string }>;
+}) {
+  return (
+    <Suspense>
+      <ScanReceiptContent params={params} />
+    </Suspense>
+  );
+}
+
+function ScanReceiptContent({
   params,
 }: {
   params: Promise<{ groupId: string }>;
