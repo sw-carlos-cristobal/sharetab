@@ -19,10 +19,10 @@ export default async function VerifyRequestPage() {
       </CardHeader>
       <CardContent className="text-center space-y-4">
         <p className="text-sm text-muted-foreground">
-          Click the link in the email to sign in. The link will expire in 24 hours.
+          {t("instructions")}
         </p>
         <p className="text-sm text-muted-foreground">
-          If you don&apos;t see the email, check your spam folder.
+          {t("spamHint")}
         </p>
         <Link href="/login" className="text-sm font-medium text-primary hover:underline">
           {t("backToLogin")}

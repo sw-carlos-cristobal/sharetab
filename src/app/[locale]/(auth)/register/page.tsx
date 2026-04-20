@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
+import { TRPCClientError } from "@trpc/client";
 import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,38 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Receipt } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+
+type RegistrationErrorKey =
+  | "emailTaken"
+  | "inviteRequired"
+  | "inviteInvalid"
+  | "closed"
+  | "generic";
+
+function getRegistrationErrorKey(error: unknown): RegistrationErrorKey {
+  if (!(error instanceof TRPCClientError)) {
+    return "generic";
+  }
+
+  if (error.data?.code === "CONFLICT") {
+    return "emailTaken";
+  }
+
+  if (error.data?.code !== "FORBIDDEN") {
+    return "generic";
+  }
+
+  switch (error.message) {
+    case "An invite code is required to register.":
+      return "inviteRequired";
+    case "Invalid or expired invite code.":
+      return "inviteInvalid";
+    case "Registration is currently closed.":
+      return "closed";
+    default:
+      return "generic";
+  }
+}
 
 export default function RegisterPage() {
   const t = useTranslations("auth.register");
@@ -55,18 +88,7 @@ export default function RegisterPage() {
         router.refresh();
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "";
-      if (message.includes("already")) {
-        setError(t("error.emailTaken"));
-      } else if (message.includes("invite code is required")) {
-        setError(t("error.inviteRequired"));
-      } else if (message.includes("Invalid or expired")) {
-        setError(t("error.inviteInvalid"));
-      } else if (message.includes("closed")) {
-        setError(t("error.closed"));
-      } else {
-        setError(t("error.generic"));
-      }
+      setError(t(`error.${getRegistrationErrorKey(err)}`));
     } finally {
       setLoading(false);
     }

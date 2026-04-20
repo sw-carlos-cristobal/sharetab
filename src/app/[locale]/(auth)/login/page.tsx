@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { useSearchParams } from "next/navigation";
 import { Link, useRouter } from "@/i18n/navigation";
+import { locales } from "@/i18n/routing";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,9 +13,27 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Receipt, Mail } from "lucide-react";
 
+function isSafeInternalPath(path: string | null): path is string {
+  return !!path && path.startsWith("/") && !path.startsWith("//");
+}
+
+function hasLocalePrefix(path: string): boolean {
+  return locales.some((locale) => path === `/${locale}` || path.startsWith(`/${locale}/`));
+}
+
+function stripLocalePrefix(path: string): string {
+  const locale = locales.find((l) => path === `/${l}` || path.startsWith(`/${l}/`));
+  if (!locale) return path;
+
+  const stripped = path.slice(locale.length + 1);
+  return stripped ? `/${stripped}` : "/";
+}
+
 export default function LoginPage() {
   const t = useTranslations("auth.login");
+  const locale = useLocale();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -21,6 +41,13 @@ export default function LoginPage() {
   const [magicLinkEmail, setMagicLinkEmail] = useState("");
   const [magicLinkSending, setMagicLinkSending] = useState(false);
   const [showMagicLink, setShowMagicLink] = useState(false);
+  const rawCallbackUrl = searchParams.get("callbackUrl");
+  const callbackPath = isSafeInternalPath(rawCallbackUrl)
+    ? hasLocalePrefix(rawCallbackUrl)
+      ? rawCallbackUrl
+      : `/${locale}${rawCallbackUrl}`
+    : `/${locale}/dashboard`;
+  const callbackHref = stripLocalePrefix(callbackPath);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -31,6 +58,7 @@ export default function LoginPage() {
       email,
       password,
       redirect: false,
+      callbackUrl: callbackPath,
     });
 
     setLoading(false);
@@ -38,7 +66,7 @@ export default function LoginPage() {
     if (result?.error) {
       setError(t("error"));
     } else {
-      router.push("/dashboard");
+      router.push(callbackHref);
       router.refresh();
     }
   }
@@ -51,7 +79,7 @@ export default function LoginPage() {
     const result = await signIn("nodemailer", {
       email: magicLinkEmail,
       redirect: false,
-      callbackUrl: "/dashboard",
+      callbackUrl: callbackPath,
     });
 
     setMagicLinkSending(false);

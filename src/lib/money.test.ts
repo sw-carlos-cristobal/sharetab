@@ -38,9 +38,14 @@ describe("formatCents", () => {
     expect(result).toContain("1.234,56");
   });
 
-  test("defaults to en-US locale when not specified", () => {
+  test("defaults to configured app locale when not specified", () => {
     expect(formatCents(1299, "USD")).toBe("$12.99");
     expect(formatCents(1299, "USD", "en-US")).toBe("$12.99");
+  });
+
+  test("maps app locale codes to regional money locales", () => {
+    const result = formatCents(123456, "EUR", "es");
+    expect(result).toContain("1234,56");
   });
 });
 

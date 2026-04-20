@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { formatCents } from "@/lib/money";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -106,6 +106,7 @@ function GroupCardSkeleton() {
 
 export default function DashboardPage() {
   const t = useTranslations("dashboard");
+  const locale = useLocale();
   const dashboard = trpc.balances.getDashboard.useQuery();
   const overallDebts = trpc.balances.getOverallDebts.useQuery();
   const groups = trpc.groups.list.useQuery();
@@ -144,7 +145,7 @@ export default function DashboardPage() {
           <CardContent>
             {dashboard.data ? (
               <span className="text-3xl font-bold tracking-tight tabular-nums text-green-600 dark:text-green-400">
-                {formatCents(dashboard.data.totalOwed)}
+                {formatCents(dashboard.data.totalOwed, "USD", locale)}
               </span>
             ) : (
               <SummarySkeleton />
@@ -166,7 +167,7 @@ export default function DashboardPage() {
           <CardContent>
             {dashboard.data ? (
               <span className="text-3xl font-bold tracking-tight tabular-nums text-red-600 dark:text-red-400">
-                {formatCents(dashboard.data.totalOwing)}
+                {formatCents(dashboard.data.totalOwing, "USD", locale)}
               </span>
             ) : (
               <SummarySkeleton />
@@ -182,7 +183,7 @@ export default function DashboardPage() {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium">
               <ArrowDownLeft className="h-4 w-4 text-green-600 dark:text-green-400" />
-              {t("youAreOwed")}
+              {t("owedToYouTitle")}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -213,7 +214,7 @@ export default function DashboardPage() {
                     <span className="text-sm font-medium">{person.userName}</span>
                   </div>
                   <span className="text-sm font-semibold tabular-nums text-green-600 dark:text-green-400">
-                    {formatCents(person.amount)}
+                    {formatCents(person.amount, "USD", locale)}
                   </span>
                 </div>
               ))}
@@ -226,7 +227,7 @@ export default function DashboardPage() {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium">
               <ArrowUpRight className="h-4 w-4 text-red-600 dark:text-red-400" />
-              {t("youOwe")}
+              {t("youOweTitle")}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -257,7 +258,7 @@ export default function DashboardPage() {
                     <span className="text-sm font-medium">{person.userName}</span>
                   </div>
                   <span className="text-sm font-semibold tabular-nums text-red-600 dark:text-red-400">
-                    {formatCents(person.amount)}
+                    {formatCents(person.amount, "USD", locale)}
                   </span>
                 </div>
               ))}
@@ -364,7 +365,7 @@ export default function DashboardPage() {
                           }`}
                         >
                           {balance.balance > 0 ? "+" : ""}
-                          {formatCents(balance.balance)}
+                          {formatCents(balance.balance, "USD", locale)}
                         </span>
                       )}
                       {balance && balance.balance === 0 && (
@@ -396,7 +397,7 @@ export default function DashboardPage() {
               href="/groups?archived=1"
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
-              {archivedGroups.data?.length} archived group{archivedGroups.data?.length !== 1 ? "s" : ""}
+              {t("archivedGroups", { count: archivedGroups.data?.length ?? 0 })}
             </Link>
           </div>
         )}

@@ -2,6 +2,7 @@
 
 import { use, useEffect } from "react";
 import { Link, useRouter } from "@/i18n/navigation";
+import { useLocale } from "next-intl";
 import { useSession } from "next-auth/react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +16,7 @@ export default function InvitePage({
 }) {
   const { token } = use(params);
   const router = useRouter();
+  const locale = useLocale();
   const { data: session, status } = useSession();
 
   const joinGroup = trpc.groups.joinByInvite.useMutation({
@@ -25,9 +27,9 @@ export default function InvitePage({
 
   useEffect(() => {
     if (status === "unauthenticated") {
-      router.push(`/login?callbackUrl=/invite/${token}`);
+      router.push(`/login?callbackUrl=${encodeURIComponent(`/${locale}/invite/${token}`)}`);
     }
-  }, [status, router, token]);
+  }, [status, router, token, locale]);
 
   if (status === "loading") {
     return (

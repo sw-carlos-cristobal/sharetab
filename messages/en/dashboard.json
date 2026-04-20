@@ -2,6 +2,8 @@
   "title": "Dashboard",
   "youOwe": "You owe",
   "youAreOwed": "You are owed",
+  "owedToYouTitle": "People who owe you",
+  "youOweTitle": "People you owe",
   "settledUp": "All settled up!",
   "noGroups": "No groups yet",
   "noGroupsDescription": "Create a group to start splitting expenses.",
@@ -11,5 +13,6 @@
   "noActivity": "No recent activity",
   "groups": "Groups",
   "showMore": "Show more",
-  "members": "{count, plural, one {# member} other {# members}}"
+  "members": "{count, plural, one {# member} other {# members}}",
+  "archivedGroups": "{count, plural, one {# archived group} other {# archived groups}}"
 }

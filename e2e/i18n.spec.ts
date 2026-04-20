@@ -7,7 +7,7 @@ test.describe("i18n Language Switching", () => {
     await expect(page.getByText("Welcome back")).toBeVisible();
 
     // Open language switcher and pick Spanish
-    await page.getByRole("button", { name: "Change language" }).click();
+    await page.getByTestId("language-switcher").first().click();
     await page.getByRole("menuitem", { name: "🇪🇸 Español" }).click();
     await page.waitForURL("**/es/login");
 
@@ -19,7 +19,7 @@ test.describe("i18n Language Switching", () => {
     await expect(page.getByRole("button", { name: "Iniciar sesión", exact: true })).toBeVisible();
 
     // Switch back to English
-    await page.getByRole("button", { name: "Change language" }).click();
+    await page.getByTestId("language-switcher").first().click();
     await page.getByRole("menuitem", { name: "🇺🇸 English" }).click();
     await page.waitForURL("**/en/login");
 
@@ -35,7 +35,7 @@ test.describe("i18n Language Switching", () => {
     await expect(page.getByText("Create your account")).toBeVisible();
 
     // Switch to Spanish
-    await page.getByRole("button", { name: "Change language" }).click();
+    await page.getByTestId("language-switcher").first().click();
     await page.getByRole("menuitem", { name: "🇪🇸 Español" }).click();
     await page.waitForURL("**/es/register");
 
@@ -45,7 +45,7 @@ test.describe("i18n Language Switching", () => {
     await expect(page.getByRole("button", { name: "Crear cuenta" })).toBeVisible();
 
     // Switch back to English
-    await page.getByRole("button", { name: "Change language" }).click();
+    await page.getByTestId("language-switcher").first().click();
     await page.getByRole("menuitem", { name: "🇺🇸 English" }).click();
     await page.waitForURL("**/en/register");
 
@@ -60,7 +60,7 @@ test.describe("i18n Language Switching", () => {
     await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
 
     // Click sidebar language switcher
-    await page.getByRole("button", { name: "Change language" }).click();
+    await page.getByTestId("language-switcher").first().click();
     await page.getByRole("menuitem", { name: "🇪🇸 Español" }).click();
     await page.waitForURL("**/es/dashboard");
 
@@ -71,7 +71,7 @@ test.describe("i18n Language Switching", () => {
     await expect(page.getByRole("heading", { name: "Grupos" })).toBeVisible();
 
     // Switch back to English
-    await page.getByRole("button", { name: "Change language" }).click();
+    await page.getByTestId("language-switcher").first().click();
     await page.getByRole("menuitem", { name: "🇺🇸 English" }).click();
     await page.waitForURL("**/en/dashboard");
 

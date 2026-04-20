@@ -16,7 +16,8 @@ import { trpc } from "@/lib/trpc";
 import { useSession } from "next-auth/react";
 
 function setLocaleCookie(locale: string) {
-  document.cookie = `NEXT_LOCALE=${locale};path=/;max-age=31536000;samesite=lax`;
+  const secure = window.location.protocol === "https:" ? ";secure" : "";
+  document.cookie = `NEXT_LOCALE=${encodeURIComponent(locale)};path=/;max-age=31536000;samesite=lax${secure}`;
 }
 
 export function LanguageSwitcher() {
@@ -40,7 +41,16 @@ export function LanguageSwitcher() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label={t("nav.changeLanguage")} />}>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t("nav.changeLanguage")}
+            data-testid="language-switcher"
+          />
+        }
+      >
         <Globe className="h-4 w-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
