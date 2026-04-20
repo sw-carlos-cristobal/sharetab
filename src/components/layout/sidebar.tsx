@@ -16,6 +16,7 @@ import {
   Heart,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
+import { LanguageSwitcher } from "@/components/layout/language-switcher";
 
 function SponsorBanner() {
   return (
@@ -159,7 +160,10 @@ export function AppSidebar({
               Sign out
             </Button>
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-1">
+            <LanguageSwitcher />
+            <ThemeToggle />
+          </div>
         </div>
       </div>
     </aside>

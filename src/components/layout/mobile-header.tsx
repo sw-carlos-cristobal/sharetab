@@ -23,6 +23,7 @@ import {
   Menu,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
+import { LanguageSwitcher } from "@/components/layout/language-switcher";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -104,6 +105,7 @@ export function MobileHeader({ isAdmin }: { isAdmin?: boolean }) {
                 <LogOut className="h-5 w-5" />
                 Sign out
               </button>
+              <LanguageSwitcher />
               <ThemeToggle />
             </div>
           </nav>
