@@ -54,6 +54,7 @@ model User {
   passwordHash    String?
   image           String?
   defaultCurrency String    @default("USD")
+  locale          String    @default("en")
   suspendedAt     DateTime?
   isPlaceholder   Boolean   @default(false)
   placeholderName String?
