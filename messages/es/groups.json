@@ -1,0 +1,48 @@
+{
+  "title": "Grupos",
+  "create": "Crear grupo",
+  "new": {
+    "title": "Crear un nuevo grupo",
+    "name": "Nombre del grupo",
+    "namePlaceholder": "ej. Apartamento, Viaje a París",
+    "currency": "Moneda",
+    "submit": "Crear grupo",
+    "submitting": "Creando..."
+  },
+  "detail": {
+    "expenses": "Gastos",
+    "balances": "Balances",
+    "addExpense": "Agregar gasto",
+    "scanReceipt": "Escanear recibo",
+    "settle": "Saldar",
+    "noExpenses": "Sin gastos aún",
+    "noExpensesDescription": "Agrega un gasto para empezar.",
+    "totalSpent": "Total gastado",
+    "youOwe": "Debes a {name}",
+    "owesYou": "{name} te debe",
+    "settledUp": "Saldado"
+  },
+  "settings": {
+    "title": "Configuración del grupo",
+    "name": "Nombre del grupo",
+    "currency": "Moneda",
+    "members": "Miembros",
+    "addMember": "Agregar miembro",
+    "removeMember": "Eliminar",
+    "deleteGroup": "Eliminar grupo",
+    "deleteConfirm": "¿Estás seguro? Esto no se puede deshacer.",
+    "invite": "Enlace de invitación",
+    "copyLink": "Copiar enlace",
+    "linkCopied": "¡Enlace copiado!"
+  },
+  "settle": {
+    "title": "Saldar",
+    "from": "De",
+    "to": "Para",
+    "amount": "Monto",
+    "submit": "Registrar pago",
+    "submitting": "Registrando..."
+  },
+  "empty": "Sin grupos aún",
+  "emptyDescription": "Crea tu primer grupo para empezar a dividir gastos con amigos."
+}

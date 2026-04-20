@@ -1,0 +1,37 @@
+{
+  "nav": {
+    "dashboard": "Panel",
+    "groups": "Grupos",
+    "quickSplit": "División rápida",
+    "settings": "Configuración",
+    "admin": "Admin",
+    "signOut": "Cerrar sesión"
+  },
+  "actions": {
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "create": "Crear",
+    "back": "Volver",
+    "close": "Cerrar",
+    "confirm": "Confirmar",
+    "loading": "Cargando...",
+    "saving": "Guardando...",
+    "submit": "Enviar"
+  },
+  "brand": {
+    "name": "ShareTab",
+    "tagline": "División de gastos autoalojada con escaneo de recibos con IA"
+  },
+  "sponsor": {
+    "title": "Apoya ShareTab",
+    "description": "ShareTab es gratuito y de código abierto. Si te ahorra tiempo, considera patrocinar el desarrollo.",
+    "cta": "Patrocinar en GitHub"
+  },
+  "errors": {
+    "generic": "Algo salió mal. Inténtalo de nuevo.",
+    "notFound": "No encontrado",
+    "unauthorized": "Debes iniciar sesión para acceder a esta página."
+  }
+}
