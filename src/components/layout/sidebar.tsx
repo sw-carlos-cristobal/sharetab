@@ -16,17 +16,19 @@ import {
 } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { LanguageSwitcher } from "@/components/layout/language-switcher";
+import { useTranslations } from "next-intl";
 
 function SponsorBanner() {
+  const t = useTranslations("common");
   return (
     <div className="shrink-0 px-3 pb-2">
       <div className="rounded-lg border border-pink-500/20 bg-gradient-to-br from-pink-500/10 via-rose-500/5 to-transparent p-3">
         <div className="flex items-center gap-2 mb-1.5">
           <Heart className="h-3.5 w-3.5 text-pink-500 shrink-0" />
-          <span className="text-xs font-semibold text-foreground">Support ShareTab</span>
+          <span className="text-xs font-semibold text-foreground">{t("sponsor.title")}</span>
         </div>
         <p className="text-xs text-muted-foreground mb-2.5 leading-relaxed">
-          ShareTab is free and open source. If it saves you time, consider sponsoring development.
+          {t("sponsor.description")}
         </p>
         <a
           href="https://github.com/sponsors/sw-carlos-cristobal"
@@ -35,7 +37,7 @@ function SponsorBanner() {
           className="flex items-center justify-center gap-1.5 w-full rounded-md bg-pink-500/15 hover:bg-pink-500/25 border border-pink-500/20 px-2.5 py-1.5 text-xs font-medium text-pink-600 dark:text-pink-400 transition-colors"
         >
           <Heart className="h-3 w-3" />
-          Sponsor on GitHub
+          {t("sponsor.cta")}
         </a>
       </div>
     </div>
@@ -43,10 +45,10 @@ function SponsorBanner() {
 }
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/groups", label: "Groups", icon: Users },
-  { href: "/split", label: "Quick Split", icon: Receipt },
-];
+  { href: "/dashboard", key: "dashboard", icon: LayoutDashboard },
+  { href: "/groups", key: "groups", icon: Users },
+  { href: "/split", key: "quickSplit", icon: Receipt },
+] as const;
 
 type SidebarUser = {
   id: string;
@@ -63,6 +65,7 @@ export function AppSidebar({
   isAdmin?: boolean;
 }) {
   const pathname = usePathname();
+  const t = useTranslations("common");
 
   const initials = user.name
     ? user.name
@@ -99,7 +102,7 @@ export function AppSidebar({
                 )}
               >
                 <item.icon className="h-5 w-5 shrink-0" />
-                {item.label}
+                {t(`nav.${item.key}`)}
               </span>
             </Link>
           );
@@ -115,7 +118,7 @@ export function AppSidebar({
               )}
             >
               <Shield className="h-5 w-5 shrink-0" />
-              Admin
+              {t("nav.admin")}
             </span>
           </Link>
         )}
@@ -147,7 +150,7 @@ export function AppSidebar({
               className="inline-flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors duration-200 hover:bg-muted hover:text-foreground"
             >
               <Settings className="h-3.5 w-3.5" />
-              Settings
+              {t("nav.settings")}
             </Link>
             <Button
               variant="ghost"
@@ -156,7 +159,7 @@ export function AppSidebar({
               onClick={() => signOut({ callbackUrl: "/login" })}
             >
               <LogOut className="h-3.5 w-3.5" />
-              Sign out
+              {t("nav.signOut")}
             </Button>
           </div>
           <div className="flex items-center gap-1">
