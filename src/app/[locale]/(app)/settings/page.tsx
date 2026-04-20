@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export default function SettingsPage() {
+  const t = useTranslations("settings");
   const { data: session, update } = useSession();
   const router = useRouter();
   const [name, setName] = useState(session?.user?.name ?? "");
@@ -55,20 +57,20 @@ export default function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-lg space-y-6">
-      <h1 className="text-2xl font-bold">Settings</h1>
+      <h1 className="text-2xl font-bold">{t("title")}</h1>
 
       <Card>
         <CardHeader>
-          <CardTitle>Profile</CardTitle>
+          <CardTitle>{t("profile.title")}</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSave} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">{t("profile.email")}</Label>
               <Input id="email" value={session?.user?.email ?? ""} disabled />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="name">Name</Label>
+              <Label htmlFor="name">{t("profile.name")}</Label>
               <Input
                 id="name"
                 value={name}
@@ -77,10 +79,10 @@ export default function SettingsPage() {
               />
             </div>
             <Button type="submit" disabled={updateProfile.isPending}>
-              {updateProfile.isPending ? "Saving..." : "Save"}
+              {updateProfile.isPending ? t("profile.saving") : t("profile.save")}
             </Button>
             {updateProfile.isSuccess && (
-              <p className="text-sm text-green-600">Profile updated!</p>
+              <p className="text-sm text-green-600">{t("profile.saved")}</p>
             )}
           </form>
         </CardContent>
@@ -88,12 +90,12 @@ export default function SettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Change Password</CardTitle>
+          <CardTitle>{t("password.title")}</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleChangePassword} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="currentPassword">Current password</Label>
+              <Label htmlFor="currentPassword">{t("password.current")}</Label>
               <Input
                 id="currentPassword"
                 type="password"
@@ -104,7 +106,7 @@ export default function SettingsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="newPassword">New password</Label>
+              <Label htmlFor="newPassword">{t("password.new")}</Label>
               <Input
                 id="newPassword"
                 type="password"
@@ -115,7 +117,7 @@ export default function SettingsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm new password</Label>
+              <Label htmlFor="confirmPassword">{t("password.confirm")}</Label>
               <Input
                 id="confirmPassword"
                 type="password"
@@ -125,17 +127,17 @@ export default function SettingsPage() {
                 minLength={8}
               />
               {confirmPassword && newPassword !== confirmPassword && (
-                <p className="text-sm text-red-600">Passwords do not match</p>
+                <p className="text-sm text-red-600">{t("password.mismatch")}</p>
               )}
             </div>
             <Button
               type="submit"
               disabled={changePassword.isPending || newPassword !== confirmPassword || !currentPassword || !newPassword}
             >
-              {changePassword.isPending ? "Changing..." : "Change password"}
+              {changePassword.isPending ? t("password.submitting") : t("password.submit")}
             </Button>
             {changePassword.isSuccess && (
-              <p className="text-sm text-green-600">Password changed!</p>
+              <p className="text-sm text-green-600">{t("password.success")}</p>
             )}
             {changePassword.error && (
               <p className="text-sm text-red-600">{changePassword.error.message}</p>

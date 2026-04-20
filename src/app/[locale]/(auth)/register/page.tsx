@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
+import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +13,7 @@ import { Receipt } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
 export default function RegisterPage() {
+  const t = useTranslations("auth.register");
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -47,14 +49,24 @@ export default function RegisterPage() {
       });
 
       if (result?.error) {
-        setError("Account created but could not sign in. Please try logging in.");
+        setError(t("error.generic"));
       } else {
         router.push("/dashboard");
         router.refresh();
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Registration failed";
-      setError(message);
+      const message = err instanceof Error ? err.message : "";
+      if (message.includes("already")) {
+        setError(t("error.emailTaken"));
+      } else if (message.includes("invite code is required")) {
+        setError(t("error.inviteRequired"));
+      } else if (message.includes("Invalid or expired")) {
+        setError(t("error.inviteInvalid"));
+      } else if (message.includes("closed")) {
+        setError(t("error.closed"));
+      } else {
+        setError(t("error.generic"));
+      }
     } finally {
       setLoading(false);
     }
@@ -66,8 +78,8 @@ export default function RegisterPage() {
         <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 ring-1 ring-primary/20">
           <Receipt className="h-7 w-7 text-primary" />
         </div>
-        <CardTitle className="text-2xl font-semibold tracking-tight">Create an account</CardTitle>
-        <CardDescription className="mt-1">Get started with ShareTab</CardDescription>
+        <CardTitle className="text-2xl font-semibold tracking-tight">{t("title")}</CardTitle>
+        <CardDescription className="mt-1">{t("subtitle")}</CardDescription>
       </CardHeader>
       <CardContent className="pt-4">
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -77,33 +89,33 @@ export default function RegisterPage() {
             </div>
           )}
           <div className="space-y-2">
-            <Label htmlFor="name">Name</Label>
+            <Label htmlFor="name">{t("name")}</Label>
             <Input
               id="name"
               type="text"
-              placeholder="Your name"
+              placeholder={t("namePlaceholder")}
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email">{t("email")}</Label>
             <Input
               id="email"
               type="email"
-              placeholder="you@example.com"
+              placeholder={t("emailPlaceholder")}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">{t("password")}</Label>
             <Input
               id="password"
               type="password"
-              placeholder="••••••••"
+              placeholder={t("passwordPlaceholder")}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -112,27 +124,27 @@ export default function RegisterPage() {
           </div>
           {mode === "invite-only" && (
             <div className="space-y-2">
-              <Label htmlFor="inviteCode">Invite Code</Label>
+              <Label htmlFor="inviteCode">{t("inviteCode")}</Label>
               <Input
                 id="inviteCode"
                 type="text"
-                placeholder="Enter your invite code"
+                placeholder={t("inviteCodePlaceholder")}
                 value={inviteCode}
                 onChange={(e) => setInviteCode(e.target.value)}
                 required
               />
               <p className="text-xs text-muted-foreground">
-                Registration requires an invite code from an administrator.
+                {t("error.inviteRequired")}
               </p>
             </div>
           )}
           {mode === "closed" ? (
             <div className="rounded-md bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">
-              Registration is currently closed. Please contact an administrator.
+              {t("error.closed")}
             </div>
           ) : (
             <Button type="submit" className="w-full rounded-full h-10 text-sm font-medium mt-2" disabled={loading}>
-              {loading ? "Creating account..." : "Create account"}
+              {loading ? t("submitting") : t("submit")}
             </Button>
           )}
         </form>
@@ -142,9 +154,9 @@ export default function RegisterPage() {
         </div>
 
         <p className="text-center text-sm text-muted-foreground">
-          Already have an account?{" "}
+          {t("hasAccount")}{" "}
           <Link href="/login" className="font-medium text-primary hover:underline">
-            Sign in
+            {t("signIn")}
           </Link>
         </p>
       </CardContent>

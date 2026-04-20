@@ -1,17 +1,20 @@
+import { getTranslations } from "next-intl/server";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Mail } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 
-export default function VerifyRequestPage() {
+export default async function VerifyRequestPage() {
+  const t = await getTranslations("auth.verifyRequest");
+
   return (
     <Card>
       <CardHeader className="text-center">
         <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
           <Mail className="h-6 w-6 text-primary" />
         </div>
-        <CardTitle className="text-2xl">Check your email</CardTitle>
+        <CardTitle className="text-2xl">{t("title")}</CardTitle>
         <CardDescription>
-          A sign-in link has been sent to your email address.
+          {t("description")}
         </CardDescription>
       </CardHeader>
       <CardContent className="text-center space-y-4">
@@ -22,7 +25,7 @@ export default function VerifyRequestPage() {
           If you don&apos;t see the email, check your spam folder.
         </p>
         <Link href="/login" className="text-sm font-medium text-primary hover:underline">
-          Back to sign in
+          {t("backToLogin")}
         </Link>
       </CardContent>
     </Card>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { formatCents } from "@/lib/money";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -104,6 +105,7 @@ function GroupCardSkeleton() {
 /* ------------------------------------------------------------------ */
 
 export default function DashboardPage() {
+  const t = useTranslations("dashboard");
   const dashboard = trpc.balances.getDashboard.useQuery();
   const overallDebts = trpc.balances.getOverallDebts.useQuery();
   const groups = trpc.groups.list.useQuery();
@@ -119,10 +121,10 @@ export default function DashboardPage() {
     <div className="space-y-8">
       {/* ---- Header ---- */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <h1 className="text-2xl font-bold">{t("title")}</h1>
         <Button nativeButton={false} render={<Link href="/groups/new" />}>
           <Plus className="mr-2 h-4 w-4" />
-          New Group
+          {t("createGroup")}
         </Button>
       </div>
 
@@ -133,7 +135,7 @@ export default function DashboardPage() {
           <div className="pointer-events-none absolute -right-4 -top-4 h-24 w-24 rounded-full bg-green-500/5 dark:bg-green-400/5" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              You are owed
+              {t("youAreOwed")}
             </CardTitle>
             <div className="hidden h-8 w-8 items-center justify-center rounded-full bg-green-100 sm:flex dark:bg-green-900/40">
               <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400" />
@@ -155,7 +157,7 @@ export default function DashboardPage() {
           <div className="pointer-events-none absolute -right-4 -top-4 h-24 w-24 rounded-full bg-red-500/5 dark:bg-red-400/5" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              You owe
+              {t("youOwe")}
             </CardTitle>
             <div className="hidden h-8 w-8 items-center justify-center rounded-full bg-red-100 sm:flex dark:bg-red-900/40">
               <TrendingDown className="h-4 w-4 text-red-600 dark:text-red-400" />
@@ -180,7 +182,7 @@ export default function DashboardPage() {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium">
               <ArrowDownLeft className="h-4 w-4 text-green-600 dark:text-green-400" />
-              People who owe you
+              {t("youAreOwed")}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -193,7 +195,7 @@ export default function DashboardPage() {
             )}
             {overallDebts.data?.owedToYou.length === 0 && (
               <p className="py-3 text-center text-sm text-muted-foreground">
-                All settled up
+                {t("settledUp")}
               </p>
             )}
             <div className="divide-y divide-border/60">
@@ -224,7 +226,7 @@ export default function DashboardPage() {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium">
               <ArrowUpRight className="h-4 w-4 text-red-600 dark:text-red-400" />
-              People you owe
+              {t("youOwe")}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -237,7 +239,7 @@ export default function DashboardPage() {
             )}
             {overallDebts.data?.youOwe.length === 0 && (
               <p className="py-3 text-center text-sm text-muted-foreground">
-                All settled up
+                {t("settledUp")}
               </p>
             )}
             <div className="divide-y divide-border/60">
@@ -268,7 +270,7 @@ export default function DashboardPage() {
 
       {/* ---- Your Groups ---- */}
       <div>
-        <h2 className="mb-4 text-lg font-semibold">Your Groups</h2>
+        <h2 className="mb-4 text-lg font-semibold">{t("groups")}</h2>
 
         {groups.isLoading && (
           <div className="grid gap-4 @2xl:grid-cols-2">
@@ -282,7 +284,7 @@ export default function DashboardPage() {
           <Card>
             <CardContent className="py-8 text-center">
               <p className="text-muted-foreground">
-                No groups yet. Create one to get started!
+                {t("noGroupsDescription")}
               </p>
               <Button
                 nativeButton={false}
@@ -290,7 +292,7 @@ export default function DashboardPage() {
                 render={<Link href="/groups/new" />}
               >
                 <Plus className="mr-2 h-4 w-4" />
-                Create Group
+                {t("createGroup")}
               </Button>
             </CardContent>
           </Card>
@@ -366,7 +368,7 @@ export default function DashboardPage() {
                         </span>
                       )}
                       {balance && balance.balance === 0 && (
-                        <span className="text-muted-foreground">Settled up</span>
+                        <span className="text-muted-foreground">{t("settledUp")}</span>
                       )}
                     </div>
                   </CardContent>
@@ -383,7 +385,7 @@ export default function DashboardPage() {
               size="sm"
               onClick={() => setShowAllGroups(true)}
             >
-              Show all {groups.data?.length} groups
+              {t("showMore")}
             </Button>
           </div>
         )}
