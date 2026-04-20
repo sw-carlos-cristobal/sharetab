@@ -7,8 +7,8 @@ test.describe("Balances & Settlements", () => {
   test.describe("Dashboard", () => {
     test("7.2.1 — shows balance cards", async ({ page }) => {
       await login(page, users.alice.email, users.alice.password);
-      await expect(page.getByText("You are owed")).toBeVisible();
-      await expect(page.getByText("You owe", { exact: true })).toBeVisible();
+      await expect(page.getByText("You are owed").first()).toBeVisible();
+      await expect(page.getByText("You owe", { exact: true }).first()).toBeVisible();
       // Alice is owed money from seed data
       const owedText = page.locator("text=$").first();
       await expect(owedText).toBeVisible();
@@ -17,8 +17,8 @@ test.describe("Balances & Settlements", () => {
     test("7.2.2 — shows group cards with balances", async ({ page }) => {
       await login(page, users.alice.email, users.alice.password);
       // Dashboard paginates groups — click "Show all" to reveal seed groups
-      const showAll = page.getByRole("button", { name: /Show all/ });
-      await showAll.click({ timeout: 3000 }).catch(() => {});
+      const showMore = page.getByRole("button", { name: /Show more/ });
+      await showMore.click({ timeout: 3000 }).catch(() => {});
       await expect(page.getByRole("link", { name: /Japan Trip/ }).first()).toBeVisible();
       await expect(page.getByRole("link", { name: /Apartment/ }).first()).toBeVisible();
     });
@@ -34,7 +34,7 @@ test.describe("Balances & Settlements", () => {
       await page.waitForURL("**/dashboard", { timeout: 15000 });
 
       await expect(page.getByText("$0.00").first()).toBeVisible();
-      await expect(page.getByText("No groups yet")).toBeVisible();
+      await expect(page.getByText("Create a group to start splitting expenses")).toBeVisible();
     });
   });
 

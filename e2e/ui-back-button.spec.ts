@@ -62,7 +62,7 @@ test.describe("Back button navigation", () => {
     await page.goto(`/groups/${groupId}/settings`);
     await expect(page.getByText("Group Settings")).toBeVisible();
 
-    await page.locator(`a[href="/groups/${groupId}"]`).first().click();
+    await page.locator(`a[href*="/groups/${groupId}"]`).first().click();
 
     await expect(page.getByRole("heading", { name: "Back Button Settings Test" })).toBeVisible({ timeout: 10000 });
     expect(page.url()).not.toContain("/settings");
@@ -80,7 +80,7 @@ test.describe("Back button navigation", () => {
     await page.goto(`/groups/${groupId}/scan`);
     await expect(page.getByRole("heading", { name: "Scan Receipt" })).toBeVisible();
 
-    await page.locator(`a[href="/groups/${groupId}"]`).first().click();
+    await page.locator(`a[href*="/groups/${groupId}"]`).first().click();
 
     await expect(page.getByRole("heading", { name: "Back Button Scan Test" })).toBeVisible({ timeout: 10000 });
     expect(page.url()).not.toContain("/scan");
@@ -109,7 +109,7 @@ test.describe("Back button navigation", () => {
     await expect(page.getByRole("heading", { name: "Edit Expense" })).toBeVisible();
 
     // Verify sidebar Dashboard link exists and navigate via it
-    const dashLink = page.locator('aside a[href="/dashboard"]');
+    const dashLink = page.locator('aside a[href*="/dashboard"]');
     await expect(dashLink).toBeVisible();
     // Use evaluate to trigger navigation (Next.js Link click doesn't fire from form pages)
     await dashLink.evaluate((el: HTMLAnchorElement) => { window.location.href = el.href; });

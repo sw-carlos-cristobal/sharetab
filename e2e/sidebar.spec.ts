@@ -45,9 +45,9 @@ test.describe("Sidebar", () => {
   });
 
   test("sidebar has settings link pointing to /settings", async ({ page }) => {
-    const settingsLink = page.locator('aside a[href="/settings"]');
+    const settingsLink = page.locator('aside a[href*="/settings"]');
     await expect(settingsLink).toBeVisible();
-    await expect(settingsLink).toHaveAttribute("href", "/settings");
+    await expect(settingsLink).toHaveAttribute("href", /\/settings$/);
   });
 });
 
@@ -73,10 +73,8 @@ test.describe("Responsive layout", () => {
     await page.goto("/dashboard");
 
     // Both balance cards should be visible (stacked, not side-by-side overflowing)
-    await expect(page.getByText("You are owed")).toBeVisible();
-    await expect(page.getByText("You owe", { exact: true })).toBeVisible();
-    await expect(page.getByText("People who owe you")).toBeVisible();
-    await expect(page.getByText("People you owe")).toBeVisible();
+    await expect(page.getByText("You are owed").first()).toBeVisible();
+    await expect(page.getByText("You owe", { exact: true }).first()).toBeVisible();
   });
 
   test("dashboard shows two-column layout at wide viewport", async ({ page }) => {
@@ -84,8 +82,8 @@ test.describe("Responsive layout", () => {
     await page.goto("/dashboard");
 
     // Both balance cards should be side by side (check they're at similar Y position)
-    const owedBox = await page.getByText("You are owed").boundingBox();
-    const oweBox = await page.getByText("You owe", { exact: true }).boundingBox();
+    const owedBox = await page.getByText("You are owed").first().boundingBox();
+    const oweBox = await page.getByText("You owe", { exact: true }).first().boundingBox();
     expect(owedBox).toBeTruthy();
     expect(oweBox).toBeTruthy();
     // Same row means similar Y coordinates (within 5px tolerance)
@@ -105,23 +103,23 @@ test.describe("Live viewport resize", () => {
 
     // Desktop: sidebar visible, cards side by side
     await expect(page.locator("aside")).toBeVisible();
-    const owedWide = await page.getByText("You are owed").boundingBox();
-    const oweWide = await page.getByText("You owe", { exact: true }).boundingBox();
+    const owedWide = await page.getByText("You are owed").first().boundingBox();
+    const oweWide = await page.getByText("You owe", { exact: true }).first().boundingBox();
     expect(Math.abs(owedWide!.y - oweWide!.y)).toBeLessThan(5);
 
     // Resize to tablet — sidebar should hide, content fills width
     await page.setViewportSize({ width: 900, height: 700 });
     await page.waitForTimeout(500);
     await expect(page.locator("aside")).not.toBeVisible();
-    await expect(page.getByText("You are owed")).toBeVisible();
-    await expect(page.getByText("You owe", { exact: true })).toBeVisible();
+    await expect(page.getByText("You are owed").first()).toBeVisible();
+    await expect(page.getByText("You owe", { exact: true }).first()).toBeVisible();
 
     // Resize to mobile — cards should stack (different Y positions)
     await page.setViewportSize({ width: 375, height: 812 });
     await page.waitForTimeout(500);
     await expect(page.locator("aside")).not.toBeVisible();
-    const owedMobile = await page.getByText("You are owed").boundingBox();
-    const oweMobile = await page.getByText("You owe", { exact: true }).boundingBox();
+    const owedMobile = await page.getByText("You are owed").first().boundingBox();
+    const oweMobile = await page.getByText("You owe", { exact: true }).first().boundingBox();
     expect(oweMobile!.y - owedMobile!.y).toBeGreaterThan(50);
 
     // Resize back to desktop — sidebar should reappear

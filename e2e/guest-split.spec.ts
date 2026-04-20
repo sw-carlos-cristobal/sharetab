@@ -20,7 +20,7 @@ test.describe("Guest Bill Split — UI", () => {
     await page.goto("/login");
     const splitLink = page.getByRole("link", { name: "Split without an account" });
     await expect(splitLink).toBeVisible();
-    await expect(splitLink).toHaveAttribute("href", "/split");
+    await expect(splitLink).toHaveAttribute("href", /\/split$/);
   });
 });
 

@@ -47,7 +47,7 @@ test.describe("Groups Search & Filter", () => {
     // Clear search — more groups should appear than just the filtered one
     await searchInput.fill("");
     // Verify multiple group cards are visible (pagination shows at least GROUPS_PER_PAGE)
-    const groupCards = page.locator('a[href^="/groups/"]');
+    const groupCards = page.locator('a[href*="/groups/"]');
     await expect(groupCards.first()).toBeVisible();
     const count = await groupCards.count();
     expect(count).toBeGreaterThan(1);

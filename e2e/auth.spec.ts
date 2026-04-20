@@ -22,7 +22,7 @@ test.describe("Authentication", () => {
       await page.getByLabel("Email").fill(users.alice.email);
       await page.getByLabel("Password").fill("testpass123");
       await page.getByRole("button", { name: "Create account" }).click();
-      await expect(page.getByText(/unable to create account/i)).toBeVisible({ timeout: 10000 });
+      await expect(page.getByText(/already exists/i)).toBeVisible({ timeout: 10000 });
     });
 
     test("1.1.3 — short password prevented by HTML validation", async ({ page }) => {
@@ -66,7 +66,7 @@ test.describe("Authentication", () => {
       await page.goto("/login");
       await page.getByRole("link", { name: "Create one" }).click();
       await expect(page).toHaveURL(/register/);
-      await expect(page.getByText("Create an account")).toBeVisible();
+      await expect(page.getByText("Create your account")).toBeVisible();
     });
   });
 
