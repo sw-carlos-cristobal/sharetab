@@ -5,7 +5,8 @@
     "quickSplit": "División rápida",
     "settings": "Configuración",
     "admin": "Administración",
-    "signOut": "Cerrar sesión"
+    "signOut": "Cerrar sesión",
+    "changeLanguage": "Cambiar idioma"
   },
   "actions": {
     "save": "Guardar",

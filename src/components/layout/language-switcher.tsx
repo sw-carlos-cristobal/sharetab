@@ -1,6 +1,6 @@
 "use client";
 
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { usePathname, useRouter } from "@/i18n/navigation";
 import { locales, languageConfig } from "@/i18n/routing";
 import type { Locale } from "@/i18n/routing";
@@ -24,6 +24,7 @@ export function LanguageSwitcher() {
   const router = useRouter();
   const pathname = usePathname();
   const { data: session } = useSession();
+  const t = useTranslations("common");
 
   const updateLocale = trpc.auth.updateProfile.useMutation();
 
@@ -39,7 +40,7 @@ export function LanguageSwitcher() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Change language" />}>
+      <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label={t("nav.changeLanguage")} />}>
         <Globe className="h-4 w-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">

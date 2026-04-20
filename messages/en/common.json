@@ -5,7 +5,8 @@
     "quickSplit": "Quick Split",
     "settings": "Settings",
     "admin": "Admin",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "changeLanguage": "Change language"
   },
   "actions": {
     "save": "Save",

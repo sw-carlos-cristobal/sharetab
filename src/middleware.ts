@@ -46,6 +46,12 @@ export async function middleware(request: NextRequest) {
   }
 
   if (!token) {
+    // For unprefixed routes (e.g. /dashboard), intlMiddleware will redirect to
+    // the locale-prefixed URL. Return that redirect so locale is resolved first;
+    // auth will be re-checked on the resulting locale-prefixed request.
+    if (!localePrefix && intlResponse.status >= 300 && intlResponse.status < 400) {
+      return intlResponse;
+    }
     const locale = localePrefix ?? routing.defaultLocale;
     const loginUrl = new URL(`/${locale}/login`, request.url);
     loginUrl.searchParams.set("callbackUrl", pathname);

@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, publicProcedure, protectedProcedure } from "../init";
 import { checkRateLimit } from "../../lib/rate-limit";
+import { locales } from "@/i18n/routing";
 
 export const authRouter = createTRPCRouter({
   getSession: publicProcedure.query(({ ctx }) => {
@@ -145,7 +146,7 @@ export const authRouter = createTRPCRouter({
       z.object({
         name: z.string().min(1).max(100).optional(),
         defaultCurrency: z.string().length(3).optional(),
-        locale: z.string().min(2).max(10).optional(),
+        locale: z.enum(locales).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {

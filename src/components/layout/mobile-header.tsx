@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { LanguageSwitcher } from "@/components/layout/language-switcher";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 
 const navItems = [
   { href: "/dashboard", key: "dashboard", icon: LayoutDashboard },
@@ -36,6 +36,7 @@ export function MobileHeader({ isAdmin }: { isAdmin?: boolean }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const t = useTranslations("common");
+  const locale = useLocale();
 
   return (
     <header className="sticky top-0 z-50 flex h-14 items-center justify-between border-b border-border/60 bg-background/80 px-4 backdrop-blur-md supports-[backdrop-filter]:bg-background/60 lg:hidden">
@@ -99,7 +100,7 @@ export function MobileHeader({ isAdmin }: { isAdmin?: boolean }) {
               <button
                 onClick={() => {
                   setOpen(false);
-                  signOut({ callbackUrl: "/login" });
+                  signOut({ callbackUrl: `/${locale}/login` });
                 }}
                 className="flex flex-1 items-center gap-3 text-sm font-medium text-muted-foreground transition-colors duration-200 hover:text-foreground"
               >

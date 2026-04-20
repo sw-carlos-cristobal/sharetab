@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { LanguageSwitcher } from "@/components/layout/language-switcher";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 
 function SponsorBanner() {
   const t = useTranslations("common");
@@ -66,6 +66,7 @@ export function AppSidebar({
 }) {
   const pathname = usePathname();
   const t = useTranslations("common");
+  const locale = useLocale();
 
   const initials = user.name
     ? user.name
@@ -156,7 +157,7 @@ export function AppSidebar({
               variant="ghost"
               size="xs"
               className="gap-2 text-muted-foreground"
-              onClick={() => signOut({ callbackUrl: "/login" })}
+              onClick={() => signOut({ callbackUrl: `/${locale}/login` })}
             >
               <LogOut className="h-3.5 w-3.5" />
               {t("nav.signOut")}
