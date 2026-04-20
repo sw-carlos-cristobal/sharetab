@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { Link, useRouter } from "@/i18n/navigation";
 import { trpc } from "@/lib/trpc";
 import { parseToCents, centsToDecimal } from "@/lib/money";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ArrowLeft } from "lucide-react";
-import Link from "next/link";
 import { EqualSplit } from "@/components/expenses/equal-split";
 import { ExactSplit } from "@/components/expenses/exact-split";
 import { PercentageSplit } from "@/components/expenses/percentage-split";

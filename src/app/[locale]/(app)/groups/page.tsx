@@ -2,13 +2,13 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { Link } from "@/i18n/navigation";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Archive, ArchiveRestore, Plus, Search } from "lucide-react";
-import Link from "next/link";
 
 const GROUPS_PER_PAGE = 12;
 

@@ -20,7 +20,7 @@ import {
   Archive,
   Trash2,
 } from "lucide-react";
-import Link from "next/link";
+import { Link } from "@/i18n/navigation";
 import { InviteDialog } from "@/components/groups/invite-dialog";
 import { SettleDialog } from "@/components/groups/settle-dialog";
 
