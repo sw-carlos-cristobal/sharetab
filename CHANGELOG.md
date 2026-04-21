@@ -3,14 +3,14 @@
 ## [v0.6.1] - 2026-04-21
 
 ### Features
-- Add swedish translation (#80) (fd8ef57)
+- Add Swedish translation (#80) (fd8ef57)
 
 **Full Changelog**: https://github.com/sw-carlos-cristobal/sharetab/compare/v0.6.0...v0.6.1
 
 ## [v0.6.0] - 2026-04-21
 
 ### Features
-- add i18n multilanguage support with next-intl (#77) (065eb0b)
+- add i18n multilingual support with next-intl (#77) (065eb0b)
 
 ### Other Changes
 - chore(deps): bump hono in the npm_and_yarn group across 1 directory (#75) (b46eee9)
