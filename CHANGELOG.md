@@ -1,5 +1,23 @@
 # Changelog
 
+## [v0.6.1] - 2026-04-21
+
+### Features
+- Add Swedish translation (#80) (fd8ef57)
+
+**Full Changelog**: https://github.com/sw-carlos-cristobal/sharetab/compare/v0.6.0...v0.6.1
+
+## [v0.6.0] - 2026-04-21
+
+### Features
+- add i18n multilingual support with next-intl (#77) (065eb0b)
+
+### Other Changes
+- chore(deps): bump hono in the npm_and_yarn group across 1 directory (#75) (b46eee9)
+- Improve CI/CD release flow and add LLM-friendly repo commands (1b59885)
+
+**Full Changelog**: https://github.com/sw-carlos-cristobal/sharetab/compare/v0.5.12...v0.6.0
+
 ## [v0.5.12] - 2026-04-14
 
 ### Bug Fixes
