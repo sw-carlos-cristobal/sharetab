@@ -42,13 +42,15 @@ export async function middleware(request: NextRequest) {
     // Malformed or forged JWT — treat as unauthenticated
   }
 
-  const tokenLocale =
-    typeof token?.locale === "string" && isSupportedLocale(token.locale)
+  const cookieLocale = request.cookies.get("NEXT_LOCALE")?.value;
+  const preferredLocale =
+    (isSupportedLocale(cookieLocale) ? cookieLocale : null) ??
+    (typeof token?.locale === "string" && isSupportedLocale(token.locale)
       ? token.locale
-      : null;
+      : null);
 
-  if (!localePrefix && tokenLocale) {
-    return NextResponse.redirect(new URL(withLocalePrefix(callbackUrl, tokenLocale), request.url));
+  if (!localePrefix && preferredLocale) {
+    return NextResponse.redirect(new URL(withLocalePrefix(callbackUrl, preferredLocale), request.url));
   }
 
   if (isPublicPage(strippedPathname) || strippedPathname === "/") {
@@ -62,7 +64,7 @@ export async function middleware(request: NextRequest) {
     if (!localePrefix && intlResponse.status >= 300 && intlResponse.status < 400) {
       return intlResponse;
     }
-    const locale = localePrefix ?? tokenLocale ?? routing.defaultLocale;
+    const locale = localePrefix ?? preferredLocale ?? routing.defaultLocale;
     const loginUrl = new URL(`/${locale}/login`, request.url);
     loginUrl.searchParams.set("callbackUrl", callbackUrl);
     return NextResponse.redirect(loginUrl);
