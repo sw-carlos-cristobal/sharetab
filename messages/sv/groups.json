@@ -1,0 +1,48 @@
+{
+  "title": "Grupper",
+  "create": "Skapa grupp",
+  "new": {
+    "title": "Skapa en ny grupp",
+    "name": "Gruppnamn",
+    "namePlaceholder": "till exempel Lägenhet, resa till Paris",
+    "currency": "Valuta",
+    "submit": "Skapa grupp",
+    "submitting": "Skapar..."
+  },
+  "detail": {
+    "expenses": "Utgifter",
+    "balances": "Balanser",
+    "addExpense": "Lägg till kostnad",
+    "scanReceipt": "Skanna kvitto",
+    "settle": "Ordna upp",
+    "noExpenses": "Inga utgifter än",
+    "noExpensesDescription": "Lägg till en kostnad för att komma igång.",
+    "totalSpent": "Totalt spenderat",
+    "youOwe": "Du är skyldig {name}",
+    "owesYou": "{name} är skyldig dig",
+    "settledUp": "Ordnade upp sig"
+  },
+  "settings": {
+    "title": "Gruppinställningar",
+    "name": "Gruppnamn",
+    "currency": "Valuta",
+    "members": "Medlemmar",
+    "addMember": "Lägg till medlem",
+    "removeMember": "Ta bort",
+    "deleteGroup": "Ta bort grupp",
+    "deleteConfirm": "Är du säker? Detta kan inte ångras.",
+    "invite": "Inbjudningslänk",
+    "copyLink": "Kopiera länk",
+    "linkCopied": "Länken kopierad!"
+  },
+  "settle": {
+    "title": "Ordna upp",
+    "from": "Från",
+    "to": "Till",
+    "amount": "Belopp",
+    "submit": "Bokför uppgörelse",
+    "submitting": "Bokför..."
+  },
+  "empty": "Inga grupper än",
+  "emptyDescription": "Skapa din första grupp för att börja dela utgifter med vänner."
+}

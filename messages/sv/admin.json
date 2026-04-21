@@ -1,0 +1,24 @@
+{
+  "title": "Administration",
+  "users": {
+    "title": "Användare",
+    "total": "Totalt antal användare",
+    "active": "Aktiv",
+    "suspended": "Suspenderad"
+  },
+  "registration": {
+    "title": "Registrering",
+    "mode": "Registreringsläge",
+    "open": "Öppna",
+    "inviteOnly": "Endast inbjudan",
+    "closed": "Stängd"
+  },
+  "activity": {
+    "title": "Aktivitet",
+    "noActivity": "Ingen senaste aktivitet"
+  },
+  "audit": {
+    "title": "Revisionslogg",
+    "noEntries": "Inga revisionsposter"
+  }
+}
