@@ -1,0 +1,23 @@
+{
+  "title": "设置",
+  "profile": {
+    "title": "个人资料",
+    "email": "电子邮件",
+    "name": "姓名",
+    "save": "保存",
+    "saving": "保存中...",
+    "saved": "资料已更新!",
+    "language": "语言",
+    "languageDescription": "选择您的首选语言"
+  },
+  "password": {
+    "title": "修改密码",
+    "current": "当前密码",
+    "new": "新密码",
+    "confirm": "确认新密码",
+    "mismatch": "两次输入的密码不一致",
+    "submit": "修改密码",
+    "submitting": "修改中...",
+    "success": "密码已修改!"
+  }
+}

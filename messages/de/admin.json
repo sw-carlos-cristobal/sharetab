@@ -1,0 +1,24 @@
+{
+  "title": "Verwaltung",
+  "users": {
+    "title": "Benutzer",
+    "total": "Benutzer gesamt",
+    "active": "Aktiv",
+    "suspended": "Gesperrt"
+  },
+  "registration": {
+    "title": "Registrierung",
+    "mode": "Registrierungsmodus",
+    "open": "Offen",
+    "inviteOnly": "Nur mit Einladung",
+    "closed": "Geschlossen"
+  },
+  "activity": {
+    "title": "Aktivität",
+    "noActivity": "Keine aktuelle Aktivität"
+  },
+  "audit": {
+    "title": "Prüfprotokoll",
+    "noEntries": "Keine Protokolleinträge"
+  }
+}

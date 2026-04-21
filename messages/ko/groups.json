@@ -1,0 +1,48 @@
+{
+  "title": "그룹",
+  "create": "그룹 만들기",
+  "new": {
+    "title": "새 그룹 만들기",
+    "name": "그룹 이름",
+    "namePlaceholder": "예: 아파트, 파리 여행",
+    "currency": "통화",
+    "submit": "그룹 만들기",
+    "submitting": "생성 중..."
+  },
+  "detail": {
+    "expenses": "비용",
+    "balances": "잔액",
+    "addExpense": "비용 추가",
+    "scanReceipt": "영수증 스캔",
+    "settle": "정산하기",
+    "noExpenses": "비용이 없습니다",
+    "noExpensesDescription": "비용을 추가하여 시작하세요.",
+    "totalSpent": "총 지출",
+    "youOwe": "{name}에게 갚을 금액",
+    "owesYou": "{name}이(가) 갚을 금액",
+    "settledUp": "정산 완료"
+  },
+  "settings": {
+    "title": "그룹 설정",
+    "name": "그룹 이름",
+    "currency": "통화",
+    "members": "멤버",
+    "addMember": "멤버 추가",
+    "removeMember": "제거",
+    "deleteGroup": "그룹 삭제",
+    "deleteConfirm": "정말 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
+    "invite": "초대 링크",
+    "copyLink": "링크 복사",
+    "linkCopied": "링크가 복사되었습니다!"
+  },
+  "settle": {
+    "title": "정산하기",
+    "from": "보내는 사람",
+    "to": "받는 사람",
+    "amount": "금액",
+    "submit": "정산 기록",
+    "submitting": "기록 중..."
+  },
+  "empty": "그룹이 없습니다",
+  "emptyDescription": "친구들과 비용 분할을 시작하려면 첫 번째 그룹을 만드세요."
+}

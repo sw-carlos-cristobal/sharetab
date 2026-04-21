@@ -1,0 +1,18 @@
+{
+  "title": "대시보드",
+  "youOwe": "내가 갚을 금액",
+  "youAreOwed": "받을 금액",
+  "owedToYouTitle": "나에게 빚진 사람",
+  "youOweTitle": "내가 빚진 사람",
+  "settledUp": "모두 정산 완료!",
+  "noGroups": "그룹이 없습니다",
+  "noGroupsDescription": "비용 분할을 시작하려면 그룹을 만드세요.",
+  "createGroup": "그룹 만들기",
+  "viewAll": "모두 보기",
+  "recentActivity": "최근 활동",
+  "noActivity": "최근 활동이 없습니다",
+  "groups": "그룹",
+  "showMore": "더 보기",
+  "members": "{count, plural, other {#명}}",
+  "archivedGroups": "{count, plural, other {보관된 그룹 #개}}"
+}

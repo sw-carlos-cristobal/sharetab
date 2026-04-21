@@ -1,0 +1,23 @@
+{
+  "title": "設定",
+  "profile": {
+    "title": "プロフィール",
+    "email": "メールアドレス",
+    "name": "名前",
+    "save": "保存",
+    "saving": "保存中...",
+    "saved": "プロフィールを更新しました!",
+    "language": "言語",
+    "languageDescription": "お好みの言語を選択してください"
+  },
+  "password": {
+    "title": "パスワードを変更",
+    "current": "現在のパスワード",
+    "new": "新しいパスワード",
+    "confirm": "新しいパスワード(確認)",
+    "mismatch": "パスワードが一致しません",
+    "submit": "パスワードを変更",
+    "submitting": "変更中...",
+    "success": "パスワードを変更しました!"
+  }
+}

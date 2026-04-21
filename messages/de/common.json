@@ -1,0 +1,38 @@
+{
+  "nav": {
+    "dashboard": "Übersicht",
+    "groups": "Gruppen",
+    "quickSplit": "Schnell teilen",
+    "settings": "Einstellungen",
+    "admin": "Verwaltung",
+    "signOut": "Abmelden",
+    "changeLanguage": "Sprache ändern"
+  },
+  "actions": {
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "create": "Erstellen",
+    "back": "Zurück",
+    "close": "Schließen",
+    "confirm": "Bestätigen",
+    "loading": "Laden...",
+    "saving": "Speichern...",
+    "submit": "Absenden"
+  },
+  "brand": {
+    "name": "ShareTab",
+    "tagline": "Selbst gehostete Ausgabenteilung mit KI-Belegerfassung"
+  },
+  "sponsor": {
+    "title": "ShareTab unterstützen",
+    "description": "ShareTab ist kostenlos und quelloffen. Wenn es Ihnen Zeit spart, unterstützen Sie die Entwicklung.",
+    "cta": "Auf GitHub sponsern"
+  },
+  "errors": {
+    "generic": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
+    "notFound": "Nicht gefunden",
+    "unauthorized": "Sie müssen angemeldet sein, um auf diese Seite zuzugreifen."
+  }
+}

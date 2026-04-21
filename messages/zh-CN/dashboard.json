@@ -1,0 +1,18 @@
+{
+  "title": "仪表盘",
+  "youOwe": "你欠",
+  "youAreOwed": "别人欠你",
+  "owedToYouTitle": "欠你钱的人",
+  "youOweTitle": "你欠钱的人",
+  "settledUp": "已全部结清!",
+  "noGroups": "暂无群组",
+  "noGroupsDescription": "创建一个群组来开始分摊费用。",
+  "createGroup": "创建群组",
+  "viewAll": "查看全部",
+  "recentActivity": "最近动态",
+  "noActivity": "暂无最近动态",
+  "groups": "群组",
+  "showMore": "显示更多",
+  "members": "{count, plural, other {#位成员}}",
+  "archivedGroups": "{count, plural, other {#个已归档群组}}"
+}

@@ -1,0 +1,18 @@
+{
+  "title": "Übersicht",
+  "youOwe": "Sie schulden",
+  "youAreOwed": "Ihnen wird geschuldet",
+  "owedToYouTitle": "Personen, die Ihnen schulden",
+  "youOweTitle": "Personen, denen Sie schulden",
+  "settledUp": "Alles ausgeglichen!",
+  "noGroups": "Noch keine Gruppen",
+  "noGroupsDescription": "Erstellen Sie eine Gruppe, um Ausgaben zu teilen.",
+  "createGroup": "Gruppe erstellen",
+  "viewAll": "Alle anzeigen",
+  "recentActivity": "Letzte Aktivität",
+  "noActivity": "Keine aktuelle Aktivität",
+  "groups": "Gruppen",
+  "showMore": "Mehr anzeigen",
+  "members": "{count, plural, one {# Mitglied} other {# Mitglieder}}",
+  "archivedGroups": "{count, plural, one {# archivierte Gruppe} other {# archivierte Gruppen}}"
+}
