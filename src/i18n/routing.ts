@@ -11,9 +11,9 @@ export const languageConfig: Record<Locale, { flag: string; name: string }> = {
   es: { flag: "\u{1F1EA}\u{1F1F8}", name: "Espa\u00F1ol" },
   fr: { flag: "\u{1F1EB}\u{1F1F7}", name: "Fran\u00E7ais" },
   de: { flag: "\u{1F1E9}\u{1F1EA}", name: "Deutsch" },
-  "pt-BR": { flag: "\u{1F1E7}\u{1F1F7}", name: "Portugu\u00EAs" },
+  "pt-BR": { flag: "\u{1F1E7}\u{1F1F7}", name: "Portugu\u00EAs (Brasil)" },
   ja: { flag: "\u{1F1EF}\u{1F1F5}", name: "\u65E5\u672C\u8A9E" },
-  "zh-CN": { flag: "\u{1F1E8}\u{1F1F3}", name: "\u4E2D\u6587" },
+  "zh-CN": { flag: "\u{1F1E8}\u{1F1F3}", name: "\u4E2D\u6587 (\u7B80\u4F53)" },
   ko: { flag: "\u{1F1F0}\u{1F1F7}", name: "\uD55C\uAD6D\uC5B4" },
 };
 
