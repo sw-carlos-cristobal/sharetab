@@ -1,0 +1,18 @@
+{
+  "title": "Panel",
+  "youOwe": "Debes",
+  "youAreOwed": "Te deben",
+  "owedToYouTitle": "Personas que te deben",
+  "youOweTitle": "Personas a quienes debes",
+  "settledUp": "¡Todo saldado!",
+  "noGroups": "Sin grupos aún",
+  "noGroupsDescription": "Crea un grupo para empezar a dividir gastos.",
+  "createGroup": "Crear grupo",
+  "viewAll": "Ver todos",
+  "recentActivity": "Actividad reciente",
+  "noActivity": "Sin actividad reciente",
+  "groups": "Grupos",
+  "showMore": "Mostrar más",
+  "members": "{count, plural, one {# miembro} other {# miembros}}",
+  "archivedGroups": "{count, plural, one {# grupo archivado} other {# grupos archivados}}"
+}

@@ -1,0 +1,46 @@
+{
+  "new": {
+    "title": "Add expense",
+    "description": "Description",
+    "descriptionPlaceholder": "What was this for?",
+    "amount": "Amount",
+    "amountPlaceholder": "0.00",
+    "paidBy": "Paid by",
+    "date": "Date",
+    "splitType": "Split type",
+    "splitEqual": "Equal",
+    "splitExact": "Exact amounts",
+    "splitPercentage": "Percentage",
+    "splitShares": "Shares",
+    "submit": "Add expense",
+    "submitting": "Adding..."
+  },
+  "edit": {
+    "title": "Edit expense",
+    "submit": "Save changes",
+    "submitting": "Saving..."
+  },
+  "detail": {
+    "paidBy": "Paid by {name}",
+    "addedBy": "Added by {name}",
+    "date": "Date",
+    "split": "Split details",
+    "edit": "Edit",
+    "delete": "Delete",
+    "deleteConfirm": "Delete this expense?"
+  },
+  "scan": {
+    "title": "Scan receipt",
+    "upload": "Upload receipt",
+    "uploadDescription": "Take a photo or upload an image of your receipt",
+    "processing": "Processing receipt...",
+    "retry": "Try again"
+  },
+  "splits": {
+    "selectAll": "Select all",
+    "deselectAll": "Deselect all",
+    "perPerson": "per person",
+    "remaining": "Remaining",
+    "total": "Total"
+  }
+}

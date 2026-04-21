@@ -59,7 +59,7 @@ test.describe("Additional UI Tests", () => {
     await page.getByLabel("Password").fill("testpass123");
     await page.getByRole("button", { name: "Create account" }).click();
     await page.waitForURL("**/dashboard", { timeout: 30000 });
-    await expect(page.getByText("No groups yet")).toBeVisible();
+    await expect(page.getByText("Create a group to start splitting expenses")).toBeVisible();
   });
 
   test("7.1.5 — updating name in settings reflects after reload", async ({ page }) => {

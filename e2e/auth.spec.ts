@@ -7,26 +7,26 @@ test.describe("Authentication", () => {
   test.describe("Registration", () => {
     test("1.1.1 — register new user", async ({ page }) => {
       const email = uniqueEmail("reg");
-      await page.goto("/register");
+      await page.goto("/en/register");
       await page.getByLabel("Name").fill("New Test User");
       await page.getByLabel("Email").fill(email);
       await page.getByLabel("Password").fill("testpass123");
       await page.getByRole("button", { name: "Create account" }).click();
-      await page.waitForURL("**/dashboard", { timeout: 15000 });
+      await page.waitForURL(/\/en\/dashboard$/, { timeout: 15000 });
       await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
     });
 
     test("1.1.2 — register duplicate email shows error", async ({ page }) => {
-      await page.goto("/register");
+      await page.goto("/en/register");
       await page.getByLabel("Name").fill("Duplicate");
       await page.getByLabel("Email").fill(users.alice.email);
       await page.getByLabel("Password").fill("testpass123");
       await page.getByRole("button", { name: "Create account" }).click();
-      await expect(page.getByText(/unable to create account/i)).toBeVisible({ timeout: 10000 });
+      await expect(page.getByText(/already exists/i)).toBeVisible({ timeout: 10000 });
     });
 
     test("1.1.3 — short password prevented by HTML validation", async ({ page }) => {
-      await page.goto("/register");
+      await page.goto("/en/register");
       await page.getByLabel("Name").fill("Short");
       await page.getByLabel("Email").fill(uniqueEmail("short"));
       await page.getByLabel("Password").fill("abc");
@@ -46,16 +46,16 @@ test.describe("Authentication", () => {
     });
 
     test("7.1.2 — wrong password shows error", async ({ page }) => {
-      await page.goto("/login");
+      await page.goto("/en/login");
       await page.getByLabel("Email").fill(users.alice.email);
       await page.getByLabel("Password").fill("wrongpassword");
       await page.getByRole("button", { name: "Sign in", exact: true }).click();
       await expect(page.getByText("Invalid email or password")).toBeVisible({ timeout: 15000 });
-      await expect(page).toHaveURL(/login/);
+      await expect(page).toHaveURL(/\/en\/login/);
     });
 
     test("1.2.3 — non-existent email shows error", async ({ page }) => {
-      await page.goto("/login");
+      await page.goto("/en/login");
       await page.getByLabel("Email").fill("nobody@nobody.com");
       await page.getByLabel("Password").fill("whatever123");
       await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -63,10 +63,10 @@ test.describe("Authentication", () => {
     });
 
     test("7.1.3 — navigate to register page", async ({ page }) => {
-      await page.goto("/login");
+      await page.goto("/en/login");
       await page.getByRole("link", { name: "Create one" }).click();
-      await expect(page).toHaveURL(/register/);
-      await expect(page.getByText("Create an account")).toBeVisible();
+      await expect(page).toHaveURL(/\/en\/register/);
+      await expect(page.getByText("Create your account")).toBeVisible();
     });
   });
 
@@ -75,16 +75,16 @@ test.describe("Authentication", () => {
   test.describe("Session & Middleware", () => {
     test("1.3.1 — dashboard redirects to login without auth", async ({ page }) => {
       await page.goto("/dashboard");
-      await expect(page).toHaveURL(/login/);
+      await expect(page).toHaveURL(/\/(en|es)\/login/);
     });
 
     test("1.3.2 — groups redirects to login without auth", async ({ page }) => {
       await page.goto("/groups");
-      await expect(page).toHaveURL(/login/);
+      await expect(page).toHaveURL(/\/(en|es)\/login/);
     });
 
     test("1.3.3 — login page is accessible", async ({ page }) => {
-      await page.goto("/login");
+      await page.goto("/en/login");
       await expect(page.getByText("Welcome back")).toBeVisible();
     });
   });

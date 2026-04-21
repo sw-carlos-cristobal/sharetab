@@ -39,7 +39,8 @@
     "test:e2e": "npx playwright test",
     "test:e2e:ui": "npx playwright test --ui",
     "demo": "tsx e2e/demo-video.ts",
-    "demo:gifs": "tsx e2e/demo-gifs.ts"
+    "demo:gifs": "tsx e2e/demo-gifs.ts",
+    "lint:i18n": "npx tsx scripts/check-translations.ts"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"
@@ -69,6 +70,7 @@
     "lucide-react": "^1.7.0",
     "next": "16.2.3",
     "next-auth": "^5.0.0-beta.30",
+    "next-intl": "^4.9.1",
     "next-themes": "^0.4.6",
     "nodemailer": "^8.0.5",
     "openai": "^6.33.0",

@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Link, usePathname } from "@/i18n/navigation";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -23,17 +22,21 @@ import {
   Menu,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
+import { LanguageSwitcher } from "@/components/layout/language-switcher";
+import { useTranslations, useLocale } from "next-intl";
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/groups", label: "Groups", icon: Users },
-  { href: "/split", label: "Quick Split", icon: Receipt },
-  { href: "/settings", label: "Settings", icon: Settings },
-];
+  { href: "/dashboard", key: "dashboard", icon: LayoutDashboard },
+  { href: "/groups", key: "groups", icon: Users },
+  { href: "/split", key: "quickSplit", icon: Receipt },
+  { href: "/settings", key: "settings", icon: Settings },
+] as const;
 
 export function MobileHeader({ isAdmin }: { isAdmin?: boolean }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const t = useTranslations("common");
+  const locale = useLocale();
 
   return (
     <header className="sticky top-0 z-50 flex h-14 items-center justify-between border-b border-border/60 bg-background/80 px-4 backdrop-blur-md supports-[backdrop-filter]:bg-background/60 lg:hidden">
@@ -73,7 +76,7 @@ export function MobileHeader({ isAdmin }: { isAdmin?: boolean }) {
                     )}
                   >
                     <item.icon className="h-5 w-5 shrink-0" />
-                    {item.label}
+                    {t(`nav.${item.key}`)}
                   </span>
                 </Link>
               );
@@ -89,7 +92,7 @@ export function MobileHeader({ isAdmin }: { isAdmin?: boolean }) {
                   )}
                 >
                   <Shield className="h-5 w-5 shrink-0" />
-                  Admin
+                  {t("nav.admin")}
                 </span>
               </Link>
             )}
@@ -97,13 +100,14 @@ export function MobileHeader({ isAdmin }: { isAdmin?: boolean }) {
               <button
                 onClick={() => {
                   setOpen(false);
-                  signOut({ callbackUrl: "/login" });
+                  signOut({ callbackUrl: `/${locale}/login` });
                 }}
                 className="flex flex-1 items-center gap-3 text-sm font-medium text-muted-foreground transition-colors duration-200 hover:text-foreground"
               >
                 <LogOut className="h-5 w-5" />
-                Sign out
+                {t("nav.signOut")}
               </button>
+              <LanguageSwitcher />
               <ThemeToggle />
             </div>
           </nav>

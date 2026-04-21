@@ -1,0 +1,23 @@
+{
+  "title": "Configuración",
+  "profile": {
+    "title": "Perfil",
+    "email": "Correo electrónico",
+    "name": "Nombre",
+    "save": "Guardar",
+    "saving": "Guardando...",
+    "saved": "¡Perfil actualizado!",
+    "language": "Idioma",
+    "languageDescription": "Elige tu idioma preferido"
+  },
+  "password": {
+    "title": "Cambiar contraseña",
+    "current": "Contraseña actual",
+    "new": "Nueva contraseña",
+    "confirm": "Confirmar nueva contraseña",
+    "mismatch": "Las contraseñas no coinciden",
+    "submit": "Cambiar contraseña",
+    "submitting": "Cambiando...",
+    "success": "¡Contraseña cambiada!"
+  }
+}

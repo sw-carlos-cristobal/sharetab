@@ -1,0 +1,48 @@
+{
+  "title": "Groups",
+  "create": "Create group",
+  "new": {
+    "title": "Create a new group",
+    "name": "Group name",
+    "namePlaceholder": "e.g. Apartment, Trip to Paris",
+    "currency": "Currency",
+    "submit": "Create group",
+    "submitting": "Creating..."
+  },
+  "detail": {
+    "expenses": "Expenses",
+    "balances": "Balances",
+    "addExpense": "Add expense",
+    "scanReceipt": "Scan receipt",
+    "settle": "Settle up",
+    "noExpenses": "No expenses yet",
+    "noExpensesDescription": "Add an expense to get started.",
+    "totalSpent": "Total spent",
+    "youOwe": "You owe {name}",
+    "owesYou": "{name} owes you",
+    "settledUp": "Settled up"
+  },
+  "settings": {
+    "title": "Group settings",
+    "name": "Group name",
+    "currency": "Currency",
+    "members": "Members",
+    "addMember": "Add member",
+    "removeMember": "Remove",
+    "deleteGroup": "Delete group",
+    "deleteConfirm": "Are you sure? This cannot be undone.",
+    "invite": "Invite link",
+    "copyLink": "Copy link",
+    "linkCopied": "Link copied!"
+  },
+  "settle": {
+    "title": "Settle up",
+    "from": "From",
+    "to": "To",
+    "amount": "Amount",
+    "submit": "Record settlement",
+    "submitting": "Recording..."
+  },
+  "empty": "No groups yet",
+  "emptyDescription": "Create your first group to start splitting expenses with friends."
+}

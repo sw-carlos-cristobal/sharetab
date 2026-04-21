@@ -56,7 +56,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         logger.info("auth.login", { userId: user.id, email: user.email });
-        return { id: user.id, name: user.name, email: user.email, image: user.image };
+        return { id: user.id, name: user.name, email: user.email, image: user.image, locale: user.locale };
       },
     }),
     ...(process.env.GOOGLE_CLIENT_ID
@@ -85,18 +85,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       : []),
   ],
   callbacks: {
-    async jwt({ token, user, trigger }) {
+    async jwt({ token, user }) {
       if (user?.id) {
         token.id = user.id;
         token.name = user.name;
+        token.locale = user.locale;
       }
-      // Always refresh name from DB to pick up profile changes
+      // Always refresh profile fields from DB to pick up profile changes.
       if (token.id) {
         const fresh = await db.user.findUnique({
           where: { id: token.id as string },
-          select: { name: true },
+          select: { name: true, locale: true },
         });
         if (fresh?.name) token.name = fresh.name;
+        if (fresh?.locale) token.locale = fresh.locale;
       }
       return token;
     },
@@ -104,6 +106,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (session.user) {
         session.user.id = token.id as string;
         session.user.name = (token.name as string | null | undefined) ?? session.user.name;
+        session.user.locale = typeof token.locale === "string" ? token.locale : session.user.locale;
       }
       return session;
     },

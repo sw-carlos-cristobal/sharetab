@@ -30,8 +30,22 @@ describe("formatCents", () => {
 
   test("formats JPY without decimals", () => {
     const result = formatCents(1000, "JPY");
-    // JPY: 1000 cents / 100 = ¥10
     expect(result).toContain("10");
+  });
+
+  test("respects locale parameter for formatting", () => {
+    const result = formatCents(123456, "EUR", "de-DE");
+    expect(result).toContain("1.234,56");
+  });
+
+  test("defaults to configured app locale when not specified", () => {
+    expect(formatCents(1299, "USD")).toBe("$12.99");
+    expect(formatCents(1299, "USD", "en-US")).toBe("$12.99");
+  });
+
+  test("maps app locale codes to regional money locales", () => {
+    const result = formatCents(123456, "EUR", "es");
+    expect(result).toContain("1234,56");
   });
 });
 

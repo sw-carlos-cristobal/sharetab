@@ -1,5 +1,12 @@
-export function formatCents(cents: number, currency = "USD"): string {
-  return new Intl.NumberFormat("en-US", {
+import { defaultLocale } from "@/i18n/routing";
+
+const moneyLocales: Record<string, string> = {
+  en: "en-US",
+  es: "es-ES",
+};
+
+export function formatCents(cents: number, currency = "USD", locale: string = defaultLocale): string {
+  return new Intl.NumberFormat(moneyLocales[locale] ?? locale, {
     style: "currency",
     currency,
   }).format(cents / 100);
