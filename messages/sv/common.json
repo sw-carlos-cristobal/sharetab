@@ -1,0 +1,38 @@
+{
+  "nav": {
+    "dashboard": "Skrivbord",
+    "groups": "Grupper",
+    "quickSplit": "Snabb delning",
+    "settings": "Inställningar",
+    "admin": "Administration",
+    "signOut": "Logga ut",
+    "changeLanguage": "Byt språk"
+  },
+  "actions": {
+    "save": "Spara",
+    "cancel": "Avbryt",
+    "delete": "Radera",
+    "edit": "Redigera",
+    "create": "Skapa",
+    "back": "Tillbaka",
+    "close": "Stäng",
+    "confirm": "Bekräfta",
+    "loading": "Laddar...",
+    "saving": "Sparar...",
+    "submit": "Skicka"
+  },
+  "brand": {
+    "name": "ShareTab",
+    "tagline": "Egen hostad kostnadsdelning med AI-kvittoskanning"
+  },
+  "sponsor": {
+    "title": "Stöd ShareTab",
+    "description": "ShareTab är gratis och öppen källkod. Om det sparar tid, överväg att sponsra utvecklingen.",
+    "cta": "Sponsor på GitHub"
+  },
+  "errors": {
+    "generic": "Något gick fel. Försök igen.",
+    "notFound": "Hittade inte",
+    "unauthorized": "Du måste vara inloggad för att komma åt den här sidan."
+  }
+}

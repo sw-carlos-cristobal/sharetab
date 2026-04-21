@@ -1,0 +1,18 @@
+{
+  "title": "Skrivbord",
+  "youOwe": "Du är skyldig",
+  "youAreOwed": "Du är skyldig",
+  "owedToYouTitle": "Människor som är skyldiga dig",
+  "youOweTitle": "Människor du är skyldig",
+  "settledUp": "Allt uppgjort!",
+  "noGroups": "Inga grupper än",
+  "noGroupsDescription": "Skapa en grupp för att börja dela upp utgifterna.",
+  "createGroup": "Skapa grupp",
+  "viewAll": "Visa alla",
+  "recentActivity": "Senaste aktiviteten",
+  "noActivity": "Ingen senaste aktivitet",
+  "groups": "Grupper",
+  "showMore": "Visa mer",
+  "members": "{count, plural, one {# medlem} other {# medlemmar}}",
+  "archivedGroups": "{count, plural, one {# arkiverad grupp} other {# arkiverade grupper}}"
+}
