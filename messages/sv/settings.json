@@ -1,0 +1,23 @@
+{
+  "title": "Inställningar",
+  "profile": {
+    "title": "Profil",
+    "email": "E-post",
+    "name": "Namn",
+    "save": "Spara",
+    "saving": "Sparar...",
+    "saved": "Profilen uppdaterad!",
+    "language": "Språk",
+    "languageDescription": "Välj önskat språk"
+  },
+  "password": {
+    "title": "Ändra lösenord",
+    "current": "Aktuellt lösenord",
+    "new": "Nytt lösenord",
+    "confirm": "Bekräfta nytt lösenord",
+    "mismatch": "Lösenord stämmer inte överens",
+    "submit": "Byt lösenord",
+    "submitting": "Ändrar...",
+    "success": "Lösenord ändrat!"
+  }
+}

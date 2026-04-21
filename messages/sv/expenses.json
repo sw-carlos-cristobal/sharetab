@@ -1,0 +1,46 @@
+{
+  "new": {
+    "title": "Lägg till kostnad",
+    "description": "Beskrivning",
+    "descriptionPlaceholder": "Vad var detta till för?",
+    "amount": "Belopp",
+    "amountPlaceholder": "0.00",
+    "paidBy": "Betalad av",
+    "date": "Datum",
+    "splitType": "Delad typ",
+    "splitEqual": "Lika",
+    "splitExact": "Exakta belopp",
+    "splitPercentage": "Procentsats",
+    "splitShares": "Delar",
+    "submit": "Lägg till kostnad",
+    "submitting": "Lägger till..."
+  },
+  "edit": {
+    "title": "Redigera kostnad",
+    "submit": "Spara ändringar",
+    "submitting": "Sparar..."
+  },
+  "detail": {
+    "paidBy": "Betalt av {name}",
+    "addedBy": "Tillagt av {name}",
+    "date": "Datum",
+    "split": "Dela detaljer",
+    "edit": "Redigera",
+    "delete": "Radera",
+    "deleteConfirm": "Vill du ta bort den här utgiften?"
+  },
+  "scan": {
+    "title": "Skanna kvitto",
+    "upload": "Ladda upp kvitto",
+    "uploadDescription": "Ta ett foto eller ladda upp en bild av ditt kvitto",
+    "processing": "Bearbetar kvitto...",
+    "retry": "Försök igen"
+  },
+  "splits": {
+    "selectAll": "Välj alla",
+    "deselectAll": "Avmarkera alla",
+    "perPerson": "per person",
+    "remaining": "Återstående",
+    "total": "Total"
+  }
+}
