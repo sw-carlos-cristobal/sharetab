@@ -3,6 +3,7 @@
 ## [v0.6.1] - 2026-04-21
 
 ### Features
+- add translations for 6 new languages (#79) (b27e4ee)
 - Add Swedish translation (#80) (fd8ef57)
 
 **Full Changelog**: https://github.com/sw-carlos-cristobal/sharetab/compare/v0.6.0...v0.6.1
