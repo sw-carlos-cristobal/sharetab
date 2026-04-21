@@ -1,0 +1,46 @@
+{
+  "new": {
+    "title": "添加费用",
+    "description": "描述",
+    "descriptionPlaceholder": "这笔费用是什么?",
+    "amount": "金额",
+    "amountPlaceholder": "0.00",
+    "paidBy": "付款人",
+    "date": "日期",
+    "splitType": "分摊方式",
+    "splitEqual": "平均分摊",
+    "splitExact": "按金额",
+    "splitPercentage": "按百分比",
+    "splitShares": "按份额",
+    "submit": "添加费用",
+    "submitting": "添加中..."
+  },
+  "edit": {
+    "title": "编辑费用",
+    "submit": "保存更改",
+    "submitting": "保存中..."
+  },
+  "detail": {
+    "paidBy": "{name}支付",
+    "addedBy": "{name}添加",
+    "date": "日期",
+    "split": "分摊详情",
+    "edit": "编辑",
+    "delete": "删除",
+    "deleteConfirm": "确定删除这笔费用?"
+  },
+  "scan": {
+    "title": "扫描小票",
+    "upload": "上传小票",
+    "uploadDescription": "拍照或上传小票图片",
+    "processing": "正在处理小票...",
+    "retry": "重试"
+  },
+  "splits": {
+    "selectAll": "全选",
+    "deselectAll": "取消全选",
+    "perPerson": "每人",
+    "remaining": "剩余",
+    "total": "合计"
+  }
+}

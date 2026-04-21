@@ -1,0 +1,38 @@
+{
+  "nav": {
+    "dashboard": "대시보드",
+    "groups": "그룹",
+    "quickSplit": "빠른 정산",
+    "settings": "설정",
+    "admin": "관리자",
+    "signOut": "로그아웃",
+    "changeLanguage": "언어 변경"
+  },
+  "actions": {
+    "save": "저장",
+    "cancel": "취소",
+    "delete": "삭제",
+    "edit": "편집",
+    "create": "생성",
+    "back": "뒤로",
+    "close": "닫기",
+    "confirm": "확인",
+    "loading": "로딩 중...",
+    "saving": "저장 중...",
+    "submit": "제출"
+  },
+  "brand": {
+    "name": "ShareTab",
+    "tagline": "AI 영수증 스캔 기능을 갖춘 셀프 호스팅 비용 분할 서비스"
+  },
+  "sponsor": {
+    "title": "ShareTab 후원하기",
+    "description": "ShareTab은 무료 오픈 소스입니다. 유용하셨다면 개발 후원을 고려해 주세요.",
+    "cta": "GitHub에서 후원하기"
+  },
+  "errors": {
+    "generic": "문제가 발생했습니다. 다시 시도해 주세요.",
+    "notFound": "찾을 수 없습니다",
+    "unauthorized": "이 페이지에 접근하려면 로그인해야 합니다."
+  }
+}

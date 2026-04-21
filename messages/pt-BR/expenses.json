@@ -1,0 +1,46 @@
+{
+  "new": {
+    "title": "Adicionar despesa",
+    "description": "Descrição",
+    "descriptionPlaceholder": "Para que foi isso?",
+    "amount": "Valor",
+    "amountPlaceholder": "0,00",
+    "paidBy": "Pago por",
+    "date": "Data",
+    "splitType": "Tipo de divisão",
+    "splitEqual": "Igual",
+    "splitExact": "Valores exatos",
+    "splitPercentage": "Porcentagem",
+    "splitShares": "Cotas",
+    "submit": "Adicionar despesa",
+    "submitting": "Adicionando..."
+  },
+  "edit": {
+    "title": "Editar despesa",
+    "submit": "Salvar alterações",
+    "submitting": "Salvando..."
+  },
+  "detail": {
+    "paidBy": "Pago por {name}",
+    "addedBy": "Adicionado por {name}",
+    "date": "Data",
+    "split": "Detalhes da divisão",
+    "edit": "Editar",
+    "delete": "Excluir",
+    "deleteConfirm": "Excluir esta despesa?"
+  },
+  "scan": {
+    "title": "Escanear recibo",
+    "upload": "Enviar recibo",
+    "uploadDescription": "Tire uma foto ou envie uma imagem do seu recibo",
+    "processing": "Processando recibo...",
+    "retry": "Tentar novamente"
+  },
+  "splits": {
+    "selectAll": "Selecionar todos",
+    "deselectAll": "Desmarcar todos",
+    "perPerson": "por pessoa",
+    "remaining": "Restante",
+    "total": "Total"
+  }
+}

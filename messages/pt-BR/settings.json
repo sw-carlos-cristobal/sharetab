@@ -1,0 +1,23 @@
+{
+  "title": "Configurações",
+  "profile": {
+    "title": "Perfil",
+    "email": "E-mail",
+    "name": "Nome",
+    "save": "Salvar",
+    "saving": "Salvando...",
+    "saved": "Perfil atualizado!",
+    "language": "Idioma",
+    "languageDescription": "Escolha seu idioma preferido"
+  },
+  "password": {
+    "title": "Alterar senha",
+    "current": "Senha atual",
+    "new": "Nova senha",
+    "confirm": "Confirmar nova senha",
+    "mismatch": "As senhas não coincidem",
+    "submit": "Alterar senha",
+    "submitting": "Alterando...",
+    "success": "Senha alterada!"
+  }
+}

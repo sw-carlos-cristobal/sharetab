@@ -1,0 +1,38 @@
+{
+  "nav": {
+    "dashboard": "仪表盘",
+    "groups": "群组",
+    "quickSplit": "快速分账",
+    "settings": "设置",
+    "admin": "管理",
+    "signOut": "退出登录",
+    "changeLanguage": "切换语言"
+  },
+  "actions": {
+    "save": "保存",
+    "cancel": "取消",
+    "delete": "删除",
+    "edit": "编辑",
+    "create": "创建",
+    "back": "返回",
+    "close": "关闭",
+    "confirm": "确认",
+    "loading": "加载中...",
+    "saving": "保存中...",
+    "submit": "提交"
+  },
+  "brand": {
+    "name": "ShareTab",
+    "tagline": "自托管的费用分摊工具，支持 AI 小票扫描"
+  },
+  "sponsor": {
+    "title": "支持 ShareTab",
+    "description": "ShareTab 是免费开源项目。如果它帮你节省了时间，请考虑赞助开发。",
+    "cta": "在 GitHub 上赞助"
+  },
+  "errors": {
+    "generic": "出了点问题，请重试。",
+    "notFound": "未找到",
+    "unauthorized": "请先登录再访问此页面。"
+  }
+}

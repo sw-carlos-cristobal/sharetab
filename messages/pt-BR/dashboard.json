@@ -1,0 +1,18 @@
+{
+  "title": "Painel",
+  "youOwe": "Você deve",
+  "youAreOwed": "Devem a você",
+  "owedToYouTitle": "Pessoas que devem a você",
+  "youOweTitle": "Pessoas a quem você deve",
+  "settledUp": "Tudo acertado!",
+  "noGroups": "Nenhum grupo ainda",
+  "noGroupsDescription": "Crie um grupo para começar a dividir despesas.",
+  "createGroup": "Criar grupo",
+  "viewAll": "Ver todos",
+  "recentActivity": "Atividade recente",
+  "noActivity": "Nenhuma atividade recente",
+  "groups": "Grupos",
+  "showMore": "Mostrar mais",
+  "members": "{count, plural, one {# membro} other {# membros}}",
+  "archivedGroups": "{count, plural, one {# grupo arquivado} other {# grupos arquivados}}"
+}

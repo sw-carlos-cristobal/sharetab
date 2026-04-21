@@ -1,0 +1,24 @@
+{
+  "title": "관리자",
+  "users": {
+    "title": "사용자",
+    "total": "전체 사용자",
+    "active": "활성",
+    "suspended": "정지됨"
+  },
+  "registration": {
+    "title": "가입 설정",
+    "mode": "가입 방식",
+    "open": "공개",
+    "inviteOnly": "초대 전용",
+    "closed": "비공개"
+  },
+  "activity": {
+    "title": "활동",
+    "noActivity": "최근 활동이 없습니다"
+  },
+  "audit": {
+    "title": "감사 로그",
+    "noEntries": "감사 기록이 없습니다"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "title": "설정",
+  "profile": {
+    "title": "프로필",
+    "email": "이메일",
+    "name": "이름",
+    "save": "저장",
+    "saving": "저장 중...",
+    "saved": "프로필이 업데이트되었습니다!",
+    "language": "언어",
+    "languageDescription": "선호하는 언어를 선택하세요"
+  },
+  "password": {
+    "title": "비밀번호 변경",
+    "current": "현재 비밀번호",
+    "new": "새 비밀번호",
+    "confirm": "새 비밀번호 확인",
+    "mismatch": "비밀번호가 일치하지 않습니다",
+    "submit": "비밀번호 변경",
+    "submitting": "변경 중...",
+    "success": "비밀번호가 변경되었습니다!"
+  }
+}

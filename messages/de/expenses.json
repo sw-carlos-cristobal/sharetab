@@ -1,0 +1,46 @@
+{
+  "new": {
+    "title": "Ausgabe hinzufügen",
+    "description": "Beschreibung",
+    "descriptionPlaceholder": "Wofür war das?",
+    "amount": "Betrag",
+    "amountPlaceholder": "0,00",
+    "paidBy": "Bezahlt von",
+    "date": "Datum",
+    "splitType": "Aufteilungsart",
+    "splitEqual": "Gleichmäßig",
+    "splitExact": "Genaue Beträge",
+    "splitPercentage": "Prozentual",
+    "splitShares": "Anteile",
+    "submit": "Ausgabe hinzufügen",
+    "submitting": "Hinzufügen..."
+  },
+  "edit": {
+    "title": "Ausgabe bearbeiten",
+    "submit": "Änderungen speichern",
+    "submitting": "Speichern..."
+  },
+  "detail": {
+    "paidBy": "Bezahlt von {name}",
+    "addedBy": "Hinzugefügt von {name}",
+    "date": "Datum",
+    "split": "Aufteilungsdetails",
+    "edit": "Bearbeiten",
+    "delete": "Löschen",
+    "deleteConfirm": "Diese Ausgabe löschen?"
+  },
+  "scan": {
+    "title": "Beleg scannen",
+    "upload": "Beleg hochladen",
+    "uploadDescription": "Fotografieren oder laden Sie ein Bild Ihres Belegs hoch",
+    "processing": "Beleg wird verarbeitet...",
+    "retry": "Erneut versuchen"
+  },
+  "splits": {
+    "selectAll": "Alle auswählen",
+    "deselectAll": "Alle abwählen",
+    "perPerson": "pro Person",
+    "remaining": "Verbleibend",
+    "total": "Gesamt"
+  }
+}

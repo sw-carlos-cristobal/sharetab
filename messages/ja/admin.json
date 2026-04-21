@@ -1,0 +1,24 @@
+{
+  "title": "管理",
+  "users": {
+    "title": "ユーザー",
+    "total": "ユーザー総数",
+    "active": "アクティブ",
+    "suspended": "停止中"
+  },
+  "registration": {
+    "title": "登録",
+    "mode": "登録モード",
+    "open": "オープン",
+    "inviteOnly": "招待制",
+    "closed": "停止中"
+  },
+  "activity": {
+    "title": "アクティビティ",
+    "noActivity": "最近のアクティビティはありません"
+  },
+  "audit": {
+    "title": "監査ログ",
+    "noEntries": "監査エントリはありません"
+  }
+}

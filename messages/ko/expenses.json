@@ -1,0 +1,46 @@
+{
+  "new": {
+    "title": "비용 추가",
+    "description": "설명",
+    "descriptionPlaceholder": "무엇에 대한 비용인가요?",
+    "amount": "금액",
+    "amountPlaceholder": "0.00",
+    "paidBy": "결제자",
+    "date": "날짜",
+    "splitType": "분할 방식",
+    "splitEqual": "균등 분할",
+    "splitExact": "금액 지정",
+    "splitPercentage": "비율",
+    "splitShares": "비율 분할",
+    "submit": "비용 추가",
+    "submitting": "추가 중..."
+  },
+  "edit": {
+    "title": "비용 편집",
+    "submit": "변경 사항 저장",
+    "submitting": "저장 중..."
+  },
+  "detail": {
+    "paidBy": "{name}이(가) 결제",
+    "addedBy": "{name}이(가) 추가",
+    "date": "날짜",
+    "split": "분할 내역",
+    "edit": "편집",
+    "delete": "삭제",
+    "deleteConfirm": "이 비용을 삭제하시겠습니까?"
+  },
+  "scan": {
+    "title": "영수증 스캔",
+    "upload": "영수증 업로드",
+    "uploadDescription": "영수증 사진을 촬영하거나 이미지를 업로드하세요",
+    "processing": "영수증 처리 중...",
+    "retry": "다시 시도"
+  },
+  "splits": {
+    "selectAll": "전체 선택",
+    "deselectAll": "전체 해제",
+    "perPerson": "1인당",
+    "remaining": "남은 금액",
+    "total": "합계"
+  }
+}

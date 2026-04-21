@@ -1,0 +1,46 @@
+{
+  "new": {
+    "title": "支出を追加",
+    "description": "説明",
+    "descriptionPlaceholder": "何の支出ですか?",
+    "amount": "金額",
+    "amountPlaceholder": "0.00",
+    "paidBy": "支払った人",
+    "date": "日付",
+    "splitType": "割り勘の方法",
+    "splitEqual": "均等",
+    "splitExact": "金額指定",
+    "splitPercentage": "割合",
+    "splitShares": "比率",
+    "submit": "支出を追加",
+    "submitting": "追加中..."
+  },
+  "edit": {
+    "title": "支出を編集",
+    "submit": "変更を保存",
+    "submitting": "保存中..."
+  },
+  "detail": {
+    "paidBy": "{name}が支払い",
+    "addedBy": "{name}が追加",
+    "date": "日付",
+    "split": "割り勘の詳細",
+    "edit": "編集",
+    "delete": "削除",
+    "deleteConfirm": "この支出を削除しますか?"
+  },
+  "scan": {
+    "title": "レシートをスキャン",
+    "upload": "レシートをアップロード",
+    "uploadDescription": "レシートの写真を撮るか、画像をアップロードしてください",
+    "processing": "レシートを処理中...",
+    "retry": "もう一度試す"
+  },
+  "splits": {
+    "selectAll": "すべて選択",
+    "deselectAll": "すべて解除",
+    "perPerson": "一人あたり",
+    "remaining": "残り",
+    "total": "合計"
+  }
+}

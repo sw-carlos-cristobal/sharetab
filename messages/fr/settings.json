@@ -1,0 +1,23 @@
+{
+  "title": "Paramètres",
+  "profile": {
+    "title": "Profil",
+    "email": "E-mail",
+    "name": "Nom",
+    "save": "Enregistrer",
+    "saving": "Enregistrement...",
+    "saved": "Profil mis à jour !",
+    "language": "Langue",
+    "languageDescription": "Choisissez votre langue préférée"
+  },
+  "password": {
+    "title": "Changer le mot de passe",
+    "current": "Mot de passe actuel",
+    "new": "Nouveau mot de passe",
+    "confirm": "Confirmer le nouveau mot de passe",
+    "mismatch": "Les mots de passe ne correspondent pas",
+    "submit": "Changer le mot de passe",
+    "submitting": "Modification...",
+    "success": "Mot de passe modifié !"
+  }
+}
