@@ -1,0 +1,24 @@
+{
+  "title": "Administration",
+  "users": {
+    "title": "Utilisateurs",
+    "total": "Total des utilisateurs",
+    "active": "Actifs",
+    "suspended": "Suspendus"
+  },
+  "registration": {
+    "title": "Inscription",
+    "mode": "Mode d'inscription",
+    "open": "Ouvert",
+    "inviteOnly": "Sur invitation uniquement",
+    "closed": "Fermé"
+  },
+  "activity": {
+    "title": "Activité",
+    "noActivity": "Aucune activité récente"
+  },
+  "audit": {
+    "title": "Journal d'audit",
+    "noEntries": "Aucune entrée d'audit"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "title": "Admin",
+  "users": {
+    "title": "Usuários",
+    "total": "Total de usuários",
+    "active": "Ativos",
+    "suspended": "Suspensos"
+  },
+  "registration": {
+    "title": "Registro",
+    "mode": "Modo de registro",
+    "open": "Aberto",
+    "inviteOnly": "Somente com convite",
+    "closed": "Fechado"
+  },
+  "activity": {
+    "title": "Atividade",
+    "noActivity": "Nenhuma atividade recente"
+  },
+  "audit": {
+    "title": "Log de auditoria",
+    "noEntries": "Nenhum registro de auditoria"
+  }
+}

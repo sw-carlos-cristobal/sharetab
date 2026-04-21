@@ -1,0 +1,24 @@
+{
+  "title": "管理",
+  "users": {
+    "title": "用户",
+    "total": "用户总数",
+    "active": "活跃",
+    "suspended": "已停用"
+  },
+  "registration": {
+    "title": "注册",
+    "mode": "注册模式",
+    "open": "开放注册",
+    "inviteOnly": "仅限邀请",
+    "closed": "关闭注册"
+  },
+  "activity": {
+    "title": "动态",
+    "noActivity": "暂无最近动态"
+  },
+  "audit": {
+    "title": "审计日志",
+    "noEntries": "暂无审计记录"
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "nav": {
+    "dashboard": "Painel",
+    "groups": "Grupos",
+    "quickSplit": "Divisão rápida",
+    "settings": "Configurações",
+    "admin": "Admin",
+    "signOut": "Sair",
+    "changeLanguage": "Alterar idioma"
+  },
+  "actions": {
+    "save": "Salvar",
+    "cancel": "Cancelar",
+    "delete": "Excluir",
+    "edit": "Editar",
+    "create": "Criar",
+    "back": "Voltar",
+    "close": "Fechar",
+    "confirm": "Confirmar",
+    "loading": "Carregando...",
+    "saving": "Salvando...",
+    "submit": "Enviar"
+  },
+  "brand": {
+    "name": "ShareTab",
+    "tagline": "Divisão de despesas auto-hospedada com leitura de recibos por IA"
+  },
+  "sponsor": {
+    "title": "Apoie o ShareTab",
+    "description": "O ShareTab é gratuito e de código aberto. Se ele economiza seu tempo, considere patrocinar o desenvolvimento.",
+    "cta": "Patrocinar no GitHub"
+  },
+  "errors": {
+    "generic": "Algo deu errado. Tente novamente.",
+    "notFound": "Não encontrado",
+    "unauthorized": "Você precisa estar conectado para acessar esta página."
+  }
+}

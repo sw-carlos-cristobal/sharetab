@@ -1,0 +1,48 @@
+{
+  "title": "群组",
+  "create": "创建群组",
+  "new": {
+    "title": "创建新群组",
+    "name": "群组名称",
+    "namePlaceholder": "例如：合租、巴黎旅行",
+    "currency": "货币",
+    "submit": "创建群组",
+    "submitting": "创建中..."
+  },
+  "detail": {
+    "expenses": "费用",
+    "balances": "余额",
+    "addExpense": "添加费用",
+    "scanReceipt": "扫描小票",
+    "settle": "结算",
+    "noExpenses": "暂无费用",
+    "noExpensesDescription": "添加一笔费用来开始使用。",
+    "totalSpent": "总支出",
+    "youOwe": "你欠{name}",
+    "owesYou": "{name}欠你",
+    "settledUp": "已结清"
+  },
+  "settings": {
+    "title": "群组设置",
+    "name": "群组名称",
+    "currency": "货币",
+    "members": "成员",
+    "addMember": "添加成员",
+    "removeMember": "移除",
+    "deleteGroup": "删除群组",
+    "deleteConfirm": "确定要删除吗？此操作无法撤销。",
+    "invite": "邀请链接",
+    "copyLink": "复制链接",
+    "linkCopied": "链接已复制!"
+  },
+  "settle": {
+    "title": "结算",
+    "from": "付款人",
+    "to": "收款人",
+    "amount": "金额",
+    "submit": "记录结算",
+    "submitting": "记录中..."
+  },
+  "empty": "暂无群组",
+  "emptyDescription": "创建您的第一个群组，开始与朋友分摊费用。"
+}

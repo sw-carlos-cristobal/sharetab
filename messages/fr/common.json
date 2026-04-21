@@ -1,0 +1,38 @@
+{
+  "nav": {
+    "dashboard": "Tableau de bord",
+    "groups": "Groupes",
+    "quickSplit": "Partage rapide",
+    "settings": "Paramètres",
+    "admin": "Administration",
+    "signOut": "Se déconnecter",
+    "changeLanguage": "Changer de langue"
+  },
+  "actions": {
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "create": "Créer",
+    "back": "Retour",
+    "close": "Fermer",
+    "confirm": "Confirmer",
+    "loading": "Chargement...",
+    "saving": "Enregistrement...",
+    "submit": "Envoyer"
+  },
+  "brand": {
+    "name": "ShareTab",
+    "tagline": "Partage de dépenses auto-hébergé avec scan de reçus par IA"
+  },
+  "sponsor": {
+    "title": "Soutenir ShareTab",
+    "description": "ShareTab est gratuit et open source. S'il vous fait gagner du temps, pensez à soutenir son développement.",
+    "cta": "Sponsoriser sur GitHub"
+  },
+  "errors": {
+    "generic": "Une erreur est survenue. Veuillez réessayer.",
+    "notFound": "Introuvable",
+    "unauthorized": "Vous devez être connecté pour accéder à cette page."
+  }
+}

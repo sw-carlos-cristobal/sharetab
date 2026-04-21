@@ -1,0 +1,48 @@
+{
+  "title": "Groupes",
+  "create": "Créer un groupe",
+  "new": {
+    "title": "Créer un nouveau groupe",
+    "name": "Nom du groupe",
+    "namePlaceholder": "ex. Appartement, Voyage à Paris",
+    "currency": "Devise",
+    "submit": "Créer le groupe",
+    "submitting": "Création..."
+  },
+  "detail": {
+    "expenses": "Dépenses",
+    "balances": "Soldes",
+    "addExpense": "Ajouter une dépense",
+    "scanReceipt": "Scanner un reçu",
+    "settle": "Régler les comptes",
+    "noExpenses": "Aucune dépense",
+    "noExpensesDescription": "Ajoutez une dépense pour commencer.",
+    "totalSpent": "Total dépensé",
+    "youOwe": "Vous devez à {name}",
+    "owesYou": "{name} vous doit",
+    "settledUp": "Comptes réglés"
+  },
+  "settings": {
+    "title": "Paramètres du groupe",
+    "name": "Nom du groupe",
+    "currency": "Devise",
+    "members": "Membres",
+    "addMember": "Ajouter un membre",
+    "removeMember": "Retirer",
+    "deleteGroup": "Supprimer le groupe",
+    "deleteConfirm": "Êtes-vous sûr ? Cette action est irréversible.",
+    "invite": "Lien d'invitation",
+    "copyLink": "Copier le lien",
+    "linkCopied": "Lien copié !"
+  },
+  "settle": {
+    "title": "Régler les comptes",
+    "from": "De",
+    "to": "À",
+    "amount": "Montant",
+    "submit": "Enregistrer le règlement",
+    "submitting": "Enregistrement..."
+  },
+  "empty": "Aucun groupe",
+  "emptyDescription": "Créez votre premier groupe pour commencer à partager les dépenses entre amis."
+}

@@ -1,0 +1,18 @@
+{
+  "title": "Tableau de bord",
+  "youOwe": "Vous devez",
+  "youAreOwed": "On vous doit",
+  "owedToYouTitle": "Personnes qui vous doivent",
+  "youOweTitle": "Personnes à qui vous devez",
+  "settledUp": "Tout est réglé !",
+  "noGroups": "Aucun groupe",
+  "noGroupsDescription": "Créez un groupe pour commencer à partager les dépenses.",
+  "createGroup": "Créer un groupe",
+  "viewAll": "Tout voir",
+  "recentActivity": "Activité récente",
+  "noActivity": "Aucune activité récente",
+  "groups": "Groupes",
+  "showMore": "Voir plus",
+  "members": "{count, plural, one {# membre} other {# membres}}",
+  "archivedGroups": "{count, plural, one {# groupe archivé} other {# groupes archivés}}"
+}

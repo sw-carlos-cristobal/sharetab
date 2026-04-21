@@ -1,0 +1,46 @@
+{
+  "new": {
+    "title": "Ajouter une dépense",
+    "description": "Description",
+    "descriptionPlaceholder": "À quoi correspond cette dépense ?",
+    "amount": "Montant",
+    "amountPlaceholder": "0,00",
+    "paidBy": "Payé par",
+    "date": "Date",
+    "splitType": "Type de partage",
+    "splitEqual": "Égal",
+    "splitExact": "Montants exacts",
+    "splitPercentage": "Pourcentage",
+    "splitShares": "Parts",
+    "submit": "Ajouter la dépense",
+    "submitting": "Ajout..."
+  },
+  "edit": {
+    "title": "Modifier la dépense",
+    "submit": "Enregistrer les modifications",
+    "submitting": "Enregistrement..."
+  },
+  "detail": {
+    "paidBy": "Payé par {name}",
+    "addedBy": "Ajouté par {name}",
+    "date": "Date",
+    "split": "Détails du partage",
+    "edit": "Modifier",
+    "delete": "Supprimer",
+    "deleteConfirm": "Supprimer cette dépense ?"
+  },
+  "scan": {
+    "title": "Scanner un reçu",
+    "upload": "Envoyer un reçu",
+    "uploadDescription": "Prenez une photo ou envoyez une image de votre reçu",
+    "processing": "Traitement du reçu...",
+    "retry": "Réessayer"
+  },
+  "splits": {
+    "selectAll": "Tout sélectionner",
+    "deselectAll": "Tout désélectionner",
+    "perPerson": "par personne",
+    "remaining": "Restant",
+    "total": "Total"
+  }
+}

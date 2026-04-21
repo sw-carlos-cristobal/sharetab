@@ -1,0 +1,48 @@
+{
+  "title": "Gruppen",
+  "create": "Gruppe erstellen",
+  "new": {
+    "title": "Neue Gruppe erstellen",
+    "name": "Gruppenname",
+    "namePlaceholder": "z.\u00A0B. WG, Reise nach Paris",
+    "currency": "Währung",
+    "submit": "Gruppe erstellen",
+    "submitting": "Erstellen..."
+  },
+  "detail": {
+    "expenses": "Ausgaben",
+    "balances": "Salden",
+    "addExpense": "Ausgabe hinzufügen",
+    "scanReceipt": "Beleg scannen",
+    "settle": "Ausgleichen",
+    "noExpenses": "Noch keine Ausgaben",
+    "noExpensesDescription": "Fügen Sie eine Ausgabe hinzu, um loszulegen.",
+    "totalSpent": "Gesamtausgaben",
+    "youOwe": "Sie schulden {name}",
+    "owesYou": "{name} schuldet Ihnen",
+    "settledUp": "Ausgeglichen"
+  },
+  "settings": {
+    "title": "Gruppeneinstellungen",
+    "name": "Gruppenname",
+    "currency": "Währung",
+    "members": "Mitglieder",
+    "addMember": "Mitglied hinzufügen",
+    "removeMember": "Entfernen",
+    "deleteGroup": "Gruppe löschen",
+    "deleteConfirm": "Sind Sie sicher? Dies kann nicht rückgängig gemacht werden.",
+    "invite": "Einladungslink",
+    "copyLink": "Link kopieren",
+    "linkCopied": "Link kopiert!"
+  },
+  "settle": {
+    "title": "Ausgleichen",
+    "from": "Von",
+    "to": "An",
+    "amount": "Betrag",
+    "submit": "Ausgleich erfassen",
+    "submitting": "Erfassen..."
+  },
+  "empty": "Noch keine Gruppen",
+  "emptyDescription": "Erstellen Sie Ihre erste Gruppe, um Ausgaben mit Freunden zu teilen."
+}

@@ -1,0 +1,18 @@
+{
+  "title": "ダッシュボード",
+  "youOwe": "あなたの支払い",
+  "youAreOwed": "あなたへの支払い",
+  "owedToYouTitle": "あなたに借りがある人",
+  "youOweTitle": "あなたが借りている人",
+  "settledUp": "すべて精算済みです!",
+  "noGroups": "グループがありません",
+  "noGroupsDescription": "グループを作成して割り勘を始めましょう。",
+  "createGroup": "グループを作成",
+  "viewAll": "すべて表示",
+  "recentActivity": "最近のアクティビティ",
+  "noActivity": "最近のアクティビティはありません",
+  "groups": "グループ",
+  "showMore": "もっと見る",
+  "members": "{count, plural, other {#人のメンバー}}",
+  "archivedGroups": "{count, plural, other {#件のアーカイブ済みグループ}}"
+}

@@ -1,0 +1,48 @@
+{
+  "title": "Grupos",
+  "create": "Criar grupo",
+  "new": {
+    "title": "Criar um novo grupo",
+    "name": "Nome do grupo",
+    "namePlaceholder": "ex: Apartamento, Viagem a Paris",
+    "currency": "Moeda",
+    "submit": "Criar grupo",
+    "submitting": "Criando..."
+  },
+  "detail": {
+    "expenses": "Despesas",
+    "balances": "Saldos",
+    "addExpense": "Adicionar despesa",
+    "scanReceipt": "Escanear recibo",
+    "settle": "Acertar contas",
+    "noExpenses": "Nenhuma despesa ainda",
+    "noExpensesDescription": "Adicione uma despesa para começar.",
+    "totalSpent": "Total gasto",
+    "youOwe": "Você deve a {name}",
+    "owesYou": "{name} deve a você",
+    "settledUp": "Acertado"
+  },
+  "settings": {
+    "title": "Configurações do grupo",
+    "name": "Nome do grupo",
+    "currency": "Moeda",
+    "members": "Membros",
+    "addMember": "Adicionar membro",
+    "removeMember": "Remover",
+    "deleteGroup": "Excluir grupo",
+    "deleteConfirm": "Tem certeza? Esta ação não pode ser desfeita.",
+    "invite": "Link de convite",
+    "copyLink": "Copiar link",
+    "linkCopied": "Link copiado!"
+  },
+  "settle": {
+    "title": "Acertar contas",
+    "from": "De",
+    "to": "Para",
+    "amount": "Valor",
+    "submit": "Registrar acerto",
+    "submitting": "Registrando..."
+  },
+  "empty": "Nenhum grupo ainda",
+  "emptyDescription": "Crie seu primeiro grupo para começar a dividir despesas com amigos."
+}
