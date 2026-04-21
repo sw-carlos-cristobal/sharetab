@@ -18,6 +18,8 @@ services:
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       - AI_PROVIDER_PRIORITY=${AI_PROVIDER_PRIORITY:-openai,ocr}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o}
+      - OPENAI_CODEX_MODEL=${OPENAI_CODEX_MODEL:-gpt-5.4}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-opus-4-6}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
@@ -27,8 +29,13 @@ services:
       - EMAIL_SERVER_USER=${EMAIL_SERVER_USER:-}
       - EMAIL_SERVER_PASSWORD=${EMAIL_SERVER_PASSWORD:-}
       - EMAIL_FROM=${EMAIL_FROM:-}
+      - MERIDIAN_PORT=${MERIDIAN_PORT:-3457}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-}
       - UPLOAD_DIR=/app/uploads
       - MAX_UPLOAD_SIZE_MB=${MAX_UPLOAD_SIZE_MB:-10}
+      - AUTH_RATE_LIMIT_MAX=${AUTH_RATE_LIMIT_MAX:-5}
+      - REGISTER_RATE_LIMIT_MAX=${REGISTER_RATE_LIMIT_MAX:-10}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - uploads:/app/uploads

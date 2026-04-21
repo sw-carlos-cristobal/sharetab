@@ -13,7 +13,8 @@ ShareTab — open-source, self-hosted Splitwise alternative with AI receipt scan
 - **ORM:** Prisma 7 + PostgreSQL 16 (via `@prisma/adapter-pg`)
 - **Auth:** NextAuth v5 (email/password + OAuth)
 - **UI:** TailwindCSS 4 + shadcn/ui (v4, uses `@base-ui/react` — use `render` prop instead of `asChild`) + next-themes (dark mode)
-- **AI:** Pluggable providers (OpenAI, Claude, Meridian, Ollama, OCR fallback) via `src/server/ai/`
+- **AI:** Pluggable providers (OpenAI, OpenAI-Codex, Claude, Meridian, Ollama, OCR fallback) via `src/server/ai/`
+- **i18n:** next-intl (9 locales: en, es, sv, fr, de, pt-BR, ja, zh-CN, ko)
 
 ## Commands
 
@@ -26,6 +27,7 @@ npm run lint         # ESLint
 npm test             # Run unit tests (Vitest)
 npm run test:watch   # Unit tests in watch mode
 npm run test:e2e     # Run Playwright e2e tests
+npm run lint:i18n    # Check translations for missing/extra keys
 npx prisma generate  # Regenerate Prisma client after schema changes
 npx prisma db push   # Push schema without migration (dev only)
 ```
@@ -39,7 +41,7 @@ npx prisma db push   # Push schema without migration (dev only)
 - `src/server/trpc/router.ts` — Root app router (exports `AppRouter` type)
 - `src/server/trpc/routers/` — Individual routers: auth, groups, expenses, balances, settlements, activity, receipts, guest, admin
 - `src/server/lib/balance-calculator.ts` — Pure functions for debt simplification and balance computation (extracted for testability)
-- `src/app/` — Next.js App Router pages. `(auth)/` for login/register, `(app)/` for authenticated pages
+- `src/app/[locale]/` — Next.js App Router pages under i18n locale segment. `(auth)/` for login/register, `(app)/` for authenticated pages
 - `src/components/` — React components organized by domain
 - `src/components/providers.tsx` — Client-side tRPC + React Query + SessionProvider + ThemeProvider wrapper
 - `src/lib/trpc.ts` — Client-side tRPC React hooks
@@ -47,6 +49,10 @@ npx prisma db push   # Push schema without migration (dev only)
 - `src/generated/prisma/` — Auto-generated Prisma client (do not edit, gitignored)
 - `prisma/schema.prisma` — Database schema (money stored as Int cents)
 - `prisma.config.ts` — Prisma v7 config (datasource URL lives here, not in schema.prisma)
+- `src/i18n/routing.ts` — Locale list, default locale, and next-intl routing config
+- `src/i18n/request.ts` — Server-side locale resolution for next-intl
+- `src/i18n/navigation.ts` — Locale-aware `Link`, `redirect`, `usePathname`, `useRouter`
+- `messages/{locale}/` — Translation files with namespaces: admin, auth, common, dashboard, expenses, groups, settings
 - `docker/` — Dockerfile (multi-stage) + docker-compose.yml
 
 ## Key Conventions
@@ -66,7 +72,7 @@ npx prisma db push   # Push schema without migration (dev only)
 - Dark mode: class-based via `next-themes` ThemeProvider; toggle in sidebar and mobile menu
 - Theme: emerald/teal accent color (OKLCH), neutral backgrounds — defined in `globals.css`
 - `scripts/dev.mjs` — All-in-one dev script: starts embedded-postgres + Next.js dev server
-- `next.config.ts` has `output: "standalone"` for Docker builds
+- `next.config.ts` sets `output: "standalone"` conditionally when `DOCKER_BUILD=1` (set by `docker/Dockerfile`)
 
 ## Responsive Layout Architecture
 
@@ -82,9 +88,9 @@ npx prisma db push   # Push schema without migration (dev only)
 ## Testing
 
 ### Unit Tests (Vitest)
-- `npm test` — run all unit tests (~67 tests, <1s)
+- `npm test` — run all unit tests (~222 tests, <1s)
 - Tests live co-located with source: `src/**/*.test.ts`
-- Covers: `money.ts`, `split-calculator.ts`, `rate-limit.ts`, `upload-dir.ts`, `balance-calculator.ts`, `ai/registry.ts`
+- Covers: `money.ts`, `split-calculator.ts`, `rate-limit.ts`, `upload-dir.ts`, `balance-calculator.ts`, `ai/registry.ts`, `ai/providers/ocr.ts`, `ai/providers/openai-codex.ts`, `lib/normalize-date.ts`, `lib/meridian-login.ts`, `lib/receipt-processor.ts`, `lib/auth-health-poller.ts`, `lib/openai-codex-login.ts`, `trpc/routers/admin.ts`
 
 ### E2E Tests (Playwright)
 - `BASE_URL=http://localhost:3000 npx playwright test` — run all e2e tests
@@ -96,9 +102,22 @@ npx prisma db push   # Push schema without migration (dev only)
 - `createTestGroup()` auto-deletes the group on `dispose()` to avoid test pollution
 - Do NOT rely on Chrome DevTools MCP viewport emulation for visual accuracy — it doesn't account for browser chrome
 
+## i18n
+
+- Uses `next-intl` with `createNextIntlPlugin` in `next.config.ts`
+- 9 locales defined in `src/i18n/routing.ts`: en, es, sv, fr, de, pt-BR, ja, zh-CN, ko (default: en)
+- All routes under `src/app/[locale]/` — the `[locale]` segment is required
+- Translation files: `messages/{locale}/{namespace}.json` (namespaces: admin, auth, common, dashboard, expenses, groups, settings)
+- Use `useTranslations(namespace)` in client components, `getTranslations(namespace)` in server components
+- Locale-aware navigation: import `Link`, `redirect`, `usePathname`, `useRouter` from `@/i18n/navigation`
+- `LanguageSwitcher` component in sidebar and mobile menu
+- User locale preference stored in `User.locale` field (Prisma schema)
+- `npm run lint:i18n` checks for missing or extra translation keys
+- To add a new language: add locale to `src/i18n/routing.ts`, create `messages/{locale}/` with all namespace files, add display config to `languageConfig`
+
 ## Docker
 
-All-in-one container: PostgreSQL is bundled inside — no external database required.
+All-in-one container: PostgreSQL is bundled inside — no external database required. Requires `NEXTAUTH_SECRET` and `AUTH_SECRET` env vars.
 
 ```bash
 cd docker && docker compose up -d    # Start app (PostgreSQL included)

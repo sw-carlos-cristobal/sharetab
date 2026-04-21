@@ -24,7 +24,7 @@
 
 ---
 
-ShareTab is a free, self-hosted alternative to Splitwise for tracking shared expenses with roommates, friends, and travel groups. Snap a photo of a receipt, let AI extract the line items, and assign them to group members. Taxes and tips split proportionally. Deploy on your own server with a single Docker command.
+ShareTab is a free, self-hosted alternative to Splitwise for tracking shared expenses with roommates, friends, and travel groups. Snap a photo of a receipt, let AI extract the line items, and assign them to group members. Taxes and tips split proportionally. Deploy on your own server with Docker Compose.
 
 ## Screenshots
 
@@ -93,7 +93,7 @@ ShareTab is a free, self-hosted alternative to Splitwise for tracking shared exp
 - **Group expense tracking** with multiple split modes (equal, percentage, shares, exact, item-level)
 - **AI receipt scanning** -- photograph a receipt, AI extracts line items, assign items to group members with proportional tax/tip; zoomable/pannable receipt viewer; rescan with correction prompts
 - **Guest bill splitting** -- no account needed, shareable summary links
-- **Pluggable AI providers** -- OpenAI (GPT-4o), Claude (API key), Meridian (Claude Max subscription), local Ollama, or OCR fallback (no API key needed)
+- **Pluggable AI providers** -- OpenAI (GPT-4o), OpenAI-Codex (ChatGPT OAuth), Claude (API key), Meridian (Claude Max subscription), local Ollama, or OCR fallback (no API key needed)
 - **Group archiving** -- archive inactive groups to declutter your dashboard; toggle archived view on groups page
 - **Cross-group dashboard** -- see all your balances at a glance, with per-person debt breakdown
 - **Debt simplification** -- minimize the number of payments needed
@@ -103,7 +103,7 @@ ShareTab is a free, self-hosted alternative to Splitwise for tracking shared exp
 - **Invite links** -- share a link to add friends to your groups
 - **Magic link auth** -- passwordless email sign-in
 - **PWA** -- installable on mobile with app-like experience
-- **Admin dashboard** -- user management, group overview, storage stats, AI usage, audit log, registration control, announcements, server logs
+- **Admin dashboard** -- user management, group overview, storage stats, AI usage, audit log, registration control, announcements, server logs, user impersonation, data export, expired guest split cleanup
 - **Self-hosted** -- Docker Compose deployment, designed for Unraid
 
 ## Quick Start
@@ -256,7 +256,7 @@ The `ocr` provider uses Tesseract.js for local text extraction -- no API key or 
 | Database | [Prisma 7](https://www.prisma.io) + PostgreSQL 16 |
 | Auth | [NextAuth v5](https://authjs.dev) (credentials + OAuth + magic link) |
 | UI | [TailwindCSS 4](https://tailwindcss.com) + [shadcn/ui](https://ui.shadcn.com) + [next-themes](https://github.com/pacocoursey/next-themes) |
-| AI | Pluggable providers: OpenAI, Claude, Meridian, Ollama, OCR fallback |
+| AI | Pluggable providers: OpenAI, OpenAI-Codex, Claude, Meridian, Ollama, OCR fallback |
 | Testing | [Vitest](https://vitest.dev) (unit) + [Playwright](https://playwright.dev) (e2e) |
 
 ## Development
@@ -311,8 +311,8 @@ cp .env.example .env  # Then edit .env as needed
 # Option A: All-in-one (embedded PostgreSQL + schema push + seed + dev server)
 npm run dev:full
 
-# Option B: Manual setup
-docker compose -f docker/docker-compose.yml up db -d  # or use your own PostgreSQL
+# Option B: Manual setup (bring your own PostgreSQL)
+# Set DATABASE_URL in .env pointing to your PostgreSQL instance
 npx prisma db push
 npm run db:seed    # optional -- creates demo data
 npm run dev
