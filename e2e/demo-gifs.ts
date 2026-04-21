@@ -117,7 +117,7 @@ async function recordDashboard(browser: Browser): Promise<string> {
   await page.waitForURL("**/dashboard", { timeout: 15000 });
 
   // Let dashboard data load
-  await page.waitForSelector("text=Your Groups", { timeout: 10000 });
+  await page.waitForSelector("h2:has-text('Groups')", { timeout: 10000 });
   await page.waitForTimeout(PAUSE_MEDIUM);
 
   // Scroll down to show group cards and balances
@@ -264,7 +264,7 @@ async function recordDarkMode(browser: Browser): Promise<string> {
   const page = await loginAs(context);
 
   // Pause on light dashboard
-  await page.waitForSelector("text=Your Groups", { timeout: 10000 });
+  await page.waitForSelector("h2:has-text('Groups')", { timeout: 10000 });
   await page.waitForTimeout(PAUSE_SHORT);
 
   // Open mobile hamburger menu
@@ -491,6 +491,34 @@ async function recordGroupSettings(browser: Browser): Promise<string> {
   return finalizeRecording(page, context);
 }
 
+async function recordAdminDashboard(browser: Browser): Promise<string> {
+  const context = await createRecordingContext(browser, DESKTOP);
+  const page = await loginAs(context);
+
+  // Navigate to admin
+  await page.goto("/admin");
+  await page.waitForSelector("text=Admin Dashboard", { timeout: 10000 });
+  await page.waitForTimeout(PAUSE_MEDIUM);
+
+  // Scroll through sections: system health, Meridian auth, OpenAI Codex auth
+  await page.evaluate(() => window.scrollTo({ top: 500, behavior: "smooth" }));
+  await page.waitForTimeout(PAUSE_MEDIUM);
+
+  // Continue scrolling to show more admin sections
+  await page.evaluate(() => window.scrollTo({ top: 1200, behavior: "smooth" }));
+  await page.waitForTimeout(PAUSE_MEDIUM);
+
+  // Scroll further to show tools, audit log, etc.
+  await page.evaluate(() => window.scrollTo({ top: 2000, behavior: "smooth" }));
+  await page.waitForTimeout(PAUSE_MEDIUM);
+
+  // Scroll back to top
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+  await page.waitForTimeout(PAUSE_SHORT);
+
+  return finalizeRecording(page, context);
+}
+
 // ── Main ──
 
 async function main() {
@@ -509,9 +537,18 @@ async function main() {
     { name: "split-modes", fn: recordSplitModes, desktop: false },
     { name: "invite-members", fn: recordInviteMembers, desktop: false },
     { name: "group-settings", fn: recordGroupSettings, desktop: false },
+    { name: "admin-dashboard", fn: recordAdminDashboard, desktop: true },
   ];
 
-  for (const { name, fn, desktop } of features) {
+  // Filter by CLI args: `tsx e2e/demo-gifs.ts dashboard dark-mode admin-dashboard`
+  const only = process.argv.slice(2);
+  const filtered = only.length > 0 ? features.filter((f) => only.includes(f.name)) : features;
+  if (filtered.length === 0) {
+    console.error(`No matching features. Available: ${features.map((f) => f.name).join(", ")}`);
+    process.exit(1);
+  }
+
+  for (const { name, fn, desktop } of filtered) {
     console.log(`Recording ${name}...`);
     try {
       const webmPath = await fn(browser);

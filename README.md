@@ -88,6 +88,12 @@ ShareTab is a free, self-hosted alternative to Splitwise for tracking shared exp
   <img src="demo/dark-mode.gif" width="320" alt="Dark mode toggle" />
 </p>
 
+### Admin dashboard -- manage users, AI providers, and system settings
+
+<p align="center">
+  <img src="demo/admin-dashboard.gif" width="100%" alt="Admin dashboard with system health, OAuth management, audit log, and tools" />
+</p>
+
 ## Features
 
 - **Group expense tracking** with multiple split modes (equal, percentage, shares, exact, item-level)
