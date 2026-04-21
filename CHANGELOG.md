@@ -1,5 +1,12 @@
 # Changelog
 
+## [v0.6.1] - 2026-04-21
+
+### Features
+- Add swedish translation (#80) (fd8ef57)
+
+**Full Changelog**: https://github.com/sw-carlos-cristobal/sharetab/compare/v0.6.0...v0.6.1
+
 ## [v0.6.0] - 2026-04-21
 
 ### Features
