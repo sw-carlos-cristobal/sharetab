@@ -1,5 +1,16 @@
 # Changelog
 
+## [v0.6.2] - 2026-04-22
+
+### Features
+- auto-refresh Meridian OAuth tokens in health poller (#82) (344a4d0)
+
+### Other Changes
+- docs: fix stale claims, add i18n section, fix Docker env pass-through (d2490bb)
+- docs: refresh GIFs for i18n, add admin dashboard demo (c95e607)
+
+**Full Changelog**: https://github.com/sw-carlos-cristobal/sharetab/compare/v0.6.1...v0.6.2
+
 ## [v0.6.1] - 2026-04-21
 
 ### Features
