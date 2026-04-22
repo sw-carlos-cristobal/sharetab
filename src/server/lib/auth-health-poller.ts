@@ -176,8 +176,6 @@ export async function checkMeridianHealth(
     if (meridianHealthInFlight) {
       return meridianHealthInFlight;
     }
-  } else if (meridianHealthInFlight) {
-    return meridianHealthInFlight;
   }
 
   meridianHealthInFlight = runMeridianHealthCheck()
