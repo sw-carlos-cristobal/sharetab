@@ -2,7 +2,7 @@ import nodemailer from "nodemailer";
 import { db } from "@/server/db";
 import { isProviderConfigured } from "@/server/ai/registry";
 import { checkOpenAICodexHealth } from "./openai-codex-login";
-import { getStoredMeridianTokenExpiry } from "./meridian-login";
+import { getStoredMeridianTokenExpiry, refreshIfNeeded as refreshMeridianToken } from "./meridian-login";
 import { logger } from "./logger";
 
 // ─── Types ────────────────────────────────────────────────
@@ -176,8 +176,6 @@ export async function checkMeridianHealth(
     if (meridianHealthInFlight) {
       return meridianHealthInFlight;
     }
-  } else if (meridianHealthInFlight) {
-    return meridianHealthInFlight;
   }
 
   meridianHealthInFlight = runMeridianHealthCheck()
@@ -310,6 +308,14 @@ async function handleMeridianTick(): Promise<void> {
     state.hasSeenHealthy = true;
     state.lastEmailSentAt = null;
     state.lastStatus = "healthy";
+
+    // Proactively refresh if token is within 15 minutes of expiry
+    const expiresAt = getStoredMeridianTokenExpiry();
+    if (expiresAt && expiresAt - Date.now() <= 15 * 60 * 1000) {
+      const refreshed = await refreshMeridianToken({ force: true });
+      logger.info("auth.poller.proactiveRefresh", { provider: "meridian", success: refreshed });
+      if (refreshed) invalidateMeridianHealthCache();
+    }
     return;
   }
 
@@ -319,15 +325,31 @@ async function handleMeridianTick(): Promise<void> {
   }
 
   if (result.status === "unhealthy") {
-    logger.warn("auth.poller.unhealthy", { provider: "meridian", error: result.error });
-    const interval = await getNotifyInterval();
-    if (await shouldSendEmail(state.lastEmailSentAt, interval)) {
-      const sent = await sendAuthExpiryEmail(
-        result.error ?? "Authentication expired",
-        undefined,
-        "meridian"
-      );
-      if (sent) state.lastEmailSentAt = Date.now();
+    // Force-refresh token, then re-verify health before suppressing alerts
+    await refreshMeridianToken({ force: true });
+    invalidateMeridianHealthCache();
+    const recheck = await checkMeridianHealth({ force: true });
+    if (recheck.status === "healthy") {
+      logger.info("auth.poller.autoRefresh", { provider: "meridian" });
+      state.hasSeenHealthy = true;
+      state.lastEmailSentAt = null;
+      state.lastStatus = "healthy";
+      return;
+    }
+
+    // Only send auth-expired email when re-check confirms authentication failure.
+    // Transient issues (degraded/not_running) after refresh aren't auth problems.
+    if (recheck.status === "unhealthy") {
+      logger.warn("auth.poller.unhealthy", { provider: "meridian", error: recheck.error });
+      const interval = await getNotifyInterval();
+      if (await shouldSendEmail(state.lastEmailSentAt, interval)) {
+        const sent = await sendAuthExpiryEmail(
+          recheck.error ?? "Authentication expired",
+          undefined,
+          "meridian"
+        );
+        if (sent) state.lastEmailSentAt = Date.now();
+      }
     }
   }
 
