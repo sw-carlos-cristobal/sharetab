@@ -755,6 +755,28 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
     expect(mockSendMail).toHaveBeenCalledTimes(1);
   });
 
+  test("skips email when re-check after refresh returns degraded (transient issue)", async () => {
+    mockRefreshIfNeeded.mockResolvedValue(true);
+
+    const { _pollTick, _resetPollerState } = await import("./auth-health-poller");
+    _resetPollerState();
+
+    // Tick 1: healthy
+    mockHealthy();
+    await _pollTick();
+
+    // Tick 2: unhealthy — refresh succeeds, but re-check is degraded (probe timeout)
+    vi.advanceTimersByTime(15 * 60 * 1000 + 1);
+    mockUnhealthy();
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ status: "degraded", auth: { email: "a@b.com" } }))
+    );
+    vi.mocked(fetch).mockResolvedValueOnce(new Response("", { status: 504 }));
+    await _pollTick();
+
+    expect(mockSendMail).not.toHaveBeenCalled();
+  });
+
   test("clears email suppression state after successful auto-refresh recovery", async () => {
     const { _pollTick, _resetPollerState } = await import("./auth-health-poller");
     _resetPollerState();

@@ -339,15 +339,19 @@ async function handleMeridianTick(): Promise<void> {
       return;
     }
 
-    logger.warn("auth.poller.unhealthy", { provider: "meridian", error: result.error });
-    const interval = await getNotifyInterval();
-    if (await shouldSendEmail(state.lastEmailSentAt, interval)) {
-      const sent = await sendAuthExpiryEmail(
-        result.error ?? "Authentication expired",
-        undefined,
-        "meridian"
-      );
-      if (sent) state.lastEmailSentAt = Date.now();
+    // Only send auth-expired email when re-check confirms authentication failure.
+    // Transient issues (degraded/not_running) after refresh aren't auth problems.
+    if (recheck.status === "unhealthy") {
+      logger.warn("auth.poller.unhealthy", { provider: "meridian", error: recheck.error });
+      const interval = await getNotifyInterval();
+      if (await shouldSendEmail(state.lastEmailSentAt, interval)) {
+        const sent = await sendAuthExpiryEmail(
+          recheck.error ?? "Authentication expired",
+          undefined,
+          "meridian"
+        );
+        if (sent) state.lastEmailSentAt = Date.now();
+      }
     }
   }
 
