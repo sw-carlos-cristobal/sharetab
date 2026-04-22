@@ -255,8 +255,9 @@ const EXPIRY_BUFFER_MS = 5 * 60 * 1000;
  * Read stored credentials and refresh the access token if expired.
  * Called on app startup so a container restart doesn't require re-login.
  * Returns true if credentials are valid (refreshed or still fresh).
+ * Pass `force: true` to refresh even if the token appears unexpired.
  */
-export async function refreshIfNeeded(): Promise<boolean> {
+export async function refreshIfNeeded(options?: { force?: boolean }): Promise<boolean> {
   const credPath = getCredentialPath();
   const oauth = readStoredOauthCredentials();
   if (!oauth) {
@@ -269,8 +270,8 @@ export async function refreshIfNeeded(): Promise<boolean> {
     return false;
   }
 
-  // Still fresh — no refresh needed
-  if (oauth.expiresAt && oauth.expiresAt - EXPIRY_BUFFER_MS > Date.now()) {
+  // Still fresh — no refresh needed (unless forced)
+  if (!options?.force && oauth.expiresAt && oauth.expiresAt - EXPIRY_BUFFER_MS > Date.now()) {
     logger.info("meridian.refresh.tokenStillValid", {
       expiresIn: Math.round((oauth.expiresAt - Date.now()) / 1000) + "s",
     });

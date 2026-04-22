@@ -314,7 +314,7 @@ async function handleMeridianTick(): Promise<void> {
     // Proactively refresh if token is within 15 minutes of expiry
     const expiresAt = getStoredMeridianTokenExpiry();
     if (expiresAt && expiresAt - Date.now() <= 15 * 60 * 1000) {
-      const refreshed = await refreshMeridianToken();
+      const refreshed = await refreshMeridianToken({ force: true });
       logger.info("auth.poller.proactiveRefresh", { provider: "meridian", success: refreshed });
       if (refreshed) invalidateMeridianHealthCache();
     }
@@ -327,11 +327,14 @@ async function handleMeridianTick(): Promise<void> {
   }
 
   if (result.status === "unhealthy") {
-    // Attempt auto-refresh before alerting
-    const refreshed = await refreshMeridianToken();
-    if (refreshed) {
+    // Force-refresh token, then re-verify health before suppressing alerts
+    await refreshMeridianToken({ force: true });
+    invalidateMeridianHealthCache();
+    const recheck = await checkMeridianHealth({ force: true });
+    if (recheck.status === "healthy") {
       logger.info("auth.poller.autoRefresh", { provider: "meridian" });
-      invalidateMeridianHealthCache();
+      state.hasSeenHealthy = true;
+      state.lastEmailSentAt = null;
       state.lastStatus = "healthy";
       return;
     }

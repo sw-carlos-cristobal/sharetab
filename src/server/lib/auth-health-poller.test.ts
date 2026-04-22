@@ -441,6 +441,7 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
 
     // First tick: proxy is running but auth is expired — should alert immediately
     mockUnhealthy();
+    mockUnhealthy(); // re-check after refresh attempt
     await _pollTick();
 
     expect(mockSendMail).toHaveBeenCalledTimes(1);
@@ -470,6 +471,7 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
     // Tick 2: unhealthy — should send email
     vi.advanceTimersByTime(15 * 60 * 1000 + 1);
     mockUnhealthy();
+    mockUnhealthy(); // re-check after refresh attempt
     await _pollTick();
     expect(mockSendMail).toHaveBeenCalledTimes(1);
     expect(mockSendMail.mock.calls[0][0].subject).toContain("Claude AI authentication expired");
@@ -486,11 +488,13 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
     // Tick 2: unhealthy — sends email
     vi.advanceTimersByTime(15 * 60 * 1000 + 1);
     mockUnhealthy();
+    mockUnhealthy(); // re-check
     await _pollTick();
     expect(mockSendMail).toHaveBeenCalledTimes(1);
 
     // Tick 3: still unhealthy — should NOT send again (default is "once")
     mockUnhealthy();
+    mockUnhealthy(); // re-check
     await _pollTick();
     expect(mockSendMail).toHaveBeenCalledTimes(1);
   });
@@ -508,18 +512,21 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
     // Tick 2: unhealthy — sends first email
     vi.advanceTimersByTime(15 * 60 * 1000 + 1);
     mockUnhealthy();
+    mockUnhealthy(); // re-check
     await _pollTick();
     expect(mockSendMail).toHaveBeenCalledTimes(1);
 
     // Tick 3: still unhealthy, but only 5 min later — should NOT send
     vi.advanceTimersByTime(5 * 60 * 1000);
     mockUnhealthy();
+    mockUnhealthy(); // re-check
     await _pollTick();
     expect(mockSendMail).toHaveBeenCalledTimes(1);
 
     // Tick 4: still unhealthy, 1 hour later — should send reminder
     vi.advanceTimersByTime(55 * 60 * 1000); // total 60 min
     mockUnhealthy();
+    mockUnhealthy(); // re-check
     await _pollTick();
     expect(mockSendMail).toHaveBeenCalledTimes(2);
   });
@@ -535,6 +542,7 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
     // Tick 2: unhealthy — sends email
     vi.advanceTimersByTime(15 * 60 * 1000 + 1);
     mockUnhealthy();
+    mockUnhealthy(); // re-check
     await _pollTick();
     expect(mockSendMail).toHaveBeenCalledTimes(1);
 
@@ -546,6 +554,7 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
     // Tick 4: unhealthy again — should send a NEW email
     vi.advanceTimersByTime(15 * 60 * 1000 + 1);
     mockUnhealthy("Token revoked");
+    mockUnhealthy("Token revoked"); // re-check
     await _pollTick();
     expect(mockSendMail).toHaveBeenCalledTimes(2);
     expect(mockSendMail.mock.calls[1][0].text).toContain("Token revoked");
@@ -706,7 +715,7 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  test("auto-refreshes token on unhealthy and skips email if refresh succeeds", async () => {
+  test("auto-refreshes on unhealthy, re-verifies health, and skips email if recovered", async () => {
     mockRefreshIfNeeded.mockResolvedValue(true);
 
     const { _pollTick, _resetPollerState } = await import("./auth-health-poller");
@@ -716,16 +725,17 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
     mockHealthy();
     await _pollTick();
 
-    // Tick 2: unhealthy — should attempt refresh, succeed, and skip email
+    // Tick 2: unhealthy — force-refresh + re-check returns healthy
     vi.advanceTimersByTime(15 * 60 * 1000 + 1);
     mockUnhealthy();
+    mockHealthy(); // re-check after refresh succeeds
     await _pollTick();
 
-    expect(mockRefreshIfNeeded).toHaveBeenCalled();
+    expect(mockRefreshIfNeeded).toHaveBeenCalledWith({ force: true });
     expect(mockSendMail).not.toHaveBeenCalled();
   });
 
-  test("sends email when auto-refresh fails on unhealthy", async () => {
+  test("sends email when re-check still unhealthy after refresh", async () => {
     mockRefreshIfNeeded.mockResolvedValue(false);
 
     const { _pollTick, _resetPollerState } = await import("./auth-health-poller");
@@ -735,16 +745,51 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
     mockHealthy();
     await _pollTick();
 
-    // Tick 2: unhealthy — refresh fails, should send email
+    // Tick 2: unhealthy — refresh + re-check still unhealthy
     vi.advanceTimersByTime(15 * 60 * 1000 + 1);
     mockUnhealthy();
+    mockUnhealthy(); // re-check also unhealthy
     await _pollTick();
 
-    expect(mockRefreshIfNeeded).toHaveBeenCalled();
+    expect(mockRefreshIfNeeded).toHaveBeenCalledWith({ force: true });
     expect(mockSendMail).toHaveBeenCalledTimes(1);
   });
 
-  test("proactively refreshes token when healthy but near expiry", async () => {
+  test("clears email suppression state after successful auto-refresh recovery", async () => {
+    const { _pollTick, _resetPollerState } = await import("./auth-health-poller");
+    _resetPollerState();
+
+    // Tick 1: healthy baseline
+    mockHealthy();
+    await _pollTick();
+
+    // Tick 2: unhealthy — refresh fails, sends first email
+    mockRefreshIfNeeded.mockResolvedValue(false);
+    vi.advanceTimersByTime(15 * 60 * 1000 + 1);
+    mockUnhealthy();
+    mockUnhealthy(); // re-check still unhealthy
+    await _pollTick();
+    expect(mockSendMail).toHaveBeenCalledTimes(1);
+
+    // Tick 3: unhealthy — refresh succeeds, re-check healthy, clears suppression
+    mockRefreshIfNeeded.mockResolvedValue(true);
+    vi.advanceTimersByTime(30 * 1000 + 1);
+    mockUnhealthy();
+    mockHealthy(); // re-check now healthy
+    await _pollTick();
+    expect(mockSendMail).toHaveBeenCalledTimes(1);
+
+    // Tick 4: unhealthy again — refresh fails, should send email again
+    // Advance past healthy cache TTL (15 min) so checkMeridianHealth re-fetches
+    mockRefreshIfNeeded.mockResolvedValue(false);
+    vi.advanceTimersByTime(15 * 60 * 1000 + 1);
+    mockUnhealthy();
+    mockUnhealthy(); // re-check still unhealthy
+    await _pollTick();
+    expect(mockSendMail).toHaveBeenCalledTimes(2);
+  });
+
+  test("proactively force-refreshes token when healthy but near expiry", async () => {
     mockRefreshIfNeeded.mockResolvedValue(true);
     mockGetStoredMeridianTokenExpiry.mockReturnValue(Date.now() + 10 * 60 * 1000);
 
@@ -754,7 +799,7 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
     mockHealthy();
     await _pollTick();
 
-    expect(mockRefreshIfNeeded).toHaveBeenCalledTimes(1);
+    expect(mockRefreshIfNeeded).toHaveBeenCalledWith({ force: true });
     expect(mockSendMail).not.toHaveBeenCalled();
   });
 
