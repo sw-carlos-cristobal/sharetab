@@ -206,6 +206,15 @@
     Required="false"
     Mask="false">claude-opus-4-6</Config>
   <Config
+    Name="Anthropic Health Model"
+    Target="ANTHROPIC_HEALTH_MODEL"
+    Default="claude-haiku-4-5-20251001"
+    Description="Lightweight model used by the Meridian health poller to verify auth tokens. Defaults to Haiku to minimize token usage."
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false">claude-haiku-4-5-20251001</Config>
+  <Config
     Name="Meridian Port"
     Target="MERIDIAN_PORT"
     Default="3457"
