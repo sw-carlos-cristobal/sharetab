@@ -187,6 +187,7 @@ All configuration is done through environment variables. Copy `.env.example` to 
 | `OPENAI_CODEX_MODEL` | Model for ChatGPT OAuth / Codex backend receipt scanning. Defaults to `gpt-5.4`. |
 | `ANTHROPIC_API_KEY` | Required when `claude` is included in `AI_PROVIDER_PRIORITY`. |
 | `ANTHROPIC_MODEL` | Claude model for receipt scanning. Defaults to `claude-sonnet-4-6` (claude provider) or `claude-opus-4-6` (meridian provider). |
+| `ANTHROPIC_HEALTH_MODEL` | Model for health-check probes (auth verification). Defaults to `claude-haiku-4-5-20251001`. |
 | `MERIDIAN_PORT` | Port for the embedded Meridian proxy. Defaults to `3457`. |
 | `OLLAMA_BASE_URL` | Ollama server URL. Defaults to `http://localhost:11434`. |
 | `OLLAMA_MODEL` | Ollama model name. Defaults to `llava`. |
