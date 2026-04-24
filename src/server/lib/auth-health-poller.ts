@@ -112,9 +112,18 @@ async function runMeridianHealthCheck(): Promise<MeridianHealthResult> {
     };
   }
 
-  // Step 2: Verify auth actually works with a minimal API call
-  // The /health endpoint can report "healthy" even with expired tokens,
-  // so we make a real API call to confirm.
+  // Step 2: Verify auth actually works with a minimal API call.
+  // Skip the probe when the stored token has plenty of time left — the only
+  // scenario it catches is server-side revocation, which is rare enough to
+  // not warrant burning tokens every cycle.
+  const storedExpiry = getStoredMeridianTokenExpiry();
+  if (storedExpiry && storedExpiry - Date.now() > 2 * 60 * 60 * 1000) {
+    return {
+      status: healthData.status === "degraded" ? "degraded" : "healthy",
+      email: healthData.auth?.email,
+    };
+  }
+
   try {
     const probeRes = await fetch(`${baseUrl}/v1/messages`, {
       method: "POST",
@@ -124,7 +133,7 @@ async function runMeridianHealthCheck(): Promise<MeridianHealthResult> {
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6",
+        model: process.env.ANTHROPIC_HEALTH_MODEL || "claude-haiku-4-5-20251001",
         max_tokens: 1,
         messages: [{ role: "user", content: "hi" }],
       }),

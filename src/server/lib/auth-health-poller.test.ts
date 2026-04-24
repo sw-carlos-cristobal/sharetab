@@ -217,7 +217,7 @@ describe("MeridianHealthPoller", () => {
     expect(fetch).toHaveBeenCalledTimes(4);
   });
 
-  test("checkMeridianHealth keeps healthy result cached for four hours when token expiry is far away", async () => {
+  test("checkMeridianHealth skips probe and caches result when token expiry is far away", async () => {
     mockGetStoredMeridianTokenExpiry.mockReturnValue(Date.now() + 12 * 60 * 60 * 1000);
 
     vi.mocked(fetch)
@@ -226,17 +226,18 @@ describe("MeridianHealthPoller", () => {
           status: "healthy",
           auth: { loggedIn: true, email: "user@test.com" },
         }), { status: 200 })
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ id: "msg_1", content: [] }), { status: 200 })
       );
 
     const { checkMeridianHealth } = await import("./auth-health-poller");
-    await checkMeridianHealth();
+    const result = await checkMeridianHealth();
+    expect(result.status).toBe("healthy");
+    // Only /health was called — probe was skipped because token expiry is >2h away
+    expect(fetch).toHaveBeenCalledTimes(1);
+
     vi.advanceTimersByTime(3 * 60 * 60 * 1000 + 59 * 60 * 1000);
     await checkMeridianHealth();
-
-    expect(fetch).toHaveBeenCalledTimes(2);
+    // Still cached — no additional fetch
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   test("checkMeridianHealth refreshes healthy result every five minutes when token is near expiry", async () => {
@@ -623,24 +624,13 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
           status: "healthy",
           auth: { loggedIn: true, email: "user@test.com" },
         }), { status: 200 })
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ id: "msg_1", content: [] }), { status: 200 })
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({
-          status: "healthy",
-          auth: { loggedIn: true, email: "user@test.com" },
-        }), { status: 200 })
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ id: "msg_2", content: [] }), { status: 200 })
       );
 
     await checkMeridianHealth();
     await _pollTick();
 
-    expect(fetch).toHaveBeenCalledTimes(2);
+    // Only 1 fetch: /health check (probe skipped for far-away expiry), then cached for poll tick
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   test("sends auth expiry email when openai-codex token expires", async () => {
