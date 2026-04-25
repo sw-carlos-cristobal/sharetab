@@ -47,8 +47,8 @@ test.describe("User suspend/unsuspend", () => {
     });
     await expect(bobRow).toBeVisible();
     // Should have either suspend or unsuspend button
-    const hasSuspend = await bobRow.getByTitle("Suspend user").isVisible().catch(() => false);
-    const hasUnsuspend = await bobRow.getByTitle("Unsuspend user").isVisible().catch(() => false);
+    const hasSuspend = await bobRow.getByLabel(/^Suspend /).isVisible().catch(() => false);
+    const hasUnsuspend = await bobRow.getByLabel(/^Unsuspend /).isVisible().catch(() => false);
     expect(hasSuspend || hasUnsuspend).toBe(true);
   });
 
@@ -57,7 +57,7 @@ test.describe("User suspend/unsuspend", () => {
 
     // Get Bob's user ID
     const listData = await trpcResult(
-      await trpcQuery(ctx, "admin.listUsers")
+      await trpcQuery(ctx, "admin.listUsers", {})
     );
     const bob = listData.users.find(
       (u: { email: string }) => u.email === "bob@example.com"
@@ -82,7 +82,7 @@ test.describe("User suspend/unsuspend", () => {
 
     // Verify Bob is now suspended
     const listData2 = await trpcResult(
-      await trpcQuery(ctx, "admin.listUsers")
+      await trpcQuery(ctx, "admin.listUsers", {})
     );
     const bob2 = listData2.users.find(
       (u: { email: string }) => u.email === "bob@example.com"
@@ -440,7 +440,7 @@ test.describe("User impersonation", () => {
       .first()
       .locator("tr", { hasText: "bob@example.com" });
     await expect(bobRow).toBeVisible();
-    await expect(bobRow.getByTitle("Impersonate user")).toBeVisible();
+    await expect(bobRow.getByLabel(/^Impersonate /)).toBeVisible();
   });
 
   test("impersonation API start and stop", async () => {
@@ -448,7 +448,7 @@ test.describe("User impersonation", () => {
 
     // Get Bob's user ID
     const listData = await trpcResult(
-      await trpcQuery(ctx, "admin.listUsers")
+      await trpcQuery(ctx, "admin.listUsers", {})
     );
     const bob = listData.users.find(
       (u: { email: string }) => u.email === "bob@example.com"
@@ -490,7 +490,7 @@ test.describe("User impersonation", () => {
       .locator("table")
       .first()
       .locator("tr", { hasText: "bob@example.com" });
-    await bobRow.getByTitle("Impersonate user").click();
+    await bobRow.getByLabel(/^Impersonate /).click();
 
     // Should redirect to dashboard
     await page.waitForURL("**/dashboard", { timeout: 10000 });

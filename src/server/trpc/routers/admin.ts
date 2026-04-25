@@ -216,39 +216,112 @@ export const adminRouter = createTRPCRouter({
     };
   }),
 
-  listUsers: adminProcedure.query(async ({ ctx }) => {
-    const users = await ctx.db.user.findMany({
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        isPlaceholder: true,
-        placeholderName: true,
-        suspendedAt: true,
-        createdAt: true,
-        _count: {
-          select: { groupMembers: true },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-    });
+  listUsers: adminProcedure
+    .input(
+      z.object({
+        cursor: z.string().optional(),
+        limit: z.number().int().min(1).max(100).default(20),
+        search: z.string().max(200).optional(),
+        sortBy: z
+          .enum(["name", "email", "groupCount", "createdAt"])
+          .default("createdAt"),
+        sortDirection: z.enum(["asc", "desc"]).default("desc"),
+        status: z
+          .enum(["all", "active", "suspended", "placeholder"])
+          .default("all"),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      // Build where clause
+      const where: Prisma.UserWhereInput = {};
 
-    const totalCount = users.length;
+      if (input.status === "active") {
+        where.suspendedAt = null;
+        where.isPlaceholder = false;
+      } else if (input.status === "suspended") {
+        where.suspendedAt = { not: null };
+      } else if (input.status === "placeholder") {
+        where.isPlaceholder = true;
+      }
 
-    return {
-      users: users.map((u) => ({
-        id: u.id,
-        name: u.isPlaceholder ? u.placeholderName : u.name,
-        email: u.email,
-        isPlaceholder: u.isPlaceholder,
-        isSuspended: u.suspendedAt !== null,
-        suspendedAt: u.suspendedAt,
-        groupCount: u._count.groupMembers,
-        createdAt: u.createdAt,
-      })),
-      totalCount,
-    };
-  }),
+      if (input.search) {
+        where.OR = [
+          { name: { contains: input.search, mode: "insensitive" } },
+          { email: { contains: input.search, mode: "insensitive" } },
+          { placeholderName: { contains: input.search, mode: "insensitive" } },
+        ];
+      }
+
+      type UserOrderBy = Prisma.UserOrderByWithRelationInput;
+      const dir = input.sortDirection;
+      const idTiebreaker: UserOrderBy = { id: dir };
+      let orderBy: UserOrderBy[];
+      switch (input.sortBy) {
+        case "name":
+          orderBy = [
+            { name: { sort: dir, nulls: dir === "asc" ? "last" : "first" } },
+            { placeholderName: dir },
+            idTiebreaker,
+          ];
+          break;
+        case "email":
+          orderBy = [{ email: dir }, idTiebreaker];
+          break;
+        case "groupCount":
+          orderBy = [{ groupMembers: { _count: dir } }, idTiebreaker];
+          break;
+        case "createdAt":
+        default:
+          orderBy = [{ createdAt: dir }, idTiebreaker];
+          break;
+      }
+
+      const isFirstPage = !input.cursor;
+      const [users, ...counts] = await Promise.all([
+        ctx.db.user.findMany({
+          take: input.limit + 1,
+          ...(input.cursor
+            ? { cursor: { id: input.cursor }, skip: 1 }
+            : {}),
+          where,
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            isPlaceholder: true,
+            placeholderName: true,
+            suspendedAt: true,
+            createdAt: true,
+            _count: {
+              select: { groupMembers: true },
+            },
+          },
+          orderBy,
+        }),
+        ...(isFirstPage ? [ctx.db.user.count({ where })] : []),
+      ]);
+
+      let nextCursor: string | undefined;
+      if (users.length > input.limit) {
+        users.pop();
+        nextCursor = users.at(-1)?.id;
+      }
+
+      return {
+        users: users.map((u) => ({
+          id: u.id,
+          name: u.isPlaceholder ? u.placeholderName : u.name,
+          email: u.email,
+          isPlaceholder: u.isPlaceholder,
+          isSuspended: u.suspendedAt !== null,
+          suspendedAt: u.suspendedAt,
+          groupCount: u._count.groupMembers,
+          createdAt: u.createdAt,
+        })),
+        totalCount: counts[0] as number | undefined,
+        nextCursor,
+      };
+    }),
 
   suspendUser: adminProcedure
     .input(z.object({ userId: z.string() }))
@@ -358,59 +431,128 @@ export const adminRouter = createTRPCRouter({
       return { deleted: true, userId: input.userId };
     }),
 
-  listGroups: adminProcedure.query(async ({ ctx }) => {
-    const groups = await ctx.db.group.findMany({
-      select: {
-        id: true,
-        name: true,
-        archivedAt: true,
-        createdAt: true,
-        _count: {
+  listGroups: adminProcedure
+    .input(
+      z.object({
+        cursor: z.string().optional(),
+        limit: z.number().int().min(1).max(100).default(20),
+        search: z.string().max(200).optional(),
+        sortBy: z
+          .enum(["name", "memberCount", "expenseCount", "createdAt"])
+          .default("createdAt"),
+        sortDirection: z.enum(["asc", "desc"]).default("desc"),
+        status: z.enum(["all", "active", "archived"]).default("all"),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      // Build where clause
+      const where: Prisma.GroupWhereInput = {};
+
+      if (input.status === "active") {
+        where.archivedAt = null;
+      } else if (input.status === "archived") {
+        where.archivedAt = { not: null };
+      }
+
+      if (input.search) {
+        where.name = { contains: input.search, mode: "insensitive" };
+      }
+
+      type GroupOrderBy = Prisma.GroupOrderByWithRelationInput;
+      const dir = input.sortDirection;
+      const idTiebreaker: GroupOrderBy = { id: dir };
+      let orderBy: GroupOrderBy[];
+      switch (input.sortBy) {
+        case "name":
+          orderBy = [{ name: dir }, idTiebreaker];
+          break;
+        case "memberCount":
+          orderBy = [{ members: { _count: dir } }, idTiebreaker];
+          break;
+        case "expenseCount":
+          orderBy = [{ expenses: { _count: dir } }, idTiebreaker];
+          break;
+        case "createdAt":
+        default:
+          orderBy = [{ createdAt: dir }, idTiebreaker];
+          break;
+      }
+
+      const isFirstPage = !input.cursor;
+
+      const [groups, ...countsArr] = await Promise.all([
+        ctx.db.group.findMany({
+          take: input.limit + 1,
+          ...(input.cursor
+            ? { cursor: { id: input.cursor }, skip: 1 }
+            : {}),
+          where,
           select: {
-            members: true,
-            expenses: true,
-            settlements: true,
+            id: true,
+            name: true,
+            archivedAt: true,
+            createdAt: true,
+            _count: {
+              select: {
+                members: true,
+                expenses: true,
+                settlements: true,
+              },
+            },
+            activityLogs: {
+              select: { createdAt: true },
+              orderBy: { createdAt: "desc" },
+              take: 1,
+            },
           },
-        },
-        expenses: {
-          select: { amount: true },
-        },
-        activityLogs: {
-          select: { createdAt: true },
-          orderBy: { createdAt: "desc" },
-          take: 1,
-        },
-      },
-      orderBy: { createdAt: "desc" },
-    });
+          orderBy,
+        }),
+        ...(isFirstPage
+          ? [
+              ctx.db.group.count({ where }),
+              ctx.db.expense.count({ where: { group: where } }),
+              ctx.db.settlement.count({ where: { group: where } }),
+            ]
+          : []),
+      ]);
 
-    let totalExpenses = 0;
-    let totalSettlements = 0;
+      let nextCursor: string | undefined;
+      if (groups.length > input.limit) {
+        groups.pop();
+        nextCursor = groups.at(-1)?.id;
+      }
 
-    const result = groups.map((g) => {
-      const totalAmount = g.expenses.reduce((sum, e) => sum + e.amount, 0);
-      totalExpenses += g._count.expenses;
-      totalSettlements += g._count.settlements;
+      const groupIds = groups.map((g) => g.id);
+      const expenseSums = groupIds.length > 0
+        ? await ctx.db.expense.groupBy({
+            by: ["groupId"],
+            where: { groupId: { in: groupIds } },
+            _sum: { amount: true },
+          })
+        : [];
+      const sumByGroup = new Map(
+        expenseSums.map((e) => [e.groupId, e._sum.amount ?? 0])
+      );
 
-      return {
+      const result = groups.map((g) => ({
         id: g.id,
         name: g.name,
         memberCount: g._count.members,
         expenseCount: g._count.expenses,
-        totalAmount,
+        totalAmount: sumByGroup.get(g.id) ?? 0,
         lastActivity: g.activityLogs[0]?.createdAt ?? g.createdAt,
         isArchived: g.archivedAt !== null,
         createdAt: g.createdAt,
-      };
-    });
+      }));
 
-    return {
-      groups: result,
-      totalCount: groups.length,
-      totalExpenses,
-      totalSettlements,
-    };
-  }),
+      return {
+        groups: result,
+        totalCount: countsArr[0] as number | undefined,
+        totalExpenses: countsArr[1] as number | undefined,
+        totalSettlements: countsArr[2] as number | undefined,
+        nextCursor,
+      };
+    }),
 
   deleteGroup: adminProcedure
     .input(z.object({ groupId: z.string() }))
