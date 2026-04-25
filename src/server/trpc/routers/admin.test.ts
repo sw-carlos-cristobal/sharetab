@@ -48,13 +48,22 @@ const mockDb = {
   user: {
     findMany: vi.fn(),
     findUnique: vi.fn(),
+    count: vi.fn(),
     delete: vi.fn(),
     update: vi.fn(),
   },
   group: {
     findMany: vi.fn(),
     findUnique: vi.fn(),
+    count: vi.fn(),
     delete: vi.fn(),
+  },
+  expense: {
+    count: vi.fn(),
+    groupBy: vi.fn().mockResolvedValue([]),
+  },
+  settlement: {
+    count: vi.fn(),
   },
   receipt: {
     count: vi.fn(),
@@ -222,10 +231,91 @@ describe("admin router procedures existence", () => {
 });
 
 describe("admin formatBytes helper", () => {
-  // The formatBytes function is internal, but we can test it indirectly
-  // by verifying the router was created successfully
   test("admin router initializes without errors", async () => {
     const { adminRouter } = await import("./admin");
     expect(adminRouter).toBeTruthy();
+  });
+});
+
+describe("listUsers input schema", () => {
+  const originalEnv = process.env;
+  let inputSchema: { parse: (v: unknown) => unknown };
+
+  beforeEach(async () => {
+    vi.resetModules();
+    process.env = { ...originalEnv, ADMIN_EMAIL: "admin@example.com" };
+    const { adminRouter } = await import("./admin");
+    const inputs = (adminRouter._def.procedures.listUsers as { _def: { inputs: { parse: (v: unknown) => unknown }[] } })._def.inputs;
+    inputSchema = inputs[0];
+  });
+
+  test("accepts valid sortBy values", () => {
+    for (const sortBy of ["name", "email", "groupCount", "createdAt"]) {
+      expect(() => inputSchema.parse({ sortBy })).not.toThrow();
+    }
+  });
+
+  test("rejects invalid sortBy values", () => {
+    expect(() => inputSchema.parse({ sortBy: "totalAmount" })).toThrow();
+    expect(() => inputSchema.parse({ sortBy: "bogus" })).toThrow();
+  });
+
+  test("accepts valid status filters", () => {
+    for (const status of ["all", "active", "suspended", "placeholder"]) {
+      expect(() => inputSchema.parse({ status })).not.toThrow();
+    }
+  });
+
+  test("defaults to createdAt desc when no sort specified", () => {
+    const result = inputSchema.parse({}) as { sortBy: string; sortDirection: string };
+    expect(result.sortBy).toBe("createdAt");
+    expect(result.sortDirection).toBe("desc");
+  });
+
+  test("limits search to 200 characters", () => {
+    expect(() => inputSchema.parse({ search: "a".repeat(201) })).toThrow();
+    expect(() => inputSchema.parse({ search: "a".repeat(200) })).not.toThrow();
+  });
+
+  test("enforces limit bounds", () => {
+    expect(() => inputSchema.parse({ limit: 0 })).toThrow();
+    expect(() => inputSchema.parse({ limit: 101 })).toThrow();
+    expect(() => inputSchema.parse({ limit: 50 })).not.toThrow();
+  });
+});
+
+describe("listGroups input schema", () => {
+  const originalEnv = process.env;
+  let inputSchema: { parse: (v: unknown) => unknown };
+
+  beforeEach(async () => {
+    vi.resetModules();
+    process.env = { ...originalEnv, ADMIN_EMAIL: "admin@example.com" };
+    const { adminRouter } = await import("./admin");
+    const inputs = (adminRouter._def.procedures.listGroups as { _def: { inputs: { parse: (v: unknown) => unknown }[] } })._def.inputs;
+    inputSchema = inputs[0];
+  });
+
+  test("accepts valid sortBy values", () => {
+    for (const sortBy of ["name", "memberCount", "expenseCount", "createdAt"]) {
+      expect(() => inputSchema.parse({ sortBy })).not.toThrow();
+    }
+  });
+
+  test("rejects computed column sort keys", () => {
+    expect(() => inputSchema.parse({ sortBy: "totalAmount" })).toThrow();
+    expect(() => inputSchema.parse({ sortBy: "lastActivity" })).toThrow();
+  });
+
+  test("accepts valid status filters", () => {
+    for (const status of ["all", "active", "archived"]) {
+      expect(() => inputSchema.parse({ status })).not.toThrow();
+    }
+  });
+
+  test("defaults to createdAt desc when no sort specified", () => {
+    const result = inputSchema.parse({}) as { sortBy: string; sortDirection: string };
+    expect(result.sortBy).toBe("createdAt");
+    expect(result.sortDirection).toBe("desc");
   });
 });

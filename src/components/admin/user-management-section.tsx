@@ -123,7 +123,8 @@ export function UserManagementSection({
         body: JSON.stringify({ userId }),
       });
       if (res.ok) {
-        window.location.href = "/dashboard";
+        const [, locale] = window.location.pathname.split("/");
+        window.location.href = locale ? `/${locale}/dashboard` : "/dashboard";
       }
     } finally {
       setImpersonating(false);
@@ -187,6 +188,13 @@ export function UserManagementSection({
           {users.isLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : users.isError ? (
+            <div className="flex flex-col items-center gap-2 py-12 text-sm text-destructive">
+              <p>Failed to load users.</p>
+              <Button variant="outline" size="sm" onClick={() => users.refetch()}>
+                Retry
+              </Button>
             </div>
           ) : allUsers.length === 0 ? (
             <div className="py-12 text-center text-sm text-muted-foreground">

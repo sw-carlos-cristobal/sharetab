@@ -24,13 +24,7 @@ import {
   ArrowDown,
 } from "lucide-react";
 
-type GroupSortBy =
-  | "name"
-  | "memberCount"
-  | "expenseCount"
-  | "totalAmount"
-  | "lastActivity"
-  | "createdAt";
+type GroupSortBy = "name" | "memberCount" | "expenseCount" | "createdAt";
 type GroupStatus = "all" | "active" | "archived";
 type SortDirection = "asc" | "desc";
 
@@ -85,8 +79,8 @@ export function GroupOverviewSection() {
 
   const allGroups = groups.data?.pages.flatMap((p) => p.groups) ?? [];
   const totalCount = groups.data?.pages[0]?.totalCount ?? 0;
-  const totalExpenses = groups.data?.pages[0]?.totalExpenses ?? 0;
-  const totalSettlements = groups.data?.pages[0]?.totalSettlements ?? 0;
+  const totalExpenses = groups.data?.pages[0]?.totalExpenses;
+  const totalSettlements = groups.data?.pages[0]?.totalSettlements;
 
   // Mutations
   const deleteGroup = trpc.admin.deleteGroup.useMutation({
@@ -123,8 +117,12 @@ export function GroupOverviewSection() {
         <h2 className="text-lg font-semibold">Group Overview</h2>
         <div className="flex items-center gap-2">
           <Badge variant="secondary">{totalCount} groups</Badge>
-          <Badge variant="secondary">{totalExpenses} expenses</Badge>
-          <Badge variant="secondary">{totalSettlements} settlements</Badge>
+          {totalExpenses != null && (
+            <Badge variant="secondary">{totalExpenses} expenses</Badge>
+          )}
+          {totalSettlements != null && (
+            <Badge variant="secondary">{totalSettlements} settlements</Badge>
+          )}
         </div>
       </div>
 
@@ -162,6 +160,13 @@ export function GroupOverviewSection() {
           {groups.isLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : groups.isError ? (
+            <div className="flex flex-col items-center gap-2 py-12 text-sm text-destructive">
+              <p>Failed to load groups.</p>
+              <Button variant="outline" size="sm" onClick={() => groups.refetch()}>
+                Retry
+              </Button>
             </div>
           ) : allGroups.length === 0 ? (
             <div className="py-12 text-center text-sm text-muted-foreground">
@@ -216,32 +221,10 @@ export function GroupOverviewSection() {
                         </button>
                       </th>
                       <th className="px-4 py-3 font-medium text-right">
-                        <button
-                          type="button"
-                          className="inline-flex items-center hover:text-foreground"
-                          onClick={() => handleSort("totalAmount")}
-                        >
-                          Total
-                          <SortIcon
-                            column="totalAmount"
-                            currentSort={sortBy}
-                            currentDirection={sortDirection}
-                          />
-                        </button>
+                        Total
                       </th>
                       <th className="px-4 py-3 font-medium">
-                        <button
-                          type="button"
-                          className="inline-flex items-center hover:text-foreground"
-                          onClick={() => handleSort("lastActivity")}
-                        >
-                          Last Activity
-                          <SortIcon
-                            column="lastActivity"
-                            currentSort={sortBy}
-                            currentDirection={sortDirection}
-                          />
-                        </button>
+                        Last Activity
                       </th>
                       <th className="px-4 py-3 font-medium">Status</th>
                       <th className="px-4 py-3 font-medium" />
@@ -274,6 +257,7 @@ export function GroupOverviewSection() {
                           <Button
                             variant="ghost"
                             size="icon-sm"
+                            aria-label={`Delete group ${group.name}`}
                             onClick={() =>
                               setDeleteTarget({
                                 id: group.id,

@@ -252,22 +252,27 @@ export const adminRouter = createTRPCRouter({
         ];
       }
 
-      // Build orderBy
       type UserOrderBy = Prisma.UserOrderByWithRelationInput;
-      let orderBy: UserOrderBy;
+      const dir = input.sortDirection;
+      const idTiebreaker: UserOrderBy = { id: dir };
+      let orderBy: UserOrderBy[];
       switch (input.sortBy) {
         case "name":
-          orderBy = { name: input.sortDirection };
+          orderBy = [
+            { name: { sort: dir, nulls: dir === "asc" ? "last" : "first" } },
+            { placeholderName: dir },
+            idTiebreaker,
+          ];
           break;
         case "email":
-          orderBy = { email: input.sortDirection };
+          orderBy = [{ email: dir }, idTiebreaker];
           break;
         case "groupCount":
-          orderBy = { groupMembers: { _count: input.sortDirection } };
+          orderBy = [{ groupMembers: { _count: dir } }, idTiebreaker];
           break;
         case "createdAt":
         default:
-          orderBy = { createdAt: input.sortDirection };
+          orderBy = [{ createdAt: dir }, idTiebreaker];
           break;
       }
 
@@ -432,14 +437,7 @@ export const adminRouter = createTRPCRouter({
         limit: z.number().min(1).max(100).default(20),
         search: z.string().max(200).optional(),
         sortBy: z
-          .enum([
-            "name",
-            "memberCount",
-            "expenseCount",
-            "totalAmount",
-            "lastActivity",
-            "createdAt",
-          ])
+          .enum(["name", "memberCount", "expenseCount", "createdAt"])
           .default("createdAt"),
         sortDirection: z.enum(["asc", "desc"]).default("desc"),
         status: z.enum(["all", "active", "archived"]).default("all"),
@@ -459,65 +457,60 @@ export const adminRouter = createTRPCRouter({
         where.name = { contains: input.search, mode: "insensitive" };
       }
 
-      // Build orderBy — computed fields (totalAmount, lastActivity) fall back to createdAt
       type GroupOrderBy = Prisma.GroupOrderByWithRelationInput;
-      let orderBy: GroupOrderBy;
+      const dir = input.sortDirection;
+      const idTiebreaker: GroupOrderBy = { id: dir };
+      let orderBy: GroupOrderBy[];
       switch (input.sortBy) {
         case "name":
-          orderBy = { name: input.sortDirection };
+          orderBy = [{ name: dir }, idTiebreaker];
           break;
         case "memberCount":
-          orderBy = { members: { _count: input.sortDirection } };
+          orderBy = [{ members: { _count: dir } }, idTiebreaker];
           break;
         case "expenseCount":
-          orderBy = { expenses: { _count: input.sortDirection } };
-          break;
-        case "totalAmount":
-        case "lastActivity":
-          // These are computed fields — can't sort server-side via Prisma
-          orderBy = { createdAt: input.sortDirection };
+          orderBy = [{ expenses: { _count: dir } }, idTiebreaker];
           break;
         case "createdAt":
         default:
-          orderBy = { createdAt: input.sortDirection };
+          orderBy = [{ createdAt: dir }, idTiebreaker];
           break;
       }
 
-      const [groups, totalCount, totalExpenses, totalSettlements] =
-        await Promise.all([
-          ctx.db.group.findMany({
-            take: input.limit + 1,
-            ...(input.cursor
-              ? { cursor: { id: input.cursor }, skip: 1 }
-              : {}),
-            where,
-            select: {
-              id: true,
-              name: true,
-              archivedAt: true,
-              createdAt: true,
-              _count: {
-                select: {
-                  members: true,
-                  expenses: true,
-                  settlements: true,
-                },
-              },
-              expenses: {
-                select: { amount: true },
-              },
-              activityLogs: {
-                select: { createdAt: true },
-                orderBy: { createdAt: "desc" },
-                take: 1,
+      const isFirstPage = !input.cursor;
+
+      const [groups, totalCount, ...globalCounts] = await Promise.all([
+        ctx.db.group.findMany({
+          take: input.limit + 1,
+          ...(input.cursor
+            ? { cursor: { id: input.cursor }, skip: 1 }
+            : {}),
+          where,
+          select: {
+            id: true,
+            name: true,
+            archivedAt: true,
+            createdAt: true,
+            _count: {
+              select: {
+                members: true,
+                expenses: true,
+                settlements: true,
               },
             },
-            orderBy,
-          }),
-          ctx.db.group.count({ where }),
-          ctx.db.expense.count(),
-          ctx.db.settlement.count(),
-        ]);
+            activityLogs: {
+              select: { createdAt: true },
+              orderBy: { createdAt: "desc" },
+              take: 1,
+            },
+          },
+          orderBy,
+        }),
+        ctx.db.group.count({ where }),
+        ...(isFirstPage
+          ? [ctx.db.expense.count({ where: { group: where } }), ctx.db.settlement.count({ where: { group: where } })]
+          : []),
+      ]);
 
       let nextCursor: string | undefined;
       if (groups.length > input.limit) {
@@ -525,26 +518,34 @@ export const adminRouter = createTRPCRouter({
         nextCursor = next?.id;
       }
 
-      const result = groups.map((g) => {
-        const totalAmount = g.expenses.reduce((sum, e) => sum + e.amount, 0);
+      const groupIds = groups.map((g) => g.id);
+      const expenseSums = groupIds.length > 0
+        ? await ctx.db.expense.groupBy({
+            by: ["groupId"],
+            where: { groupId: { in: groupIds } },
+            _sum: { amount: true },
+          })
+        : [];
+      const sumByGroup = new Map(
+        expenseSums.map((e) => [e.groupId, e._sum.amount ?? 0])
+      );
 
-        return {
-          id: g.id,
-          name: g.name,
-          memberCount: g._count.members,
-          expenseCount: g._count.expenses,
-          totalAmount,
-          lastActivity: g.activityLogs[0]?.createdAt ?? g.createdAt,
-          isArchived: g.archivedAt !== null,
-          createdAt: g.createdAt,
-        };
-      });
+      const result = groups.map((g) => ({
+        id: g.id,
+        name: g.name,
+        memberCount: g._count.members,
+        expenseCount: g._count.expenses,
+        totalAmount: sumByGroup.get(g.id) ?? 0,
+        lastActivity: g.activityLogs[0]?.createdAt ?? g.createdAt,
+        isArchived: g.archivedAt !== null,
+        createdAt: g.createdAt,
+      }));
 
       return {
         groups: result,
         totalCount,
-        totalExpenses,
-        totalSettlements,
+        totalExpenses: globalCounts[0] as number | undefined,
+        totalSettlements: globalCounts[1] as number | undefined,
         nextCursor,
       };
     }),
