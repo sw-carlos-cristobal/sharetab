@@ -15,6 +15,7 @@ import {
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const OAUTH_PROVIDERS = new Set(['meridian', 'openai-codex']);
+const KNOWN_PROVIDERS = new Set(['openai', 'openai-codex', 'claude', 'meridian', 'ollama', 'ocr']);
 
 export function AIProviderTestSection() {
   const health = trpc.admin.getSystemHealth.useQuery();
@@ -31,11 +32,15 @@ export function AIProviderTestSection() {
     ?.split(' -> ')
     .filter(Boolean) ?? [];
 
-  const nonOAuthProviders = allProviders.filter((p) => !OAUTH_PROVIDERS.has(p));
+  const nonOAuthProviders = allProviders.filter(
+    (p) => KNOWN_PROVIDERS.has(p) && !OAUTH_PROVIDERS.has(p)
+  );
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
     if (!selected) return;
+    if (!ACCEPTED_TYPES.includes(selected.type)) return;
+    if (selected.size > 5 * 1024 * 1024) return;
 
     const reader = new FileReader();
     reader.onload = () => {

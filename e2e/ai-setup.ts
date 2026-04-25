@@ -16,14 +16,18 @@
  *
  * Requires:
  *   - dev:full server running (npm run dev:full)
- *   - ADMIN_EMAIL set to alice@example.com (seed data)
+ *   - Optional: ADMIN_EMAIL / ADMIN_PASSWORD to override the default seed admin
+ *     credentials (defaults: alice@example.com / password123)
  *   - AI_PROVIDER_PRIORITY includes meridian and/or openai-codex
  */
 
 import * as readline from "readline";
 
 const BASE = process.env.BASE_URL || "http://localhost:3001";
-const ADMIN = { email: "alice@example.com", password: "password123" };
+const ADMIN = {
+  email: process.env.ADMIN_EMAIL || "alice@example.com",
+  password: process.env.ADMIN_PASSWORD || "password123",
+};
 
 async function getAuthedCookies(): Promise<string> {
   const csrfRes = await fetch(`${BASE}/api/auth/csrf`);

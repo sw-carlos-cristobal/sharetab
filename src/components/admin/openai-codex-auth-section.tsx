@@ -95,6 +95,8 @@ export function OpenAICodexAuthSection() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
     if (!selected) return;
+    if (!ACCEPTED_TYPES.includes(selected.type)) return;
+    if (selected.size > 5 * 1024 * 1024) return;
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = reader.result as string;

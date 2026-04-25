@@ -1149,19 +1149,27 @@ export const adminRouter = createTRPCRouter({
       try {
         provider = await createProviderByName(input.providerName);
       } catch (err) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message:
-            err instanceof Error ? err.message : "Failed to create provider",
+        const message =
+          err instanceof Error ? err.message : "Failed to create provider";
+        await logAdminAction(ctx.db, ctx.user.id, "AI_PROVIDER_TESTED", null, {
+          provider: input.providerName,
+          durationMs: Date.now() - start,
+          success: false,
+          error: message,
         });
+        throw new TRPCError({ code: "BAD_REQUEST", message });
       }
 
       const available = await provider.isAvailable();
       if (!available) {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: `Provider "${input.providerName}" is not available`,
+        const message = `Provider "${input.providerName}" is not available`;
+        await logAdminAction(ctx.db, ctx.user.id, "AI_PROVIDER_TESTED", null, {
+          provider: input.providerName,
+          durationMs: Date.now() - start,
+          success: false,
+          error: message,
         });
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message });
       }
 
       const imageBuffer = Buffer.from(input.imageBase64, "base64");

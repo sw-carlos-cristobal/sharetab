@@ -11,7 +11,7 @@ import { users, authedContext, trpcQuery, trpcMutation, trpcResult } from "./hel
  */
 
 const RECEIPT_PATH = resolve("e2e/receipts/coffee-shop.png");
-const AI_TIMEOUT = 90_000;
+const AI_TIMEOUT = 150_000;
 
 test.describe("AI Provider Test — admin endpoint", () => {
   test.beforeEach(({}, testInfo) => {
@@ -23,6 +23,7 @@ test.describe("AI Provider Test — admin endpoint", () => {
   let configuredProviders: string[] = [];
 
   test.beforeAll(async () => {
+    if (!process.env.RUN_AI_TESTS) return;
     const ctx = await authedContext(users.alice.email, users.alice.password);
     try {
       const health = await trpcResult(
