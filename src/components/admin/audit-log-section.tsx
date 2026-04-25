@@ -20,6 +20,13 @@ const ACTION_LABELS: Record<string, { label: string; color: string }> = {
   REGISTRATION_MODE_CHANGED: { label: 'Reg. Mode Changed', color: 'bg-violet-500/10 text-violet-700 dark:text-violet-400' },
   EXPORT_CREATED: { label: 'Data Export', color: 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-400' },
   TEST_EMAIL_SENT: { label: 'Test Email', color: 'bg-teal-500/10 text-teal-700 dark:text-teal-400' },
+  EXPIRED_SPLITS_CLEANED: { label: 'Splits Cleaned', color: 'bg-blue-500/10 text-blue-700 dark:text-blue-400' },
+  MERIDIAN_LOGIN_STARTED: { label: 'Meridian Login', color: 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-400' },
+  MERIDIAN_LOGIN_COMPLETED: { label: 'Meridian Logged In', color: 'bg-green-500/10 text-green-700 dark:text-green-400' },
+  MERIDIAN_LOGIN_FAILED: { label: 'Meridian Login Failed', color: 'bg-red-500/10 text-red-700 dark:text-red-400' },
+  MERIDIAN_LOGOUT: { label: 'Meridian Logout', color: 'bg-orange-500/10 text-orange-700 dark:text-orange-400' },
+  MERIDIAN_NOTIFY_PREFERENCE_CHANGED: { label: 'Notify Pref Changed', color: 'bg-violet-500/10 text-violet-700 dark:text-violet-400' },
+  AI_PROVIDER_TESTED: { label: 'AI Provider Test', color: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' },
 };
 
 export function AuditLogSection() {
@@ -122,5 +129,8 @@ function formatMetadata(metadata: Record<string, unknown> | null): string {
     parts.push(`${metadata.deletedCount} files`);
   }
   if (metadata.to) parts.push(`to: ${metadata.to}`);
+  if (metadata.provider) parts.push(`${metadata.provider}`);
+  if (metadata.durationMs !== undefined) parts.push(`${metadata.durationMs}ms`);
+  if (metadata.success === false && metadata.error) parts.push(`error: ${metadata.error}`);
   return parts.join(', ') || '---';
 }

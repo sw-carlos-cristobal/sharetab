@@ -99,6 +99,16 @@ async function createProvider(name: AIProviderName): Promise<AIProvider> {
   }
 }
 
+export async function createProviderByName(name: string): Promise<AIProvider> {
+  if (
+    !isAIProviderName(name) ||
+    !USER_SELECTABLE_PROVIDERS.includes(name as (typeof USER_SELECTABLE_PROVIDERS)[number])
+  ) {
+    throw unknownProviderError(name);
+  }
+  return createProvider(name);
+}
+
 export function getConfiguredProviderPriority(): string[] {
   return getConfiguredProviderPriorityInternal();
 }

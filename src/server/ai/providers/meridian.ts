@@ -69,29 +69,32 @@ export class MeridianProvider implements AIProvider {
       ? `${RECEIPT_EXTRACTION_PROMPT}\n\nThe user has provided a correction. Apply it to improve accuracy:\n<user_correction>${correctionHint.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</user_correction>`
       : RECEIPT_EXTRACTION_PROMPT;
 
-    const stream = client.messages.stream({
-      model: process.env.ANTHROPIC_MODEL || "claude-opus-4-6",
-      max_tokens: 4000,
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "image",
-              source: {
-                type: "base64",
-                media_type: mimeType as ImageMediaType,
-                data: base64,
+    const stream = client.messages.stream(
+      {
+        model: process.env.ANTHROPIC_MODEL || "claude-opus-4-6",
+        max_tokens: 4000,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image",
+                source: {
+                  type: "base64",
+                  media_type: mimeType as ImageMediaType,
+                  data: base64,
+                },
               },
-            },
-            {
-              type: "text",
-              text: prompt,
-            },
-          ],
-        },
-      ],
-    });
+              {
+                type: "text",
+                text: prompt,
+              },
+            ],
+          },
+        ],
+      },
+      { timeout: 120_000 }
+    );
 
     const response = await stream.finalMessage();
     console.log(`[meridian] completed in ${Date.now() - start}ms, content blocks: ${response.content?.length}`);

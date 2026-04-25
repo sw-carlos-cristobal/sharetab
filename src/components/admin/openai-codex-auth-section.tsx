@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,7 +12,13 @@ import {
   CheckCircle2,
   Copy,
   ExternalLink,
+  FlaskConical,
+  Upload,
+  AlertCircle,
+  X,
 } from "lucide-react";
+
+const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 
 export function OpenAICodexAuthSection() {
   const utils = trpc.useUtils();
@@ -60,6 +66,10 @@ export function OpenAICodexAuthSection() {
     },
   });
 
+  const testProvider = trpc.admin.testAIProvider.useMutation({
+    onSettled: () => utils.admin.getAuditLog.invalidate(),
+  });
+
   const [loginState, setLoginState] = useState<
     "idle" | "starting" | "waiting_for_code" | "submitting" | "success" | "error"
   >("idle");
@@ -68,12 +78,49 @@ export function OpenAICodexAuthSection() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [testFile, setTestFile] = useState<{
+    name: string;
+    base64: string;
+    mimeType: string;
+  } | null>(null);
+
   function resetLoginState() {
     setLoginState("idle");
     setLoginUrl(null);
     setLoginCode("");
     setLoginError(null);
   }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files?.[0];
+    if (!selected) return;
+    if (!ACCEPTED_TYPES.includes(selected.type)) return;
+    if (selected.size > 5 * 1024 * 1024) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const base64 = dataUrl.split(",")[1];
+      setTestFile({ name: selected.name, base64, mimeType: selected.type });
+      testProvider.reset();
+    };
+    reader.readAsDataURL(selected);
+  };
+
+  const clearFile = () => {
+    setTestFile(null);
+    testProvider.reset();
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const handleTest = () => {
+    if (!testFile) return;
+    testProvider.mutate({
+      providerName: "openai-codex",
+      imageBase64: testFile.base64,
+      mimeType: testFile.mimeType as "image/jpeg" | "image/png" | "image/webp" | "image/gif",
+    });
+  };
 
   const status = authStatus.data;
   if (!status || "status" in status && status.status === "not_applicable") {
@@ -269,6 +316,77 @@ export function OpenAICodexAuthSection() {
             <div className="text-sm text-red-600 dark:text-red-400">
               {loginError}
             </div>
+          )}
+
+          {/* Test Receipt Extraction */}
+          {isHealthy && loginState === "idle" && (
+            <>
+              <div className="border-t pt-3">
+                <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Test Receipt Extraction
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept={ACCEPTED_TYPES.join(",")}
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => fileRef.current?.click()}
+                    disabled={testProvider.isPending}
+                  >
+                    <Upload className="mr-1 h-3 w-3" />
+                    {testFile ? "Change" : "Upload"}
+                  </Button>
+                  {testFile && (
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <span className="max-w-32 truncate">{testFile.name}</span>
+                      <button
+                        onClick={clearFile}
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  )}
+                  <Button
+                    size="sm"
+                    disabled={!testFile || testProvider.isPending}
+                    onClick={handleTest}
+                  >
+                    {testProvider.isPending ? (
+                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                    ) : (
+                      <FlaskConical className="mr-1 h-3 w-3" />
+                    )}
+                    Test
+                  </Button>
+                </div>
+              </div>
+
+              {testProvider.isSuccess && (
+                <div className="space-y-1">
+                  <p className="flex items-center gap-1 text-xs text-green-600">
+                    <CheckCircle2 className="h-3 w-3" />
+                    Responded in {testProvider.data.durationMs}ms
+                  </p>
+                  <pre className="max-h-64 overflow-auto rounded-md bg-muted p-2 text-xs">
+                    {JSON.stringify(testProvider.data.result, null, 2)}
+                  </pre>
+                </div>
+              )}
+
+              {testProvider.isError && (
+                <p className="flex items-center gap-1 text-xs text-destructive">
+                  <AlertCircle className="h-3 w-3" />
+                  {testProvider.error.message}
+                </p>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

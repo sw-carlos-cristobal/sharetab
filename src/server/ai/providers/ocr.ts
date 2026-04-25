@@ -76,7 +76,8 @@ async function runOcrWorker(imageBuffer: Buffer): Promise<OcrWorkerResult> {
 
 // ── Receipt text parser ─────────────────────────────────────────────
 
-const LINE_PRICE_RE = /^(.+?)\s+\$?\s*(\d{1,6}[.,]\d{2})\s*-?\s*$/;
+// Allow trailing stray digits after the 2-decimal price (OCR artifact: "5.253" → captures "5.25")
+const LINE_PRICE_RE = /^(.+?)\s+\$?\s*(\d{1,6}[.,]\d{2})\d?\s*-?\s*$/;
 const QTY_PREFIX_RE = /^(\d+)\s*[xX@]\s+/;
 // OCR often reads "1x" as "Ix" or "lx" — normalize before parsing
 const OCR_QTY_RE = /^[Il1]\s*[xX]\s+/;
@@ -111,7 +112,8 @@ const SKIP_KEYWORDS = [
 ];
 
 // Discount-related keywords — lines containing these with a price are skipped
-const DISCOUNT_KEYWORDS = ["save", "discount", "off", "coupon", "promo", "savings", "you saved"];
+// NOTE: "off" was removed — it false-positives on "coffee", "office", etc.
+const DISCOUNT_KEYWORDS = ["save", "discount", "% off", "%off", "$ off", "$off", "coupon", "promo", "savings", "you saved"];
 
 // Fee, reward, and payment keywords — lines with these are always skipped, even with a price
 const FEE_REWARD_KEYWORDS = [

@@ -5,6 +5,7 @@ import {
   getAIProvidersWithFallback,
   getConfiguredProviderPriority,
   isProviderConfigured,
+  createProviderByName,
 } from "@/server/ai/registry";
 import {
   type AdminAction,
@@ -158,7 +159,7 @@ export const adminRouter = createTRPCRouter({
     let aiAvailable = false;
     let ocrFallback = false;
     let aiStatus: "available" | "requires_auth" | "unavailable" = "unavailable";
-    let authProvidersNeedingLogin: string[] = [];
+    const authProvidersNeedingLogin: string[] = [];
     try {
       const configured = getConfiguredProviderPriority();
       const [active] = await getAIProvidersWithFallback();
@@ -1126,6 +1127,103 @@ export const adminRouter = createTRPCRouter({
     invalidateOpenAICodexHealthCache();
     return { success: true };
   }),
+
+  // ─── AI Provider Testing ─────────────────────────────────
+
+  testAIProvider: adminProcedure
+    .input(
+      z.object({
+        providerName: z.string(),
+        imageBase64: z.string().max(10 * 1024 * 1024),
+        mimeType: z.enum([
+          "image/jpeg",
+          "image/png",
+          "image/webp",
+          "image/gif",
+        ]),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const start = Date.now();
+      let provider;
+      try {
+        provider = await createProviderByName(input.providerName);
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Failed to create provider";
+        await logAdminAction(ctx.db, ctx.user.id, "AI_PROVIDER_TESTED", null, {
+          provider: input.providerName,
+          durationMs: Date.now() - start,
+          success: false,
+          error: message,
+        });
+        throw new TRPCError({ code: "BAD_REQUEST", message });
+      }
+
+      const available = await provider.isAvailable();
+      if (!available) {
+        const message = `Provider "${input.providerName}" is not available`;
+        await logAdminAction(ctx.db, ctx.user.id, "AI_PROVIDER_TESTED", null, {
+          provider: input.providerName,
+          durationMs: Date.now() - start,
+          success: false,
+          error: message,
+        });
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message });
+      }
+
+      const imageBuffer = Buffer.from(input.imageBase64, "base64");
+      if (imageBuffer.length > 5 * 1024 * 1024) {
+        const message = "Image exceeds 5 MB limit";
+        await logAdminAction(ctx.db, ctx.user.id, "AI_PROVIDER_TESTED", null, {
+          provider: input.providerName,
+          durationMs: Date.now() - start,
+          success: false,
+          error: message,
+        });
+        throw new TRPCError({ code: "BAD_REQUEST", message });
+      }
+
+      try {
+        const result = await provider.extractReceipt(
+          imageBuffer,
+          input.mimeType
+        );
+        const durationMs = Date.now() - start;
+
+        await logAdminAction(
+          ctx.db,
+          ctx.user.id,
+          "AI_PROVIDER_TESTED",
+          null,
+          { provider: input.providerName, durationMs, success: true }
+        );
+
+        return { result, durationMs };
+      } catch (err) {
+        const durationMs = Date.now() - start;
+        const message =
+          err instanceof Error ? err.message : "Extraction failed";
+
+        await logAdminAction(
+          ctx.db,
+          ctx.user.id,
+          "AI_PROVIDER_TESTED",
+          null,
+          {
+            provider: input.providerName,
+            durationMs,
+            success: false,
+            error: message,
+          }
+        );
+
+        throw new TRPCError({
+          code: "BAD_GATEWAY",
+          message,
+        });
+      }
+    }),
 });
 
 function formatBytes(bytes: number): string {

@@ -38,6 +38,7 @@ import { RegistrationControlSection } from "@/components/admin/registration-cont
 import { AnnouncementSection } from "@/components/admin/announcement-section";
 import { ActivityFeedSection } from "@/components/admin/activity-feed-section";
 import { AIStatsSection } from "@/components/admin/ai-stats-section";
+import { AIProviderTestSection } from "@/components/admin/ai-provider-test-section";
 import { ToolsSection } from "@/components/admin/tools-section";
 import { ServerLogsSection } from "@/components/admin/server-logs-section";
 import { AuthExpiryNotificationsSection } from "@/components/admin/auth-expiry-notifications-section";
@@ -71,6 +72,7 @@ export default function AdminPage() {
         <AnnouncementSection />
         <Separator />
         <AIStatsSection />
+        <AIProviderTestSection />
         <Separator />
         <ActivityFeedSection />
         <Separator />
