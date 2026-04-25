@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Mock next-auth (must come before other imports that transitively import it)
 vi.mock("next-auth", () => ({
@@ -249,6 +249,10 @@ describe("listUsers input schema", () => {
     inputSchema = inputs[0];
   });
 
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
   test("accepts valid sortBy values", () => {
     for (const sortBy of ["name", "email", "groupCount", "createdAt"]) {
       expect(() => inputSchema.parse({ sortBy })).not.toThrow();
@@ -295,6 +299,10 @@ describe("listGroups input schema", () => {
     const { adminRouter } = await import("./admin");
     const inputs = (adminRouter._def.procedures.listGroups as { _def: { inputs: { parse: (v: unknown) => unknown }[] } })._def.inputs;
     inputSchema = inputs[0];
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
   });
 
   test("accepts valid sortBy values", () => {

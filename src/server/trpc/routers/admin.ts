@@ -276,7 +276,8 @@ export const adminRouter = createTRPCRouter({
           break;
       }
 
-      const [users, totalCount] = await Promise.all([
+      const isFirstPage = !input.cursor;
+      const [users, ...counts] = await Promise.all([
         ctx.db.user.findMany({
           take: input.limit + 1,
           ...(input.cursor
@@ -297,7 +298,7 @@ export const adminRouter = createTRPCRouter({
           },
           orderBy,
         }),
-        ctx.db.user.count({ where }),
+        ...(isFirstPage ? [ctx.db.user.count({ where })] : []),
       ]);
 
       let nextCursor: string | undefined;
@@ -317,7 +318,7 @@ export const adminRouter = createTRPCRouter({
           groupCount: u._count.groupMembers,
           createdAt: u.createdAt,
         })),
-        totalCount,
+        totalCount: counts[0] as number | undefined,
         nextCursor,
       };
     }),
@@ -479,7 +480,7 @@ export const adminRouter = createTRPCRouter({
 
       const isFirstPage = !input.cursor;
 
-      const [groups, totalCount, ...globalCounts] = await Promise.all([
+      const [groups, ...countsArr] = await Promise.all([
         ctx.db.group.findMany({
           take: input.limit + 1,
           ...(input.cursor
@@ -506,9 +507,12 @@ export const adminRouter = createTRPCRouter({
           },
           orderBy,
         }),
-        ctx.db.group.count({ where }),
         ...(isFirstPage
-          ? [ctx.db.expense.count({ where: { group: where } }), ctx.db.settlement.count({ where: { group: where } })]
+          ? [
+              ctx.db.group.count({ where }),
+              ctx.db.expense.count({ where: { group: where } }),
+              ctx.db.settlement.count({ where: { group: where } }),
+            ]
           : []),
       ]);
 
@@ -543,9 +547,9 @@ export const adminRouter = createTRPCRouter({
 
       return {
         groups: result,
-        totalCount,
-        totalExpenses: globalCounts[0] as number | undefined,
-        totalSettlements: globalCounts[1] as number | undefined,
+        totalCount: countsArr[0] as number | undefined,
+        totalExpenses: countsArr[1] as number | undefined,
+        totalSettlements: countsArr[2] as number | undefined,
         nextCursor,
       };
     }),
