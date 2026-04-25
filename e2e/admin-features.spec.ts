@@ -57,7 +57,7 @@ test.describe("User suspend/unsuspend", () => {
 
     // Get Bob's user ID
     const listData = await trpcResult(
-      await trpcQuery(ctx, "admin.listUsers")
+      await trpcQuery(ctx, "admin.listUsers", {})
     );
     const bob = listData.users.find(
       (u: { email: string }) => u.email === "bob@example.com"
@@ -82,7 +82,7 @@ test.describe("User suspend/unsuspend", () => {
 
     // Verify Bob is now suspended
     const listData2 = await trpcResult(
-      await trpcQuery(ctx, "admin.listUsers")
+      await trpcQuery(ctx, "admin.listUsers", {})
     );
     const bob2 = listData2.users.find(
       (u: { email: string }) => u.email === "bob@example.com"
@@ -448,7 +448,7 @@ test.describe("User impersonation", () => {
 
     // Get Bob's user ID
     const listData = await trpcResult(
-      await trpcQuery(ctx, "admin.listUsers")
+      await trpcQuery(ctx, "admin.listUsers", {})
     );
     const bob = listData.users.find(
       (u: { email: string }) => u.email === "bob@example.com"
