@@ -175,6 +175,7 @@ export function UserManagementSection({
         <div className="relative min-w-[180px] flex-1">
           <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
+            aria-label="Search users"
             placeholder="Search by name or email..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -300,7 +301,7 @@ export function UserManagementSection({
                                 <Button
                                   variant="ghost"
                                   size="icon-sm"
-                                  title="Unsuspend user"
+                                  aria-label={`Unsuspend ${user.name ?? user.email}`}
                                   onClick={() =>
                                     unsuspendUser.mutate({ userId: user.id })
                                   }
@@ -312,7 +313,7 @@ export function UserManagementSection({
                                 <Button
                                   variant="ghost"
                                   size="icon-sm"
-                                  title="Suspend user"
+                                  aria-label={`Suspend ${user.name ?? user.email}`}
                                   onClick={() =>
                                     suspendUser.mutate({ userId: user.id })
                                   }
@@ -325,7 +326,7 @@ export function UserManagementSection({
                                 <Button
                                   variant="ghost"
                                   size="icon-sm"
-                                  title="Impersonate user"
+                                  aria-label={`Impersonate ${user.name ?? user.email}`}
                                   onClick={() => handleImpersonate(user.id)}
                                   disabled={impersonating}
                                 >
@@ -335,7 +336,7 @@ export function UserManagementSection({
                               <Button
                                 variant="ghost"
                                 size="icon-sm"
-                                title="Delete user"
+                                aria-label={`Delete ${user.name ?? user.email}`}
                                 onClick={() =>
                                   setDeleteTarget({
                                     id: user.id,

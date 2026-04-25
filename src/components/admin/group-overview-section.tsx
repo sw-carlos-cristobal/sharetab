@@ -147,6 +147,7 @@ export function GroupOverviewSection() {
         <div className="relative min-w-[180px] flex-1">
           <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
+            aria-label="Search groups"
             placeholder="Search by group name..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
