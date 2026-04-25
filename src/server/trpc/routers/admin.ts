@@ -220,7 +220,7 @@ export const adminRouter = createTRPCRouter({
     .input(
       z.object({
         cursor: z.string().optional(),
-        limit: z.number().min(1).max(100).default(20),
+        limit: z.number().int().min(1).max(100).default(20),
         search: z.string().max(200).optional(),
         sortBy: z
           .enum(["name", "email", "groupCount", "createdAt"])
@@ -302,8 +302,8 @@ export const adminRouter = createTRPCRouter({
 
       let nextCursor: string | undefined;
       if (users.length > input.limit) {
-        const next = users.pop();
-        nextCursor = next?.id;
+        users.pop();
+        nextCursor = users.at(-1)?.id;
       }
 
       return {
@@ -434,7 +434,7 @@ export const adminRouter = createTRPCRouter({
     .input(
       z.object({
         cursor: z.string().optional(),
-        limit: z.number().min(1).max(100).default(20),
+        limit: z.number().int().min(1).max(100).default(20),
         search: z.string().max(200).optional(),
         sortBy: z
           .enum(["name", "memberCount", "expenseCount", "createdAt"])
@@ -514,8 +514,8 @@ export const adminRouter = createTRPCRouter({
 
       let nextCursor: string | undefined;
       if (groups.length > input.limit) {
-        const next = groups.pop();
-        nextCursor = next?.id;
+        groups.pop();
+        nextCursor = groups.at(-1)?.id;
       }
 
       const groupIds = groups.map((g) => g.id);

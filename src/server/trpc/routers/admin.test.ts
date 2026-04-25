@@ -277,9 +277,10 @@ describe("listUsers input schema", () => {
     expect(() => inputSchema.parse({ search: "a".repeat(200) })).not.toThrow();
   });
 
-  test("enforces limit bounds", () => {
+  test("enforces limit bounds and integer constraint", () => {
     expect(() => inputSchema.parse({ limit: 0 })).toThrow();
     expect(() => inputSchema.parse({ limit: 101 })).toThrow();
+    expect(() => inputSchema.parse({ limit: 20.5 })).toThrow();
     expect(() => inputSchema.parse({ limit: 50 })).not.toThrow();
   });
 });
