@@ -216,6 +216,32 @@ The bundled Docker Compose setup persists `/app/claude` automatically. If you us
 
 The `ocr` provider uses Tesseract.js for local text extraction -- no API key or external service needed. It's less accurate than AI providers but works as a free fallback. In priority mode, OCR can be listed explicitly, and is also appended automatically as a final fallback if omitted.
 
+### AI Provider Performance
+
+Benchmarked on a set of receipt photos (grocery, coffee shop, restaurant). Results represent typical single-receipt extraction.
+
+| Provider | Speed | Item Accuracy | Cost | Notes |
+|---|---|---|---|---|
+| **OpenAI Codex** (ChatGPT OAuth) | ~6 s | 5/5 items | Free (uses ChatGPT subscription) | **Recommended.** Best balance of speed and accuracy. |
+| **Meridian** (Claude OAuth) | ~16 s | 5/5 items | Free (uses Claude Max subscription) | Same accuracy, but 2–3x slower. |
+| **OpenAI** (API key) | ~4 s | 5/5 items | Pay-per-token | Fastest, but requires an API key and costs money. |
+| **OCR** (Tesseract.js) | ~1.4 s | 5/5 items | Free, fully local | No network calls. Good for simple receipts; struggles with handwritten or low-contrast text. |
+| **Ollama** (local LLM) | Varies | Varies | Free, fully local | Depends on model and hardware. Requires a running Ollama server. |
+
+**Recommendation:** Use `openai-codex` as your primary provider. It delivers the same accuracy as API-key providers at no additional cost (it piggybacks on your existing ChatGPT Plus/Pro subscription). Set your priority to:
+
+```
+AI_PROVIDER_PRIORITY="openai-codex,ocr"
+```
+
+If you also have a Claude Max subscription, you can add `meridian` as a second fallback:
+
+```
+AI_PROVIDER_PRIORITY="openai-codex,meridian,ocr"
+```
+
+OCR is always appended as the final fallback if omitted, so even if your OAuth session expires, receipt scanning will still work.
+
 ### OAuth (optional)
 
 | Variable | Description |

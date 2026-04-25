@@ -30,7 +30,7 @@ try {
   let pipeline = sharp(rawBuffer)
     .grayscale()                    // Remove color noise
     .normalize()                    // Stretch contrast (helps faded thermal prints)
-    .sharpen({ sigma: 1.5 });      // Sharpen text edges
+    .sharpen({ sigma: 0.5 });      // Light sharpen — preserves detail better than heavy sigma
 
   // Upscale small images — Tesseract needs ~300 DPI for good results
   // Most phone photos are fine, but screenshots/thumbnails may be too small
@@ -57,11 +57,7 @@ const { data } = await Tesseract.recognize(imageBuffer, 'eng', {
   preserve_interword_spaces: '1',   // Keep spacing for column alignment
 });
 
-// Compute mean word confidence from Tesseract word-level data
-let confidence = 0;
-if (data.words && data.words.length > 0) {
-  const sum = data.words.reduce((acc, w) => acc + w.confidence, 0);
-  confidence = sum / data.words.length / 100; // Tesseract returns 0-100, normalize to 0-1
-}
+// Tesseract.js v7: confidence is a top-level number (0-100)
+const confidence = typeof data.confidence === 'number' ? data.confidence / 100 : 0;
 
 process.stdout.write(JSON.stringify({ text: data.text, confidence }));

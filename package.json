@@ -38,6 +38,8 @@
     "test:watch": "vitest",
     "test:e2e": "npx playwright test",
     "test:e2e:ui": "npx playwright test --ui",
+    "test:ai:setup": "npx tsx e2e/ai-setup.ts",
+    "test:ai": "RUN_AI_TESTS=1 npx playwright test ai-provider-test.spec.ts",
     "demo": "tsx e2e/demo-video.ts",
     "demo:gifs": "tsx e2e/demo-gifs.ts",
     "lint:i18n": "npx tsx scripts/check-translations.ts"

@@ -24,6 +24,7 @@ export default defineConfig({
       testMatch: [
         "admin-features.spec.ts",
         "admin-meridian.spec.ts",
+        "ai-provider-test.spec.ts",
         "balances.spec.ts",
         "expenses.spec.ts",
         "groups.spec.ts",
@@ -40,6 +41,7 @@ export default defineConfig({
       testIgnore: [
         "admin-features.spec.ts",
         "admin-meridian.spec.ts",
+        "ai-provider-test.spec.ts",
         "balances.spec.ts",
         "expenses.spec.ts",
         "groups.spec.ts",
