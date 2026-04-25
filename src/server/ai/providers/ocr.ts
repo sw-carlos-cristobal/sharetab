@@ -113,7 +113,7 @@ const SKIP_KEYWORDS = [
 
 // Discount-related keywords — lines containing these with a price are skipped
 // NOTE: "off" was removed — it false-positives on "coffee", "office", etc.
-const DISCOUNT_KEYWORDS = ["save", "discount", "% off", "$ off", "coupon", "promo", "savings", "you saved"];
+const DISCOUNT_KEYWORDS = ["save", "discount", "% off", "%off", "$ off", "$off", "coupon", "promo", "savings", "you saved"];
 
 // Fee, reward, and payment keywords — lines with these are always skipped, even with a price
 const FEE_REWARD_KEYWORDS = [

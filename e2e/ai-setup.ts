@@ -48,6 +48,11 @@ async function getAuthedCookies(): Promise<string> {
     redirect: "manual",
   });
 
+  const location = loginRes.headers.get("location") ?? "";
+  if (location.includes("error=")) {
+    throw new Error(`Login failed for ${ADMIN.email} — check credentials`);
+  }
+
   const allCookies = [
     ...cookies,
     ...(loginRes.headers.getSetCookie?.() ?? []),
