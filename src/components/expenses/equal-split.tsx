@@ -10,10 +10,14 @@ export function EqualSplit({
   members,
   totalCents,
   onChange,
+  locale,
+  currency,
 }: {
   members: Member[];
   totalCents: number;
   onChange: (shares: ShareEntry[]) => void;
+  locale?: string;
+  currency?: string;
 }) {
   const [selected, setSelected] = useState<Set<string>>(
     new Set(members.map((m) => m.id))
@@ -70,14 +74,14 @@ export function EqualSplit({
           </div>
           {selected.has(m.id) && totalCents > 0 && (
             <span className="text-sm text-muted-foreground">
-              {formatCents(Math.round(perPerson))}
+              {formatCents(Math.round(perPerson), currency, locale)}
             </span>
           )}
         </label>
       ))}
       {selected.size > 0 && totalCents > 0 && (
         <p className="text-xs text-muted-foreground">
-          {formatCents(Math.round(perPerson))} per person
+          {formatCents(Math.round(perPerson), currency, locale)} per person
           ({selected.size} selected)
         </p>
       )}

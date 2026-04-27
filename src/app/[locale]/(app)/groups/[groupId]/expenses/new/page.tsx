@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useMemo, useState } from "react";
+import { useLocale } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { trpc } from "@/lib/trpc";
 import { parseToCents } from "@/lib/money";
@@ -42,6 +43,7 @@ export default function NewExpensePage({
 }) {
   const { groupId } = use(params);
   const router = useRouter();
+  const locale = useLocale();
   const group = trpc.groups.get.useQuery({ groupId });
 
   const [title, setTitle] = useState("");
@@ -183,6 +185,8 @@ export default function NewExpensePage({
                   members={members}
                   totalCents={amountCents}
                   onChange={setShares}
+                  locale={locale}
+                  currency={group.data?.currency}
                 />
               )}
               {splitMode === "EXACT" && (
@@ -190,6 +194,8 @@ export default function NewExpensePage({
                   members={members}
                   totalCents={amountCents}
                   onChange={setShares}
+                  locale={locale}
+                  currency={group.data?.currency}
                 />
               )}
               {splitMode === "PERCENTAGE" && (
@@ -197,6 +203,8 @@ export default function NewExpensePage({
                   members={members}
                   totalCents={amountCents}
                   onChange={setShares}
+                  locale={locale}
+                  currency={group.data?.currency}
                 />
               )}
               {splitMode === "SHARES" && (
@@ -204,6 +212,8 @@ export default function NewExpensePage({
                   members={members}
                   totalCents={amountCents}
                   onChange={setShares}
+                  locale={locale}
+                  currency={group.data?.currency}
                 />
               )}
             </div>

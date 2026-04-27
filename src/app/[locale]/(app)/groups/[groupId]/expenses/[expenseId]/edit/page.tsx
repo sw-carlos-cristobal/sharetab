@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useState, useEffect } from "react";
+import { useLocale } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { trpc } from "@/lib/trpc";
 import { parseToCents, centsToDecimal } from "@/lib/money";
@@ -42,6 +43,7 @@ export default function EditExpensePage({
 }) {
   const { groupId, expenseId } = use(params);
   const router = useRouter();
+  const locale = useLocale();
   const group = trpc.groups.get.useQuery({ groupId });
   const expense = trpc.expenses.get.useQuery({ groupId, expenseId });
 
@@ -225,6 +227,8 @@ export default function EditExpensePage({
                   members={members}
                   totalCents={amountCents}
                   onChange={setShares}
+                  locale={locale}
+                  currency={group.data?.currency}
                 />
               )}
               {splitMode === "EXACT" && (
@@ -232,6 +236,8 @@ export default function EditExpensePage({
                   members={members}
                   totalCents={amountCents}
                   onChange={setShares}
+                  locale={locale}
+                  currency={group.data?.currency}
                 />
               )}
               {splitMode === "PERCENTAGE" && (
@@ -239,6 +245,8 @@ export default function EditExpensePage({
                   members={members}
                   totalCents={amountCents}
                   onChange={setShares}
+                  locale={locale}
+                  currency={group.data?.currency}
                 />
               )}
               {splitMode === "SHARES" && (
@@ -246,6 +254,8 @@ export default function EditExpensePage({
                   members={members}
                   totalCents={amountCents}
                   onChange={setShares}
+                  locale={locale}
+                  currency={group.data?.currency}
                 />
               )}
             </div>

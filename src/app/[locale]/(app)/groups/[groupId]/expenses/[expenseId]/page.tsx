@@ -1,6 +1,7 @@
 "use client";
 
 import { use } from "react";
+import { useLocale } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { trpc } from "@/lib/trpc";
 import { formatCents } from "@/lib/money";
@@ -16,6 +17,7 @@ export default function ExpenseDetailPage({
   params: Promise<{ groupId: string; expenseId: string }>;
 }) {
   const { groupId, expenseId } = use(params);
+  const locale = useLocale();
   const router = useRouter();
 
   const expense = trpc.expenses.get.useQuery({ groupId, expenseId });
@@ -53,7 +55,7 @@ export default function ExpenseDetailPage({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>{formatCents(e.amount, e.currency)}</span>
+            <span>{formatCents(e.amount, e.currency, locale)}</span>
             <Badge variant="secondary">{e.splitMode}</Badge>
           </CardTitle>
         </CardHeader>
@@ -100,7 +102,7 @@ export default function ExpenseDetailPage({
                 >
                   <span>{share.user.name ?? "Unknown"}</span>
                   <span className="font-medium">
-                    {formatCents(share.amount, e.currency)}
+                    {formatCents(share.amount, e.currency, locale)}
                   </span>
                 </div>
               ))}
