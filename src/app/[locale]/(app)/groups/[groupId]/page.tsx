@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useState } from "react";
+import { useLocale } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { formatCents } from "@/lib/money";
 import { Button } from "@/components/ui/button";
@@ -61,6 +62,7 @@ export default function GroupDetailPage({
   params: Promise<{ groupId: string }>;
 }) {
   const { groupId } = use(params);
+  const locale = useLocale();
   const [showInvite, setShowInvite] = useState(false);
   const [settleState, setSettleState] = useState<{
     open: boolean;
@@ -231,7 +233,7 @@ export default function GroupDetailPage({
                     {to?.name ?? to?.email ?? "Unknown"}
                   </span>
                   <span className="ml-auto shrink-0 font-semibold tabular-nums text-red-600 dark:text-red-400">
-                    {formatCents(debt.amount, g.currency)}
+                    {formatCents(debt.amount, g.currency, locale)}
                   </span>
                 </button>
               );
@@ -268,7 +270,7 @@ export default function GroupDetailPage({
                   <div className="flex items-center gap-3 ml-3">
                     <p className="text-lg font-semibold">
                       {r.extractedData
-                        ? formatCents(r.extractedData.total, g.currency)
+                        ? formatCents(r.extractedData.total, g.currency, locale)
                         : "—"}
                     </p>
                     <button
@@ -365,7 +367,7 @@ export default function GroupDetailPage({
                   </div>
                 </div>
                 <p className="ml-4 shrink-0 text-lg font-semibold tabular-nums">
-                  {formatCents(expense.amount, g.currency)}
+                  {formatCents(expense.amount, g.currency, locale)}
                 </p>
               </div>
             </Link>

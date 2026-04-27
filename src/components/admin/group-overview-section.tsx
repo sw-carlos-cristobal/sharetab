@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useLocale } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { formatCents } from "@/lib/money";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,7 @@ function SortIcon({
 
 export function GroupOverviewSection() {
   const utils = trpc.useUtils();
+  const locale = useLocale();
 
   // Filter / search / sort state
   const [search, setSearch] = useState("");
@@ -242,7 +244,7 @@ export function GroupOverviewSection() {
                           {group.expenseCount}
                         </td>
                         <td className="px-4 py-3 text-right">
-                          {formatCents(group.totalAmount)}
+                          {formatCents(group.totalAmount, "USD", locale)}
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">
                           {new Date(group.lastActivity).toLocaleDateString()}

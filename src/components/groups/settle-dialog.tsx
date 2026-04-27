@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLocale } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { parseToCents, formatCents } from "@/lib/money";
 import {
@@ -35,6 +36,7 @@ export function SettleDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const locale = useLocale();
   const [fromId, setFromId] = useState(suggestedFrom ?? "");
   const [toId, setToId] = useState(suggestedTo ?? "");
   const [amountStr, setAmountStr] = useState(
@@ -134,7 +136,7 @@ export function SettleDialog({
                 onClick={() => setAmountStr((suggestedAmount / 100).toFixed(2))}
                 className="text-xs text-primary hover:underline"
               >
-                Use suggested: {formatCents(suggestedAmount, currency)}
+                Use suggested: {formatCents(suggestedAmount, currency, locale)}
               </button>
             )}
           </div>

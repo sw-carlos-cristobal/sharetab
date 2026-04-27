@@ -1,6 +1,7 @@
 "use client";
 
 import { use } from "react";
+import { useLocale } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { formatCents } from "@/lib/money";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ export default function SharedSplitPage({
   params: Promise<{ token: string }>;
 }) {
   const { token } = use(params);
+  const locale = useLocale();
   const split = trpc.guest.getSplit.useQuery({ token });
 
   if (split.isLoading) {
@@ -56,7 +58,7 @@ export default function SharedSplitPage({
 
   async function handleShare() {
     const url = window.location.href;
-    const text = `Bill split from ${data.receiptData.merchantName ?? "a receipt"} — ${formatCents(data.receiptData.total, currency)} total`;
+    const text = `Bill split from ${data.receiptData.merchantName ?? "a receipt"} — ${formatCents(data.receiptData.total, currency, locale)} total`;
 
     if (navigator.share) {
       try {
@@ -111,7 +113,7 @@ export default function SharedSplitPage({
           <div className="flex justify-between items-center">
             <span className="font-semibold text-lg">Total Bill</span>
             <span className="text-2xl font-bold text-primary">
-              {formatCents(data.receiptData.total, currency)}
+              {formatCents(data.receiptData.total, currency, locale)}
             </span>
           </div>
         </CardContent>
@@ -140,7 +142,7 @@ export default function SharedSplitPage({
                     <span className="font-semibold">{person.name}</span>
                   </div>
                   <span className="text-xl font-bold text-primary">
-                    {formatCents(person.total, currency)}
+                    {formatCents(person.total, currency, locale)}
                   </span>
                 </div>
 
@@ -149,19 +151,19 @@ export default function SharedSplitPage({
                   {personItems.map((item, i) => (
                     <div key={i} className="flex justify-between">
                       <span>{item.name}</span>
-                      <span>{formatCents(item.totalPrice, currency)}</span>
+                      <span>{formatCents(item.totalPrice, currency, locale)}</span>
                     </div>
                   ))}
                   {person.tax > 0 && (
                     <div className="flex justify-between">
                       <span>Tax</span>
-                      <span>{formatCents(person.tax, currency)}</span>
+                      <span>{formatCents(person.tax, currency, locale)}</span>
                     </div>
                   )}
                   {person.tip > 0 && (
                     <div className="flex justify-between">
                       <span>Tip</span>
-                      <span>{formatCents(person.tip, currency)}</span>
+                      <span>{formatCents(person.tip, currency, locale)}</span>
                     </div>
                   )}
                 </div>
@@ -179,20 +181,20 @@ export default function SharedSplitPage({
         <CardContent className="space-y-1 text-sm">
           <div className="flex justify-between">
             <span className="text-muted-foreground">Subtotal</span>
-            <span>{formatCents(data.receiptData.subtotal, currency)}</span>
+            <span>{formatCents(data.receiptData.subtotal, currency, locale)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Tax</span>
-            <span>{formatCents(data.receiptData.tax, currency)}</span>
+            <span>{formatCents(data.receiptData.tax, currency, locale)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Tip</span>
-            <span>{formatCents(data.receiptData.tip, currency)}</span>
+            <span>{formatCents(data.receiptData.tip, currency, locale)}</span>
           </div>
           <Separator />
           <div className="flex justify-between font-semibold">
             <span>Total</span>
-            <span>{formatCents(data.receiptData.total, currency)}</span>
+            <span>{formatCents(data.receiptData.total, currency, locale)}</span>
           </div>
         </CardContent>
       </Card>

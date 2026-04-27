@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
+import { useLocale } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { formatCents, centsToDecimal, parseToCents } from "@/lib/money";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,7 @@ export function ItemAssignment({
   members: Member[];
   onComplete: () => void;
 }) {
+  const locale = useLocale();
   const receiptData = trpc.receipts.getReceiptItems.useQuery({ receiptId });
   const utils = trpc.useUtils();
 
@@ -339,20 +341,20 @@ export function ItemAssignment({
           )}
           <div className="flex justify-between">
             <span className="text-muted-foreground">Subtotal</span>
-            <span>{formatCents(extracted.subtotal, extracted.currency)}</span>
+            <span>{formatCents(extracted.subtotal, extracted.currency, locale)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Tax</span>
-            <span>{formatCents(extracted.tax, extracted.currency)}</span>
+            <span>{formatCents(extracted.tax, extracted.currency, locale)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Tip</span>
-            <span>{formatCents(tip, extracted.currency)}</span>
+            <span>{formatCents(tip, extracted.currency, locale)}</span>
           </div>
           <Separator />
           <div className="flex justify-between font-semibold">
             <span>Total</span>
-            <span>{formatCents(extracted.subtotal + extracted.tax + tip, extracted.currency)}</span>
+            <span>{formatCents(extracted.subtotal + extracted.tax + tip, extracted.currency, locale)}</span>
           </div>
         </CardContent>
       </Card>
@@ -537,7 +539,7 @@ export function ItemAssignment({
                       </button>
                     </div>
                     <span className="font-semibold">
-                      {formatCents(item.totalPrice, extracted.currency)}
+                      {formatCents(item.totalPrice, extracted.currency, locale)}
                     </span>
                   </div>
                 )}
@@ -594,7 +596,7 @@ export function ItemAssignment({
                 <div key={m.id} className="flex justify-between text-sm">
                   <span>{m.name ?? "Unnamed"}</span>
                   <span className="font-medium">
-                    {formatCents(total, extracted.currency)}
+                    {formatCents(total, extracted.currency, locale)}
                   </span>
                 </div>
               );

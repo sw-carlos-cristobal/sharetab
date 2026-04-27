@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useLocale } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { trpc } from "@/lib/trpc";
 import { formatCents, centsToDecimal, parseToCents } from "@/lib/money";
@@ -259,6 +260,7 @@ export default function GuestSplitPage() {
   }
 
   // Calculate totals
+  const locale = useLocale();
   const tip = tipOverride !== "" ? Math.round(parseFloat(tipOverride) * 100) : (extracted?.tip ?? 0);
   const currency = extracted?.currency ?? "USD";
 
@@ -595,20 +597,20 @@ export default function GuestSplitPage() {
             <CardContent className="space-y-1 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Subtotal</span>
-                <span>{formatCents(extracted.subtotal, currency)}</span>
+                <span>{formatCents(extracted.subtotal, currency, locale)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Tax</span>
-                <span>{formatCents(extracted.tax, currency)}</span>
+                <span>{formatCents(extracted.tax, currency, locale)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Tip</span>
-                <span>{formatCents(tip, currency)}</span>
+                <span>{formatCents(tip, currency, locale)}</span>
               </div>
               <Separator />
               <div className="flex justify-between font-semibold">
                 <span>Total</span>
-                <span>{formatCents(extracted.subtotal + extracted.tax + tip, currency)}</span>
+                <span>{formatCents(extracted.subtotal + extracted.tax + tip, currency, locale)}</span>
               </div>
             </CardContent>
           </Card>
@@ -739,7 +741,7 @@ export default function GuestSplitPage() {
                             <Trash2 className="h-3 w-3" />
                           </button>
                         </div>
-                        <span className="font-semibold">{formatCents(item.totalPrice, currency)}</span>
+                        <span className="font-semibold">{formatCents(item.totalPrice, currency, locale)}</span>
                       </div>
                     )}
                     {/* Person toggle buttons */}
@@ -783,7 +785,7 @@ export default function GuestSplitPage() {
                 {perPersonTotals.map((t) => (
                   <div key={t.personIndex} className="flex justify-between text-sm">
                     <span>{people[t.personIndex]?.trim() || `Person ${t.personIndex + 1}`}</span>
-                    <span className="font-medium">{formatCents(t.total, currency)}</span>
+                    <span className="font-medium">{formatCents(t.total, currency, locale)}</span>
                   </div>
                 ))}
               </CardContent>
