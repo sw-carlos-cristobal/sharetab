@@ -13,7 +13,7 @@ const moneyLocales = {
 } satisfies Record<Locale, string>;
 
 export function formatCents(cents: number, currency = "USD", locale: string = defaultLocale): string {
-  return new Intl.NumberFormat(moneyLocales[locale] ?? locale, {
+  return new Intl.NumberFormat((moneyLocales as Record<string, string>)[locale] ?? locale, {
     style: "currency",
     currency,
   }).format(cents / 100);
