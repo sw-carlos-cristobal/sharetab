@@ -40,6 +40,7 @@ type ExtractedData = {
 
 export default function GuestSplitPage() {
   const router = useRouter();
+  const locale = useLocale();
   const [step, setStep] = useState<Step>("upload");
   const [receiptId, setReceiptId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -260,7 +261,6 @@ export default function GuestSplitPage() {
   }
 
   // Calculate totals
-  const locale = useLocale();
   const tip = tipOverride !== "" ? Math.round(parseFloat(tipOverride) * 100) : (extracted?.tip ?? 0);
   const currency = extracted?.currency ?? "USD";
 
