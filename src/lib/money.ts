@@ -1,6 +1,6 @@
 import { defaultLocale, type Locale } from "@/i18n/routing";
 
-const moneyLocales = {
+const moneyLocales: Record<string, string> = {
   en: "en-US",
   es: "es-ES",
   sv: "sv-SE",
@@ -13,7 +13,7 @@ const moneyLocales = {
 } satisfies Record<Locale, string>;
 
 export function formatCents(cents: number, currency = "USD", locale: string = defaultLocale): string {
-  return new Intl.NumberFormat((moneyLocales as Record<string, string>)[locale] ?? locale, {
+  return new Intl.NumberFormat(moneyLocales[locale] ?? locale, {
     style: "currency",
     currency,
   }).format(cents / 100);

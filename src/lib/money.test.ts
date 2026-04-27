@@ -49,13 +49,17 @@ describe("formatCents", () => {
   });
 
   test("maps all supported app locales to regional money locales", () => {
-    // Swedish (sv-SE uses U+00A0 non-breaking space as thousands separator)
-    const sv = formatCents(123456, "SEK", "sv");
-    expect(sv).toContain("1 234,56");
+    // Normalize whitespace variants (NBSP, narrow NBSP) to ASCII space
+    // to avoid flaky assertions across Node/ICU versions
+    const norm = (s: string) => s.replace(/[  ]/g, " ");
 
-    // French (fr-FR uses U+202F narrow no-break space as thousands separator)
+    // Swedish
+    const sv = formatCents(123456, "SEK", "sv");
+    expect(norm(sv)).toContain("1 234,56");
+
+    // French
     const fr = formatCents(123456, "EUR", "fr");
-    expect(fr).toContain("1 234,56");
+    expect(norm(fr)).toContain("1 234,56");
 
     // German
     const de = formatCents(123456, "EUR", "de");
