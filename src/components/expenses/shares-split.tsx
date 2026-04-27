@@ -11,10 +11,14 @@ export function SharesSplit({
   members,
   totalCents,
   onChange,
+  locale,
+  currency,
 }: {
   members: Member[];
   totalCents: number;
   onChange: (shares: ShareEntry[]) => void;
+  locale?: string;
+  currency?: string;
 }) {
   const [shareUnits, setShareUnits] = useState<Record<string, string>>(
     () => Object.fromEntries(members.map((m) => [m.id, "1"]))
@@ -79,7 +83,7 @@ export function SharesSplit({
             <span className="text-xs text-muted-foreground">shares</span>
             {units > 0 && totalCents > 0 && (
               <span className="w-20 text-right text-xs text-muted-foreground">
-                {formatCents(share)}
+                {formatCents(share, currency, locale)}
               </span>
             )}
           </div>

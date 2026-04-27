@@ -11,10 +11,14 @@ export function PercentageSplit({
   members,
   totalCents,
   onChange,
+  locale,
+  currency,
 }: {
   members: Member[];
   totalCents: number;
   onChange: (shares: ShareEntry[]) => void;
+  locale?: string;
+  currency?: string;
 }) {
   const [percentages, setPercentages] = useState<Record<string, string>>(() => {
     // Pre-fill equal percentages so switching from Equal mode isn't jarring
@@ -87,7 +91,7 @@ export function PercentageSplit({
             </div>
             {pct > 0 && totalCents > 0 && (
               <span className="w-20 text-right text-xs text-muted-foreground">
-                {formatCents(share)}
+                {formatCents(share, currency, locale)}
               </span>
             )}
           </div>

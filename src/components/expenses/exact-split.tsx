@@ -11,10 +11,14 @@ export function ExactSplit({
   members,
   totalCents,
   onChange,
+  locale,
+  currency,
 }: {
   members: Member[];
   totalCents: number;
   onChange: (shares: ShareEntry[]) => void;
+  locale?: string;
+  currency?: string;
 }) {
   const [amounts, setAmounts] = useState<Record<string, string>>({});
 
@@ -68,8 +72,8 @@ export function ExactSplit({
         {remaining === 0
           ? "Fully allocated"
           : remaining > 0
-            ? `${formatCents(remaining)} remaining`
-            : `${formatCents(-remaining)} over-allocated`}
+            ? `${formatCents(remaining, currency, locale)} remaining`
+            : `${formatCents(-remaining, currency, locale)} over-allocated`}
       </p>
     </div>
   );
