@@ -47,6 +47,36 @@ describe("formatCents", () => {
     const result = formatCents(123456, "EUR", "es");
     expect(result).toContain("1234,56");
   });
+
+  test("maps all supported app locales to regional money locales", () => {
+    // Swedish (sv-SE uses U+00A0 non-breaking space as thousands separator)
+    const sv = formatCents(123456, "SEK", "sv");
+    expect(sv).toContain("1 234,56");
+
+    // French (fr-FR uses U+202F narrow no-break space as thousands separator)
+    const fr = formatCents(123456, "EUR", "fr");
+    expect(fr).toContain("1 234,56");
+
+    // German
+    const de = formatCents(123456, "EUR", "de");
+    expect(de).toContain("1.234,56");
+
+    // Portuguese (Brazil)
+    const ptBR = formatCents(123456, "BRL", "pt-BR");
+    expect(ptBR).toContain("1.234,56");
+
+    // Japanese
+    const ja = formatCents(100000, "JPY", "ja");
+    expect(ja).toContain("1,000");
+
+    // Chinese (Simplified)
+    const zhCN = formatCents(123456, "CNY", "zh-CN");
+    expect(zhCN).toContain("1,234.56");
+
+    // Korean
+    const ko = formatCents(123456, "KRW", "ko");
+    expect(ko).toContain("1,235");
+  });
 });
 
 describe("parseToCents", () => {
