@@ -11,7 +11,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY prisma ./prisma
 COPY prisma.config.ts ./
-RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev --legacy-peer-deps && npm cache clean --force
+RUN npm ci --omit=dev --legacy-peer-deps
 
 # --- Builder ---
 FROM base AS builder
@@ -20,7 +20,7 @@ ENV DOCKER_BUILD=1
 COPY package.json package-lock.json ./
 COPY prisma ./prisma
 COPY prisma.config.ts ./
-RUN --mount=type=cache,target=/root/.npm npm ci --legacy-peer-deps && npm cache clean --force
+RUN npm ci --legacy-peer-deps
 COPY . .
 RUN npx prisma generate
 RUN npm run build
@@ -63,10 +63,8 @@ COPY --from=builder /app/node_modules/@rynfar/meridian ./node_modules/@rynfar/me
 COPY --from=builder /app/node_modules/@anthropic-ai/claude-agent-sdk ./node_modules/@anthropic-ai/claude-agent-sdk
 # Install Prisma CLI in isolated dir to avoid conflict with standalone node_modules
 WORKDIR /prisma-cli
-RUN --mount=type=cache,target=/root/.npm \
-    npm init -y && \
-    npm install --legacy-peer-deps prisma@7.6.0 dotenv@17.3.1 && \
-    npm cache clean --force
+RUN npm init -y && \
+    npm install --legacy-peer-deps prisma@7.6.0 dotenv@17.3.1
 WORKDIR /app
 
 COPY docker/entrypoint.sh /app/entrypoint.sh
