@@ -252,6 +252,13 @@ export const receiptsRouter = createTRPCRouter({
           where: { id: input.itemId },
         });
 
+        if (input.splitQuantity >= current.quantity) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Split quantity must be less than total quantity",
+          });
+        }
+
         const newTotalPrice = current.unitPrice * input.splitQuantity;
         const remainingQuantity = current.quantity - input.splitQuantity;
         const remainingTotalPrice = current.totalPrice - newTotalPrice;

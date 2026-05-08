@@ -551,6 +551,7 @@ export function ItemAssignment({
                           }}
                           className="text-muted-foreground hover:text-foreground"
                           title="Split into separate line"
+                          aria-label={`Split ${item.name} into separate line`}
                         >
                           <Scissors className="h-3 w-3" />
                         </button>
