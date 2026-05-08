@@ -78,6 +78,7 @@ export default function GuestSplitPage() {
     { enabled: !!receiptId && step === "people" }
   );
   const createSplit = trpc.guest.createSplit.useMutation();
+  const createClaimSession = trpc.guest.createClaimSession.useMutation();
 
   const configuredProviderChain =
     providerInfo.data?.configuredProviders?.join(" -> ") ?? "loading...";
@@ -356,6 +357,23 @@ export default function GuestSplitPage() {
       router.push(`/split/${result.shareToken}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create split");
+    }
+  }
+
+  async function handleShareForClaiming() {
+    if (!extracted || validPeople.length < 1) return;
+
+    try {
+      const result = await createClaimSession.mutateAsync({
+        receiptId: receiptId ?? undefined,
+        receiptData: { ...extracted, tip },
+        items,
+        creatorName: validPeople[paidByIndex] || validPeople[0],
+        paidByName: validPeople[paidByIndex] || validPeople[0],
+      });
+      router.push(`/split/${result.shareToken}/claim`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to create claiming session");
     }
   }
 
@@ -889,7 +907,7 @@ export default function GuestSplitPage() {
 
           {/* Next button - sticky bottom */}
           <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t">
-            <div className="mx-auto max-w-lg">
+            <div className="mx-auto max-w-lg space-y-3">
               <Button
                 className="w-full h-14 text-lg"
                 disabled={!allAssigned || createSplit.isPending}
@@ -903,6 +921,21 @@ export default function GuestSplitPage() {
                     : "Create Split & Get Link"}
                 {allAssigned && !createSplit.isPending && <Share2 className="ml-2 h-5 w-5" />}
               </Button>
+              <Button
+                variant="outline"
+                className="w-full h-12"
+                disabled={validPeople.length < 1 || createClaimSession.isPending}
+                onClick={handleShareForClaiming}
+                data-testid="share-for-claiming-btn"
+              >
+                {createClaimSession.isPending
+                  ? "Creating session..."
+                  : "Share Link — Let Everyone Claim Their Items"}
+                {!createClaimSession.isPending && <Users className="ml-2 h-5 w-5" />}
+              </Button>
+              <p className="text-xs text-center text-muted-foreground">
+                Don&apos;t know who had what? Share the link and let each person pick their own items.
+              </p>
             </div>
           </div>
         </div>
