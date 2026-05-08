@@ -89,6 +89,10 @@
     "claimsSaved": "Reclamos guardados",
     "joinedSession": "¡Te uniste a la sesión!",
     "pleaseEnterName": "Por favor ingresa tu nombre",
-    "claimsSavedToast": "¡Reclamos guardados!"
+    "claimsSavedToast": "¡Reclamos guardados!",
+    "viewReceipt": "Ver recibo",
+    "hideReceipt": "Ocultar recibo",
+    "receiptImage": "Imagen del recibo",
+    "orRejoinAs": "O volver como:"
   }
 }

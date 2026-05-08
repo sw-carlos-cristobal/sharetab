@@ -608,6 +608,15 @@ export const guestRouter = createTRPCRouter({
       if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
       if (session.expiresAt < new Date()) throw new TRPCError({ code: "NOT_FOUND", message: "Session expired" });
 
+      let receiptImagePath: string | null = null;
+      if (session.receiptId) {
+        const receipt = await ctx.db.receipt.findUnique({
+          where: { id: session.receiptId },
+          select: { imagePath: true },
+        });
+        receiptImagePath = receipt?.imagePath ?? null;
+      }
+
       return {
         id: session.id,
         shareToken: session.shareToken,
@@ -626,6 +635,7 @@ export const guestRouter = createTRPCRouter({
         assignments: session.assignments as { itemIndex: number; personIndices: number[] }[],
         summary: session.summary as { personIndex: number; name: string; itemTotal: number; tax: number; tip: number; total: number }[] | null,
         paidByIndex: session.paidByIndex,
+        receiptImagePath,
         createdAt: session.createdAt,
         expiresAt: session.expiresAt,
       };

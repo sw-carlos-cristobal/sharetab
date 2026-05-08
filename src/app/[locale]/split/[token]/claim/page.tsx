@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Check, Loader2, Users, Receipt, ArrowRight } from "lucide-react";
+import { Check, Loader2, Users, Receipt, ArrowRight, Image as ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "@/i18n/navigation";
 
@@ -76,6 +76,7 @@ export default function ClaimPage({
   const [personToken, setPersonToken] = useState<string | null>(null);
   const [claimedItems, setClaimedItems] = useState<Set<number>>(new Set());
   const [saving, setSaving] = useState(false);
+  const [showImage, setShowImage] = useState(false);
 
   // --- tRPC ---
   const session = trpc.guest.getSession.useQuery(
@@ -306,6 +307,32 @@ export default function ClaimPage({
           </CardContent>
         </Card>
 
+        {/* Receipt image viewer */}
+        {data.receiptImagePath && (
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowImage(!showImage)}
+            >
+              <ImageIcon className="mr-2 h-4 w-4" />
+              {showImage ? t("hideReceipt") : t("viewReceipt")}
+            </Button>
+            {showImage && (
+              <Card>
+                <CardContent className="p-2">
+                  <img
+                    src={`/api/uploads/${data.receiptImagePath}`}
+                    alt={t("receiptImage")}
+                    className="w-full rounded-md"
+                  />
+                </CardContent>
+              </Card>
+            )}
+          </>
+        )}
+
         {/* People already in session */}
         {data.people.length > 0 && (
           <Card>
@@ -359,6 +386,46 @@ export default function ClaimPage({
                 data-testid="claim-name-input"
               />
             </div>
+            {/* Rejoin as existing participant */}
+            {data.people.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">{t("orRejoinAs")}</p>
+                <div className="flex flex-wrap gap-2">
+                  {data.people.map((person, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        setName(person.name);
+                        // Auto-submit after a brief delay so the user sees the name fill in
+                        setTimeout(() => {
+                          const storedIdentity = getStoredClaimIdentity(token);
+                          joinSession.mutate({
+                            token,
+                            name: person.name,
+                            personToken:
+                              storedIdentity && normalizeGuestName(storedIdentity.name) === normalizeGuestName(person.name)
+                                ? storedIdentity.personToken
+                                : undefined,
+                          });
+                        }, 100);
+                      }}
+                      className="flex items-center gap-2 rounded-full bg-muted px-3 py-1.5 hover:bg-muted/80 transition-colors"
+                      data-testid={`rejoin-person-${idx}`}
+                    >
+                      <Avatar className="h-6 w-6">
+                        <AvatarFallback
+                          className={`text-[10px] font-semibold ${colors[idx % colors.length]}`}
+                        >
+                          {initials(person.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm font-medium">{person.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <Button
               className="w-full"
               onClick={handleJoin}
@@ -409,6 +476,32 @@ export default function ClaimPage({
           </div>
         </CardContent>
       </Card>
+
+      {/* Receipt image viewer */}
+      {data.receiptImagePath && (
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setShowImage(!showImage)}
+          >
+            <ImageIcon className="mr-2 h-4 w-4" />
+            {showImage ? t("hideReceipt") : t("viewReceipt")}
+          </Button>
+          {showImage && (
+            <Card>
+              <CardContent className="p-2">
+                <img
+                  src={`/api/uploads/${data.receiptImagePath}`}
+                  alt={t("receiptImage")}
+                  className="w-full rounded-md"
+                />
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
 
       {/* People in session */}
       <Card>

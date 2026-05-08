@@ -89,6 +89,10 @@
     "claimsSaved": "Val sparade",
     "joinedSession": "Du gick med i sessionen!",
     "pleaseEnterName": "Ange ditt namn",
-    "claimsSavedToast": "Val sparade!"
+    "claimsSavedToast": "Val sparade!",
+    "viewReceipt": "Visa kvitto",
+    "hideReceipt": "Dölj kvitto",
+    "receiptImage": "Kvittobild",
+    "orRejoinAs": "Eller återanslut som:"
   }
 }

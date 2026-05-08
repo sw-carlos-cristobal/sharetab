@@ -89,6 +89,10 @@
     "claimsSaved": "Claims saved",
     "joinedSession": "Joined the session!",
     "pleaseEnterName": "Please enter your name",
-    "claimsSavedToast": "Claims saved!"
+    "claimsSavedToast": "Claims saved!",
+    "viewReceipt": "View Receipt",
+    "hideReceipt": "Hide Receipt",
+    "receiptImage": "Receipt image",
+    "orRejoinAs": "Or rejoin as:"
   }
 }

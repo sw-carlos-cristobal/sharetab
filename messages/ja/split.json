@@ -89,6 +89,10 @@
     "claimsSaved": "選択が保存されました",
     "joinedSession": "セッションに参加しました！",
     "pleaseEnterName": "名前を入力してください",
-    "claimsSavedToast": "選択が保存されました！"
+    "claimsSavedToast": "選択が保存されました！",
+    "viewReceipt": "レシートを表示",
+    "hideReceipt": "レシートを非表示",
+    "receiptImage": "レシート画像",
+    "orRejoinAs": "または再参加："
   }
 }

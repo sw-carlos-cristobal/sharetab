@@ -89,6 +89,10 @@
     "claimsSaved": "Auswahl gespeichert",
     "joinedSession": "Sie sind der Session beigetreten!",
     "pleaseEnterName": "Bitte geben Sie Ihren Namen ein",
-    "claimsSavedToast": "Auswahl gespeichert!"
+    "claimsSavedToast": "Auswahl gespeichert!",
+    "viewReceipt": "Beleg anzeigen",
+    "hideReceipt": "Beleg ausblenden",
+    "receiptImage": "Belegbild",
+    "orRejoinAs": "Oder beitreten als:"
   }
 }

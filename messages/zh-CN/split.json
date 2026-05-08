@@ -89,6 +89,10 @@
     "claimsSaved": "选择已保存",
     "joinedSession": "已加入会话！",
     "pleaseEnterName": "请输入你的姓名",
-    "claimsSavedToast": "选择已保存！"
+    "claimsSavedToast": "选择已保存！",
+    "viewReceipt": "查看小票",
+    "hideReceipt": "隐藏小票",
+    "receiptImage": "小票图片",
+    "orRejoinAs": "或以身份重新加入："
   }
 }
