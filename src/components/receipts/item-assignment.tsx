@@ -245,7 +245,7 @@ export function ItemAssignment({
     saveForLater.mutate({
       groupId,
       receiptId,
-      paidById: paidById || undefined,
+      paidById: paidById || null,
       assignments: Object.entries(assignments)
         .filter(([, userIds]) => userIds.size > 0)
         .map(([receiptItemId, userIds]) => ({

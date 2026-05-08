@@ -556,7 +556,7 @@ export const receiptsRouter = createTRPCRouter({
     .input(z.object({
       groupId: z.string(),
       receiptId: z.string(),
-      paidById: z.string().optional(),
+      paidById: z.string().nullable().optional(),
       assignments: z.array(z.object({
         receiptItemId: z.string(),
         userIds: z.array(z.string()),
