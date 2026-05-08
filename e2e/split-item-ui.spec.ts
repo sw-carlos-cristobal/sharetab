@@ -146,4 +146,46 @@ test.describe("Split Item UI", () => {
     const restoredToggle = restoredItemCard.locator(`[data-testid="${toggledMemberTestId}"]`);
     await expect(restoredToggle).toHaveClass(/bg-primary/);
   });
+
+  test("save for later rehydrates selections without page refresh", async ({ page }) => {
+    // API: upload, process, save with paidById + assignments
+    const ctx = await authedContext(users.alice.email, users.alice.password);
+
+    const uploadRes = await ctx.post(`${BASE}/api/upload`, {
+      multipart: { file: { name: "rehydrate-test.png", mimeType: "image/png", buffer: require("fs").readFileSync(RECEIPT_PATH) } },
+    });
+    const { receiptId } = await uploadRes.json();
+    await trpcMutation(ctx, "receipts.processReceipt", { receiptId, groupId: "cmow2v0up0003kwxdb2z6r5rr" }, 90000);
+
+    // Get items + alice's ID
+    const itemsRes = await trpcQuery(ctx, "receipts.getReceiptItems", { receiptId });
+    const data = await trpcResult(itemsRes);
+    const groupRes = await trpcQuery(ctx, "groups.get", { groupId: "cmow2v0up0003kwxdb2z6r5rr" });
+    const groupData = await trpcResult(groupRes);
+    const aliceId = groupData.members.find((m: { user: { email: string } }) => m.user.email === "alice@example.com").user.id;
+    const firstItemId = data.items[0]?.id;
+
+    // Save via API with paidById + assignment
+    await trpcMutation(ctx, "receipts.saveForLater", {
+      groupId: "cmow2v0up0003kwxdb2z6r5rr",
+      receiptId,
+      paidById: aliceId,
+      assignments: firstItemId ? [{ receiptItemId: firstItemId, userIds: [aliceId] }] : [],
+    });
+    await ctx.dispose();
+
+    // Browser: navigate directly to the resume page — NO refresh, NO prior visit
+    await navigateToGroup(page, "Apartment");
+    const pendingLink = page.locator('a[href*="scan?receiptId="]').first();
+    await expect(pendingLink).toBeVisible({ timeout: 10000 });
+    await pendingLink.click();
+    await expect(page.getByTestId("item-assignment-form")).toBeVisible({ timeout: 30000 });
+
+    // Immediately verify — no refresh needed
+    await expect(page.getByTestId("paid-by-select")).toHaveValue(aliceId);
+
+    // At least one member toggle should be active
+    const activeToggles = page.locator('[data-testid^="member-toggle-"].bg-primary, [data-testid^="member-toggle-"][class*="bg-primary"]');
+    await expect(activeToggles.first()).toBeVisible({ timeout: 5000 });
+  });
 });

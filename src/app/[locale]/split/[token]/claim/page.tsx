@@ -337,7 +337,7 @@ export default function ClaimPage({
         )}
 
         {/* Join form */}
-        <Card>
+        <Card data-testid="claim-join-form">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Join this session</CardTitle>
           </CardHeader>
@@ -355,12 +355,14 @@ export default function ClaimPage({
                   if (e.key === "Enter") handleJoin();
                 }}
                 autoFocus
+                data-testid="claim-name-input"
               />
             </div>
             <Button
               className="w-full"
               onClick={handleJoin}
               disabled={!name.trim() || joinSession.isPending}
+              data-testid="claim-join-btn"
             >
               {joinSession.isPending ? (
                 <>
