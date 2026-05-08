@@ -381,7 +381,7 @@ export default function GuestSplitPage() {
           )}
 
           {/* Camera capture button - mobile optimized */}
-          <label className="flex flex-col items-center gap-4 rounded-2xl bg-primary p-8 text-primary-foreground cursor-pointer active:scale-[0.98] transition-transform">
+          <label className="flex flex-col items-center gap-4 rounded-2xl bg-primary p-8 text-primary-foreground cursor-pointer active:scale-[0.98] transition-transform" data-testid="guest-snap-upload">
             <div className="rounded-full bg-primary-foreground/20 p-4">
               <Camera className="h-10 w-10" />
             </div>
@@ -406,7 +406,7 @@ export default function GuestSplitPage() {
           </div>
 
           {/* Gallery upload */}
-          <label className="flex flex-col items-center gap-4 rounded-2xl border-2 border-dashed border-muted-foreground/25 p-8 cursor-pointer hover:border-primary/50 transition-colors active:scale-[0.98]">
+          <label className="flex flex-col items-center gap-4 rounded-2xl border-2 border-dashed border-muted-foreground/25 p-8 cursor-pointer hover:border-primary/50 transition-colors active:scale-[0.98]" data-testid="guest-gallery-upload">
             <div className="rounded-full bg-muted p-4">
               <ImageIcon className="h-8 w-8 text-muted-foreground" />
             </div>
@@ -417,6 +417,7 @@ export default function GuestSplitPage() {
               onChange={handleFileUpload}
               disabled={uploading}
               className="hidden"
+              data-testid="guest-file-input"
             />
           </label>
 
@@ -431,7 +432,7 @@ export default function GuestSplitPage() {
 
       {/* Step: Processing */}
       {step === "processing" && (
-        <div className="flex flex-col items-center justify-center gap-6 py-20">
+        <div className="flex flex-col items-center justify-center gap-6 py-20" data-testid="guest-processing">
           <Loader2 className="h-12 w-12 animate-spin text-primary" />
           <div className="text-center space-y-2 max-w-xs">
             <p className="font-semibold text-lg">Processing receipt...</p>
@@ -453,7 +454,7 @@ export default function GuestSplitPage() {
             <Button variant="ghost" size="icon" onClick={() => setStep("upload")}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <h2 className="text-xl font-bold">Who&apos;s splitting?</h2>
+            <h2 className="text-xl font-bold" data-testid="guest-people-step">Who&apos;s splitting?</h2>
           </div>
 
           <p className="text-sm text-muted-foreground">
@@ -474,6 +475,7 @@ export default function GuestSplitPage() {
                   onChange={(e) => updatePersonName(idx, e.target.value)}
                   placeholder={`Person ${idx + 1}`}
                   className="h-12 text-base"
+                  data-testid={`person-input-${idx}`}
                 />
                 {people.length > 1 && (
                   <Button
@@ -493,6 +495,7 @@ export default function GuestSplitPage() {
             variant="outline"
             className="w-full h-12"
             onClick={() => setPeople((p) => [...p, ""])}
+            data-testid="add-person-btn"
           >
             <Plus className="mr-2 h-4 w-4" />
             Add person
@@ -521,6 +524,7 @@ export default function GuestSplitPage() {
                 className="w-full h-14 text-lg"
                 disabled={validPeople.length < 1}
                 onClick={() => setStep("assign")}
+                data-testid="next-assign-btn"
               >
                 Next: Assign Items
                 <ArrowRight className="ml-2 h-5 w-5" />
@@ -600,7 +604,7 @@ export default function GuestSplitPage() {
 
       {/* Step: Assign */}
       {step === "assign" && extracted && (
-        <div className="space-y-4">
+        <div className="space-y-4" data-testid="guest-assign-step">
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="icon" onClick={() => setStep("people")}>
               <ArrowLeft className="h-4 w-4" />
@@ -678,7 +682,7 @@ export default function GuestSplitPage() {
 
           {/* Quick actions */}
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={assignAllToEveryone}>
+            <Button variant="outline" size="sm" onClick={assignAllToEveryone} data-testid="guest-split-all-btn">
               <Users className="mr-2 h-4 w-4" />
               Split all equally
             </Button>
@@ -890,6 +894,7 @@ export default function GuestSplitPage() {
                 className="w-full h-14 text-lg"
                 disabled={!allAssigned || createSplit.isPending}
                 onClick={handleCreateSplit}
+                data-testid="create-split-btn"
               >
                 {createSplit.isPending
                   ? "Creating split..."

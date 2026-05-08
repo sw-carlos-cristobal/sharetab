@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useLocale } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { formatCents, centsToDecimal, parseToCents } from "@/lib/money";
@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Check, Users, Pencil, Trash2, Plus, Image as ImageIcon, Bookmark, Scissors } from "lucide-react";
+import { Check, Users, Pencil, Trash2, Plus, Image as ImageIcon, Scissors } from "lucide-react";
 
 type Member = { id: string; name: string | null };
 
@@ -21,13 +21,11 @@ export function ItemAssignment({
   receiptId,
   members,
   onComplete,
-  onSaveForLater,
 }: {
   groupId: string;
   receiptId: string;
   members: Member[];
   onComplete: () => void;
-  onSaveForLater?: () => void;
 }) {
   const locale = useLocale();
   const receiptData = trpc.receipts.getReceiptItems.useQuery({ receiptId });
@@ -70,9 +68,6 @@ export function ItemAssignment({
       utils.receipts.getReceiptItems.invalidate({ receiptId });
     },
   });
-  const saveForLater = trpc.receipts.saveForLater.useMutation({
-    onSuccess: () => onSaveForLater?.(),
-  });
   const splitItem = trpc.receipts.splitItem.useMutation({
     onSuccess: () => utils.receipts.getReceiptItems.invalidate({ receiptId }),
   });
@@ -95,32 +90,12 @@ export function ItemAssignment({
     return () => el.removeEventListener("wheel", handler);
   }, [showImage]);
 
-  // Initialize title, paidById, and assignments from saved data when loaded.
-  // This runs once when receiptData first arrives (initialized guards against re-runs).
-  const [initialized, setInitialized] = useState(false);
-
-  /* eslint-disable react-hooks/set-state-in-effect -- one-time init from async query data */
-  useEffect(() => {
-    if (initialized || !receiptData.data) return;
-    const data = receiptData.data;
-    if (data.receipt.extractedData?.merchantName && !title) {
-      setTitle(data.receipt.extractedData.merchantName);
+  // Initialize title from merchant name when data loads
+  useMemo(() => {
+    if (receiptData.data?.receipt.extractedData?.merchantName && !title) {
+      setTitle(receiptData.data.receipt.extractedData.merchantName);
     }
-    if (data.receipt.paidById) {
-      setPaidById(data.receipt.paidById);
-    }
-    const restored: Assignments = {};
-    for (const item of data.items) {
-      if (item.assignments && item.assignments.length > 0) {
-        restored[item.id] = new Set(item.assignments.map((a: { userId: string }) => a.userId));
-      }
-    }
-    if (Object.keys(restored).length > 0) {
-      setAssignments(restored);
-    }
-    setInitialized(true);
-  }, [receiptData.data, initialized]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+  }, [receiptData.data, title]);
 
   if (receiptData.isLoading) {
     return <p className="text-muted-foreground">Loading items...</p>;
@@ -241,20 +216,6 @@ export function ItemAssignment({
   const assignedItemCount = Object.values(assignments).filter((s) => s.size > 0).length;
   const allAssigned = assignedItemCount === items.length;
 
-  function handleSaveForLater() {
-    saveForLater.mutate({
-      groupId,
-      receiptId,
-      paidById: paidById || null,
-      assignments: Object.entries(assignments)
-        .filter(([, userIds]) => userIds.size > 0)
-        .map(([receiptItemId, userIds]) => ({
-          receiptItemId,
-          userIds: Array.from(userIds),
-        })),
-    });
-  }
-
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!paidById || !allAssigned) return;
@@ -275,7 +236,7 @@ export function ItemAssignment({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4" data-testid="item-assignment-form">
       {/* Receipt image toggle */}
       {receipt.imagePath && (
         <Button
@@ -424,6 +385,7 @@ export function ItemAssignment({
               onChange={(e) => setPaidById(e.target.value)}
               required
               className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+              data-testid="paid-by-select"
             >
               <option value="">Select member</option>
               {members.map((m) => (
@@ -450,7 +412,7 @@ export function ItemAssignment({
 
       {/* Quick actions */}
       <div className="flex gap-2">
-        <Button type="button" variant="outline" size="sm" onClick={assignAllToEveryone}>
+        <Button type="button" variant="outline" size="sm" onClick={assignAllToEveryone} data-testid="split-all-btn">
           <Users className="mr-2 h-4 w-4" />
           Split all equally
         </Button>
@@ -459,6 +421,7 @@ export function ItemAssignment({
           variant="outline"
           size="sm"
           onClick={() => setAddingItem(true)}
+          data-testid="add-item-btn"
         >
           <Plus className="mr-2 h-4 w-4" />
           Add item
@@ -467,7 +430,7 @@ export function ItemAssignment({
 
       {/* Add new item form */}
       {addingItem && (
-        <Card className="border-primary/50">
+        <Card className="border-primary/50" data-testid="add-item-form">
           <CardContent className="py-3">
             <form onSubmit={handleAddItem} className="space-y-2">
               <div className="flex gap-2">
@@ -517,7 +480,7 @@ export function ItemAssignment({
           const isEditing = editingItem === item.id;
 
           return (
-            <Card key={item.id} className={assigned.size === 0 ? "border-amber-300" : ""}>
+            <Card key={item.id} className={assigned.size === 0 ? "border-amber-300" : ""} data-testid={`item-card-${item.id}`}>
               <CardContent className="py-3">
                 {isEditing ? (
                   <div className="mb-2 space-y-2">
@@ -591,6 +554,7 @@ export function ItemAssignment({
                           className="text-muted-foreground hover:text-foreground"
                           title="Split into separate line"
                           aria-label={`Split ${item.name} into separate line`}
+                          data-testid={`split-btn-${item.id}`}
                         >
                           <Scissors className="h-3 w-3" />
                         </button>
@@ -605,7 +569,7 @@ export function ItemAssignment({
                   const parsed = Number(splitQuantity);
                   const validQty = Number.isSafeInteger(parsed) && parsed >= 1 && parsed < item.quantity;
                   return (
-                    <div className="mb-2 flex items-center gap-2">
+                    <div className="mb-2 flex items-center gap-2" data-testid="split-form">
                       <span className="text-xs text-muted-foreground">Split off</span>
                       <Input
                         type="number"
@@ -614,6 +578,7 @@ export function ItemAssignment({
                         value={splitQuantity}
                         onChange={(e) => setSplitQuantity(e.target.value)}
                         className="w-16 h-7 text-xs"
+                        data-testid="split-qty-input"
                       />
                       <span className="text-xs text-muted-foreground">of {item.quantity}</span>
                       <Button
@@ -621,6 +586,7 @@ export function ItemAssignment({
                         size="sm"
                         className="h-7 text-xs"
                         disabled={splitItem.isPending || !validQty}
+                        data-testid="split-submit"
                         onClick={() => {
                           if (!validQty) return;
                           splitItem.mutate({ itemId: item.id, splitQuantity: parsed });
@@ -651,6 +617,7 @@ export function ItemAssignment({
                         key={m.id}
                         type="button"
                         onClick={() => toggleAssignment(item.id, m.id)}
+                        data-testid={`member-toggle-${m.id}`}
                         className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors ${
                           isAssigned
                             ? "bg-primary text-primary-foreground"
@@ -676,7 +643,7 @@ export function ItemAssignment({
 
       {/* Per-person summary */}
       {perPersonTotals.size > 0 && (
-        <Card>
+        <Card data-testid="per-person-totals">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Per-person totals</CardTitle>
           </CardHeader>
@@ -707,6 +674,7 @@ export function ItemAssignment({
         type="submit"
         className="w-full"
         disabled={createExpense.isPending || !allAssigned || !paidById}
+        data-testid="create-expense-btn"
       >
         {createExpense.isPending
           ? "Creating expense..."
@@ -714,19 +682,6 @@ export function ItemAssignment({
             ? `Assign all items (${items.length - assignedItemCount} remaining)`
             : "Create Expense from Receipt"}
       </Button>
-
-      {onSaveForLater && (
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full"
-          onClick={handleSaveForLater}
-          disabled={saveForLater.isPending}
-        >
-          <Bookmark className="mr-2 h-4 w-4" />
-          {saveForLater.isPending ? "Saving..." : "Save for Later"}
-        </Button>
-      )}
     </form>
   );
 }
