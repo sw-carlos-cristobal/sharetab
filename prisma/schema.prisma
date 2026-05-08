@@ -371,6 +371,7 @@ model GuestSplit {
   assignments Json     // [{itemIndex, personIndices}]
   summary     Json?    // [{name, itemTotal, tax, tip, total}]
   paidByIndex Int      @default(0)
+  status      String   @default("finalized") // "claiming" | "finalized"
   expiresAt   DateTime
   createdAt   DateTime @default(now())
 }
