@@ -259,9 +259,17 @@ export const receiptsRouter = createTRPCRouter({
           });
         }
 
-        const newTotalPrice = current.unitPrice * input.splitQuantity;
+        const rawNewTotal = current.unitPrice * input.splitQuantity;
+        const newTotalPrice = Math.min(rawNewTotal, current.totalPrice - 1);
         const remainingQuantity = current.quantity - input.splitQuantity;
         const remainingTotalPrice = current.totalPrice - newTotalPrice;
+
+        if (remainingTotalPrice <= 0 || newTotalPrice <= 0) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Split would result in invalid price distribution",
+          });
+        }
 
         await tx.receiptItem.updateMany({
           where: {

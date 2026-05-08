@@ -270,7 +270,7 @@ export default function GuestSplitPage() {
     const item = items[index];
     if (!item || !Number.isSafeInteger(qty) || qty < 1 || qty >= item.quantity) return;
 
-    const newTotalPrice = item.unitPrice * qty;
+    const newTotalPrice = Math.min(item.unitPrice * qty, item.totalPrice - 1);
     const remainingQty = item.quantity - qty;
     const remainingTotalPrice = item.totalPrice - newTotalPrice;
 
@@ -295,6 +295,11 @@ export default function GuestSplitPage() {
       }
     }
     setAssignments(newAssignments);
+
+    // Shift index-based UI state so edits don't target the wrong item
+    if (editingItem !== null && editingItem > index) {
+      setEditingItem(editingItem + 1);
+    }
     setSplittingIndex(null);
   }
 
