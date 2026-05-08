@@ -1,0 +1,75 @@
+name: Auto Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: auto-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate release tag
+        id: tag
+        run: |
+          DATE=$(date -u +%Y.%m.%d)
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+
+          # Count existing tags for today to get build number
+          BUILD_NUM=1
+          while git rev-parse "build/${DATE}.${BUILD_NUM}" >/dev/null 2>&1; do
+            BUILD_NUM=$((BUILD_NUM + 1))
+          done
+
+          TAG="build/${DATE}.${BUILD_NUM}"
+          DISPLAY="${DATE}.${BUILD_NUM}-${SHORT_SHA}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "display=${DISPLAY}" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Find the previous auto-release tag
+          PREV_TAG=$(git tag -l 'build/*' --sort=-version:refname | head -1)
+
+          {
+            echo "body<<EOF"
+            if [ -n "$PREV_TAG" ]; then
+              echo "## Changes since ${PREV_TAG}"
+              echo ""
+              git log "${PREV_TAG}..HEAD" --pretty=format:"- %s (%h)" --no-merges
+            else
+              echo "## Initial auto-release"
+              echo ""
+              git log --pretty=format:"- %s (%h)" --no-merges -10
+            fi
+            echo ""
+            echo ""
+            echo "**Commit:** \`${{ github.sha }}\`"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create tag
+        run: |
+          git tag "${{ steps.tag.outputs.tag }}"
+          git push origin "${{ steps.tag.outputs.tag }}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: "Build ${{ steps.tag.outputs.display }}"
+          body: ${{ steps.changelog.outputs.body }}
+          prerelease: true
