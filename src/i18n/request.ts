@@ -16,6 +16,7 @@ export default getRequestConfig(async ({ requestLocale }) => {
   const settings = (await import(`../../messages/${locale}/settings.json`)).default;
   const admin = (await import(`../../messages/${locale}/admin.json`)).default;
   const split = (await import(`../../messages/${locale}/split.json`)).default;
+  const splits = (await import(`../../messages/${locale}/splits.json`)).default;
 
   return {
     locale,
@@ -28,6 +29,7 @@ export default getRequestConfig(async ({ requestLocale }) => {
       settings,
       admin,
       split,
+      splits,
     },
   };
 });

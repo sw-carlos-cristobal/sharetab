@@ -1,0 +1,13 @@
+{
+  "title": "Meine Teilungen",
+  "description": "Verlauf Ihrer Rechnungsteilungen",
+  "empty": "Noch keine Teilungen",
+  "emptyDescription": "Verwenden Sie Schnell teilen, um eine Rechnung mit Freunden zu teilen.",
+  "goToSplit": "Rechnung teilen",
+  "loadMore": "Mehr laden",
+  "people": "{count} Personen",
+  "items": "{count} Artikel",
+  "claiming": "In Bearbeitung",
+  "finalized": "Abgeschlossen",
+  "untitled": "Unbenannte Teilung"
+}

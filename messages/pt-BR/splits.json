@@ -1,0 +1,13 @@
+{
+  "title": "Minhas divisoes",
+  "description": "Historico de divisoes de conta",
+  "empty": "Nenhuma divisao ainda",
+  "emptyDescription": "Use Divisao rapida para dividir uma conta com amigos.",
+  "goToSplit": "Dividir uma conta",
+  "loadMore": "Carregar mais",
+  "people": "{count} pessoas",
+  "items": "{count} itens",
+  "claiming": "Em andamento",
+  "finalized": "Concluido",
+  "untitled": "Divisao sem titulo"
+}

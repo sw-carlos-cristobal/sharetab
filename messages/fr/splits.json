@@ -1,0 +1,13 @@
+{
+  "title": "Mes partages",
+  "description": "Historique de vos partages de note",
+  "empty": "Aucun partage",
+  "emptyDescription": "Utilisez Partage rapide pour partager une note entre amis.",
+  "goToSplit": "Partager une note",
+  "loadMore": "Charger plus",
+  "people": "{count} personnes",
+  "items": "{count} articles",
+  "claiming": "En cours",
+  "finalized": "Termine",
+  "untitled": "Partage sans titre"
+}

@@ -1,0 +1,13 @@
+{
+  "title": "我的分账",
+  "description": "访客分账历史记录",
+  "empty": "暂无分账",
+  "emptyDescription": "使用快速分账与朋友分摊账单。",
+  "goToSplit": "分摊账单",
+  "loadMore": "加载更多",
+  "people": "{count}人",
+  "items": "{count}项",
+  "claiming": "进行中",
+  "finalized": "已完成",
+  "untitled": "未命名分账"
+}

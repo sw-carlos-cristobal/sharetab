@@ -1,0 +1,13 @@
+{
+  "title": "내 정산",
+  "description": "게스트 정산 내역",
+  "empty": "정산 내역이 없습니다",
+  "emptyDescription": "빠른 정산을 사용하여 친구들과 비용을 나누세요.",
+  "goToSplit": "정산하기",
+  "loadMore": "더 보기",
+  "people": "{count}명",
+  "items": "{count}개",
+  "claiming": "진행 중",
+  "finalized": "완료",
+  "untitled": "제목 없는 정산"
+}

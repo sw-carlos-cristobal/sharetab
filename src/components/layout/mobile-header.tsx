@@ -20,6 +20,7 @@ import {
   Settings,
   Shield,
   Menu,
+  Scissors,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { LanguageSwitcher } from "@/components/layout/language-switcher";
@@ -29,6 +30,7 @@ const navItems = [
   { href: "/dashboard", key: "dashboard", icon: LayoutDashboard },
   { href: "/groups", key: "groups", icon: Users },
   { href: "/split", key: "quickSplit", icon: Receipt },
+  { href: "/splits", key: "mySplits", icon: Scissors },
   { href: "/settings", key: "settings", icon: Settings },
 ] as const;
 

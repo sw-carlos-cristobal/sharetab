@@ -59,6 +59,48 @@ async function withSerializableRetry<T>(run: () => Promise<T>): Promise<T> {
 }
 
 export const guestRouter = createTRPCRouter({
+  mySplits: protectedProcedure
+    .input(z.object({
+      cursor: z.string().optional(),
+      limit: z.number().int().min(1).max(50).default(20),
+    }))
+    .query(async ({ ctx, input }) => {
+      const splits = await ctx.db.guestSplit.findMany({
+        where: { userId: ctx.user.id },
+        orderBy: { createdAt: "desc" },
+        take: input.limit + 1,
+        ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {}),
+      });
+
+      let nextCursor: string | undefined;
+      if (splits.length > input.limit) {
+        nextCursor = splits.pop()!.id;
+      }
+
+      type ReceiptJson = Record<string, unknown>;
+      type PersonJson = Record<string, unknown>;
+
+      return {
+        splits: splits.map(s => {
+          const receipt = s.receiptData as ReceiptJson | null;
+          const people = s.people as PersonJson[] | null;
+          const items = s.items as PersonJson[] | null;
+          return {
+            id: s.id,
+            shareToken: s.shareToken,
+            status: s.status,
+            merchantName: receipt?.merchantName as string | undefined,
+            total: receipt?.total as number | undefined,
+            currency: (receipt?.currency as string | undefined) ?? "USD",
+            peopleCount: people?.length ?? 0,
+            itemCount: items?.length ?? 0,
+            createdAt: s.createdAt,
+          };
+        }),
+        nextCursor,
+      };
+    }),
+
   getScanProviderInfo: protectedProcedure.query(async () => {
     try {
       return {
@@ -293,6 +335,7 @@ export const guestRouter = createTRPCRouter({
           assignments: remappedAssignments as unknown as Prisma.InputJsonValue,
           summary: summaryWithNames as unknown as Prisma.InputJsonValue,
           paidByIndex: remappedPaidBy,
+          userId: ctx.session?.user?.id ?? null,
           expiresAt,
         },
       });
@@ -409,6 +452,7 @@ export const guestRouter = createTRPCRouter({
           assignments: [] as unknown as Prisma.InputJsonValue,
           paidByIndex,
           status: "claiming",
+          userId: ctx.session?.user?.id ?? null,
           expiresAt,
         },
       });

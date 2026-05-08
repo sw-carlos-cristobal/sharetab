@@ -1,0 +1,13 @@
+{
+  "title": "Mina delningar",
+  "description": "Din historik over gastdelningar",
+  "empty": "Inga delningar an",
+  "emptyDescription": "Anvand Snabb delning for att dela en nota med vanner.",
+  "goToSplit": "Dela en nota",
+  "loadMore": "Ladda fler",
+  "people": "{count} personer",
+  "items": "{count} artiklar",
+  "claiming": "Pagaende",
+  "finalized": "Slutford",
+  "untitled": "Namnlos delning"
+}

@@ -72,6 +72,7 @@ model User {
   adminAuditLogs  AdminAuditLog[] @relation("AdminAuditLogs")
   systemInvitesUsed SystemInvite[] @relation("SystemInviteUsedBy")
   uploadedReceipts Receipt[] @relation("UploadedReceipts")
+  guestSplits      GuestSplit[] @relation("GuestSplits")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -373,6 +374,8 @@ model GuestSplit {
   summary     Json?    // [{name, itemTotal, tax, tip, total}]
   paidByIndex Int      @default(0)
   status      String   @default("finalized") // "claiming" | "finalized"
+  userId      String?
+  createdBy   User?    @relation("GuestSplits", fields: [userId], references: [id])
   expiresAt   DateTime
   createdAt   DateTime @default(now())
 }
