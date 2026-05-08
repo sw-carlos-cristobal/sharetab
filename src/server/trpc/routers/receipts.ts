@@ -643,20 +643,15 @@ export const receiptsRouter = createTRPCRouter({
           });
 
           // Create new assignments
-          const assignmentUsersByItem = new Map<string, Set<string>>();
+          const seenAssignments = new Set<string>();
           const assignmentData: { receiptItemId: string; userId: string }[] = [];
           for (const assignment of input.assignments) {
-            let seenUsers = assignmentUsersByItem.get(assignment.receiptItemId);
-            if (!seenUsers) {
-              seenUsers = new Set<string>();
-              assignmentUsersByItem.set(assignment.receiptItemId, seenUsers);
-            }
-
             for (const userId of assignment.userIds) {
-              if (seenUsers.has(userId)) {
+              const key = JSON.stringify([assignment.receiptItemId, userId]);
+              if (seenAssignments.has(key)) {
                 continue;
               }
-              seenUsers.add(userId);
+              seenAssignments.add(key);
               assignmentData.push({
                 receiptItemId: assignment.receiptItemId,
                 userId,

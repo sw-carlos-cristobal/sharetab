@@ -45,25 +45,17 @@ function isTransactionConflict(error: unknown) {
 }
 
 async function withSerializableRetry<T>(run: () => Promise<T>): Promise<T> {
-  let lastError: unknown;
-
-  for (let attempt = 0; attempt < GUEST_TRANSACTION_RETRY_ATTEMPTS; attempt++) {
+  let attempt = 0;
+  while (true) {
     try {
       return await run();
     } catch (error) {
-      lastError = error;
-      if (attempt === GUEST_TRANSACTION_RETRY_ATTEMPTS - 1 || !isTransactionConflict(error)) {
+      if (attempt >= GUEST_TRANSACTION_RETRY_ATTEMPTS - 1 || !isTransactionConflict(error)) {
         throw error;
       }
+      attempt += 1;
     }
   }
-
-  throw lastError instanceof Error
-    ? lastError
-    : new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Transaction failed after multiple retries",
-    });
 }
 
 export const guestRouter = createTRPCRouter({
