@@ -89,7 +89,7 @@ test.describe("AI Provider Test UI", () => {
   test("uploading an invalid file type does not enable provider buttons", async ({
     page,
   }) => {
-    const section = await goToAdminAndWaitForProviderSection(page);
+    await goToAdminAndWaitForProviderSection(page);
 
     // Upload a .txt file (not an accepted image type)
     const txtPath = resolve("e2e/receipts/cafe.txt");
@@ -108,7 +108,7 @@ test.describe("AI Provider Test UI", () => {
   });
 
   test("changing image replaces the previous file", async ({ page }) => {
-    const section = await goToAdminAndWaitForProviderSection(page);
+    await goToAdminAndWaitForProviderSection(page);
 
     await page.getByTestId("ai-test-file-input").setInputFiles(RECEIPT_PATH);
     await expect(page.getByTestId("ai-test-file-info")).toContainText("coffee-shop.png");
@@ -122,7 +122,7 @@ test.describe("AI Provider Test UI", () => {
 
 test.describe("AI Provider Test — OCR via UI", () => {
   test.beforeEach(({}, testInfo) => {
-    if (process.env.RUN_AI_TESTS !== "1")
+    if (!process.env.RUN_AI_TESTS)
       testInfo.skip(true, "Set RUN_AI_TESTS=1 to enable");
   });
   test.setTimeout(150_000);
@@ -130,7 +130,7 @@ test.describe("AI Provider Test — OCR via UI", () => {
   test("clicking Test ocr shows success result with JSON", async ({
     page,
   }) => {
-    const section = await goToAdminAndWaitForProviderSection(page);
+    await goToAdminAndWaitForProviderSection(page);
 
     await page.getByTestId("ai-test-file-input").setInputFiles(RECEIPT_PATH);
     const ocrButton = page.getByTestId("ai-test-btn-ocr");
@@ -153,7 +153,7 @@ test.describe("AI Provider Test — OCR via UI", () => {
   });
 
   test("result JSON contains expected receipt fields", async ({ page }) => {
-    const section = await goToAdminAndWaitForProviderSection(page);
+    await goToAdminAndWaitForProviderSection(page);
 
     await page.getByTestId("ai-test-file-input").setInputFiles(RECEIPT_PATH);
     await expect(page.getByTestId("ai-test-file-info")).toBeVisible();
