@@ -20,7 +20,8 @@ export async function register() {
       } catch {}
     }
 
-    console.log(`ShareTab v${version} (${commitSha})`);
+    const { logger } = await import("@/server/lib/logger");
+    logger.info("app.startup", { version, commitSha });
 
     const { startPoller } = await import("@/server/lib/auth-health-poller");
     startPoller();

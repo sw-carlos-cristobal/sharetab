@@ -41,6 +41,22 @@ import {
 
 const serverStartTime = new Date();
 
+// Cache version and commit SHA at module load — avoids blocking reads on every poll
+let cachedVersion = "unknown";
+let cachedCommitSha = "unknown";
+try {
+  const pkg = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), "package.json"), "utf-8"));
+  cachedVersion = pkg.version;
+} catch {}
+try {
+  cachedCommitSha = fs.readFileSync(path.resolve(process.cwd(), ".commit-sha"), "utf-8").trim();
+} catch {
+  try {
+    const { execFileSync } = require("child_process");
+    cachedCommitSha = execFileSync("git", ["rev-parse", "--short", "HEAD"], { encoding: "utf-8" }).trim();
+  } catch {}
+}
+
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
   const adminEmail = process.env.ADMIN_EMAIL;
   // When impersonating, use the real admin email for the check
@@ -193,28 +209,6 @@ export const adminRouter = createTRPCRouter({
       aiStatus = "unavailable";
     }
 
-    // App version + commit hash
-    let version = "unknown";
-    let commitSha = "unknown";
-    try {
-      const pkgPath = path.resolve(process.cwd(), "package.json");
-      const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
-      version = pkg.version;
-    } catch {
-      // ignore
-    }
-    try {
-      const shaPath = path.resolve(process.cwd(), ".commit-sha");
-      commitSha = fs.readFileSync(shaPath, "utf-8").trim();
-    } catch {
-      try {
-        const { execFileSync } = await import("child_process");
-        commitSha = execFileSync("git", ["rev-parse", "--short", "HEAD"], { encoding: "utf-8" }).trim();
-      } catch {
-        // not in a git repo or git not installed
-      }
-    }
-
     return {
       dbStatus,
       aiProvider,
@@ -222,8 +216,8 @@ export const adminRouter = createTRPCRouter({
       ocrFallback,
       aiStatus,
       authProvidersNeedingLogin,
-      version,
-      commitSha,
+      version: cachedVersion,
+      commitSha: cachedCommitSha,
       serverStartTime: serverStartTime.toISOString(),
       uptime: Math.floor((Date.now() - serverStartTime.getTime()) / 1000),
     };
