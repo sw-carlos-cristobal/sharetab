@@ -46,6 +46,10 @@ function normalizeGuestName(name: string): string {
   return name.trim().toLowerCase();
 }
 
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 function getStoredClaimIdentity(token: string): StoredClaimIdentity | null {
   if (typeof window === "undefined") return null;
 
@@ -59,7 +63,8 @@ function getStoredClaimIdentity(token: string): StoredClaimIdentity | null {
       !("name" in parsed) ||
       !("personToken" in parsed) ||
       typeof parsed.name !== "string" ||
-      typeof parsed.personToken !== "string"
+      typeof parsed.personToken !== "string" ||
+      !isUuid(parsed.personToken)
     ) {
       return null;
     }
