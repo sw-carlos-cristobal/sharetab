@@ -6,7 +6,9 @@ const RECEIPT_PATH = resolve("e2e/receipts/coffee-shop.png");
 const BASE = process.env.BASE_URL || "http://localhost:3001";
 
 test.describe("Split Item UI", () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page }, testInfo) => {
+    if (!process.env.RUN_AI_TESTS)
+      testInfo.skip(true, "Set RUN_AI_TESTS=1 to enable");
     await login(page, users.alice.email, users.alice.password);
   });
   test.setTimeout(120_000);
