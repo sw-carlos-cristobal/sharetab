@@ -494,7 +494,7 @@ export const guestRouter = createTRPCRouter({
       token: z.string(),
       personIndex: z.number().int().min(0),
       personToken: z.string().uuid(),
-      claimedItemIndices: z.array(z.number().int().min(0)),
+      claimedItemIndices: z.array(z.number().int().min(0)).max(1000),
     }))
     .mutation(async ({ ctx, input }) => {
       // Rate limit: 10 claims per token per minute
@@ -531,7 +531,10 @@ export const guestRouter = createTRPCRouter({
             throw new TRPCError({ code: "FORBIDDEN", message: "Invalid person token" });
           }
 
-          for (const idx of input.claimedItemIndices) {
+          // Deduplicate claimed indices
+          const claimedSet = new Set(input.claimedItemIndices);
+
+          for (const idx of claimedSet) {
             if (idx >= items.length) {
               throw new TRPCError({ code: "BAD_REQUEST", message: `Invalid item index: ${idx}` });
             }
@@ -547,7 +550,7 @@ export const guestRouter = createTRPCRouter({
           }
 
           // Add this person to claimed items
-          for (const itemIdx of input.claimedItemIndices) {
+          for (const itemIdx of claimedSet) {
             let assignment = assignments.find((a) => a.itemIndex === itemIdx);
             if (!assignment) {
               assignment = { itemIndex: itemIdx, personIndices: [] };

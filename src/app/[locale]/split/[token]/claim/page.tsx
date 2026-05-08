@@ -55,7 +55,7 @@ export default function ClaimPage({
   // --- tRPC ---
   const session = trpc.guest.getSession.useQuery(
     { token },
-    { refetchInterval: 3000 }
+    { refetchInterval: (query) => query.state.data?.status === "finalized" ? false : 3000 }
   );
 
   const joinSession = trpc.guest.joinSession.useMutation({
@@ -428,6 +428,7 @@ export default function ClaimPage({
             <Card
               key={idx}
               role="button"
+              aria-pressed={isClaimed}
               tabIndex={0}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
