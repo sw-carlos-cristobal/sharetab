@@ -337,7 +337,7 @@ export default function ClaimPage({
         )}
 
         {/* Join form */}
-        <Card>
+        <Card data-testid="claim-join-form">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Join this session</CardTitle>
           </CardHeader>
@@ -355,12 +355,14 @@ export default function ClaimPage({
                   if (e.key === "Enter") handleJoin();
                 }}
                 autoFocus
+                data-testid="claim-name-input"
               />
             </div>
             <Button
               className="w-full"
               onClick={handleJoin}
               disabled={!name.trim() || joinSession.isPending}
+              data-testid="claim-join-btn"
             >
               {joinSession.isPending ? (
                 <>
@@ -467,6 +469,7 @@ export default function ClaimPage({
               role="button"
               aria-pressed={isClaimed}
               tabIndex={0}
+              data-testid={`claim-item-${idx}`}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
@@ -627,6 +630,7 @@ export default function ClaimPage({
             className="w-full h-14"
             onClick={saveClaims}
             disabled={saving || !hasUnsavedChanges}
+            data-testid="save-claims-btn"
           >
             {saving ? (
               <>
