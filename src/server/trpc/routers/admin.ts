@@ -39,7 +39,10 @@ import {
   isLoginInProgress as isOpenAICodexLoginInProgress,
 } from "@/server/lib/openai-codex-login";
 
+import { getBuildInfo } from "@/server/lib/build-info";
+
 const serverStartTime = new Date();
+const { version: cachedVersion, commitSha: cachedCommitSha } = getBuildInfo();
 
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
   const adminEmail = process.env.ADMIN_EMAIL;
@@ -193,16 +196,6 @@ export const adminRouter = createTRPCRouter({
       aiStatus = "unavailable";
     }
 
-    // App version
-    let version = "unknown";
-    try {
-      const pkgPath = path.resolve(process.cwd(), "package.json");
-      const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
-      version = pkg.version;
-    } catch {
-      // ignore
-    }
-
     return {
       dbStatus,
       aiProvider,
@@ -210,7 +203,8 @@ export const adminRouter = createTRPCRouter({
       ocrFallback,
       aiStatus,
       authProvidersNeedingLogin,
-      version,
+      version: cachedVersion,
+      commitSha: cachedCommitSha,
       serverStartTime: serverStartTime.toISOString(),
       uptime: Math.floor((Date.now() - serverStartTime.getTime()) / 1000),
     };

@@ -119,6 +119,9 @@ function SystemHealthSection() {
           </CardHeader>
           <CardContent>
             <span className="text-sm font-medium">v{data?.version}</span>
+            {data?.commitSha && data.commitSha !== "unknown" && (
+              <span className="ml-2 text-xs text-muted-foreground font-mono">({data.commitSha})</span>
+            )}
           </CardContent>
         </Card>
 
