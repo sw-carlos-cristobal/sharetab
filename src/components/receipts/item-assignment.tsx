@@ -95,30 +95,42 @@ export function ItemAssignment({
     return () => el.removeEventListener("wheel", handler);
   }, [showImage]);
 
-  // Initialize title, paidById, and assignments from saved data when loaded.
-  const [initialized, setInitialized] = useState(false);
+  // Restore saved state (paidById, assignments) when receipt data loads.
+  // Runs on every data change but only sets state when server data has values
+  // and local state hasn't been set yet. This handles the case where the first
+  // render gets cached data (without paidById) and the refetch brings fresh data.
+  const hasRestoredRef = useRef(false);
 
-  /* eslint-disable react-hooks/set-state-in-effect -- one-time init from async query data */
+  /* eslint-disable react-hooks/set-state-in-effect -- init from async query data */
   useEffect(() => {
-    if (initialized || !receiptData.data) return;
+    if (!receiptData.data || hasRestoredRef.current) return;
     const data = receiptData.data;
+
     if (data.receipt.extractedData?.merchantName && !title) {
       setTitle(data.receipt.extractedData.merchantName);
     }
-    if (data.receipt.paidById) {
-      setPaidById(data.receipt.paidById);
-    }
-    const restored: Assignments = {};
-    for (const item of data.items) {
-      if (item.assignments && item.assignments.length > 0) {
-        restored[item.id] = new Set(item.assignments.map((a: { userId: string }) => a.userId));
+
+    const hasSavedPaidBy = !!data.receipt.paidById;
+    const hasSavedAssignments = data.items.some(
+      (item: { assignments?: unknown[] }) => item.assignments && item.assignments.length > 0
+    );
+
+    if (hasSavedPaidBy || hasSavedAssignments) {
+      if (hasSavedPaidBy) {
+        setPaidById(data.receipt.paidById!);
       }
+      const restored: Assignments = {};
+      for (const item of data.items) {
+        if (item.assignments && item.assignments.length > 0) {
+          restored[item.id] = new Set(item.assignments.map((a: { userId: string }) => a.userId));
+        }
+      }
+      if (Object.keys(restored).length > 0) {
+        setAssignments(restored);
+      }
+      hasRestoredRef.current = true;
     }
-    if (Object.keys(restored).length > 0) {
-      setAssignments(restored);
-    }
-    setInitialized(true);
-  }, [receiptData.data, initialized]);
+  }, [receiptData.data]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   if (receiptData.isLoading) {
