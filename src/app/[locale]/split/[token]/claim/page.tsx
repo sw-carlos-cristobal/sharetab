@@ -79,7 +79,7 @@ export default function ClaimPage({
   // --- tRPC ---
   const session = trpc.guest.getSession.useQuery(
     { token },
-    { refetchInterval: (query) => query.state.data?.status === "finalized" ? false : 3000 }
+    { refetchInterval: (query) => (query.state.data?.status === "finalized" || query.state.error) ? false : 3000 }
   );
 
   const joinSession = trpc.guest.joinSession.useMutation({

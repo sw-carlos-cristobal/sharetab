@@ -683,6 +683,9 @@ export const guestRouter = createTRPCRouter({
               status: "finalized",
               summary: summaryWithNames as unknown as Prisma.InputJsonValue,
               assignments: assignments as unknown as Prisma.InputJsonValue,
+              ...(input.tipOverride !== undefined && {
+                receiptData: { ...receiptData, tip } as unknown as Prisma.InputJsonValue,
+              }),
             },
           });
 
