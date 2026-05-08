@@ -72,4 +72,4 @@ jobs:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: "Build ${{ steps.tag.outputs.display }}"
           body: ${{ steps.changelog.outputs.body }}
-          prerelease: true
+          prerelease: false
