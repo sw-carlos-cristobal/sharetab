@@ -293,6 +293,126 @@ test.describe("Guest claiming sessions", () => {
     await ctx.dispose();
   });
 
+  test("multi-quantity items: one person claims more than others after split", async () => {
+    const ctx = await request.newContext({ baseURL: BASE });
+
+    // Scenario: 5 beers originally, split into 3 rows for 3 people:
+    // - "Beer (2x)" at $10 — Alice had 2
+    // - "Beer (2x)" at $10 — Bob had 2
+    // - "Beer (1x)" at $5 — Charlie had 1
+    // Plus a shared appetizer everyone splits
+    const splitItems = [
+      { name: "Beer", quantity: 2, unitPrice: 500, totalPrice: 1000 },
+      { name: "Beer", quantity: 2, unitPrice: 500, totalPrice: 1000 },
+      { name: "Beer", quantity: 1, unitPrice: 500, totalPrice: 500 },
+      { name: "Nachos", quantity: 1, unitPrice: 800, totalPrice: 800 },
+    ];
+
+    const createRes = await trpcMutation(ctx, "guest.createClaimSession", {
+      receiptData: {
+        merchantName: "Sports Bar",
+        subtotal: 3300,
+        tax: 300,
+        tip: 500,
+        total: 4100,
+        currency: "USD",
+      },
+      items: splitItems,
+      creatorName: "Alice",
+      paidByName: "Alice",
+    });
+    const shareToken = (await createRes.json()).result?.data?.json?.shareToken;
+
+    // Join all 3 people
+    const joinAlice = await trpcMutation(ctx, "guest.joinSession", { token: shareToken, name: "Alice" });
+    const alice = (await joinAlice.json()).result?.data?.json;
+
+    const joinBob = await trpcMutation(ctx, "guest.joinSession", { token: shareToken, name: "Bob" });
+    const bob = (await joinBob.json()).result?.data?.json;
+
+    const joinCharlie = await trpcMutation(ctx, "guest.joinSession", { token: shareToken, name: "Charlie" });
+    const charlie = (await joinCharlie.json()).result?.data?.json;
+
+    // Alice claims Beer row 0 (2 beers) + Nachos (shared)
+    await trpcMutation(ctx, "guest.claimItems", {
+      token: shareToken,
+      personIndex: alice.personIndex,
+      personToken: alice.personToken,
+      claimedItemIndices: [0, 3],
+    });
+
+    // Bob claims Beer row 1 (2 beers) + Nachos (shared)
+    await trpcMutation(ctx, "guest.claimItems", {
+      token: shareToken,
+      personIndex: bob.personIndex,
+      personToken: bob.personToken,
+      claimedItemIndices: [1, 3],
+    });
+
+    // Charlie claims Beer row 2 (1 beer) + Nachos (shared)
+    await trpcMutation(ctx, "guest.claimItems", {
+      token: shareToken,
+      personIndex: charlie.personIndex,
+      personToken: charlie.personToken,
+      claimedItemIndices: [2, 3],
+    });
+
+    // Verify assignments
+    const sessionRes = await trpcQuery(ctx, "guest.getSession", { token: shareToken });
+    const session = await trpcResult(sessionRes);
+
+    // Item 0 (Beer 2x) — only Alice
+    const item0 = session.assignments.find((a: { itemIndex: number }) => a.itemIndex === 0);
+    expect(item0.personIndices).toEqual([alice.personIndex]);
+
+    // Item 1 (Beer 2x) — only Bob
+    const item1 = session.assignments.find((a: { itemIndex: number }) => a.itemIndex === 1);
+    expect(item1.personIndices).toEqual([bob.personIndex]);
+
+    // Item 2 (Beer 1x) — only Charlie
+    const item2 = session.assignments.find((a: { itemIndex: number }) => a.itemIndex === 2);
+    expect(item2.personIndices).toEqual([charlie.personIndex]);
+
+    // Item 3 (Nachos) — all three (shared)
+    const item3 = session.assignments.find((a: { itemIndex: number }) => a.itemIndex === 3);
+    expect(item3.personIndices).toHaveLength(3);
+    expect(item3.personIndices).toContain(alice.personIndex);
+    expect(item3.personIndices).toContain(bob.personIndex);
+    expect(item3.personIndices).toContain(charlie.personIndex);
+
+    // Finalize and verify totals
+    const finalizeRes = await trpcMutation(ctx, "guest.finalizeSession", {
+      token: shareToken,
+      personIndex: alice.personIndex,
+      personToken: alice.personToken,
+    });
+    expect(finalizeRes.ok()).toBe(true);
+
+    const finalSession = await trpcResult(
+      await trpcQuery(ctx, "guest.getSession", { token: shareToken })
+    );
+    expect(finalSession.status).toBe("finalized");
+    expect(finalSession.summary).toHaveLength(3);
+
+    // Alice: $10 (2 beers) + $2.67 (1/3 nachos) + proportional tax/tip
+    // Bob: $10 (2 beers) + $2.67 (1/3 nachos) + proportional tax/tip
+    // Charlie: $5 (1 beer) + $2.66 (1/3 nachos) + proportional tax/tip
+    // Alice and Bob should owe more than Charlie
+    const aliceSummary = finalSession.summary.find((s: { personIndex: number }) => s.personIndex === alice.personIndex);
+    const bobSummary = finalSession.summary.find((s: { personIndex: number }) => s.personIndex === bob.personIndex);
+    const charlieSummary = finalSession.summary.find((s: { personIndex: number }) => s.personIndex === charlie.personIndex);
+
+    expect(aliceSummary.total).toBeGreaterThan(charlieSummary.total);
+    expect(bobSummary.total).toBeGreaterThan(charlieSummary.total);
+    // Alice and Bob should be roughly equal (both had 2 beers + 1/3 nachos)
+    expect(Math.abs(aliceSummary.total - bobSummary.total)).toBeLessThanOrEqual(1);
+    // All totals should sum to the grand total
+    const totalSum = aliceSummary.total + bobSummary.total + charlieSummary.total;
+    expect(totalSum).toBe(4100);
+
+    await ctx.dispose();
+  });
+
   test("creator and paidBy are same person when names match", async () => {
     const ctx = await request.newContext({ baseURL: BASE });
 
