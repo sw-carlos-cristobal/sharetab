@@ -27,7 +27,7 @@
   <Category>Productivity: Tools:</Category>
   <WebUI>http://[IP]:[PORT:3000]</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/sw-carlos-cristobal/sharetab/main/unraid/sharetab.xml</TemplateURL>
-  <Icon>https://raw.githubusercontent.com/sw-carlos-cristobal/sharetab/main/public/icons/icon.svg</Icon>
+  <Icon>https://raw.githubusercontent.com/sw-carlos-cristobal/sharetab/main/public/icons/icon-512.png</Icon>
   <ExtraParams>--restart=unless-stopped</ExtraParams>
   <Description>
     Self-hosted Splitwise alternative with AI receipt scanning. All-in-one container with bundled PostgreSQL — no external database needed. Split expenses with friends using multiple modes (equal, percentage, shares, exact, item-level from receipts). Supports OpenAI, OpenAI-Codex (ChatGPT OAuth), Claude, Meridian (Claude Max), Ollama, and OCR fallback for receipt extraction.
