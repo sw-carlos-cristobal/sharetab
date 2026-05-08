@@ -315,6 +315,7 @@ export default function ClaimPage({
               variant="outline"
               size="sm"
               onClick={() => setShowImage(!showImage)}
+              data-testid="toggle-receipt-image"
             >
               <ImageIcon className="mr-2 h-4 w-4" />
               {showImage ? t("hideReceipt") : t("viewReceipt")}
@@ -326,6 +327,7 @@ export default function ClaimPage({
                     src={`/api/uploads/${data.receiptImagePath}`}
                     alt={t("receiptImage")}
                     className="w-full rounded-md"
+                    data-testid="receipt-image"
                   />
                 </CardContent>
               </Card>
@@ -485,6 +487,7 @@ export default function ClaimPage({
             variant="outline"
             size="sm"
             onClick={() => setShowImage(!showImage)}
+            data-testid="toggle-receipt-image"
           >
             <ImageIcon className="mr-2 h-4 w-4" />
             {showImage ? t("hideReceipt") : t("viewReceipt")}
@@ -496,6 +499,7 @@ export default function ClaimPage({
                   src={`/api/uploads/${data.receiptImagePath}`}
                   alt={t("receiptImage")}
                   className="w-full rounded-md"
+                  data-testid="receipt-image"
                 />
               </CardContent>
             </Card>
