@@ -651,7 +651,15 @@ export const guestRouter = createTRPCRouter({
           const items = session.items as { name: string; quantity: number; unitPrice: number; totalPrice: number }[];
           const people = session.people as GuestSessionPerson[];
           const assignments = session.assignments as { itemIndex: number; personIndices: number[] }[];
-          const receiptData = session.receiptData as { tax: number; tip: number };
+          const receiptData = session.receiptData as {
+            merchantName?: string;
+            date?: string;
+            subtotal: number;
+            tax: number;
+            tip: number;
+            total: number;
+            currency: string;
+          };
 
           if (input.personIndex >= people.length) {
             throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid person index" });
@@ -684,7 +692,11 @@ export const guestRouter = createTRPCRouter({
               summary: summaryWithNames as unknown as Prisma.InputJsonValue,
               assignments: assignments as unknown as Prisma.InputJsonValue,
               ...(input.tipOverride !== undefined && {
-                receiptData: { ...receiptData, tip } as unknown as Prisma.InputJsonValue,
+                receiptData: {
+                  ...receiptData,
+                  tip,
+                  total: receiptData.subtotal + receiptData.tax + tip,
+                } as unknown as Prisma.InputJsonValue,
               }),
             },
           });

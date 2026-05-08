@@ -93,6 +93,88 @@ test.describe("Guest Bill Split — API happy path", () => {
 
     await ctx.dispose();
   });
+
+  test("claim session finalization persists overridden tip and total", async () => {
+    const ctx = await request.newContext({ baseURL: BASE });
+
+    const createRes = await ctx.post("/api/trpc/guest.createClaimSession", {
+      data: {
+        json: {
+          receiptData: {
+            merchantName: "Tip Test Cafe",
+            subtotal: 3000,
+            tax: 300,
+            tip: 300,
+            total: 3600,
+            currency: "USD",
+          },
+          items: [
+            { name: "Brunch", quantity: 1, unitPrice: 3000, totalPrice: 3000 },
+          ],
+          creatorName: "Alice",
+          paidByName: "Alice",
+        },
+      },
+    });
+
+    expect(createRes.ok()).toBe(true);
+    const shareToken = (await createRes.json()).result?.data?.json?.shareToken as string;
+    expect(shareToken).toBeTruthy();
+
+    const joinRes = await ctx.post("/api/trpc/guest.joinSession", {
+      data: {
+        json: {
+          token: shareToken,
+          name: "Alice",
+        },
+      },
+    });
+    expect(joinRes.ok()).toBe(true);
+    const joinBody = await joinRes.json();
+    const { personIndex, personToken } = joinBody.result?.data?.json as {
+      personIndex: number;
+      personToken: string;
+    };
+
+    const claimRes = await ctx.post("/api/trpc/guest.claimItems", {
+      data: {
+        json: {
+          token: shareToken,
+          personIndex,
+          personToken,
+          claimedItemIndices: [0],
+        },
+      },
+    });
+    expect(claimRes.ok()).toBe(true);
+
+    const finalizeRes = await ctx.post("/api/trpc/guest.finalizeSession", {
+      data: {
+        json: {
+          token: shareToken,
+          personIndex,
+          personToken,
+          tipOverride: 600,
+        },
+      },
+    });
+    expect(finalizeRes.ok()).toBe(true);
+
+    const splitRes = await ctx.get(
+      `/api/trpc/guest.getSplit?batch=1&input=${encodeURIComponent(
+        JSON.stringify({ "0": { json: { token: shareToken } } })
+      )}`
+    );
+    expect(splitRes.ok()).toBe(true);
+    const splitBody = await splitRes.json();
+    const split = splitBody[0]?.result?.data?.json;
+
+    expect(split.receiptData.tip).toBe(600);
+    expect(split.receiptData.total).toBe(3900);
+    expect(split.summary[0]?.total).toBe(3900);
+
+    await ctx.dispose();
+  });
 });
 
 test.describe("Guest Bill Split — Share Page", () => {
