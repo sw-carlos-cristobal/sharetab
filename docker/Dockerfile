@@ -17,6 +17,7 @@ RUN npm ci --omit=dev --legacy-peer-deps
 FROM base AS builder
 WORKDIR /app
 ENV DOCKER_BUILD=1
+ARG COMMIT_SHA=unknown
 COPY package.json package-lock.json ./
 COPY prisma ./prisma
 COPY prisma.config.ts ./
@@ -24,6 +25,7 @@ RUN npm ci --legacy-peer-deps
 COPY . .
 RUN npx prisma generate
 RUN npm run build
+RUN echo "$COMMIT_SHA" > .commit-sha
 
 # --- Runner ---
 FROM base AS runner
@@ -42,6 +44,7 @@ RUN addgroup --system --gid 1001 nodejs && \
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/.commit-sha ./.commit-sha
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./
 COPY --from=builder /app/src/generated ./src/generated

@@ -3,6 +3,8 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+      args:
+        COMMIT_SHA: ${COMMIT_SHA:-unknown}
     image: sharetab:latest
     ports:
       - "${PORT:-3000}:3000"

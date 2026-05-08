@@ -1,6 +1,6 @@
 import EmbeddedPostgres from "embedded-postgres";
 import { spawn, execSync } from "child_process";
-import { rmSync } from "fs";
+import { rmSync, readFileSync } from "fs";
 import { join } from "path";
 import { createConnection } from "net";
 
@@ -60,6 +60,20 @@ try {
 } catch (e) {
   console.log("Schema/seed warning:", e.message);
 }
+
+// Print startup banner
+const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+let commitSha = "unknown";
+try {
+  commitSha = execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim();
+} catch {}
+console.log("");
+console.log("============================================");
+console.log("  ShareTab Dev Server");
+console.log("============================================");
+console.log(`  Version:  ${pkg.version}`);
+console.log(`  Commit:   ${commitSha}`);
+console.log("============================================");
 
 // Start Next.js dev server
 console.log("\nStarting Next.js dev server...");

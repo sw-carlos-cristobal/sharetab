@@ -193,14 +193,26 @@ export const adminRouter = createTRPCRouter({
       aiStatus = "unavailable";
     }
 
-    // App version
+    // App version + commit hash
     let version = "unknown";
+    let commitSha = "unknown";
     try {
       const pkgPath = path.resolve(process.cwd(), "package.json");
       const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
       version = pkg.version;
     } catch {
       // ignore
+    }
+    try {
+      const shaPath = path.resolve(process.cwd(), ".commit-sha");
+      commitSha = fs.readFileSync(shaPath, "utf-8").trim();
+    } catch {
+      try {
+        const { execFileSync } = await import("child_process");
+        commitSha = execFileSync("git", ["rev-parse", "--short", "HEAD"], { encoding: "utf-8" }).trim();
+      } catch {
+        // not in a git repo or git not installed
+      }
     }
 
     return {
@@ -211,6 +223,7 @@ export const adminRouter = createTRPCRouter({
       aiStatus,
       authProvidersNeedingLogin,
       version,
+      commitSha,
       serverStartTime: serverStartTime.toISOString(),
       uptime: Math.floor((Date.now() - serverStartTime.getTime()) / 1000),
     };
