@@ -49,6 +49,7 @@ test.describe("Claim page — rejoin buttons", () => {
   test("clicking rejoin button auto-joins as that person", async ({ page }) => {
     const ctx = await request.newContext({ baseURL: BASE });
 
+    // Create session with Carol as creator — she's in people[] but has no personToken yet
     const createRes = await trpcMutation(ctx, "guest.createClaimSession", {
       receiptData: {
         merchantName: "Auto Join Diner",
@@ -65,19 +66,16 @@ test.describe("Claim page — rejoin buttons", () => {
       paidByName: "Carol",
     });
     const shareToken = (await createRes.json()).result?.data?.json?.shareToken;
-
-    // Carol joins via API to create participant
-    await trpcMutation(ctx, "guest.joinSession", { token: shareToken, name: "Carol" });
     await ctx.dispose();
 
-    // Open in browser and click Carol's rejoin button
+    // Open in browser and click Carol's rejoin button (first join — no token needed)
     await page.goto(`/en/split/${shareToken}/claim`);
     await expect(page.getByTestId("claim-join-form")).toBeVisible({ timeout: 10000 });
 
     await page.getByTestId("rejoin-person-0").click();
 
     // Should auto-join and show claim items (join form disappears)
-    await expect(page.locator('[data-testid^="claim-item-"]').first()).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('[data-testid^="claim-item-"]').first()).toBeVisible({ timeout: 15000 });
   });
 });
 

@@ -30,7 +30,7 @@ test.describe("My Splits page", () => {
         { name: "Pasta", quantity: 1, unitPrice: 1500, totalPrice: 1500 },
         { name: "Salad", quantity: 1, unitPrice: 1500, totalPrice: 1500 },
       ],
-      people: ["Alice", "Bob"],
+      people: [{ name: "Alice" }, { name: "Bob" }],
       assignments: [
         { itemIndex: 0, personIndices: [0] },
         { itemIndex: 1, personIndices: [1] },
