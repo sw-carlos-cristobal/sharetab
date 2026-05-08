@@ -70,7 +70,11 @@ function getStoredClaimIdentity(token: string): StoredClaimIdentity | null {
 
 function setStoredClaimIdentity(token: string, identity: StoredClaimIdentity) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(`sharetab-claim:${token}`, JSON.stringify(identity));
+  try {
+    window.localStorage.setItem(`sharetab-claim:${token}`, JSON.stringify(identity));
+  } catch {
+    // Non-fatal: failing to persist rejoin state should not block the claim flow.
+  }
 }
 
 export default function ClaimPage({

@@ -392,7 +392,7 @@ export const guestRouter = createTRPCRouter({
       const creatorName = input.creatorName.trim();
       const paidByName = input.paidByName.trim();
 
-      // Tokens are assigned lazily when participants first join this session.
+      // Tokens are assigned lazily when participants, including creator/paidBy, first join this session.
       const people: GuestSessionPerson[] = [{ name: creatorName }];
       let paidByIndex = 0;
       if (normalizeGuestName(paidByName) !== normalizeGuestName(creatorName)) {
