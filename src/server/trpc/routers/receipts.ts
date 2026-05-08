@@ -647,7 +647,7 @@ export const receiptsRouter = createTRPCRouter({
           const assignmentData: { receiptItemId: string; userId: string }[] = [];
           for (const assignment of input.assignments) {
             for (const userId of assignment.userIds) {
-              const key = JSON.stringify([assignment.receiptItemId, userId]);
+              const key = `${assignment.receiptItemId}\u0000${userId}`;
               if (seenAssignments.has(key)) {
                 continue;
               }

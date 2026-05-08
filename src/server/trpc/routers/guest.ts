@@ -53,6 +53,9 @@ async function withSerializableRetry<T>(run: () => Promise<T>): Promise<T> {
       if (attempt >= GUEST_TRANSACTION_RETRY_ATTEMPTS - 1 || !isTransactionConflict(error)) {
         throw error;
       }
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.floor(Math.random() * 10) + 1)
+      );
       attempt += 1;
     }
   }
