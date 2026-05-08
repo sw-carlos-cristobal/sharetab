@@ -340,7 +340,7 @@ export const guestRouter = createTRPCRouter({
       if (split.status !== "finalized") {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "This split is still being claimed",
+          message: "This split is not yet finalized",
         });
       }
 
@@ -480,7 +480,7 @@ export const guestRouter = createTRPCRouter({
 
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message: "This name is already taken",
+              message: "This name is already claimed by another participant",
             });
           }
 
