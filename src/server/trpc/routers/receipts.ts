@@ -259,12 +259,19 @@ export const receiptsRouter = createTRPCRouter({
           });
         }
 
-        const rawNewTotal = current.unitPrice * input.splitQuantity;
-        const newTotalPrice = Math.min(rawNewTotal, current.totalPrice - 1);
+        const maxNewTotal = current.totalPrice - 1;
+        if (maxNewTotal <= 0) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Item price too low to split",
+          });
+        }
+
+        const newTotalPrice = Math.min(current.unitPrice * input.splitQuantity, maxNewTotal);
         const remainingQuantity = current.quantity - input.splitQuantity;
         const remainingTotalPrice = current.totalPrice - newTotalPrice;
 
-        if (remainingTotalPrice <= 0 || newTotalPrice <= 0) {
+        if (newTotalPrice <= 0 || remainingTotalPrice <= 0) {
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: "Split would result in invalid price distribution",
