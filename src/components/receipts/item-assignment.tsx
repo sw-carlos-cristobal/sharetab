@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { formatCents, centsToDecimal, parseToCents } from "@/lib/money";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ export function ItemAssignment({
   onSaveForLater?: () => void;
 }) {
   const locale = useLocale();
+  const t = useTranslations("expenses.receipt");
   const receiptData = trpc.receipts.getReceiptItems.useQuery({ receiptId });
   const utils = trpc.useUtils();
 
@@ -134,17 +135,17 @@ export function ItemAssignment({
   /* eslint-enable react-hooks/set-state-in-effect */
 
   if (receiptData.isLoading) {
-    return <p className="text-muted-foreground">Loading items...</p>;
+    return <p className="text-muted-foreground">{t("loadingItems")}</p>;
   }
 
   if (!receiptData.data) {
-    return <p className="text-destructive">Could not load receipt data.</p>;
+    return <p className="text-destructive">{t("noReceiptData")}</p>;
   }
 
   const { receipt, items } = receiptData.data;
   const extracted = receipt.extractedData;
   if (!extracted) {
-    return <p className="text-destructive">No extracted data available.</p>;
+    return <p className="text-destructive">{t("noExtractedData")}</p>;
   }
 
   const tip = tipOverride !== "" ? Math.round(parseFloat(tipOverride) * 100) : extracted.tip;
@@ -296,7 +297,7 @@ export function ItemAssignment({
           onClick={() => setShowImage(!showImage)}
         >
           <ImageIcon className="mr-2 h-4 w-4" />
-          {showImage ? "Hide Receipt Image" : "View Receipt Image"}
+          {showImage ? t("hideImage") : t("viewImage")}
         </Button>
       )}
 
@@ -374,7 +375,7 @@ export function ItemAssignment({
                   className="h-6 px-2 text-xs"
                   onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}
                 >
-                  Reset view
+                  {t("resetView")}
                 </Button>
               </div>
             )}
@@ -385,30 +386,30 @@ export function ItemAssignment({
       {/* Receipt summary */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Receipt Summary</CardTitle>
+          <CardTitle className="text-base">{t("receiptSummary")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-1 text-sm">
           {extracted.merchantName && (
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Merchant</span>
+              <span className="text-muted-foreground">{t("merchant")}</span>
               <span>{extracted.merchantName}</span>
             </div>
           )}
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Subtotal</span>
+            <span className="text-muted-foreground">{t("subtotal")}</span>
             <span>{formatCents(extracted.subtotal, extracted.currency, locale)}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Tax</span>
+            <span className="text-muted-foreground">{t("tax")}</span>
             <span>{formatCents(extracted.tax, extracted.currency, locale)}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Tip</span>
+            <span className="text-muted-foreground">{t("tip")}</span>
             <span>{formatCents(tip, extracted.currency, locale)}</span>
           </div>
           <Separator />
           <div className="flex justify-between font-semibold">
-            <span>Total</span>
+            <span>{t("total")}</span>
             <span>{formatCents(extracted.subtotal + extracted.tax + tip, extracted.currency, locale)}</span>
           </div>
         </CardContent>
@@ -418,17 +419,17 @@ export function ItemAssignment({
       <Card>
         <CardContent className="space-y-3 pt-4">
           <div className="space-y-2">
-            <Label htmlFor="title">Expense title</Label>
+            <Label htmlFor="title">{t("expenseTitle")}</Label>
             <Input
               id="title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g., Dinner at Restaurant"
+              placeholder={t("expenseTitlePlaceholder")}
               required
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="paidBy">Paid by</Label>
+            <Label htmlFor="paidBy">{t("paidBy")}</Label>
             <select
               id="paidBy"
               value={paidById}
@@ -437,22 +438,22 @@ export function ItemAssignment({
               className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
               data-testid="paid-by-select"
             >
-              <option value="">Select member</option>
+              <option value="">{t("selectMember")}</option>
               {members.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.name ?? "Unnamed"}
+                  {m.name ?? t("unnamed")}
                 </option>
               ))}
             </select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="tip">Tip override (optional)</Label>
+            <Label htmlFor="tip">{t("tipOverride")}</Label>
             <Input
               id="tip"
               type="number"
               step="0.01"
               min="0"
-              placeholder={`Detected: ${(extracted.tip / 100).toFixed(2)}`}
+              placeholder={t("tipDetected", { amount: (extracted.tip / 100).toFixed(2) })}
               value={tipOverride}
               onChange={(e) => setTipOverride(e.target.value)}
             />
@@ -464,7 +465,7 @@ export function ItemAssignment({
       <div className="flex gap-2">
         <Button type="button" variant="outline" size="sm" onClick={assignAllToEveryone} data-testid="split-all-btn">
           <Users className="mr-2 h-4 w-4" />
-          Split all equally
+          {t("splitAllEqually")}
         </Button>
         <Button
           type="button"
@@ -474,7 +475,7 @@ export function ItemAssignment({
           data-testid="add-item-btn"
         >
           <Plus className="mr-2 h-4 w-4" />
-          Add item
+          {t("addItem")}
         </Button>
       </div>
 
@@ -485,7 +486,7 @@ export function ItemAssignment({
             <form onSubmit={handleAddItem} className="space-y-2">
               <div className="flex gap-2">
                 <Input
-                  placeholder="Item name"
+                  placeholder={t("itemNamePlaceholder")}
                   value={newItem.name}
                   onChange={(e) => setNewItem((p) => ({ ...p, name: e.target.value }))}
                   required
@@ -493,7 +494,7 @@ export function ItemAssignment({
                 />
                 <Input
                   type="number"
-                  placeholder="Qty"
+                  placeholder={t("qtyPlaceholder")}
                   value={newItem.quantity}
                   onChange={(e) => setNewItem((p) => ({ ...p, quantity: e.target.value }))}
                   className="w-16"
@@ -502,7 +503,7 @@ export function ItemAssignment({
                 <Input
                   type="number"
                   step="0.01"
-                  placeholder="Price"
+                  placeholder={t("pricePlaceholder")}
                   value={newItem.totalPrice}
                   onChange={(e) => setNewItem((p) => ({ ...p, totalPrice: e.target.value }))}
                   className="w-24"
@@ -511,10 +512,10 @@ export function ItemAssignment({
               </div>
               <div className="flex gap-2">
                 <Button type="submit" size="sm" disabled={addItem.isPending}>
-                  {addItem.isPending ? "Adding..." : "Add"}
+                  {addItem.isPending ? t("adding") : t("add")}
                 </Button>
                 <Button type="button" variant="ghost" size="sm" onClick={() => setAddingItem(false)}>
-                  Cancel
+                  {t("cancel")}
                 </Button>
               </div>
             </form>
@@ -524,7 +525,7 @@ export function ItemAssignment({
 
       {/* Item assignment */}
       <div className="space-y-2">
-        <Label>Assign items ({assignedItemCount}/{items.length} assigned)</Label>
+        <Label>{t("assignItems", { assigned: assignedItemCount, total: items.length })}</Label>
         {items.map((item) => {
           const assigned = assignments[item.id] ?? new Set();
           const isEditing = editingItem === item.id;
@@ -539,14 +540,14 @@ export function ItemAssignment({
                         value={editValues.name}
                         onChange={(e) => setEditValues((p) => ({ ...p, name: e.target.value }))}
                         className="flex-1"
-                        placeholder="Item name"
+                        placeholder={t("itemNamePlaceholder")}
                       />
                       <Input
                         type="number"
                         value={editValues.quantity}
                         onChange={(e) => setEditValues((p) => ({ ...p, quantity: e.target.value }))}
                         className="w-16"
-                        placeholder="Qty"
+                        placeholder={t("qtyPlaceholder")}
                         min="1"
                       />
                       <Input
@@ -555,15 +556,15 @@ export function ItemAssignment({
                         value={editValues.totalPrice}
                         onChange={(e) => setEditValues((p) => ({ ...p, totalPrice: e.target.value }))}
                         className="w-24"
-                        placeholder="Price"
+                        placeholder={t("pricePlaceholder")}
                       />
                     </div>
                     <div className="flex gap-1">
                       <Button type="button" size="sm" onClick={() => saveEdit(item.id)} disabled={updateItem.isPending}>
-                        Save
+                        {t("save")}
                       </Button>
                       <Button type="button" variant="ghost" size="sm" onClick={() => setEditingItem(null)}>
-                        Cancel
+                        {t("cancel")}
                       </Button>
                     </div>
                   </div>
@@ -586,7 +587,7 @@ export function ItemAssignment({
                       <button
                         type="button"
                         onClick={() => {
-                          if (confirm(`Remove "${item.name}"?`)) {
+                          if (confirm(t("removeConfirm", { name: item.name }))) {
                             deleteItem.mutate({ itemId: item.id });
                           }
                         }}
@@ -602,8 +603,8 @@ export function ItemAssignment({
                             setSplitQuantity("1");
                           }}
                           className="text-muted-foreground hover:text-foreground"
-                          title="Split into separate line"
-                          aria-label={`Split ${item.name} into separate line`}
+                          title={t("split")}
+                          aria-label={t("splitAriaLabel", { name: item.name })}
                           data-testid={`split-btn-${item.id}`}
                         >
                           <Scissors className="h-3 w-3" />
@@ -620,7 +621,7 @@ export function ItemAssignment({
                   const validQty = Number.isSafeInteger(parsed) && parsed >= 1 && parsed < item.quantity;
                   return (
                     <div className="mb-2 flex items-center gap-2" data-testid="split-form">
-                      <span className="text-xs text-muted-foreground">Split off</span>
+                      <span className="text-xs text-muted-foreground">{t("splitOff")}</span>
                       <Input
                         type="number"
                         min={1}
@@ -630,7 +631,7 @@ export function ItemAssignment({
                         className="w-16 h-7 text-xs"
                         data-testid="split-qty-input"
                       />
-                      <span className="text-xs text-muted-foreground">of {item.quantity}</span>
+                      <span className="text-xs text-muted-foreground">{t("splitOfTotal", { total: item.quantity })}</span>
                       <Button
                         type="button"
                         size="sm"
@@ -643,10 +644,10 @@ export function ItemAssignment({
                           setSplittingItem(null);
                         }}
                       >
-                        Split
+                        {t("split")}
                       </Button>
                       <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setSplittingItem(null)}>
-                        Cancel
+                        {t("cancel")}
                       </Button>
                     </div>
                   );
@@ -695,7 +696,7 @@ export function ItemAssignment({
       {perPersonTotals.size > 0 && (
         <Card data-testid="per-person-totals">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Per-person totals</CardTitle>
+            <CardTitle className="text-base">{t("perPersonTotals")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1">
             {members.map((m) => {
@@ -703,7 +704,7 @@ export function ItemAssignment({
               if (!total) return null;
               return (
                 <div key={m.id} className="flex justify-between text-sm">
-                  <span>{m.name ?? "Unnamed"}</span>
+                  <span>{m.name ?? t("unnamed")}</span>
                   <span className="font-medium">
                     {formatCents(total, extracted.currency, locale)}
                   </span>
@@ -727,10 +728,10 @@ export function ItemAssignment({
         data-testid="create-expense-btn"
       >
         {createExpense.isPending
-          ? "Creating expense..."
+          ? t("creatingExpense")
           : !allAssigned
-            ? `Assign all items (${items.length - assignedItemCount} remaining)`
-            : "Create Expense from Receipt"}
+            ? t("assignAllItems", { remaining: items.length - assignedItemCount })
+            : t("createExpense")}
       </Button>
 
       {onSaveForLater && (
@@ -743,7 +744,7 @@ export function ItemAssignment({
           data-testid="save-for-later-btn"
         >
           <Bookmark className="mr-2 h-4 w-4" />
-          {saveForLater.isPending ? "Saving..." : "Save for Later"}
+          {saveForLater.isPending ? t("saving") : t("saveForLater")}
         </Button>
       )}
     </form>

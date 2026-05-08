@@ -2,6 +2,7 @@
 
 import { Suspense, use, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,7 @@ function ScanReceiptContent({
   const { groupId } = use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
+  const t = useTranslations("expenses.scan");
   const resumeReceiptId = searchParams.get("receiptId");
   const group = trpc.groups.get.useQuery({ groupId });
   const providerInfo = trpc.receipts.getScanProviderInfo.useQuery();
@@ -121,7 +123,7 @@ function ScanReceiptContent({
         <Button variant="ghost" size="icon" nativeButton={false} render={<Link href={`/groups/${groupId}`} />}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h1 className="text-2xl font-bold">Scan Receipt</h1>
+        <h1 className="text-2xl font-bold">{t("title")}</h1>
       </div>
 
       {step === "upload" && (
@@ -129,21 +131,20 @@ function ScanReceiptContent({
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Camera className="h-5 w-5" />
-              Upload a receipt
+              {t("upload")}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Take a photo or upload an image of your receipt. AI will extract the
-              items, tax, and tip so you can assign them to group members.
+              {t("uploadDescription")}
             </p>
             <p className="text-xs text-muted-foreground">
-              Active provider: <span className="font-medium text-foreground">{activeProvider}</span>
-              {" · "}Fallback chain: <span className="font-medium text-foreground">{configuredProviderChain}</span>
+              {t("activeProvider")} <span className="font-medium text-foreground">{activeProvider}</span>
+              {" · "}{t("fallbackChain")} <span className="font-medium text-foreground">{configuredProviderChain}</span>
             </p>
 
             <div className="space-y-2">
-              <Label htmlFor="receipt">Receipt image</Label>
+              <Label htmlFor="receipt">{t("receiptImage")}</Label>
               <Input
                 id="receipt"
                 type="file"
@@ -158,7 +159,7 @@ function ScanReceiptContent({
             {uploading && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Uploading...
+                {t("uploading")}
               </div>
             )}
           </CardContent>
@@ -170,10 +171,10 @@ function ScanReceiptContent({
           <CardContent className="flex flex-col items-center gap-4 py-12">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <div className="text-center space-y-2">
-              <p className="font-medium">Processing receipt...</p>
+              <p className="font-medium">{t("processing")}</p>
               <p className="text-xs text-muted-foreground">
-                Using: <span className="font-medium text-foreground">{activeProvider}</span>
-                {" · "}Chain: <span className="font-medium text-foreground">{configuredProviderChain}</span>
+                {t("using")} <span className="font-medium text-foreground">{activeProvider}</span>
+                {" · "}{t("chain")} <span className="font-medium text-foreground">{configuredProviderChain}</span>
               </p>
               <p className="text-sm text-muted-foreground">
                 {loadingMessages[loadingMsgIdx]}
@@ -201,16 +202,16 @@ function ScanReceiptContent({
                 data-testid="scan-rescan-btn"
               >
                 <RefreshCw className="mr-2 h-4 w-4" />
-                Rescan with corrections
+                {t("rescanCorrections")}
               </Button>
             ) : (
               <Card>
                 <CardContent className="space-y-3 pt-4">
                   <p className="text-sm text-muted-foreground">
-                    Describe what needs to be corrected and AI will re-scan the receipt.
+                    {t("rescanDescription")}
                   </p>
                   <textarea
-                    placeholder='e.g., "The total should be $45.99, not $54.99" or "There are 3 tacos, not 1"'
+                    placeholder={t("rescanPlaceholder")}
                     value={correctionHint}
                     onChange={(e) => setCorrectionHint(e.target.value)}
                     rows={3}
@@ -228,13 +229,13 @@ function ScanReceiptContent({
                       disabled={!correctionHint.trim()}
                     >
                       <RefreshCw className="mr-2 h-4 w-4" />
-                      Rescan
+                      {t("rescan")}
                     </Button>
                     <Button
                       variant="outline"
                       onClick={() => { setShowRescan(false); setCorrectionHint(""); }}
                     >
-                      Cancel
+                      {t("cancel")}
                     </Button>
                   </div>
                 </CardContent>
@@ -252,7 +253,7 @@ function ScanReceiptContent({
             </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => setStep("upload")}>
-                Try again
+                {t("retry")}
               </Button>
               {receiptId && (
                 <Button
@@ -261,7 +262,7 @@ function ScanReceiptContent({
                     processReceipt.mutate({ receiptId, groupId });
                   }}
                 >
-                  Retry processing
+                  {t("retryProcessing")}
                 </Button>
               )}
             </div>

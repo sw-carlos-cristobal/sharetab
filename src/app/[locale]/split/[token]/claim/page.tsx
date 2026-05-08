@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useState, useMemo } from "react";
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { formatCents } from "@/lib/money";
 import { normalizeGuestName, storedClaimIdentitySchema, type StoredClaimIdentity } from "@/lib/guest-session";
@@ -68,6 +68,7 @@ export default function ClaimPage({
 }) {
   const { token } = use(params);
   const locale = useLocale();
+  const t = useTranslations("split.claim");
 
   // --- State ---
   const [name, setName] = useState("");
@@ -97,7 +98,7 @@ export default function ClaimPage({
           .filter((a) => a.personIndices.includes(data.personIndex))
           .map((a) => a.itemIndex) ?? [];
       setClaimedItems(new Set(currentClaims));
-      toast.success("Joined the session!");
+      toast.success(t("joinedSession"));
     },
     onError: (error) => {
       toast.error(error.message);
@@ -106,7 +107,7 @@ export default function ClaimPage({
 
   const claimItems = trpc.guest.claimItems.useMutation({
     onSuccess: () => {
-      toast.success("Claims saved!");
+      toast.success(t("claimsSavedToast"));
     },
     onError: (error) => {
       toast.error(error.message);
@@ -182,7 +183,7 @@ export default function ClaimPage({
   function handleJoin() {
     const trimmed = name.trim();
     if (!trimmed) {
-      toast.error("Please enter your name");
+      toast.error(t("pleaseEnterName"));
       return;
     }
     const storedIdentity = getStoredClaimIdentity(token);
@@ -225,7 +226,7 @@ export default function ClaimPage({
     return (
       <div className="flex flex-col items-center justify-center gap-4 py-20">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-muted-foreground">Loading session...</p>
+        <p className="text-muted-foreground">{t("loadingSession")}</p>
       </div>
     );
   }
@@ -238,16 +239,16 @@ export default function ClaimPage({
           <Receipt className="h-8 w-8 text-muted-foreground" />
         </div>
         <div className="space-y-2">
-          <h2 className="text-xl font-bold">Session not found</h2>
+          <h2 className="text-xl font-bold">{t("sessionNotFound")}</h2>
           <p className="text-muted-foreground">
             {session.error.message.includes("expired")
-              ? "This session has expired."
-              : "This session link is invalid or has been removed."}
+              ? t("sessionExpired")
+              : t("sessionInvalid")}
           </p>
         </div>
         <Button nativeButton={false} render={<Link href="/split" />}>
           <ArrowRight className="mr-2 h-4 w-4" />
-          Split your own bill
+          {t("splitYourOwn")}
         </Button>
       </div>
     );
@@ -264,14 +265,14 @@ export default function ClaimPage({
           <Check className="h-8 w-8 text-primary" />
         </div>
         <div className="space-y-2">
-          <h2 className="text-xl font-bold">Session finalized</h2>
+          <h2 className="text-xl font-bold">{t("sessionFinalized")}</h2>
           <p className="text-muted-foreground">
-            This claiming session has been finalized. View the summary below.
+            {t("sessionFinalizedDescription")}
           </p>
         </div>
         <Button nativeButton={false} render={<Link href={`/split/${token}`} />}>
           <ArrowRight className="mr-2 h-4 w-4" />
-          View summary
+          {t("viewSummary")}
         </Button>
       </div>
     );
@@ -284,7 +285,7 @@ export default function ClaimPage({
         {/* Header */}
         <div className="text-center space-y-1 pt-4">
           <h1 className="text-2xl font-bold">
-            {data.receiptData.merchantName ?? "Bill Split"}
+            {data.receiptData.merchantName ?? t("billSplit")}
           </h1>
           {data.receiptData.date && (
             <p className="text-sm text-muted-foreground">
@@ -297,7 +298,7 @@ export default function ClaimPage({
         <Card className="bg-primary/5 border-primary/20">
           <CardContent className="py-4">
             <div className="flex justify-between items-center">
-              <span className="font-semibold text-lg">Total Bill</span>
+              <span className="font-semibold text-lg">{t("totalBill")}</span>
               <span className="text-2xl font-bold text-primary">
                 {formatCents(data.receiptData.total, currency, locale)}
               </span>
@@ -311,7 +312,7 @@ export default function ClaimPage({
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
                 <Users className="h-4 w-4" />
-                People in this session ({data.people.length})
+                {t("peopleInSession", { count: data.people.length })}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -339,16 +340,16 @@ export default function ClaimPage({
         {/* Join form */}
         <Card data-testid="claim-join-form">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Join this session</CardTitle>
+            <CardTitle className="text-base">{t("joinSession")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <label htmlFor="name-input" className="text-sm font-medium">
-                Your name
+                {t("yourName")}
               </label>
               <Input
                 id="name-input"
-                placeholder="Enter your name"
+                placeholder={t("enterName")}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 onKeyDown={(e) => {
@@ -367,12 +368,12 @@ export default function ClaimPage({
               {joinSession.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Joining...
+                  {t("joining")}
                 </>
               ) : (
                 <>
                   <ArrowRight className="mr-2 h-4 w-4" />
-                  Join
+                  {t("join")}
                 </>
               )}
             </Button>
@@ -437,7 +438,7 @@ export default function ClaimPage({
                 </Avatar>
                 <span className="text-sm font-medium">
                   {person.name}
-                  {idx === personIndex && " (you)"}
+                  {idx === personIndex && ` ${t("you")}`}
                 </span>
               </div>
             ))}
@@ -448,10 +449,10 @@ export default function ClaimPage({
       {/* Items to claim */}
       <div className="space-y-3">
         <h3 className="font-semibold text-base">
-          Tap to claim your items
+          {t("tapToClaim")}
           {hasUnsavedChanges && (
             <Badge variant="secondary" className="ml-2">
-              Unsaved changes
+              {t("unsavedChanges")}
             </Badge>
           )}
         </h3>
@@ -520,7 +521,7 @@ export default function ClaimPage({
                     {otherClaimants.length > 0 && (
                       <div className="flex items-center gap-1 mt-1">
                         <span className="text-xs text-muted-foreground">
-                          Also claimed by:
+                          {t("alsoClaimedBy")}
                         </span>
                         <div className="flex -space-x-1">
                           {otherClaimants.map((pi) => (
@@ -551,11 +552,11 @@ export default function ClaimPage({
       {/* Per-person totals */}
       {splitTotals.length > 0 && (
         <div className="space-y-3">
-          <h3 className="font-semibold text-base">Per-person totals</h3>
+          <h3 className="font-semibold text-base">{t("perPersonTotals")}</h3>
           {splitTotals.map((person) => {
             const personName =
               data.people[person.personIndex]?.name ??
-              `Person ${person.personIndex + 1}`;
+              t("personFallback", { index: person.personIndex + 1 });
             const isMe = person.personIndex === personIndex;
 
             return (
@@ -575,7 +576,7 @@ export default function ClaimPage({
                       </Avatar>
                       <span className="font-medium">
                         {personName}
-                        {isMe && " (you)"}
+                        {isMe && ` ${t("you")}`}
                       </span>
                     </div>
                     <span className="text-lg font-bold text-primary">
@@ -585,16 +586,16 @@ export default function ClaimPage({
                   {(person.tax > 0 || person.tip > 0) && (
                     <div className="ml-11 mt-1 flex gap-3 text-xs text-muted-foreground">
                       <span>
-                        Items: {formatCents(person.itemTotal, currency, locale)}
+                        {t("items", { amount: formatCents(person.itemTotal, currency, locale) })}
                       </span>
                       {person.tax > 0 && (
                         <span>
-                          Tax: {formatCents(person.tax, currency, locale)}
+                          {t("taxAmount", { amount: formatCents(person.tax, currency, locale) })}
                         </span>
                       )}
                       {person.tip > 0 && (
                         <span>
-                          Tip: {formatCents(person.tip, currency, locale)}
+                          {t("tipAmount", { amount: formatCents(person.tip, currency, locale) })}
                         </span>
                       )}
                     </div>
@@ -612,14 +613,14 @@ export default function ClaimPage({
           href="/split"
           className="text-sm font-medium text-primary hover:underline"
         >
-          Split your own bill
+          {t("splitYourOwn")}
         </Link>
-        <span className="text-muted-foreground mx-2">or</span>
+        <span className="text-muted-foreground mx-2">{t("or")}</span>
         <Link
           href="/register"
           className="text-sm font-medium text-primary hover:underline"
         >
-          Create an account
+          {t("createAccount")}
         </Link>
       </div>
 
@@ -635,17 +636,17 @@ export default function ClaimPage({
             {saving ? (
               <>
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                Saving...
+                {t("saving")}
               </>
             ) : hasUnsavedChanges ? (
               <>
                 <Check className="mr-2 h-5 w-5" />
-                Save my claims
+                {t("saveMyClaims")}
               </>
             ) : (
               <>
                 <Check className="mr-2 h-5 w-5" />
-                Claims saved
+                {t("claimsSaved")}
               </>
             )}
           </Button>
