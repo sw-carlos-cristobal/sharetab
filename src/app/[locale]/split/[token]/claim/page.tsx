@@ -424,6 +424,14 @@ export default function ClaimPage({
           return (
             <Card
               key={idx}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  toggleClaim(idx);
+                }
+              }}
               className={`cursor-pointer transition-all ${
                 isClaimed
                   ? "ring-2 ring-primary bg-primary/5"

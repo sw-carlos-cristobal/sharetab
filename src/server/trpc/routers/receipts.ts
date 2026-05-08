@@ -548,51 +548,70 @@ export const receiptsRouter = createTRPCRouter({
       })).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const receipt = await ctx.db.receipt.findUnique({
-        where: { id: input.receiptId },
-      });
-      if (!receipt || receipt.status !== "COMPLETED") {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Receipt must be processed first" });
-      }
-      // Check it's not already linked to an expense
-      const existing = await ctx.db.expense.findUnique({
-        where: { receiptId: input.receiptId },
-      });
-      if (existing) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Receipt already has an expense" });
-      }
+      await verifyReceiptAccess(ctx.db, input.receiptId, ctx.user.id);
 
-      await ctx.db.receipt.update({
-        where: { id: input.receiptId },
-        data: {
-          groupId: input.groupId,
-          savedById: ctx.user.id,
-          paidById: input.paidById,
-        },
-      });
+      await ctx.db.$transaction(async (tx) => {
+        const receipt = await tx.receipt.findUnique({
+          where: { id: input.receiptId },
+        });
+        if (!receipt || receipt.status !== "COMPLETED") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Receipt must be processed first" });
+        }
+        // Check it's not already linked to an expense
+        const existing = await tx.expense.findUnique({
+          where: { receiptId: input.receiptId },
+        });
+        if (existing) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Receipt already has an expense" });
+        }
 
-      // Save partial assignments if provided
-      if (input.assignments && input.assignments.length > 0) {
-        // Clear any existing assignments first
-        await ctx.db.receiptItemAssignment.deleteMany({
-          where: {
-            receiptItem: { receiptId: input.receiptId },
+        await tx.receipt.update({
+          where: { id: input.receiptId },
+          data: {
+            groupId: input.groupId,
+            savedById: ctx.user.id,
+            paidById: input.paidById,
           },
         });
 
-        // Create new assignments
-        const assignmentData = input.assignments.flatMap((a) =>
-          a.userIds.map((userId) => ({
-            receiptItemId: a.receiptItemId,
-            userId,
-          }))
-        );
-        if (assignmentData.length > 0) {
-          await ctx.db.receiptItemAssignment.createMany({
-            data: assignmentData,
+        // Save partial assignments if provided (empty array clears existing)
+        if (input.assignments) {
+          // Validate that all receiptItemIds belong to this receipt
+          if (input.assignments.length > 0) {
+            const itemIds = input.assignments.map((a) => a.receiptItemId);
+            const validItems = await tx.receiptItem.findMany({
+              where: { id: { in: itemIds }, receiptId: input.receiptId },
+              select: { id: true },
+            });
+            const validIds = new Set(validItems.map((i) => i.id));
+            for (const id of itemIds) {
+              if (!validIds.has(id)) {
+                throw new TRPCError({ code: "BAD_REQUEST", message: `Item ${id} does not belong to this receipt` });
+              }
+            }
+          }
+
+          // Clear any existing assignments first
+          await tx.receiptItemAssignment.deleteMany({
+            where: {
+              receiptItem: { receiptId: input.receiptId },
+            },
           });
+
+          // Create new assignments
+          const assignmentData = input.assignments.flatMap((a) =>
+            a.userIds.map((userId) => ({
+              receiptItemId: a.receiptItemId,
+              userId,
+            }))
+          );
+          if (assignmentData.length > 0) {
+            await tx.receiptItemAssignment.createMany({
+              data: assignmentData,
+            });
+          }
         }
-      }
+      });
 
       return { success: true };
     }),

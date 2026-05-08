@@ -103,7 +103,7 @@ export function ItemAssignment({
   useEffect(() => {
     if (initialized || !receiptData.data) return;
     const data = receiptData.data;
-    if (data.receipt.extractedData?.merchantName) {
+    if (data.receipt.extractedData?.merchantName && !title) {
       setTitle(data.receipt.extractedData.merchantName);
     }
     if (data.receipt.paidById) {
