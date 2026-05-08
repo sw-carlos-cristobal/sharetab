@@ -337,7 +337,7 @@ export const guestRouter = createTRPCRouter({
       if (split.status !== "finalized") {
         throw new TRPCError({
           code: "CONFLICT",
-          message: "This split is not yet finalized. Please wait for the organizer to finish the claiming session.",
+          message: "This split is not yet finalized. Please wait for the split creator to finalize it.",
         });
       }
 
@@ -423,7 +423,7 @@ export const guestRouter = createTRPCRouter({
         })
         .catch((err) => {
           logger.warn("guest.session.cleanup.failed", {
-            error: err instanceof Error ? err.message : "Unknown",
+            error: err instanceof Error ? err.message : String(err),
           });
         });
 

@@ -4,7 +4,7 @@ import { use, useState, useMemo } from "react";
 import { useLocale } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { formatCents } from "@/lib/money";
-import { normalizeGuestName, storedClaimIdentitySchema } from "@/lib/guest-session";
+import { normalizeGuestName, storedClaimIdentitySchema, type StoredClaimIdentity } from "@/lib/guest-session";
 import { calculateSplitTotals } from "@/lib/split-calculator";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,11 +14,6 @@ import { Badge } from "@/components/ui/badge";
 import { Check, Loader2, Users, Receipt, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "@/i18n/navigation";
-
-type StoredClaimIdentity = {
-  name: string;
-  personToken: string;
-};
 
 // Shared avatar color palette (matches the existing split page)
 const colors = [

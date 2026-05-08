@@ -6,6 +6,7 @@ export const storedClaimIdentitySchema = z.object({
   name: z.string(),
   personToken: guestSessionTokenSchema,
 });
+export type StoredClaimIdentity = z.infer<typeof storedClaimIdentitySchema>;
 
 export function normalizeGuestName(name: string): string {
   return name.trim().toLowerCase();
