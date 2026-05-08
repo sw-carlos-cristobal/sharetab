@@ -14,6 +14,11 @@ import { Check, Loader2, Users, Receipt, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "@/i18n/navigation";
 
+type StoredClaimIdentity = {
+  name: string;
+  personToken: string;
+};
+
 // Shared avatar color palette (matches the existing split page)
 const colors = [
   "bg-red-100 text-red-700",
@@ -35,6 +40,27 @@ function initials(name: string): string {
       .toUpperCase()
       .slice(0, 2) || "?"
   );
+}
+
+function normalizeName(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+function getStoredClaimIdentity(token: string): StoredClaimIdentity | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.localStorage.getItem(`sharetab-claim:${token}`);
+    if (!raw) return null;
+    return JSON.parse(raw) as StoredClaimIdentity;
+  } catch {
+    return null;
+  }
+}
+
+function setStoredClaimIdentity(token: string, identity: StoredClaimIdentity) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(`sharetab-claim:${token}`, JSON.stringify(identity));
 }
 
 export default function ClaimPage({
@@ -60,8 +86,13 @@ export default function ClaimPage({
 
   const joinSession = trpc.guest.joinSession.useMutation({
     onSuccess: (data) => {
+      const trimmed = name.trim();
       setPersonIndex(data.personIndex);
       setPersonToken(data.personToken);
+      setStoredClaimIdentity(token, {
+        name: trimmed,
+        personToken: data.personToken,
+      });
       // Initialize claimed items from current server assignments
       const currentClaims =
         session.data?.assignments
@@ -156,7 +187,15 @@ export default function ClaimPage({
       toast.error("Please enter your name");
       return;
     }
-    joinSession.mutate({ token, name: trimmed });
+    const storedIdentity = getStoredClaimIdentity(token);
+    joinSession.mutate({
+      token,
+      name: trimmed,
+      personToken:
+        storedIdentity && normalizeName(storedIdentity.name) === normalizeName(trimmed)
+          ? storedIdentity.personToken
+          : undefined,
+    });
   }
 
   function toggleClaim(itemIndex: number) {

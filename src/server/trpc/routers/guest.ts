@@ -337,6 +337,12 @@ export const guestRouter = createTRPCRouter({
       if (split.expiresAt < new Date()) {
         throw new TRPCError({ code: "NOT_FOUND", message: "This split has expired" });
       }
+      if (split.status !== "finalized") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This split is still being claimed",
+        });
+      }
 
       return {
         id: split.id,
@@ -390,10 +396,10 @@ export const guestRouter = createTRPCRouter({
       const paidByName = input.paidByName.trim();
 
       // Creator and paidBy might be the same person
-      const people: GuestSessionPerson[] = [{ name: creatorName, personToken: randomUUID() }];
+      const people: GuestSessionPerson[] = [{ name: creatorName }];
       let paidByIndex = 0;
       if (normalizeGuestName(paidByName) !== normalizeGuestName(creatorName)) {
-        people.push({ name: paidByName, personToken: randomUUID() });
+        people.push({ name: paidByName });
         paidByIndex = 1;
       }
 
@@ -418,7 +424,11 @@ export const guestRouter = createTRPCRouter({
             logger.info("guest.session.cleanup", { deletedCount: result.count });
           }
         })
-        .catch(() => {});
+        .catch((err) => {
+          logger.warn("guest.session.cleanup.failed", {
+            error: err instanceof Error ? err.message : "Unknown",
+          });
+        });
 
       logger.info("guest.session.created", {
         sessionId: session.id,
@@ -433,6 +443,7 @@ export const guestRouter = createTRPCRouter({
     .input(z.object({
       token: z.string(),
       name: z.string().min(1).max(100),
+      personToken: z.string().uuid().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       return withSerializableRetry(() =>
@@ -453,17 +464,24 @@ export const guestRouter = createTRPCRouter({
           );
           if (existingIndex >= 0) {
             const existingPerson = people[existingIndex]!;
-            const personToken = existingPerson.personToken ?? randomUUID();
-
             if (!existingPerson.personToken) {
+              const personToken = randomUUID();
               people[existingIndex] = { ...existingPerson, personToken };
               await tx.guestSplit.update({
                 where: { id: session.id },
                 data: { people: people as unknown as Prisma.InputJsonValue },
               });
+              return { personIndex: existingIndex, personToken };
             }
 
-            return { personIndex: existingIndex, personToken };
+            if (input.personToken === existingPerson.personToken) {
+              return { personIndex: existingIndex, personToken: existingPerson.personToken };
+            }
+
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "This name is already taken",
+            });
           }
 
           if (people.length >= 100) {
