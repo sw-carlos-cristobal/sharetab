@@ -383,8 +383,8 @@ export const guestRouter = createTRPCRouter({
         unitPrice: z.number().int(),
         totalPrice: z.number().int(),
       })).min(1).max(100),
-      creatorName: z.string().min(1).max(100),
-      paidByName: z.string().min(1).max(100),
+      creatorName: z.string().trim().min(1).max(100),
+      paidByName: z.string().trim().min(1).max(100),
     }))
     .mutation(async ({ ctx, input }) => {
       const expiresAt = new Date();
@@ -439,7 +439,7 @@ export const guestRouter = createTRPCRouter({
   joinSession: publicProcedure
     .input(z.object({
       token: z.string(),
-      name: z.string().min(1).max(100),
+      name: z.string().trim().min(1).max(100),
       personToken: z.string().uuid().optional(),
     }))
     .mutation(async ({ ctx, input }) => {

@@ -559,8 +559,8 @@ export const receiptsRouter = createTRPCRouter({
       paidById: z.string().nullable().optional(),
       assignments: z.array(z.object({
         receiptItemId: z.string(),
-        userIds: z.array(z.string()),
-      })).optional(),
+        userIds: z.array(z.string()).max(100),
+      })).max(200).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       await verifyReceiptAccess(ctx.db, input.receiptId, ctx.user.id);
