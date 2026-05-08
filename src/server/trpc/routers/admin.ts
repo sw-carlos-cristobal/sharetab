@@ -39,23 +39,10 @@ import {
   isLoginInProgress as isOpenAICodexLoginInProgress,
 } from "@/server/lib/openai-codex-login";
 
-const serverStartTime = new Date();
+import { getBuildInfo } from "@/server/lib/build-info";
 
-// Cache version and commit SHA at module load — avoids blocking reads on every poll
-let cachedVersion = "unknown";
-let cachedCommitSha = "unknown";
-try {
-  const pkg = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), "package.json"), "utf-8"));
-  cachedVersion = pkg.version;
-} catch {}
-try {
-  cachedCommitSha = fs.readFileSync(path.resolve(process.cwd(), ".commit-sha"), "utf-8").trim();
-} catch {
-  try {
-    const { execFileSync } = require("child_process");
-    cachedCommitSha = execFileSync("git", ["rev-parse", "--short", "HEAD"], { encoding: "utf-8" }).trim();
-  } catch {}
-}
+const serverStartTime = new Date();
+const { version: cachedVersion, commitSha: cachedCommitSha } = getBuildInfo();
 
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
   const adminEmail = process.env.ADMIN_EMAIL;
