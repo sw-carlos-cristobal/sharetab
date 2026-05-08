@@ -643,16 +643,23 @@ export const receiptsRouter = createTRPCRouter({
           });
 
           // Create new assignments
+          const seenAssignments = new Set<string>();
           const assignmentData = input.assignments.flatMap((a) =>
-            a.userIds.map((userId) => ({
-              receiptItemId: a.receiptItemId,
-              userId,
-            }))
+            a.userIds.flatMap((userId) => {
+              const key = `${a.receiptItemId}:${userId}`;
+              if (seenAssignments.has(key)) {
+                return [];
+              }
+              seenAssignments.add(key);
+              return [{
+                receiptItemId: a.receiptItemId,
+                userId,
+              }];
+            })
           );
           if (assignmentData.length > 0) {
             await tx.receiptItemAssignment.createMany({
               data: assignmentData,
-              skipDuplicates: true,
             });
           }
         }

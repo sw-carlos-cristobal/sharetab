@@ -16,12 +16,23 @@ type GuestSessionPerson = {
   personToken?: string;
 };
 
+const GUEST_TRANSACTION_RETRY_ATTEMPTS = 3;
+
 function normalizeGuestName(name: string) {
   return name.trim().toLowerCase();
 }
 
 function toPublicPeople(people: GuestSessionPerson[]) {
   return people.map(({ name }) => ({ name }));
+}
+
+function cloneAssignments(
+  assignments: { itemIndex: number; personIndices: number[] }[]
+) {
+  return assignments.map((assignment) => ({
+    ...assignment,
+    personIndices: [...assignment.personIndices],
+  }));
 }
 
 function isTransactionConflict(error: unknown) {
@@ -34,11 +45,11 @@ function isTransactionConflict(error: unknown) {
 }
 
 async function withSerializableRetry<T>(run: () => Promise<T>): Promise<T> {
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < GUEST_TRANSACTION_RETRY_ATTEMPTS; attempt++) {
     try {
       return await run();
     } catch (error) {
-      if (attempt === 2 || !isTransactionConflict(error)) {
+      if (attempt === GUEST_TRANSACTION_RETRY_ATTEMPTS - 1 || !isTransactionConflict(error)) {
         throw error;
       }
     }
@@ -521,10 +532,9 @@ export const guestRouter = createTRPCRouter({
             }
           }
 
-          const assignments = (session.assignments as { itemIndex: number; personIndices: number[] }[]).map((assignment) => ({
-            ...assignment,
-            personIndices: [...assignment.personIndices],
-          }));
+          const assignments = cloneAssignments(
+            session.assignments as { itemIndex: number; personIndices: number[] }[]
+          );
 
           // Remove this person from all current assignments
           for (const a of assignments) {
