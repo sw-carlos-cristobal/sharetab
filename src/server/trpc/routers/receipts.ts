@@ -247,40 +247,42 @@ export const receiptsRouter = createTRPCRouter({
         });
       }
 
-      const newTotalPrice = item.unitPrice * input.splitQuantity;
-      const remainingQuantity = item.quantity - input.splitQuantity;
-      const remainingTotalPrice = item.totalPrice - newTotalPrice;
+      return ctx.db.$transaction(async (tx) => {
+        const current = await tx.receiptItem.findUniqueOrThrow({
+          where: { id: input.itemId },
+        });
 
-      // Shift sortOrders to make room for the new item
-      await ctx.db.receiptItem.updateMany({
-        where: {
-          receiptId: item.receiptId,
-          sortOrder: { gt: item.sortOrder },
-        },
-        data: { sortOrder: { increment: 1 } },
-      });
+        const newTotalPrice = current.unitPrice * input.splitQuantity;
+        const remainingQuantity = current.quantity - input.splitQuantity;
+        const remainingTotalPrice = current.totalPrice - newTotalPrice;
 
-      const [, newItem] = await ctx.db.$transaction([
-        ctx.db.receiptItem.update({
+        await tx.receiptItem.updateMany({
+          where: {
+            receiptId: current.receiptId,
+            sortOrder: { gt: current.sortOrder },
+          },
+          data: { sortOrder: { increment: 1 } },
+        });
+
+        await tx.receiptItem.update({
           where: { id: input.itemId },
           data: {
             quantity: remainingQuantity,
             totalPrice: remainingTotalPrice,
           },
-        }),
-        ctx.db.receiptItem.create({
-          data: {
-            receiptId: item.receiptId,
-            name: item.name,
-            quantity: input.splitQuantity,
-            unitPrice: item.unitPrice,
-            totalPrice: newTotalPrice,
-            sortOrder: item.sortOrder + 1,
-          },
-        }),
-      ]);
+        });
 
-      return newItem;
+        return tx.receiptItem.create({
+          data: {
+            receiptId: current.receiptId,
+            name: current.name,
+            quantity: input.splitQuantity,
+            unitPrice: current.unitPrice,
+            totalPrice: newTotalPrice,
+            sortOrder: current.sortOrder + 1,
+          },
+        });
+      });
     }),
 
   updateExtractedData: protectedProcedure

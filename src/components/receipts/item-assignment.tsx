@@ -561,35 +561,40 @@ export function ItemAssignment({
                     </span>
                   </div>
                 )}
-                {!isEditing && splittingItem === item.id && (
-                  <div className="mb-2 flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">Split off</span>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={item.quantity - 1}
-                      value={splitQuantity}
-                      onChange={(e) => setSplitQuantity(e.target.value)}
-                      className="w-16 h-7 text-xs"
-                    />
-                    <span className="text-xs text-muted-foreground">of {item.quantity}</span>
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="h-7 text-xs"
-                      disabled={splitItem.isPending || !splitQuantity || parseInt(splitQuantity) < 1 || parseInt(splitQuantity) >= item.quantity}
-                      onClick={() => {
-                        splitItem.mutate({ itemId: item.id, splitQuantity: parseInt(splitQuantity) || 1 });
-                        setSplittingItem(null);
-                      }}
-                    >
-                      Split
-                    </Button>
-                    <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setSplittingItem(null)}>
-                      Cancel
-                    </Button>
-                  </div>
-                )}
+                {!isEditing && splittingItem === item.id && (() => {
+                  const parsed = Number(splitQuantity);
+                  const validQty = Number.isSafeInteger(parsed) && parsed >= 1 && parsed < item.quantity;
+                  return (
+                    <div className="mb-2 flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">Split off</span>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={item.quantity - 1}
+                        value={splitQuantity}
+                        onChange={(e) => setSplitQuantity(e.target.value)}
+                        className="w-16 h-7 text-xs"
+                      />
+                      <span className="text-xs text-muted-foreground">of {item.quantity}</span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-7 text-xs"
+                        disabled={splitItem.isPending || !validQty}
+                        onClick={() => {
+                          if (!validQty) return;
+                          splitItem.mutate({ itemId: item.id, splitQuantity: parsed });
+                          setSplittingItem(null);
+                        }}
+                      >
+                        Split
+                      </Button>
+                      <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setSplittingItem(null)}>
+                        Cancel
+                      </Button>
+                    </div>
+                  );
+                })()}
                 <div className="flex flex-wrap gap-1.5">
                   {members.map((m) => {
                     const isAssigned = assigned.has(m.id);

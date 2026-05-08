@@ -266,9 +266,9 @@ export default function GuestSplitPage() {
 
   // Split item into two rows
   function handleSplitItem(index: number) {
-    const qty = parseInt(splitQuantity) || 1;
+    const qty = Number(splitQuantity);
     const item = items[index];
-    if (!item || qty < 1 || qty >= item.quantity) return;
+    if (!item || !Number.isSafeInteger(qty) || qty < 1 || qty >= item.quantity) return;
 
     const newTotalPrice = item.unitPrice * qty;
     const remainingQty = item.quantity - qty;
@@ -796,32 +796,36 @@ export default function GuestSplitPage() {
                       </div>
                     )}
                     {/* Inline split form */}
-                    {splittingIndex === itemIdx && (
-                      <div className="mb-2 flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">Split off</span>
-                        <Input
-                          type="number"
-                          min={1}
-                          max={item.quantity - 1}
-                          value={splitQuantity}
-                          onChange={(e) => setSplitQuantity(e.target.value)}
-                          className="w-16 h-7 text-xs"
-                        />
-                        <span className="text-xs text-muted-foreground">of {item.quantity}</span>
-                        <Button
-                          type="button"
-                          size="sm"
-                          className="h-7 text-xs"
-                          disabled={!splitQuantity || parseInt(splitQuantity) < 1 || parseInt(splitQuantity) >= item.quantity}
-                          onClick={() => handleSplitItem(itemIdx)}
-                        >
-                          Split
-                        </Button>
-                        <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setSplittingIndex(null)}>
-                          Cancel
-                        </Button>
-                      </div>
-                    )}
+                    {splittingIndex === itemIdx && (() => {
+                      const parsed = Number(splitQuantity);
+                      const validQty = Number.isSafeInteger(parsed) && parsed >= 1 && parsed < item.quantity;
+                      return (
+                        <div className="mb-2 flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">Split off</span>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={item.quantity - 1}
+                            value={splitQuantity}
+                            onChange={(e) => setSplitQuantity(e.target.value)}
+                            className="w-16 h-7 text-xs"
+                          />
+                          <span className="text-xs text-muted-foreground">of {item.quantity}</span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="h-7 text-xs"
+                            disabled={!validQty}
+                            onClick={() => handleSplitItem(itemIdx)}
+                          >
+                            Split
+                          </Button>
+                          <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setSplittingIndex(null)}>
+                            Cancel
+                          </Button>
+                        </div>
+                      );
+                    })()}
                     {/* Person toggle buttons */}
                     <div className="flex flex-wrap gap-1.5">
                       {people.map((name, personIdx) => {
