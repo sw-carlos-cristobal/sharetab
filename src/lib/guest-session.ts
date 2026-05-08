@@ -1,7 +1,16 @@
+import { z } from "zod";
+
+const guestSessionTokenSchema = z.string().uuid();
+
+export const storedClaimIdentitySchema = z.object({
+  name: z.string(),
+  personToken: guestSessionTokenSchema,
+});
+
 export function normalizeGuestName(name: string): string {
   return name.trim().toLowerCase();
 }
 
 export function isGuestSessionToken(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  return guestSessionTokenSchema.safeParse(value).success;
 }

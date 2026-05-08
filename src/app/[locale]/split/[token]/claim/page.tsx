@@ -4,7 +4,7 @@ import { use, useState, useMemo } from "react";
 import { useLocale } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { formatCents } from "@/lib/money";
-import { isGuestSessionToken, normalizeGuestName } from "@/lib/guest-session";
+import { normalizeGuestName, storedClaimIdentitySchema } from "@/lib/guest-session";
 import { calculateSplitTotals } from "@/lib/split-calculator";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,19 +50,8 @@ function getStoredClaimIdentity(token: string): StoredClaimIdentity | null {
     const raw = window.localStorage.getItem(`sharetab-claim:${token}`);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as unknown;
-    if (
-      typeof parsed !== "object" ||
-      parsed === null ||
-      !("name" in parsed) ||
-      !("personToken" in parsed) ||
-      typeof parsed.name !== "string" ||
-      typeof parsed.personToken !== "string" ||
-      !isGuestSessionToken(parsed.personToken)
-    ) {
-      return null;
-    }
-
-    return parsed;
+    const identity = storedClaimIdentitySchema.safeParse(parsed);
+    return identity.success ? identity.data : null;
   } catch {
     return null;
   }
