@@ -124,7 +124,7 @@ export function AIProviderTestSection() {
             {file && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground" data-testid="ai-test-file-info">
                 <span className="max-w-48 truncate">{file.name}</span>
-                <button onClick={clearFile} className="text-muted-foreground hover:text-foreground" data-testid="ai-test-clear-btn">
+                <button type="button" onClick={clearFile} className="text-muted-foreground hover:text-foreground" data-testid="ai-test-clear-btn" aria-label="Clear file">
                   <X className="h-4 w-4" />
                 </button>
               </div>

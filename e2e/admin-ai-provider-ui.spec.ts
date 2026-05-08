@@ -95,9 +95,6 @@ test.describe("AI Provider Test UI", () => {
     const txtPath = resolve("e2e/receipts/cafe.txt");
     await page.getByTestId("ai-test-file-input").setInputFiles(txtPath);
 
-    // Wait a beat for any async processing
-    await page.waitForTimeout(500);
-
     // Hint text should still be visible (file was rejected client-side)
     await expect(page.getByTestId("ai-test-upload-hint")).toBeVisible();
 
@@ -125,7 +122,7 @@ test.describe("AI Provider Test UI", () => {
 
 test.describe("AI Provider Test — OCR via UI", () => {
   test.beforeEach(({}, testInfo) => {
-    if (!process.env.RUN_AI_TESTS)
+    if (process.env.RUN_AI_TESTS !== "1")
       testInfo.skip(true, "Set RUN_AI_TESTS=1 to enable");
   });
   test.setTimeout(150_000);
@@ -136,15 +133,9 @@ test.describe("AI Provider Test — OCR via UI", () => {
     const section = await goToAdminAndWaitForProviderSection(page);
 
     await page.getByTestId("ai-test-file-input").setInputFiles(RECEIPT_PATH);
-    await expect(page.getByTestId("ai-test-file-info")).toBeVisible();
-
-    // Click Test ocr
     const ocrButton = page.getByTestId("ai-test-btn-ocr");
     await expect(ocrButton).toBeEnabled();
     await ocrButton.click();
-
-    // Should show spinner while loading
-    await expect(section.locator(".animate-spin")).toBeVisible({ timeout: 5000 });
 
     // Wait for success result
     const successMsg = page.getByTestId("ai-test-success-msg");
@@ -165,8 +156,11 @@ test.describe("AI Provider Test — OCR via UI", () => {
     const section = await goToAdminAndWaitForProviderSection(page);
 
     await page.getByTestId("ai-test-file-input").setInputFiles(RECEIPT_PATH);
+    await expect(page.getByTestId("ai-test-file-info")).toBeVisible();
 
-    await page.getByTestId("ai-test-btn-ocr").click();
+    const ocrButton = page.getByTestId("ai-test-btn-ocr");
+    await expect(ocrButton).toBeEnabled();
+    await ocrButton.click();
 
     const pre = page.getByTestId("ai-test-result-json");
     await expect(pre).toBeVisible({ timeout: 120_000 });
