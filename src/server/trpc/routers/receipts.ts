@@ -226,6 +226,63 @@ export const receiptsRouter = createTRPCRouter({
       return { success: true };
     }),
 
+  splitItem: protectedProcedure
+    .input(
+      z.object({
+        itemId: z.string(),
+        splitQuantity: z.number().int().min(1),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const item = await ctx.db.receiptItem.findUnique({
+        where: { id: input.itemId },
+      });
+      if (!item) throw new TRPCError({ code: "NOT_FOUND" });
+      await verifyReceiptAccess(ctx.db, item.receiptId, ctx.user.id);
+
+      if (input.splitQuantity >= item.quantity) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Split quantity must be less than total quantity",
+        });
+      }
+
+      const newTotalPrice = item.unitPrice * input.splitQuantity;
+      const remainingQuantity = item.quantity - input.splitQuantity;
+      const remainingTotalPrice = item.totalPrice - newTotalPrice;
+
+      // Shift sortOrders to make room for the new item
+      await ctx.db.receiptItem.updateMany({
+        where: {
+          receiptId: item.receiptId,
+          sortOrder: { gt: item.sortOrder },
+        },
+        data: { sortOrder: { increment: 1 } },
+      });
+
+      const [, newItem] = await ctx.db.$transaction([
+        ctx.db.receiptItem.update({
+          where: { id: input.itemId },
+          data: {
+            quantity: remainingQuantity,
+            totalPrice: remainingTotalPrice,
+          },
+        }),
+        ctx.db.receiptItem.create({
+          data: {
+            receiptId: item.receiptId,
+            name: item.name,
+            quantity: input.splitQuantity,
+            unitPrice: item.unitPrice,
+            totalPrice: newTotalPrice,
+            sortOrder: item.sortOrder + 1,
+          },
+        }),
+      ]);
+
+      return newItem;
+    }),
+
   updateExtractedData: protectedProcedure
     .input(
       z.object({

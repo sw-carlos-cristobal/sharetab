@@ -15,7 +15,7 @@ import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Camera, Loader2, Plus, Trash2, Check, Users, ArrowLeft, ArrowRight,
-  Share2, Copy, Pencil, Image as ImageIcon, RefreshCw,
+  Share2, Copy, Pencil, Image as ImageIcon, RefreshCw, Scissors,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -65,6 +65,10 @@ export default function GuestSplitPage() {
   const [editValues, setEditValues] = useState({ name: "", quantity: "1", totalPrice: "" });
   const [addingItem, setAddingItem] = useState(false);
   const [newItem, setNewItem] = useState({ name: "", quantity: "1", totalPrice: "" });
+
+  // Splitting
+  const [splittingIndex, setSplittingIndex] = useState<number | null>(null);
+  const [splitQuantity, setSplitQuantity] = useState("");
 
   // tRPC
   const processReceipt = trpc.guest.processReceipt.useMutation();
@@ -258,6 +262,40 @@ export default function GuestSplitPage() {
     }]);
     setAddingItem(false);
     setNewItem({ name: "", quantity: "1", totalPrice: "" });
+  }
+
+  // Split item into two rows
+  function handleSplitItem(index: number) {
+    const qty = parseInt(splitQuantity) || 1;
+    const item = items[index];
+    if (!item || qty < 1 || qty >= item.quantity) return;
+
+    const newTotalPrice = item.unitPrice * qty;
+    const remainingQty = item.quantity - qty;
+    const remainingTotalPrice = item.totalPrice - newTotalPrice;
+
+    const updated = [...items];
+    updated[index] = { ...item, quantity: remainingQty, totalPrice: remainingTotalPrice };
+    updated.splice(index + 1, 0, {
+      name: item.name,
+      quantity: qty,
+      unitPrice: item.unitPrice,
+      totalPrice: newTotalPrice,
+    });
+    setItems(updated);
+
+    // Shift assignments: indices after the insertion point need to be incremented
+    const newAssignments: Record<number, Set<number>> = {};
+    for (const [key, value] of Object.entries(assignments)) {
+      const k = parseInt(key);
+      if (k > index) {
+        newAssignments[k + 1] = value;
+      } else {
+        newAssignments[k] = value;
+      }
+    }
+    setAssignments(newAssignments);
+    setSplittingIndex(null);
   }
 
   // Calculate totals
@@ -740,8 +778,48 @@ export default function GuestSplitPage() {
                           >
                             <Trash2 className="h-3 w-3" />
                           </button>
+                          {item.quantity > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSplittingIndex(itemIdx);
+                                setSplitQuantity("1");
+                              }}
+                              className="text-muted-foreground hover:text-foreground p-1"
+                              title="Split into separate line"
+                            >
+                              <Scissors className="h-3 w-3" />
+                            </button>
+                          )}
                         </div>
                         <span className="font-semibold">{formatCents(item.totalPrice, currency, locale)}</span>
+                      </div>
+                    )}
+                    {/* Inline split form */}
+                    {splittingIndex === itemIdx && (
+                      <div className="mb-2 flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Split off</span>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={item.quantity - 1}
+                          value={splitQuantity}
+                          onChange={(e) => setSplitQuantity(e.target.value)}
+                          className="w-16 h-7 text-xs"
+                        />
+                        <span className="text-xs text-muted-foreground">of {item.quantity}</span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="h-7 text-xs"
+                          disabled={!splitQuantity || parseInt(splitQuantity) < 1 || parseInt(splitQuantity) >= item.quantity}
+                          onClick={() => handleSplitItem(itemIdx)}
+                        >
+                          Split
+                        </Button>
+                        <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setSplittingIndex(null)}>
+                          Cancel
+                        </Button>
                       </div>
                     )}
                     {/* Person toggle buttons */}
