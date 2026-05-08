@@ -270,9 +270,14 @@ export default function GuestSplitPage() {
     const item = items[index];
     if (!item || !Number.isSafeInteger(qty) || qty < 1 || qty >= item.quantity) return;
 
-    const newTotalPrice = item.unitPrice * qty;
+    const maxNewTotal = item.totalPrice - 1;
+    if (maxNewTotal <= 0) return;
+
+    const newTotalPrice = Math.min(item.unitPrice * qty, maxNewTotal);
     const remainingQty = item.quantity - qty;
     const remainingTotalPrice = item.totalPrice - newTotalPrice;
+
+    if (newTotalPrice <= 0 || remainingTotalPrice <= 0) return;
 
     const updated = [...items];
     updated[index] = { ...item, quantity: remainingQty, totalPrice: remainingTotalPrice };
@@ -295,6 +300,9 @@ export default function GuestSplitPage() {
       }
     }
     setAssignments(newAssignments);
+
+    // Shift index-based UI state so edits don't target the wrong item
+    setEditingItem((prev) => (prev !== null && prev > index ? prev + 1 : prev));
     setSplittingIndex(null);
   }
 
