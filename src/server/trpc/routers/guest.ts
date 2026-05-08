@@ -7,6 +7,7 @@ import { processReceiptImage } from "../../lib/receipt-processor";
 import { logger } from "../../lib/logger";
 import { checkRateLimit } from "../../lib/rate-limit";
 import { calculateSplitTotals } from "@/lib/split-calculator";
+import { normalizeGuestName } from "@/lib/guest-session";
 import {
   getConfiguredProviderPriority,
 } from "@/server/ai/registry";
@@ -17,10 +18,6 @@ type GuestSessionPerson = {
 };
 
 const GUEST_TRANSACTION_RETRY_ATTEMPTS = 3;
-
-function normalizeGuestName(name: string) {
-  return name.trim().toLowerCase();
-}
 
 function toPublicPeople(people: GuestSessionPerson[]) {
   return people.map(({ name }) => ({ name }));
@@ -395,7 +392,7 @@ export const guestRouter = createTRPCRouter({
       const creatorName = input.creatorName.trim();
       const paidByName = input.paidByName.trim();
 
-      // Creator and paidBy might be the same person
+      // Tokens are assigned lazily when participants first join this session.
       const people: GuestSessionPerson[] = [{ name: creatorName }];
       let paidByIndex = 0;
       if (normalizeGuestName(paidByName) !== normalizeGuestName(creatorName)) {

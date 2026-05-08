@@ -4,6 +4,7 @@ import { use, useState, useMemo } from "react";
 import { useLocale } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { formatCents } from "@/lib/money";
+import { isGuestSessionToken, normalizeGuestName } from "@/lib/guest-session";
 import { calculateSplitTotals } from "@/lib/split-calculator";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,14 +43,6 @@ function initials(name: string): string {
   );
 }
 
-function normalizeGuestName(name: string): string {
-  return name.trim().toLowerCase();
-}
-
-function isUuid(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
-}
-
 function getStoredClaimIdentity(token: string): StoredClaimIdentity | null {
   if (typeof window === "undefined") return null;
 
@@ -64,7 +57,7 @@ function getStoredClaimIdentity(token: string): StoredClaimIdentity | null {
       !("personToken" in parsed) ||
       typeof parsed.name !== "string" ||
       typeof parsed.personToken !== "string" ||
-      !isUuid(parsed.personToken)
+      !isGuestSessionToken(parsed.personToken)
     ) {
       return null;
     }
