@@ -580,6 +580,35 @@ export const receiptsRouter = createTRPCRouter({
           throw new TRPCError({ code: "BAD_REQUEST", message: "Receipt already has an expense" });
         }
 
+        const userIdsToValidate = new Set<string>();
+        if (input.paidById) {
+          userIdsToValidate.add(input.paidById);
+        }
+        for (const assignment of input.assignments ?? []) {
+          for (const userId of assignment.userIds) {
+            userIdsToValidate.add(userId);
+          }
+        }
+
+        if (userIdsToValidate.size > 0) {
+          const validMembers = await tx.groupMember.findMany({
+            where: {
+              groupId: input.groupId,
+              userId: { in: Array.from(userIdsToValidate) },
+            },
+            select: { userId: true },
+          });
+          const validMemberIds = new Set(validMembers.map((member) => member.userId));
+          for (const userId of userIdsToValidate) {
+            if (!validMemberIds.has(userId)) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: `User ${userId} is not a member of this group`,
+              });
+            }
+          }
+        }
+
         await tx.receipt.update({
           where: { id: input.receiptId },
           data: {
@@ -623,6 +652,7 @@ export const receiptsRouter = createTRPCRouter({
           if (assignmentData.length > 0) {
             await tx.receiptItemAssignment.createMany({
               data: assignmentData,
+              skipDuplicates: true,
             });
           }
         }

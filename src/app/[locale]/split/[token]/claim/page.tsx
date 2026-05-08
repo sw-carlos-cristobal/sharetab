@@ -48,6 +48,7 @@ export default function ClaimPage({
   // --- State ---
   const [name, setName] = useState("");
   const [personIndex, setPersonIndex] = useState<number | null>(null);
+  const [personToken, setPersonToken] = useState<string | null>(null);
   const [claimedItems, setClaimedItems] = useState<Set<number>>(new Set());
   const [saving, setSaving] = useState(false);
 
@@ -60,6 +61,7 @@ export default function ClaimPage({
   const joinSession = trpc.guest.joinSession.useMutation({
     onSuccess: (data) => {
       setPersonIndex(data.personIndex);
+      setPersonToken(data.personToken);
       // Initialize claimed items from current server assignments
       const currentClaims =
         session.data?.assignments
@@ -167,12 +169,13 @@ export default function ClaimPage({
   }
 
   async function saveClaims() {
-    if (personIndex === null) return;
+    if (personIndex === null || !personToken) return;
     setSaving(true);
     try {
       await claimItems.mutateAsync({
         token,
         personIndex,
+        personToken,
         claimedItemIndices: Array.from(claimedItems),
       });
     } finally {
