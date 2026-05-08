@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Check, Users, Pencil, Trash2, Plus, Image as ImageIcon, Bookmark } from "lucide-react";
+import { Check, Users, Pencil, Trash2, Plus, Image as ImageIcon, Bookmark, Scissors } from "lucide-react";
 
 type Member = { id: string; name: string | null };
 
@@ -48,6 +48,8 @@ export function ItemAssignment({
   const [editValues, setEditValues] = useState<{ name: string; quantity: string; totalPrice: string }>({ name: "", quantity: "", totalPrice: "" });
   const [addingItem, setAddingItem] = useState(false);
   const [newItem, setNewItem] = useState({ name: "", quantity: "1", totalPrice: "" });
+  const [splittingItem, setSplittingItem] = useState<string | null>(null);
+  const [splitQuantity, setSplitQuantity] = useState("");
 
   const createExpense = trpc.receipts.assignItemsAndCreateExpense.useMutation({
     onSuccess: onComplete,
@@ -70,6 +72,9 @@ export function ItemAssignment({
   });
   const saveForLater = trpc.receipts.saveForLater.useMutation({
     onSuccess: () => onSaveForLater?.(),
+  });
+  const splitItem = trpc.receipts.splitItem.useMutation({
+    onSuccess: () => utils.receipts.getReceiptItems.invalidate({ receiptId }),
   });
 
   // Reset zoom/pan when image is hidden
@@ -576,12 +581,60 @@ export function ItemAssignment({
                       >
                         <Trash2 className="h-3 w-3" />
                       </button>
+                      {item.quantity > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSplittingItem(item.id);
+                            setSplitQuantity("1");
+                          }}
+                          className="text-muted-foreground hover:text-foreground"
+                          title="Split into separate line"
+                          aria-label={`Split ${item.name} into separate line`}
+                        >
+                          <Scissors className="h-3 w-3" />
+                        </button>
+                      )}
                     </div>
                     <span className="font-semibold">
                       {formatCents(item.totalPrice, extracted.currency, locale)}
                     </span>
                   </div>
                 )}
+                {!isEditing && splittingItem === item.id && (() => {
+                  const parsed = Number(splitQuantity);
+                  const validQty = Number.isSafeInteger(parsed) && parsed >= 1 && parsed < item.quantity;
+                  return (
+                    <div className="mb-2 flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">Split off</span>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={item.quantity - 1}
+                        value={splitQuantity}
+                        onChange={(e) => setSplitQuantity(e.target.value)}
+                        className="w-16 h-7 text-xs"
+                      />
+                      <span className="text-xs text-muted-foreground">of {item.quantity}</span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-7 text-xs"
+                        disabled={splitItem.isPending || !validQty}
+                        onClick={() => {
+                          if (!validQty) return;
+                          splitItem.mutate({ itemId: item.id, splitQuantity: parsed });
+                          setSplittingItem(null);
+                        }}
+                      >
+                        Split
+                      </Button>
+                      <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setSplittingItem(null)}>
+                        Cancel
+                      </Button>
+                    </div>
+                  );
+                })()}
                 <div className="flex flex-wrap gap-1.5">
                   {members.map((m) => {
                     const isAssigned = assigned.has(m.id);

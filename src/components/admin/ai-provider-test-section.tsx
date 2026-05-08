@@ -90,7 +90,7 @@ export function AIProviderTestSection() {
   }
 
   return (
-    <section>
+    <section data-testid="ai-provider-test-section">
       <div className="mb-4 flex items-center gap-2">
         <FlaskConical className="h-5 w-5 text-muted-foreground" />
         <h2 className="text-lg font-semibold">Other Provider Tests</h2>
@@ -110,26 +110,28 @@ export function AIProviderTestSection() {
               accept={ACCEPTED_TYPES.join(',')}
               onChange={handleFileChange}
               className="hidden"
+              data-testid="ai-test-file-input"
             />
             <Button
               size="sm"
               variant="outline"
               onClick={() => fileRef.current?.click()}
+              data-testid="ai-test-upload-btn"
             >
               <Upload className="mr-2 h-4 w-4" />
               {file ? 'Change Image' : 'Upload Receipt Image'}
             </Button>
             {file && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground" data-testid="ai-test-file-info">
                 <span className="max-w-48 truncate">{file.name}</span>
-                <button onClick={clearFile} className="text-muted-foreground hover:text-foreground">
+                <button type="button" onClick={clearFile} className="text-muted-foreground hover:text-foreground" data-testid="ai-test-clear-btn" aria-label="Clear file">
                   <X className="h-4 w-4" />
                 </button>
               </div>
             )}
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2" data-testid="ai-test-provider-buttons">
             {nonOAuthProviders.map((name) => (
               <Button
                 key={name}
@@ -137,6 +139,7 @@ export function AIProviderTestSection() {
                 variant="outline"
                 disabled={!file || testProvider.isPending}
                 onClick={() => handleTest(name)}
+                data-testid={`ai-test-btn-${name}`}
               >
                 {testProvider.isPending && activeProvider === name ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -149,26 +152,26 @@ export function AIProviderTestSection() {
           </div>
 
           {!file && (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground" data-testid="ai-test-upload-hint">
               Upload a receipt image to enable testing.
             </p>
           )}
 
           {testProvider.isSuccess && (
-            <div className="space-y-2">
-              <p className="flex items-center gap-1 text-sm text-green-600">
+            <div className="space-y-2" data-testid="ai-test-success">
+              <p className="flex items-center gap-1 text-sm text-green-600" data-testid="ai-test-success-msg">
                 <CheckCircle2 className="h-4 w-4" />
                 {activeProvider} responded in {testProvider.data.durationMs}ms
               </p>
-              <pre className="max-h-96 overflow-auto rounded-md bg-muted p-3 text-xs">
+              <pre className="max-h-96 overflow-auto rounded-md bg-muted p-3 text-xs" data-testid="ai-test-result-json">
                 {JSON.stringify(testProvider.data.result, null, 2)}
               </pre>
             </div>
           )}
 
           {testProvider.isError && (
-            <div className="space-y-2">
-              <p className="flex items-center gap-1 text-sm text-destructive">
+            <div className="space-y-2" data-testid="ai-test-error">
+              <p className="flex items-center gap-1 text-sm text-destructive" data-testid="ai-test-error-msg">
                 <AlertCircle className="h-4 w-4" />
                 {activeProvider} failed: {testProvider.error.message}
               </p>
