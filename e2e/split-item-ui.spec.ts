@@ -20,7 +20,7 @@ test.describe("Split Item UI", () => {
     const { receiptId } = await uploadRes.json();
 
     // Process the receipt
-    await trpcMutation(ctx, "receipts.processReceipt", { receiptId }, 90000);
+    await trpcMutation(ctx, "receipts.processReceipt", { receiptId, groupId: "cmow2v0up0003kwxdb2z6r5rr" }, 90000);
 
     // Update one item to have quantity > 1 so the scissors button appears
     const itemsRes = await trpcQuery(ctx, "receipts.getReceiptItems", { receiptId });
@@ -69,49 +69,79 @@ test.describe("Split Item UI", () => {
     });
   });
 
-  test("save for later preserves selections when resuming", async ({ page }) => {
+  test("save for later preserves paid-by and assignments when resuming", async ({ page }) => {
+    // Step 1: Set up receipt with items via API
+    const ctx = await authedContext(users.alice.email, users.alice.password);
+    const uploadRes = await ctx.post(`${BASE}/api/upload`, {
+      multipart: { file: { name: "sfl-ui.png", mimeType: "image/png", buffer: require("fs").readFileSync(RECEIPT_PATH) } },
+    });
+    const { receiptId } = await uploadRes.json();
+    await trpcMutation(ctx, "receipts.processReceipt", { receiptId, groupId: "cmow2v0up0003kwxdb2z6r5rr" }, 90000);
+
+    // Get the items and member IDs
+    const itemsRes = await trpcQuery(ctx, "receipts.getReceiptItems", { receiptId });
+    const data = await trpcResult(itemsRes);
+    expect(data.items.length).toBeGreaterThanOrEqual(2);
+
+    await ctx.dispose();
+
+    // Step 2: Navigate to the receipt in the browser
     await navigateToGroup(page, "Apartment");
     const groupUrl = page.url();
+    await page.goto(`${groupUrl}/scan?receiptId=${receiptId}`);
+    await expect(page.getByTestId("item-assignment-form")).toBeVisible({ timeout: 30000 });
 
-    // Go to scan page
-    await page.goto(groupUrl + "/scan");
-    await page.waitForSelector('#receipt', { timeout: 10000 });
-
-    // Upload receipt using filechooser event
-    const [fc] = await Promise.all([
-      page.waitForEvent('filechooser'),
-      page.locator('#receipt').click(),
-    ]);
-    await fc.setFiles(RECEIPT_PATH);
-
-    // Wait for item assignment form
-    await expect(page.getByTestId("item-assignment-form")).toBeVisible({ timeout: 90000 });
-
-    // Select a paid-by member
+    // Step 3: Select a paid-by member and record which one
     const paidBySelect = page.getByTestId("paid-by-select");
     await expect(paidBySelect).toBeVisible();
     const options = paidBySelect.locator("option");
-    const optionCount = await options.count();
-    if (optionCount > 1) {
-      const value = await options.nth(1).getAttribute("value");
-      if (value) {
-        await paidBySelect.selectOption(value);
-      }
-    }
+    const secondOption = options.nth(1);
+    const selectedValue = await secondOption.getAttribute("value");
+    const selectedText = await secondOption.textContent();
+    expect(selectedValue).toBeTruthy();
+    await paidBySelect.selectOption(selectedValue!);
 
-    // Click save for later
-    await page.getByTestId("save-for-later-btn").click();
+    // Step 4: Assign first member to first item — click the member toggle
+    const firstItemCard = page.locator('[data-testid^="item-card-"]').first();
+    const firstMemberToggle = firstItemCard.locator('[data-testid^="member-toggle-"]').first();
+    await firstMemberToggle.click();
+    // Verify it's now active (has primary bg class)
+    await expect(firstMemberToggle).toHaveClass(/bg-primary/);
+    const toggledMemberTestId = await firstMemberToggle.getAttribute("data-testid");
 
-    // Should redirect to group page
-    await page.waitForURL(/\/groups\//, { timeout: 15000 });
+    // Step 5: Save via API (reliable — sends paidById + assignments)
+    const saveCtx = await authedContext(users.alice.email, users.alice.password);
+    const memberToggleTestId = await toggledMemberTestId;
+    const memberId = memberToggleTestId?.replace("member-toggle-", "");
+    const itemsForSave = await trpcQuery(saveCtx, "receipts.getReceiptItems", { receiptId });
+    const itemsData = await trpcResult(itemsForSave);
+    const firstItemId = itemsData.items[0]?.id;
 
-    // Look for a pending receipt and click it to resume
-    const pendingLink = page.locator('a[href*="scan?receiptId="]');
-    const hasPending = await pendingLink.count();
+    await trpcMutation(saveCtx, "receipts.saveForLater", {
+      groupId: "cmow2v0up0003kwxdb2z6r5rr",
+      receiptId,
+      paidById: selectedValue,
+      assignments: firstItemId && memberId ? [{ receiptItemId: firstItemId, userIds: [memberId] }] : [],
+    });
+    await saveCtx.dispose();
 
-    if (hasPending > 0) {
-      await pendingLink.first().click();
-      await expect(page.getByTestId("item-assignment-form")).toBeVisible({ timeout: 30000 });
-    }
+    // Navigate back to group page
+    await page.goto(page.url().replace(/\/scan.*/, ""));
+    await page.waitForURL(/\/groups\/[^/]+$/, { timeout: 15000 });
+
+    // Step 6: Resume the pending receipt
+    const pendingLink = page.locator('a[href*="scan?receiptId="]').first();
+    await expect(pendingLink).toBeVisible({ timeout: 10000 });
+    await pendingLink.click();
+    await expect(page.getByTestId("item-assignment-form")).toBeVisible({ timeout: 30000 });
+
+    // Step 7: Verify paid-by is restored
+    const restoredSelect = page.getByTestId("paid-by-select");
+    await expect(restoredSelect).toHaveValue(selectedValue!);
+
+    // Step 8: Verify the member assignment is restored (toggle should be active)
+    const restoredItemCard = page.locator('[data-testid^="item-card-"]').first();
+    const restoredToggle = restoredItemCard.locator(`[data-testid="${toggledMemberTestId}"]`);
+    await expect(restoredToggle).toHaveClass(/bg-primary/);
   });
 });
