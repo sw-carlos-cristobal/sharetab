@@ -142,6 +142,7 @@ export const receiptsRouter = createTRPCRouter({
           id: receiptWithItems.id,
           status: receiptWithItems.status,
           imagePath: receiptWithItems.imagePath,
+          paidById: receiptWithItems.paidById,
           extractedData: receiptWithItems.extractedData as {
             merchantName?: string;
             date?: string;
@@ -471,7 +472,15 @@ export const receiptsRouter = createTRPCRouter({
     }),
 
   saveForLater: groupMemberProcedure
-    .input(z.object({ groupId: z.string(), receiptId: z.string() }))
+    .input(z.object({
+      groupId: z.string(),
+      receiptId: z.string(),
+      paidById: z.string().optional(),
+      assignments: z.array(z.object({
+        receiptItemId: z.string(),
+        userIds: z.array(z.string()),
+      })).optional(),
+    }))
     .mutation(async ({ ctx, input }) => {
       const receipt = await ctx.db.receipt.findUnique({
         where: { id: input.receiptId },
@@ -489,8 +498,36 @@ export const receiptsRouter = createTRPCRouter({
 
       await ctx.db.receipt.update({
         where: { id: input.receiptId },
-        data: { groupId: input.groupId, savedById: ctx.user.id },
+        data: {
+          groupId: input.groupId,
+          savedById: ctx.user.id,
+          paidById: input.paidById,
+        },
       });
+
+      // Save partial assignments if provided
+      if (input.assignments && input.assignments.length > 0) {
+        // Clear any existing assignments first
+        await ctx.db.receiptItemAssignment.deleteMany({
+          where: {
+            receiptItem: { receiptId: input.receiptId },
+          },
+        });
+
+        // Create new assignments
+        const assignmentData = input.assignments.flatMap((a) =>
+          a.userIds.map((userId) => ({
+            receiptItemId: a.receiptItemId,
+            userId,
+          }))
+        );
+        if (assignmentData.length > 0) {
+          await ctx.db.receiptItemAssignment.createMany({
+            data: assignmentData,
+          });
+        }
+      }
+
       return { success: true };
     }),
 

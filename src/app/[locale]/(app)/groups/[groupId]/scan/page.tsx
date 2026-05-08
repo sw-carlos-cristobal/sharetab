@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Loader2, Camera, Bookmark, RefreshCw } from "lucide-react";
+import { ArrowLeft, Loader2, Camera, RefreshCw } from "lucide-react";
 import { ItemAssignment } from "@/components/receipts/item-assignment";
 import { loadingMessages } from "@/lib/loading-messages";
 
@@ -64,11 +64,7 @@ function ScanReceiptContent({
     },
   });
 
-  const saveForLater = trpc.receipts.saveForLater.useMutation({
-    onSuccess: () => {
-      router.push(`/groups/${groupId}`);
-    },
-  });
+  // saveForLater is now handled inside ItemAssignment
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -107,11 +103,6 @@ function ScanReceiptContent({
 
   function handleExpenseCreated() {
     router.push(`/groups/${groupId}`);
-  }
-
-  function handleSaveForLater() {
-    if (!receiptId) return;
-    saveForLater.mutate({ groupId, receiptId });
   }
 
   const members =
@@ -198,6 +189,7 @@ function ScanReceiptContent({
             receiptId={receiptId}
             members={members}
             onComplete={handleExpenseCreated}
+            onSaveForLater={() => router.push(`/groups/${groupId}`)}
           />
           <div className="space-y-2">
             {!showRescan ? (
@@ -209,15 +201,6 @@ function ScanReceiptContent({
                 >
                   <RefreshCw className="mr-2 h-4 w-4" />
                   Rescan with corrections
-                </Button>
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={handleSaveForLater}
-                  disabled={saveForLater.isPending}
-                >
-                  <Bookmark className="mr-2 h-4 w-4" />
-                  {saveForLater.isPending ? "Saving..." : "Save for Later"}
                 </Button>
               </div>
             ) : (

@@ -198,6 +198,7 @@ model Receipt {
   extractedData Json?
   groupId       String?
   savedById     String?
+  paidById      String?
   uploadedById  String?
   isGuest       Boolean       @default(false)
 

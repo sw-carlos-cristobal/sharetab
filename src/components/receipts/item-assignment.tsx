@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useLocale } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { formatCents, centsToDecimal, parseToCents } from "@/lib/money";
@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Check, Users, Pencil, Trash2, Plus, Image as ImageIcon } from "lucide-react";
+import { Check, Users, Pencil, Trash2, Plus, Image as ImageIcon, Bookmark } from "lucide-react";
 
 type Member = { id: string; name: string | null };
 
@@ -21,11 +21,13 @@ export function ItemAssignment({
   receiptId,
   members,
   onComplete,
+  onSaveForLater,
 }: {
   groupId: string;
   receiptId: string;
   members: Member[];
   onComplete: () => void;
+  onSaveForLater?: () => void;
 }) {
   const locale = useLocale();
   const receiptData = trpc.receipts.getReceiptItems.useQuery({ receiptId });
@@ -66,6 +68,9 @@ export function ItemAssignment({
       utils.receipts.getReceiptItems.invalidate({ receiptId });
     },
   });
+  const saveForLater = trpc.receipts.saveForLater.useMutation({
+    onSuccess: () => onSaveForLater?.(),
+  });
 
   // Reset zoom/pan when image is hidden
   useEffect(() => {
@@ -85,12 +90,32 @@ export function ItemAssignment({
     return () => el.removeEventListener("wheel", handler);
   }, [showImage]);
 
-  // Initialize title from merchant name when data loads
-  useMemo(() => {
-    if (receiptData.data?.receipt.extractedData?.merchantName && !title) {
-      setTitle(receiptData.data.receipt.extractedData.merchantName);
+  // Initialize title, paidById, and assignments from saved data when loaded.
+  // This runs once when receiptData first arrives (initialized guards against re-runs).
+  const [initialized, setInitialized] = useState(false);
+
+  /* eslint-disable react-hooks/set-state-in-effect -- one-time init from async query data */
+  useEffect(() => {
+    if (initialized || !receiptData.data) return;
+    const data = receiptData.data;
+    if (data.receipt.extractedData?.merchantName) {
+      setTitle(data.receipt.extractedData.merchantName);
     }
-  }, [receiptData.data, title]);
+    if (data.receipt.paidById) {
+      setPaidById(data.receipt.paidById);
+    }
+    const restored: Assignments = {};
+    for (const item of data.items) {
+      if (item.assignments && item.assignments.length > 0) {
+        restored[item.id] = new Set(item.assignments.map((a: { userId: string }) => a.userId));
+      }
+    }
+    if (Object.keys(restored).length > 0) {
+      setAssignments(restored);
+    }
+    setInitialized(true);
+  }, [receiptData.data, initialized]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   if (receiptData.isLoading) {
     return <p className="text-muted-foreground">Loading items...</p>;
@@ -210,6 +235,20 @@ export function ItemAssignment({
   const perPersonTotals = getPerPersonTotals();
   const assignedItemCount = Object.values(assignments).filter((s) => s.size > 0).length;
   const allAssigned = assignedItemCount === items.length;
+
+  function handleSaveForLater() {
+    saveForLater.mutate({
+      groupId,
+      receiptId,
+      paidById: paidById || undefined,
+      assignments: Object.entries(assignments)
+        .filter(([, userIds]) => userIds.size > 0)
+        .map(([receiptItemId, userIds]) => ({
+          receiptItemId,
+          userIds: Array.from(userIds),
+        })),
+    });
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -622,6 +661,19 @@ export function ItemAssignment({
             ? `Assign all items (${items.length - assignedItemCount} remaining)`
             : "Create Expense from Receipt"}
       </Button>
+
+      {onSaveForLater && (
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          onClick={handleSaveForLater}
+          disabled={saveForLater.isPending}
+        >
+          <Bookmark className="mr-2 h-4 w-4" />
+          {saveForLater.isPending ? "Saving..." : "Save for Later"}
+        </Button>
+      )}
     </form>
   );
 }
