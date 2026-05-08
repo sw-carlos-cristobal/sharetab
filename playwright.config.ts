@@ -22,6 +22,7 @@ export default defineConfig({
     {
       name: "serial",
       testMatch: [
+        "admin-ai-provider-ui.spec.ts",
         "admin-features.spec.ts",
         "admin-meridian.spec.ts",
         "ai-provider-test.spec.ts",
@@ -39,6 +40,7 @@ export default defineConfig({
     {
       name: "parallel",
       testIgnore: [
+        "admin-ai-provider-ui.spec.ts",
         "admin-features.spec.ts",
         "admin-meridian.spec.ts",
         "ai-provider-test.spec.ts",
