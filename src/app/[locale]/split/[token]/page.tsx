@@ -93,7 +93,7 @@ export default function SharedSplitPage({
   ];
 
   return (
-    <div className="space-y-6 pb-24">
+    <div className="space-y-6 pb-24" data-testid="split-result">
       {/* Header */}
       <div className="text-center space-y-1 pt-4">
         <h1 className="text-2xl font-bold">
@@ -130,7 +130,7 @@ export default function SharedSplitPage({
             .filter(Boolean);
 
           return (
-            <Card key={idx}>
+            <Card key={idx} data-testid={`person-card-${idx}`}>
               <CardContent className="py-4">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-3">
@@ -218,11 +218,11 @@ export default function SharedSplitPage({
       {/* Share buttons - sticky bottom */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t">
         <div className="mx-auto max-w-lg flex gap-2">
-          <Button variant="outline" className="flex-1 h-14" onClick={handleCopy}>
+          <Button variant="outline" className="flex-1 h-14" onClick={handleCopy} data-testid="copy-link-btn">
             <Copy className="mr-2 h-5 w-5" />
             Copy Link
           </Button>
-          <Button className="flex-1 h-14" onClick={handleShare}>
+          <Button className="flex-1 h-14" onClick={handleShare} data-testid="share-btn">
             <Share2 className="mr-2 h-5 w-5" />
             Share
           </Button>

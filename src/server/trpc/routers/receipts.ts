@@ -142,6 +142,7 @@ export const receiptsRouter = createTRPCRouter({
           id: receiptWithItems.id,
           status: receiptWithItems.status,
           imagePath: receiptWithItems.imagePath,
+          paidById: receiptWithItems.paidById,
           extractedData: receiptWithItems.extractedData as {
             merchantName?: string;
             date?: string;
@@ -552,26 +553,119 @@ export const receiptsRouter = createTRPCRouter({
     }),
 
   saveForLater: groupMemberProcedure
-    .input(z.object({ groupId: z.string(), receiptId: z.string() }))
+    .input(z.object({
+      groupId: z.string(),
+      receiptId: z.string(),
+      paidById: z.string().nullable().optional(),
+      assignments: z.array(z.object({
+        receiptItemId: z.string(),
+        userIds: z.array(z.string()).max(100),
+      })).max(200).optional(),
+    }))
     .mutation(async ({ ctx, input }) => {
-      const receipt = await ctx.db.receipt.findUnique({
-        where: { id: input.receiptId },
-      });
-      if (!receipt || receipt.status !== "COMPLETED") {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Receipt must be processed first" });
-      }
-      // Check it's not already linked to an expense
-      const existing = await ctx.db.expense.findUnique({
-        where: { receiptId: input.receiptId },
-      });
-      if (existing) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Receipt already has an expense" });
-      }
+      await verifyReceiptAccess(ctx.db, input.receiptId, ctx.user.id);
 
-      await ctx.db.receipt.update({
-        where: { id: input.receiptId },
-        data: { groupId: input.groupId, savedById: ctx.user.id },
+      await ctx.db.$transaction(async (tx) => {
+        const receipt = await tx.receipt.findUnique({
+          where: { id: input.receiptId },
+        });
+        if (!receipt || receipt.status !== "COMPLETED") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Receipt must be processed first" });
+        }
+        // Check it's not already linked to an expense
+        const existing = await tx.expense.findUnique({
+          where: { receiptId: input.receiptId },
+        });
+        if (existing) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Receipt already has an expense" });
+        }
+
+        const userIdsToValidate = new Set<string>();
+        if (input.paidById) {
+          userIdsToValidate.add(input.paidById);
+        }
+        for (const assignment of input.assignments ?? []) {
+          for (const userId of assignment.userIds) {
+            userIdsToValidate.add(userId);
+          }
+        }
+
+        if (userIdsToValidate.size > 0) {
+          const validMembers = await tx.groupMember.findMany({
+            where: {
+              groupId: input.groupId,
+              userId: { in: Array.from(userIdsToValidate) },
+            },
+            select: { userId: true },
+          });
+          const validMemberIds = new Set(validMembers.map((member) => member.userId));
+          for (const userId of userIdsToValidate) {
+            if (!validMemberIds.has(userId)) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: `User ${userId} is not a member of this group`,
+              });
+            }
+          }
+        }
+
+        await tx.receipt.update({
+          where: { id: input.receiptId },
+          data: {
+            groupId: input.groupId,
+            savedById: ctx.user.id,
+            paidById: input.paidById,
+          },
+        });
+
+        // Save partial assignments if provided (empty array clears existing)
+        if (input.assignments) {
+          // Validate that all receiptItemIds belong to this receipt
+          if (input.assignments.length > 0) {
+            const itemIds = input.assignments.map((a) => a.receiptItemId);
+            const validItems = await tx.receiptItem.findMany({
+              where: { id: { in: itemIds }, receiptId: input.receiptId },
+              select: { id: true },
+            });
+            const validIds = new Set(validItems.map((i) => i.id));
+            for (const id of itemIds) {
+              if (!validIds.has(id)) {
+                throw new TRPCError({ code: "BAD_REQUEST", message: `Item ${id} does not belong to this receipt` });
+              }
+            }
+          }
+
+          // Clear any existing assignments first
+          await tx.receiptItemAssignment.deleteMany({
+            where: {
+              receiptItem: { receiptId: input.receiptId },
+            },
+          });
+
+          // Create new assignments
+          const seenAssignments = new Set<string>();
+          const assignmentData: { receiptItemId: string; userId: string }[] = [];
+          for (const assignment of input.assignments) {
+            for (const userId of assignment.userIds) {
+              const key = `${assignment.receiptItemId}\u0000${userId}`;
+              if (seenAssignments.has(key)) {
+                continue;
+              }
+              seenAssignments.add(key);
+              assignmentData.push({
+                receiptItemId: assignment.receiptItemId,
+                userId,
+              });
+            }
+          }
+          if (assignmentData.length > 0) {
+            await tx.receiptItemAssignment.createMany({
+              data: assignmentData,
+            });
+          }
+        }
       });
+
       return { success: true };
     }),
 

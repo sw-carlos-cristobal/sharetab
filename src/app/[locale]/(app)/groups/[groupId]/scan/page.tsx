@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Loader2, Camera, Bookmark, RefreshCw } from "lucide-react";
+import { ArrowLeft, Loader2, Camera, RefreshCw } from "lucide-react";
 import { ItemAssignment } from "@/components/receipts/item-assignment";
 import { loadingMessages } from "@/lib/loading-messages";
 
@@ -64,11 +64,6 @@ function ScanReceiptContent({
     },
   });
 
-  const saveForLater = trpc.receipts.saveForLater.useMutation({
-    onSuccess: () => {
-      router.push(`/groups/${groupId}`);
-    },
-  });
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -109,10 +104,6 @@ function ScanReceiptContent({
     router.push(`/groups/${groupId}`);
   }
 
-  function handleSaveForLater() {
-    if (!receiptId) return;
-    saveForLater.mutate({ groupId, receiptId });
-  }
 
   const members =
     group.data?.members.map((m) => ({
@@ -160,6 +151,7 @@ function ScanReceiptContent({
                 onChange={handleFileUpload}
                 disabled={uploading}
                 className="cursor-pointer"
+                data-testid="scan-file-input"
               />
             </div>
 
@@ -174,7 +166,7 @@ function ScanReceiptContent({
       )}
 
       {step === "processing" && (
-        <Card>
+        <Card data-testid="scan-processing">
           <CardContent className="flex flex-col items-center gap-4 py-12">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <div className="text-center space-y-2">
@@ -194,32 +186,23 @@ function ScanReceiptContent({
       {step === "assign" && receiptId && (
         <>
           <ItemAssignment
+            key={receiptId}
             groupId={groupId}
             receiptId={receiptId}
             members={members}
             onComplete={handleExpenseCreated}
+            onSaveForLater={() => router.push(`/groups/${groupId}`)}
           />
           <div className="space-y-2">
             {!showRescan ? (
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => setShowRescan(true)}
-                >
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Rescan with corrections
-                </Button>
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={handleSaveForLater}
-                  disabled={saveForLater.isPending}
-                >
-                  <Bookmark className="mr-2 h-4 w-4" />
-                  {saveForLater.isPending ? "Saving..." : "Save for Later"}
-                </Button>
-              </div>
+              <Button
+                variant="outline"
+                onClick={() => setShowRescan(true)}
+                data-testid="scan-rescan-btn"
+              >
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Rescan with corrections
+              </Button>
             ) : (
               <Card>
                 <CardContent className="space-y-3 pt-4">
