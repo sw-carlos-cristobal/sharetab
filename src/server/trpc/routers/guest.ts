@@ -340,7 +340,7 @@ export const guestRouter = createTRPCRouter({
       if (split.status !== "finalized") {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "This split is not yet finalized",
+          message: "This split is not yet finalized. Please wait for the organizer to finish the claiming session.",
         });
       }
 

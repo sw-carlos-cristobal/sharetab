@@ -42,7 +42,7 @@ function initials(name: string): string {
   );
 }
 
-function normalizeName(name: string): string {
+function normalizeGuestName(name: string): string {
   return name.trim().toLowerCase();
 }
 
@@ -52,7 +52,19 @@ function getStoredClaimIdentity(token: string): StoredClaimIdentity | null {
   try {
     const raw = window.localStorage.getItem(`sharetab-claim:${token}`);
     if (!raw) return null;
-    return JSON.parse(raw) as StoredClaimIdentity;
+    const parsed = JSON.parse(raw) as unknown;
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      !("name" in parsed) ||
+      !("personToken" in parsed) ||
+      typeof parsed.name !== "string" ||
+      typeof parsed.personToken !== "string"
+    ) {
+      return null;
+    }
+
+    return parsed;
   } catch {
     return null;
   }
@@ -192,7 +204,7 @@ export default function ClaimPage({
       token,
       name: trimmed,
       personToken:
-        storedIdentity && normalizeName(storedIdentity.name) === normalizeName(trimmed)
+        storedIdentity && normalizeGuestName(storedIdentity.name) === normalizeGuestName(trimmed)
           ? storedIdentity.personToken
           : undefined,
     });
