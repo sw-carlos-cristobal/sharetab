@@ -469,6 +469,7 @@ export default function ClaimPage({
               role="button"
               aria-pressed={isClaimed}
               tabIndex={0}
+              data-testid={`claim-item-${idx}`}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
@@ -629,6 +630,7 @@ export default function ClaimPage({
             className="w-full h-14"
             onClick={saveClaims}
             disabled={saving || !hasUnsavedChanges}
+            data-testid="save-claims-btn"
           >
             {saving ? (
               <>
