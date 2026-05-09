@@ -93,6 +93,8 @@
     "viewReceipt": "Beleg anzeigen",
     "hideReceipt": "Beleg ausblenden",
     "receiptImage": "Belegbild",
-    "orRejoinAs": "Oder beitreten als:"
+    "orRejoinAs": "Oder beitreten als:",
+    "claimingFor": "Auswahl für",
+    "saveClaimsFor": "Auswahl speichern für {name}"
   }
 }

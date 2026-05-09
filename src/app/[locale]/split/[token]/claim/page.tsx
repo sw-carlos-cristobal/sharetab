@@ -73,8 +73,9 @@ export default function ClaimPage({
   // --- State ---
   const [name, setName] = useState("");
   const [personIndex, setPersonIndex] = useState<number | null>(null);
+  const [myPersonIndex, setMyPersonIndex] = useState<number | null>(null);
   const [personToken, setPersonToken] = useState<string | null>(null);
-  const [claimedItems, setClaimedItems] = useState<Set<number>>(new Set());
+  const [claimedItems, setClaimedItems] = useState<Map<number, Set<number>>>(new Map());
   const [saving, setSaving] = useState(false);
   const [showImage, setShowImage] = useState(false);
 
@@ -88,17 +89,23 @@ export default function ClaimPage({
     onSuccess: (data) => {
       const trimmed = name.trim();
       setPersonIndex(data.personIndex);
+      setMyPersonIndex(data.personIndex);
       setPersonToken(data.personToken);
       setStoredClaimIdentity(token, {
         name: trimmed,
         personToken: data.personToken,
       });
-      // Initialize claimed items from current server assignments
-      const currentClaims =
-        session.data?.assignments
-          .filter((a) => a.personIndices.includes(data.personIndex))
-          .map((a) => a.itemIndex) ?? [];
-      setClaimedItems(new Set(currentClaims));
+      // Initialize claimed items from server assignments for ALL people
+      const map = new Map<number, Set<number>>();
+      if (session.data) {
+        for (const a of session.data.assignments) {
+          for (const pi of a.personIndices) {
+            if (!map.has(pi)) map.set(pi, new Set());
+            map.get(pi)!.add(a.itemIndex);
+          }
+        }
+      }
+      setClaimedItems(map);
       toast.success(t("joinedSession"));
     },
     onError: (error) => {
@@ -118,67 +125,81 @@ export default function ClaimPage({
   // --- Derived state ---
   const hasJoined = personIndex !== null;
 
-  // Compute which claimed items differ from the server state (dirty indicator)
-  const serverClaims = useMemo(() => {
-    if (personIndex === null || !session.data) return new Set<number>();
-    return new Set(
-      session.data.assignments
-        .filter((a) => a.personIndices.includes(personIndex))
-        .map((a) => a.itemIndex)
-    );
-  }, [session.data, personIndex]);
+  // Compute server claims for all people
+  const serverClaimsMap = useMemo(() => {
+    if (!session.data) return new Map<number, Set<number>>();
+    const map = new Map<number, Set<number>>();
+    for (const a of session.data.assignments) {
+      for (const pi of a.personIndices) {
+        if (!map.has(pi)) map.set(pi, new Set());
+        map.get(pi)!.add(a.itemIndex);
+      }
+    }
+    return map;
+  }, [session.data]);
+
+  const currentClaims = claimedItems.get(personIndex ?? -1) ?? new Set<number>();
+  const currentServerClaims = serverClaimsMap.get(personIndex ?? -1) ?? new Set<number>();
 
   const hasUnsavedChanges = useMemo(() => {
     if (personIndex === null) return false;
-    if (claimedItems.size !== serverClaims.size) return true;
-    for (const idx of claimedItems) {
-      if (!serverClaims.has(idx)) return true;
+    if (currentClaims.size !== currentServerClaims.size) return true;
+    for (const idx of currentClaims) {
+      if (!currentServerClaims.has(idx)) return true;
     }
     return false;
-  }, [claimedItems, serverClaims, personIndex]);
+  }, [currentClaims, currentServerClaims, personIndex]);
 
-  // Calculate per-person totals using the local claims merged with server assignments
+  // Calculate per-person totals using the full local claims Map merged with server assignments
   const splitTotals = useMemo(() => {
     if (!session.data) return [];
 
-    // Build assignments: start with server, override this person's claims locally
     const serverAssignments = session.data.assignments;
-    let mergedAssignments: { itemIndex: number; personIndices: number[] }[];
 
-    if (personIndex !== null) {
-      // Rebuild assignments by merging local claims for this person
+    if (claimedItems.size > 0) {
+      // Build assignment map from server state
       const assignmentMap = new Map<number, Set<number>>();
       for (const a of serverAssignments) {
         assignmentMap.set(a.itemIndex, new Set(a.personIndices));
       }
-      // Remove this person from all items, then re-add claimed ones
-      for (const [, persons] of assignmentMap) {
-        persons.delete(personIndex);
-      }
-      for (const itemIdx of claimedItems) {
-        if (!assignmentMap.has(itemIdx)) {
-          assignmentMap.set(itemIdx, new Set());
+      // Override with local claims for each person that has local state
+      for (const [pi, items] of claimedItems) {
+        // Remove this person from all items
+        for (const [, persons] of assignmentMap) {
+          persons.delete(pi);
         }
-        assignmentMap.get(itemIdx)!.add(personIndex);
+        // Re-add their claimed items
+        for (const itemIdx of items) {
+          if (!assignmentMap.has(itemIdx)) {
+            assignmentMap.set(itemIdx, new Set());
+          }
+          assignmentMap.get(itemIdx)!.add(pi);
+        }
       }
-      mergedAssignments = Array.from(assignmentMap.entries())
+      const mergedAssignments = Array.from(assignmentMap.entries())
         .filter(([, persons]) => persons.size > 0)
         .map(([itemIndex, persons]) => ({
           itemIndex,
           personIndices: Array.from(persons),
         }));
-    } else {
-      mergedAssignments = serverAssignments;
+
+      return calculateSplitTotals({
+        items: session.data.items,
+        assignments: mergedAssignments,
+        tax: session.data.receiptData.tax,
+        tip: session.data.receiptData.tip,
+        peopleCount: session.data.people.length,
+      });
     }
 
     return calculateSplitTotals({
       items: session.data.items,
-      assignments: mergedAssignments,
+      assignments: serverAssignments,
       tax: session.data.receiptData.tax,
       tip: session.data.receiptData.tip,
       peopleCount: session.data.people.length,
     });
-  }, [session.data, personIndex, claimedItems]);
+  }, [session.data, claimedItems]);
 
   // --- Handlers ---
   function handleJoin() {
@@ -199,10 +220,13 @@ export default function ClaimPage({
   }
 
   function toggleClaim(itemIndex: number) {
+    if (personIndex === null) return;
     setClaimedItems((prev) => {
-      const next = new Set(prev);
-      if (next.has(itemIndex)) next.delete(itemIndex);
-      else next.add(itemIndex);
+      const next = new Map(prev);
+      const personClaims = new Set(next.get(personIndex) ?? []);
+      if (personClaims.has(itemIndex)) personClaims.delete(itemIndex);
+      else personClaims.add(itemIndex);
+      next.set(personIndex, personClaims);
       return next;
     });
   }
@@ -211,11 +235,12 @@ export default function ClaimPage({
     if (personIndex === null || !personToken) return;
     setSaving(true);
     try {
+      const claims = claimedItems.get(personIndex) ?? new Set<number>();
       await claimItems.mutateAsync({
         token,
         personIndex,
         personToken,
-        claimedItemIndices: Array.from(claimedItems),
+        claimedItemIndices: Array.from(claims),
       });
     } finally {
       setSaving(false);
@@ -512,7 +537,7 @@ export default function ClaimPage({
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
             <Users className="h-4 w-4" />
-            People in this session ({data.people.length})
+            {t("peopleInSession", { count: data.people.length })}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -521,7 +546,7 @@ export default function ClaimPage({
               <div
                 key={idx}
                 className={`flex items-center gap-2 rounded-full px-3 py-1.5 ${
-                  idx === personIndex
+                  idx === myPersonIndex
                     ? "bg-primary/10 ring-2 ring-primary"
                     : "bg-muted"
                 }`}
@@ -535,13 +560,56 @@ export default function ClaimPage({
                 </Avatar>
                 <span className="text-sm font-medium">
                   {person.name}
-                  {idx === personIndex && ` ${t("you")}`}
+                  {idx === myPersonIndex && ` ${t("you")}`}
                 </span>
               </div>
             ))}
           </div>
         </CardContent>
       </Card>
+
+      {/* Claim as selector */}
+      <div className="space-y-2">
+        <p className="text-sm font-medium">{t("claimingFor")}</p>
+        <div className="flex flex-wrap gap-2">
+          {data.people.map((person, idx) => (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => {
+                // Sync local claims from server for the target person if not yet edited
+                if (!claimedItems.has(idx)) {
+                  setClaimedItems((prev) => {
+                    const next = new Map(prev);
+                    const serverSet = serverClaimsMap.get(idx) ?? new Set<number>();
+                    next.set(idx, new Set(serverSet));
+                    return next;
+                  });
+                }
+                setPersonIndex(idx);
+              }}
+              data-testid={`switch-person-${idx}`}
+              className={`flex items-center gap-2 rounded-full px-3 py-1.5 transition-colors ${
+                idx === personIndex
+                  ? "bg-primary text-primary-foreground ring-2 ring-primary"
+                  : "bg-muted hover:bg-muted/80"
+              }`}
+            >
+              <Avatar className="h-6 w-6">
+                <AvatarFallback
+                  className={`text-[10px] font-semibold ${idx === personIndex ? "bg-primary-foreground/20 text-primary-foreground" : colors[idx % colors.length]}`}
+                >
+                  {initials(person.name)}
+                </AvatarFallback>
+              </Avatar>
+              <span className="text-sm font-medium">
+                {person.name}
+                {idx === myPersonIndex && ` ${t("you")}`}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Items to claim */}
       <div className="space-y-3">
@@ -554,7 +622,7 @@ export default function ClaimPage({
           )}
         </h3>
         {data.items.map((item, idx) => {
-          const isClaimed = claimedItems.has(idx);
+          const isClaimed = (claimedItems.get(personIndex!) ?? new Set()).has(idx);
           // Find other claimants from server state
           const otherClaimants =
             data.assignments
@@ -654,12 +722,13 @@ export default function ClaimPage({
             const personName =
               data.people[person.personIndex]?.name ??
               t("personFallback", { index: person.personIndex + 1 });
-            const isMe = person.personIndex === personIndex;
+            const isMe = person.personIndex === myPersonIndex;
+            const isActive = person.personIndex === personIndex;
 
             return (
               <Card
                 key={person.personIndex}
-                className={isMe ? "ring-2 ring-primary" : ""}
+                className={isActive ? "ring-2 ring-primary" : ""}
               >
                 <CardContent className="py-3">
                   <div className="flex items-center justify-between">
@@ -738,7 +807,7 @@ export default function ClaimPage({
             ) : hasUnsavedChanges ? (
               <>
                 <Check className="mr-2 h-5 w-5" />
-                {t("saveMyClaims")}
+                {t("saveClaimsFor", { name: data.people[personIndex!]?.name ?? "" })}
               </>
             ) : (
               <>

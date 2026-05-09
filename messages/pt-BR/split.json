@@ -93,6 +93,8 @@
     "viewReceipt": "Ver recibo",
     "hideReceipt": "Ocultar recibo",
     "receiptImage": "Imagem do recibo",
-    "orRejoinAs": "Ou voltar como:"
+    "orRejoinAs": "Ou voltar como:",
+    "claimingFor": "Selecionando para",
+    "saveClaimsFor": "Salvar seleção de {name}"
   }
 }

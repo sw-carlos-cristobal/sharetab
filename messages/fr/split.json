@@ -93,6 +93,8 @@
     "viewReceipt": "Voir le reçu",
     "hideReceipt": "Masquer le reçu",
     "receiptImage": "Image du reçu",
-    "orRejoinAs": "Ou rejoindre en tant que :"
+    "orRejoinAs": "Ou rejoindre en tant que :",
+    "claimingFor": "Réclamation pour",
+    "saveClaimsFor": "Enregistrer les choix de {name}"
   }
 }

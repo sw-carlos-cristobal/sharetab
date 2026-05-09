@@ -93,6 +93,8 @@
     "viewReceipt": "查看小票",
     "hideReceipt": "隐藏小票",
     "receiptImage": "小票图片",
-    "orRejoinAs": "或以身份重新加入："
+    "orRejoinAs": "或以身份重新加入：",
+    "claimingFor": "选择对象：",
+    "saveClaimsFor": "保存{name}的选择"
   }
 }

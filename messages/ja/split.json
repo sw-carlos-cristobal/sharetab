@@ -93,6 +93,8 @@
     "viewReceipt": "レシートを表示",
     "hideReceipt": "レシートを非表示",
     "receiptImage": "レシート画像",
-    "orRejoinAs": "または再参加："
+    "orRejoinAs": "または再参加：",
+    "claimingFor": "選択中：",
+    "saveClaimsFor": "{name}の選択を保存"
   }
 }

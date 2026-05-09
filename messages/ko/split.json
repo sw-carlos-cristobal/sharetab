@@ -93,6 +93,8 @@
     "viewReceipt": "영수증 보기",
     "hideReceipt": "영수증 숨기기",
     "receiptImage": "영수증 이미지",
-    "orRejoinAs": "또는 다시 참가:"
+    "orRejoinAs": "또는 다시 참가:",
+    "claimingFor": "선택 대상:",
+    "saveClaimsFor": "{name}의 선택 저장"
   }
 }

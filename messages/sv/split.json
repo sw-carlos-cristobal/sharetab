@@ -93,6 +93,8 @@
     "viewReceipt": "Visa kvitto",
     "hideReceipt": "Dölj kvitto",
     "receiptImage": "Kvittobild",
-    "orRejoinAs": "Eller återanslut som:"
+    "orRejoinAs": "Eller återanslut som:",
+    "claimingFor": "Hävdar för",
+    "saveClaimsFor": "Spara val för {name}"
   }
 }

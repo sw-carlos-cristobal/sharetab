@@ -93,6 +93,8 @@
     "viewReceipt": "View Receipt",
     "hideReceipt": "Hide Receipt",
     "receiptImage": "Receipt image",
-    "orRejoinAs": "Or rejoin as:"
+    "orRejoinAs": "Or rejoin as:",
+    "claimingFor": "Claiming for",
+    "saveClaimsFor": "Save claims for {name}"
   }
 }

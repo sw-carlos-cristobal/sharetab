@@ -576,13 +576,13 @@ export const guestRouter = createTRPCRouter({
           const people = session.people as GuestSessionPerson[];
           const items = session.items as { name: string; quantity: number; unitPrice: number; totalPrice: number }[];
 
+          // Validate personToken belongs to ANY participant (allows claiming for others)
+          const isParticipant = people.some(p => p.personToken === input.personToken);
+          if (!isParticipant) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "Invalid person token" });
+          }
           if (input.personIndex >= people.length) {
             throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid person index" });
-          }
-
-          const person = people[input.personIndex];
-          if (!person?.personToken || person.personToken !== input.personToken) {
-            throw new TRPCError({ code: "FORBIDDEN", message: "Invalid person token" });
           }
 
           // Deduplicate claimed indices
