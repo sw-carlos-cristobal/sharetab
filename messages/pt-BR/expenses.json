@@ -53,7 +53,7 @@
     "loadingGroup": "Carregando grupo...",
     "groupLoadError": "Não foi possível carregar os dados do grupo. Tente novamente.",
     "uploadFailed": "Falha no upload",
-    "createSessionFailed": "Falha ao criar a sessao."
+    "createSessionFailed": "Falha ao criar a sessão."
   },
   "receipt": {
     "hideImage": "Ocultar imagem do recibo",
