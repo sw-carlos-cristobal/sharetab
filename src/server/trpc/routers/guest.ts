@@ -59,6 +59,19 @@ async function withSerializableRetry<T>(run: () => Promise<T>): Promise<T> {
 }
 
 export const guestRouter = createTRPCRouter({
+  // Test-only: expire a session for e2e testing the expiry guards
+  ...(process.env.NODE_ENV === "test" ? {
+    _testExpireSession: publicProcedure
+      .input(z.object({ token: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        await ctx.db.guestSplit.update({
+          where: { shareToken: input.token },
+          data: { expiresAt: new Date(0) },
+        });
+        return { success: true };
+      }),
+  } : {}),
+
   deleteSplit: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -343,7 +356,11 @@ export const guestRouter = createTRPCRouter({
       const guestSplit = await ctx.db.guestSplit.create({
         data: {
           receiptId: input.receiptId,
-          receiptData: { ...input.receiptData, tip } as unknown as Prisma.InputJsonValue,
+          receiptData: {
+            ...input.receiptData,
+            tip,
+            ...(input.tipOverride != null ? { total: input.receiptData.subtotal + input.receiptData.tax + tip } : {}),
+          } as unknown as Prisma.InputJsonValue,
           items: input.items as unknown as Prisma.InputJsonValue,
           people: filteredPeople as unknown as Prisma.InputJsonValue,
           assignments: remappedAssignments as unknown as Prisma.InputJsonValue,
@@ -589,6 +606,7 @@ export const guestRouter = createTRPCRouter({
             where: { shareToken: input.token },
           });
           if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
+          if (session.expiresAt < new Date()) throw new TRPCError({ code: "NOT_FOUND", message: "Session expired" });
           if (session.status !== "claiming") throw new TRPCError({ code: "BAD_REQUEST", message: "Session is finalized" });
 
           const people = [...(session.people as GuestSessionPerson[])];
@@ -623,6 +641,7 @@ export const guestRouter = createTRPCRouter({
             where: { shareToken: input.token },
           });
           if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
+          if (session.expiresAt < new Date()) throw new TRPCError({ code: "NOT_FOUND", message: "Session expired" });
           if (session.status !== "claiming") throw new TRPCError({ code: "BAD_REQUEST", message: "Session is finalized" });
 
           const people = [...(session.people as GuestSessionPerson[])];
@@ -678,6 +697,7 @@ export const guestRouter = createTRPCRouter({
             where: { shareToken: input.token },
           });
           if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
+          if (session.expiresAt < new Date()) throw new TRPCError({ code: "NOT_FOUND", message: "Session expired" });
           if (session.status !== "claiming") throw new TRPCError({ code: "BAD_REQUEST", message: "Session is finalized" });
 
           const people = session.people as GuestSessionPerson[];

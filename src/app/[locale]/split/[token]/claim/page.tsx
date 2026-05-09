@@ -99,15 +99,51 @@ export default function ClaimPage({
   });
 
   const removePerson = trpc.guest.removePerson.useMutation({
-    onSuccess: () => toast.success(t("personRemoved")),
+    onSuccess: (_data, variables) => {
+      const removedIdx = variables.targetIndex;
+      // Reset local claimed items — server has remapped indices (Finding #3)
+      setClaimedItems(new Map());
+      // Adjust personIndex / myPersonIndex to match server's new indices
+      setPersonIndex((prev) => {
+        if (prev === null) return null;
+        if (prev === removedIdx) return 0;
+        return prev > removedIdx ? prev - 1 : prev;
+      });
+      setMyPersonIndex((prev) => {
+        if (prev === null) return null;
+        if (prev === removedIdx) return 0;
+        return prev > removedIdx ? prev - 1 : prev;
+      });
+      toast.success(t("personRemoved"));
+    },
     onError: (err) => toast.error(err.message),
   });
 
   const splitClaimItem = trpc.guest.splitClaimItem.useMutation({
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      const splitIdx = variables.itemIndex;
       setSplittingItemIdx(null);
       setSplitQty("");
-      setClaimedItems(new Map());
+      // Remap claimed item indices: items after the split point shift +1 (Finding #4).
+      // Only invalidate the split item itself; preserve unsaved edits for other items.
+      setClaimedItems((prev) => {
+        const next = new Map<number, Set<number>>();
+        for (const [personIdx, itemSet] of prev) {
+          const remapped = new Set<number>();
+          for (const itemIdx of itemSet) {
+            if (itemIdx === splitIdx) {
+              // Keep claim on the original (now-reduced) item
+              remapped.add(itemIdx);
+            } else if (itemIdx > splitIdx) {
+              remapped.add(itemIdx + 1);
+            } else {
+              remapped.add(itemIdx);
+            }
+          }
+          next.set(personIdx, remapped);
+        }
+        return next;
+      });
     },
     onError: (err) => toast.error(err.message),
   });
