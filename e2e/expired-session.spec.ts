@@ -4,9 +4,9 @@ import { trpcMutation, trpcError, authedContext, users } from "./helpers";
 const BASE = process.env.BASE_URL || "http://localhost:3001";
 
 async function createSessionWithToken() {
-  const ctx = await request.newContext({ baseURL: BASE });
+  const authed = await authedContext(users.alice.email, users.alice.password);
 
-  const createRes = await trpcMutation(ctx, "guest.createClaimSession", {
+  const createRes = await trpcMutation(authed, "guest.createClaimSession", {
     receiptData: {
       merchantName: "Guard Test",
       subtotal: 1000,
@@ -21,13 +21,13 @@ async function createSessionWithToken() {
   });
   const shareToken = (await createRes.json()).result?.data?.json?.shareToken;
 
+  const ctx = await request.newContext({ baseURL: BASE });
   const joinRes = await trpcMutation(ctx, "guest.joinSession", {
     token: shareToken,
     name: "Alice",
   });
   const { personToken } = (await joinRes.json()).result?.data?.json;
 
-  const authed = await authedContext(users.alice.email, users.alice.password);
   return { ctx, authed, shareToken, personToken };
 }
 

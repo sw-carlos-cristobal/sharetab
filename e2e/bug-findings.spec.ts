@@ -86,8 +86,8 @@ test.describe("Finding #3: removePerson index state", () => {
   });
 });
 
-test.describe("Finding #5: paidByIndex with blank people", () => {
-  test("createSplit handles paidByIndex correctly when people array has blanks", async () => {
+test.describe("Finding #5: paidByIndex mapping", () => {
+  test("createSplit stores correct paidByIndex and people", async () => {
     const ctx = await request.newContext({ baseURL: BASE });
 
     // Create a split where people[0] is blank, people[1] is "Alice"
@@ -123,8 +123,8 @@ test.describe("Finding #5: paidByIndex with blank people", () => {
   });
 });
 
-test.describe("Finding #6: assignAllToEveryone with blank names", () => {
-  test("split with all-assigned should only include valid people in assignments", async () => {
+test.describe("Finding #6: shared item assignment", () => {
+  test("split with shared items distributes totals correctly across people", async () => {
     const ctx = await request.newContext({ baseURL: BASE });
 
     // Create a split with 2 valid people assigned to 1 item

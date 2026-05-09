@@ -64,9 +64,10 @@ export const guestRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const session = await ctx.db.guestSplit.findUnique({
         where: { shareToken: input.token },
-        select: { id: true },
+        select: { id: true, userId: true },
       });
       if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
+      if (session.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "Not the session owner" });
       await ctx.db.guestSplit.update({
         where: { id: session.id },
         data: { expiresAt: new Date(0) },
