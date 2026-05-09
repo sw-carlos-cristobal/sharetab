@@ -457,11 +457,38 @@ export const guestRouter = createTRPCRouter({
         paidByIndex = 1;
       }
 
+      // Auto-split multi-quantity items into individual rows for easier claiming
+      const MAX_EXPANDED_ITEMS = 200;
+      const totalExpanded = input.items.reduce((sum, item) => sum + Math.max(item.quantity, 1), 0);
+      if (totalExpanded > MAX_EXPANDED_ITEMS) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Too many items after expansion (${totalExpanded} > ${MAX_EXPANDED_ITEMS})` });
+      }
+
+      const expandedItems: typeof input.items = [];
+      for (const item of input.items) {
+        if (item.quantity <= 1) {
+          expandedItems.push(item);
+        } else {
+          // Distribute price evenly with round-robin remainder (e.g. $10/3 → $4,$3,$3 not $3,$3,$4)
+          const base = Math.floor(item.totalPrice / item.quantity);
+          const remainder = item.totalPrice - base * item.quantity;
+          for (let i = 0; i < item.quantity; i++) {
+            const price = base + (i < remainder ? 1 : 0);
+            expandedItems.push({
+              name: item.name,
+              quantity: 1,
+              unitPrice: price,
+              totalPrice: price,
+            });
+          }
+        }
+      }
+
       const session = await ctx.db.guestSplit.create({
         data: {
           receiptId: input.receiptId,
           receiptData: input.receiptData as unknown as Prisma.InputJsonValue,
-          items: input.items as unknown as Prisma.InputJsonValue,
+          items: expandedItems as unknown as Prisma.InputJsonValue,
           people: people as unknown as Prisma.InputJsonValue,
           assignments: [] as unknown as Prisma.InputJsonValue,
           paidByIndex,
@@ -488,7 +515,7 @@ export const guestRouter = createTRPCRouter({
       logger.info("guest.session.created", {
         sessionId: session.id,
         shareToken: session.shareToken.substring(0, 8) + "...",
-        itemCount: input.items.length,
+        itemCount: expandedItems.length,
       });
 
       return { shareToken: session.shareToken };
