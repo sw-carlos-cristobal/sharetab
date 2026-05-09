@@ -13,7 +13,7 @@ export async function register() {
     } catch (error) {
       // Isolate startup failures so the app can still boot (Finding #23).
       // Use console.error as logger may not be available if the import itself failed.
-      console.error("app.startup.failed", error instanceof Error ? error.message : error);
+      console.error("app.startup.failed", error instanceof Error ? error.stack ?? error.message : String(error));
     }
   }
 }

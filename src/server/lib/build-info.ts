@@ -18,7 +18,7 @@ export function getBuildInfo(): BuildInfo {
     version = pkg.version;
   } catch (error) {
     logger.warn("build-info.version.failed", {
-      error: error instanceof Error ? error.message : "Unknown",
+      error: error instanceof Error ? error.message : String(error),
     });
   }
 
@@ -32,7 +32,7 @@ export function getBuildInfo(): BuildInfo {
         commitSha = execFileSync("git", ["rev-parse", "--short", "HEAD"], { encoding: "utf-8" }).trim();
       } catch (error) {
         logger.warn("build-info.commitSha.failed", {
-          error: error instanceof Error ? error.message : "Unknown",
+          error: error instanceof Error ? error.message : String(error),
         });
       }
     }

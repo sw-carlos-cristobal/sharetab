@@ -500,7 +500,7 @@ export function ItemAssignment({
       {addingItem && (
         <Card className="border-primary/50" data-testid="add-item-form">
           <CardContent className="py-3">
-            <div className="space-y-2" onKeyDown={(e) => { if (e.key === "Enter" && (e.target as HTMLElement).tagName === "INPUT") { e.preventDefault(); handleAddItem(); } }}>
+            <div className="space-y-2" onKeyDown={(e) => { if (e.key === "Enter" && (e.target as HTMLElement).tagName === "INPUT" && !addItem.isPending) { e.preventDefault(); handleAddItem(); } }}>
               <div className="flex gap-2">
                 <Input
                   placeholder={t("itemNamePlaceholder")}
