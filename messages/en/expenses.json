@@ -46,7 +46,10 @@
     "cancel": "Cancel",
     "uploading": "Uploading...",
     "activeProvider": "Active provider:",
-    "fallbackChain": "Fallback chain:"
+    "fallbackChain": "Fallback chain:",
+    "or": "or",
+    "shareForClaiming": "Share Link — Let Members Claim Items",
+    "creatingSession": "Creating session..."
   },
   "receipt": {
     "hideImage": "Hide Receipt Image",

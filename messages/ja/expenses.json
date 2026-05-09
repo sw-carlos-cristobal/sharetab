@@ -46,7 +46,10 @@
     "cancel": "キャンセル",
     "uploading": "アップロード中...",
     "activeProvider": "使用中のプロバイダ:",
-    "fallbackChain": "フォールバックチェーン:"
+    "fallbackChain": "フォールバックチェーン:",
+    "or": "または",
+    "shareForClaiming": "リンクを共有 — メンバーに選んでもらう",
+    "creatingSession": "セッションを作成中..."
   },
   "receipt": {
     "hideImage": "レシート画像を非表示",

@@ -46,7 +46,10 @@
     "cancel": "Abbrechen",
     "uploading": "Wird hochgeladen...",
     "activeProvider": "Aktiver Anbieter:",
-    "fallbackChain": "Fallback-Kette:"
+    "fallbackChain": "Fallback-Kette:",
+    "or": "oder",
+    "shareForClaiming": "Link teilen — Mitglieder wählen lassen",
+    "creatingSession": "Sitzung wird erstellt..."
   },
   "receipt": {
     "hideImage": "Belegbild ausblenden",

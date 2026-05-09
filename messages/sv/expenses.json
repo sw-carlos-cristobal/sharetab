@@ -46,7 +46,10 @@
     "cancel": "Avbryt",
     "uploading": "Laddar upp...",
     "activeProvider": "Aktiv leverantör:",
-    "fallbackChain": "Reservkedja:"
+    "fallbackChain": "Reservkedja:",
+    "or": "eller",
+    "shareForClaiming": "Dela länk — Låt medlemmar välja artiklar",
+    "creatingSession": "Skapar session..."
   },
   "receipt": {
     "hideImage": "Dölj kvittobild",

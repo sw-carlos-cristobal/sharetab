@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Loader2, Camera, RefreshCw } from "lucide-react";
+import { ArrowLeft, Loader2, Camera, RefreshCw, Users } from "lucide-react";
 import { ItemAssignment } from "@/components/receipts/item-assignment";
 import { loadingMessages } from "@/lib/loading-messages";
 
@@ -66,6 +66,47 @@ function ScanReceiptContent({
     },
   });
 
+  const shareForClaiming = trpc.guest.createClaimSession.useMutation();
+  const receiptData = trpc.receipts.getReceiptItems.useQuery(
+    { receiptId: receiptId! },
+    { enabled: step === "assign" && !!receiptId }
+  );
+
+  async function handleShareForClaiming() {
+    if (!receiptId || !receiptData.data) return;
+    const { receipt, items } = receiptData.data;
+    const extracted = receipt.extractedData;
+    if (!extracted) return;
+
+    const currentMembers = members.filter((m) => m.name);
+    if (currentMembers.length < 1) return;
+
+    try {
+      const result = await shareForClaiming.mutateAsync({
+        receiptId,
+        receiptData: {
+          merchantName: extracted.merchantName,
+          date: extracted.date,
+          subtotal: extracted.subtotal,
+          tax: extracted.tax,
+          tip: extracted.tip ?? 0,
+          total: extracted.subtotal + extracted.tax + (extracted.tip ?? 0),
+          currency: extracted.currency ?? "USD",
+        },
+        items: items.map((i) => ({
+          name: i.name,
+          quantity: i.quantity,
+          unitPrice: i.unitPrice,
+          totalPrice: i.totalPrice,
+        })),
+        creatorName: currentMembers[0].name,
+        paidByName: currentMembers[0].name,
+      });
+      router.push(`/split/${result.shareToken}/claim`);
+    } catch {
+      // Error handled by mutation
+    }
+  }
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -194,6 +235,21 @@ function ScanReceiptContent({
             onComplete={handleExpenseCreated}
             onSaveForLater={() => router.push(`/groups/${groupId}`)}
           />
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-xs">{t("or")}</span>
+            <div className="flex-1 h-px bg-border" />
+          </div>
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={handleShareForClaiming}
+            disabled={shareForClaiming.isPending}
+            data-testid="group-share-claiming-btn"
+          >
+            <Users className="mr-2 h-4 w-4" />
+            {shareForClaiming.isPending ? t("creatingSession") : t("shareForClaiming")}
+          </Button>
           <div className="space-y-2">
             {!showRescan ? (
               <Button
