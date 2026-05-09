@@ -457,11 +457,33 @@ export const guestRouter = createTRPCRouter({
         paidByIndex = 1;
       }
 
+      // Auto-split multi-quantity items into individual rows for easier claiming
+      const expandedItems: typeof input.items = [];
+      for (const item of input.items) {
+        if (item.quantity <= 1) {
+          expandedItems.push(item);
+        } else {
+          let remaining = item.totalPrice;
+          for (let i = 0; i < item.quantity; i++) {
+            const price = i < item.quantity - 1
+              ? Math.floor(item.totalPrice / item.quantity)
+              : remaining;
+            remaining -= price;
+            expandedItems.push({
+              name: item.name,
+              quantity: 1,
+              unitPrice: item.unitPrice,
+              totalPrice: price,
+            });
+          }
+        }
+      }
+
       const session = await ctx.db.guestSplit.create({
         data: {
           receiptId: input.receiptId,
           receiptData: input.receiptData as unknown as Prisma.InputJsonValue,
-          items: input.items as unknown as Prisma.InputJsonValue,
+          items: expandedItems as unknown as Prisma.InputJsonValue,
           people: people as unknown as Prisma.InputJsonValue,
           assignments: [] as unknown as Prisma.InputJsonValue,
           paidByIndex,
