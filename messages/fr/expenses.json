@@ -52,8 +52,8 @@
     "creatingSession": "Création de la session...",
     "loadingGroup": "Chargement du groupe...",
     "groupLoadError": "Impossible de charger les données du groupe. Veuillez réessayer.",
-    "uploadFailed": "Echec du telechargement",
-    "createSessionFailed": "Echec de la creation de la session."
+    "uploadFailed": "Échec du téléchargement",
+    "createSessionFailed": "Échec de la creation de la session."
   },
   "receipt": {
     "hideImage": "Masquer l'image du reçu",
@@ -99,7 +99,7 @@
     "validationNameRequired": "Le nom de l'article est requis.",
     "validationPricePositive": "Le prix doit être supérieur à zéro.",
     "validationQtyPositive": "La quantité doit être un nombre entier positif.",
-    "receiptImageAlt": "Recu"
+    "receiptImageAlt": "Reçu"
   },
   "splits": {
     "selectAll": "Tout sélectionner",

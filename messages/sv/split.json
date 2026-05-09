@@ -60,7 +60,7 @@
     "validationPricePositive": "Priset måste vara större än noll.",
     "validationQtyPositive": "Antal måste vara ett positivt heltal.",
     "createSplitFailed": "Kunde inte skapa delningen.",
-    "createSessionFailed": "Kunde inte skapa sessionslank.",
+    "createSessionFailed": "Kunde inte skapa sessionslänk.",
     "receiptImageAlt": "Kvitto"
   },
   "claim": {

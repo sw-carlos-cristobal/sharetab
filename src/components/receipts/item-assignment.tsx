@@ -506,7 +506,6 @@ export function ItemAssignment({
                   placeholder={t("itemNamePlaceholder")}
                   value={newItem.name}
                   onChange={(e) => setNewItem((p) => ({ ...p, name: e.target.value }))}
-                  required
                   className="flex-1"
                 />
                 <Input
@@ -524,7 +523,6 @@ export function ItemAssignment({
                   value={newItem.totalPrice}
                   onChange={(e) => setNewItem((p) => ({ ...p, totalPrice: e.target.value }))}
                   className="w-24"
-                  required
                 />
               </div>
               <div className="flex gap-2">

@@ -59,8 +59,8 @@
     "validationNameRequired": "O nome do item é obrigatório.",
     "validationPricePositive": "O preço deve ser maior que zero.",
     "validationQtyPositive": "A quantidade deve ser um número inteiro positivo.",
-    "createSplitFailed": "Falha ao criar a divisao.",
-    "createSessionFailed": "Falha ao criar a sessao.",
+    "createSplitFailed": "Falha ao criar a divisão.",
+    "createSessionFailed": "Falha ao criar a sessão.",
     "receiptImageAlt": "Recibo"
   },
   "claim": {
