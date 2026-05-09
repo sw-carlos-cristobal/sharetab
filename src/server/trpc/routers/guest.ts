@@ -458,6 +458,7 @@ export const guestRouter = createTRPCRouter({
       }
 
       // Auto-split multi-quantity items into individual rows for easier claiming
+      const MAX_EXPANDED_ITEMS = 200;
       const expandedItems: typeof input.items = [];
       for (const item of input.items) {
         if (item.quantity <= 1) {
@@ -465,6 +466,7 @@ export const guestRouter = createTRPCRouter({
         } else {
           let remaining = item.totalPrice;
           for (let i = 0; i < item.quantity; i++) {
+            if (expandedItems.length >= MAX_EXPANDED_ITEMS) break;
             const price = i < item.quantity - 1
               ? Math.floor(item.totalPrice / item.quantity)
               : remaining;
@@ -472,11 +474,15 @@ export const guestRouter = createTRPCRouter({
             expandedItems.push({
               name: item.name,
               quantity: 1,
-              unitPrice: item.unitPrice,
+              unitPrice: price,
               totalPrice: price,
             });
           }
         }
+        if (expandedItems.length >= MAX_EXPANDED_ITEMS) break;
+      }
+      if (expandedItems.length > MAX_EXPANDED_ITEMS) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Too many items after expansion (max 200)" });
       }
 
       const session = await ctx.db.guestSplit.create({

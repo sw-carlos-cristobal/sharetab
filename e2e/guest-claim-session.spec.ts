@@ -295,11 +295,10 @@ test.describe("Guest claiming sessions", () => {
   test("multi-quantity items: one person claims more than others after split", async () => {
     const ctx = await request.newContext({ baseURL: BASE });
 
-    // Scenario: 5 beers originally, split into 3 rows for 3 people:
-    // - "Beer (2x)" at $10 — Alice had 2
-    // - "Beer (2x)" at $10 — Bob had 2
-    // - "Beer (1x)" at $5 — Charlie had 1
-    // Plus a shared appetizer everyone splits
+    // Scenario: 5 beers + nachos. Items with qty > 1 are auto-split into
+    // individual rows by createClaimSession, so:
+    //   Input: Beer(2), Beer(2), Beer(1), Nachos(1)
+    //   Stored: Beer, Beer, Beer, Beer, Beer, Nachos (indices 0-5)
     const splitItems = [
       { name: "Beer", quantity: 2, unitPrice: 500, totalPrice: 1000 },
       { name: "Beer", quantity: 2, unitPrice: 500, totalPrice: 1000 },
@@ -332,52 +331,57 @@ test.describe("Guest claiming sessions", () => {
     const joinCharlie = await trpcMutation(ctx, "guest.joinSession", { token: shareToken, name: "Charlie" });
     const charlie = (await joinCharlie.json()).result?.data?.json;
 
-    // Alice claims Beer row 0 (2 beers) + Nachos (shared)
+    // After auto-split: indices 0,1 = first 2x Beer; 2,3 = second 2x Beer; 4 = 1x Beer; 5 = Nachos
+    // Alice claims her 2 beers (0,1) + Nachos (5, shared)
     await trpcMutation(ctx, "guest.claimItems", {
       token: shareToken,
       personIndex: alice.personIndex,
       personToken: alice.personToken,
-      claimedItemIndices: [0, 3],
+      claimedItemIndices: [0, 1, 5],
     });
 
-    // Bob claims Beer row 1 (2 beers) + Nachos (shared)
+    // Bob claims his 2 beers (2,3) + Nachos (5, shared)
     await trpcMutation(ctx, "guest.claimItems", {
       token: shareToken,
       personIndex: bob.personIndex,
       personToken: bob.personToken,
-      claimedItemIndices: [1, 3],
+      claimedItemIndices: [2, 3, 5],
     });
 
-    // Charlie claims Beer row 2 (1 beer) + Nachos (shared)
+    // Charlie claims his 1 beer (4) + Nachos (5, shared)
     await trpcMutation(ctx, "guest.claimItems", {
       token: shareToken,
       personIndex: charlie.personIndex,
       personToken: charlie.personToken,
-      claimedItemIndices: [2, 3],
+      claimedItemIndices: [4, 5],
     });
 
     // Verify assignments
     const sessionRes = await trpcQuery(ctx, "guest.getSession", { token: shareToken });
     const session = await trpcResult(sessionRes);
 
-    // Item 0 (Beer 2x) — only Alice
+    // Items 0,1 (Beer) — only Alice
     const item0 = session.assignments.find((a: { itemIndex: number }) => a.itemIndex === 0);
     expect(item0.personIndices).toEqual([alice.personIndex]);
-
-    // Item 1 (Beer 2x) — only Bob
     const item1 = session.assignments.find((a: { itemIndex: number }) => a.itemIndex === 1);
-    expect(item1.personIndices).toEqual([bob.personIndex]);
+    expect(item1.personIndices).toEqual([alice.personIndex]);
 
-    // Item 2 (Beer 1x) — only Charlie
+    // Items 2,3 (Beer) — only Bob
     const item2 = session.assignments.find((a: { itemIndex: number }) => a.itemIndex === 2);
-    expect(item2.personIndices).toEqual([charlie.personIndex]);
-
-    // Item 3 (Nachos) — all three (shared)
+    expect(item2.personIndices).toEqual([bob.personIndex]);
     const item3 = session.assignments.find((a: { itemIndex: number }) => a.itemIndex === 3);
-    expect(item3.personIndices).toHaveLength(3);
-    expect(item3.personIndices).toContain(alice.personIndex);
-    expect(item3.personIndices).toContain(bob.personIndex);
-    expect(item3.personIndices).toContain(charlie.personIndex);
+    expect(item3.personIndices).toEqual([bob.personIndex]);
+
+    // Item 4 (Beer) — only Charlie
+    const item4 = session.assignments.find((a: { itemIndex: number }) => a.itemIndex === 4);
+    expect(item4.personIndices).toEqual([charlie.personIndex]);
+
+    // Item 5 (Nachos) — all three (shared)
+    const item5 = session.assignments.find((a: { itemIndex: number }) => a.itemIndex === 5);
+    expect(item5.personIndices).toHaveLength(3);
+    expect(item5.personIndices).toContain(alice.personIndex);
+    expect(item5.personIndices).toContain(bob.personIndex);
+    expect(item5.personIndices).toContain(charlie.personIndex);
 
     // Finalize and verify totals
     const finalizeRes = await trpcMutation(ctx, "guest.finalizeSession", {
