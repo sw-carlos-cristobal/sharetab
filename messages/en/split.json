@@ -5,7 +5,8 @@
     "snapBill": "Snap a Bill",
     "or": "Or",
     "chooseGallery": "Choose from Gallery",
-    "uploading": "Uploading..."
+    "uploading": "Uploading...",
+    "uploadFailed": "Upload failed"
   },
   "processing": {
     "title": "Processing receipt...",
@@ -57,7 +58,10 @@
     "shareHint": "Don't know who had what? Share the link and let each person pick their own items.",
     "validationNameRequired": "Item name is required.",
     "validationPricePositive": "Price must be greater than zero.",
-    "validationQtyPositive": "Quantity must be a positive whole number."
+    "validationQtyPositive": "Quantity must be a positive whole number.",
+    "createSplitFailed": "Failed to create split.",
+    "createSessionFailed": "Failed to create claiming session.",
+    "receiptImageAlt": "Receipt"
   },
   "claim": {
     "loadingSession": "Loading session...",

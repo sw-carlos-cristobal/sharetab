@@ -51,7 +51,9 @@
     "shareForClaiming": "Partager le lien — Laissez les membres choisir",
     "creatingSession": "Création de la session...",
     "loadingGroup": "Chargement du groupe...",
-    "groupLoadError": "Impossible de charger les données du groupe. Veuillez réessayer."
+    "groupLoadError": "Impossible de charger les données du groupe. Veuillez réessayer.",
+    "uploadFailed": "Echec du telechargement",
+    "createSessionFailed": "Echec de la creation de la session."
   },
   "receipt": {
     "hideImage": "Masquer l'image du reçu",
@@ -96,7 +98,8 @@
     "noExtractedData": "Aucune donnée extraite disponible.",
     "validationNameRequired": "Le nom de l'article est requis.",
     "validationPricePositive": "Le prix doit être supérieur à zéro.",
-    "validationQtyPositive": "La quantité doit être un nombre entier positif."
+    "validationQtyPositive": "La quantité doit être un nombre entier positif.",
+    "receiptImageAlt": "Recu"
   },
   "splits": {
     "selectAll": "Tout sélectionner",

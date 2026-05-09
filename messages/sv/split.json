@@ -5,7 +5,8 @@
     "snapBill": "Fota nota",
     "or": "Eller",
     "chooseGallery": "Välj från galleri",
-    "uploading": "Laddar upp..."
+    "uploading": "Laddar upp...",
+    "uploadFailed": "Uppladdningen misslyckades"
   },
   "processing": {
     "title": "Bearbetar kvitto...",
@@ -57,7 +58,10 @@
     "shareHint": "Vet du inte vem som hade vad? Dela länken och låt varje person välja sina egna artiklar.",
     "validationNameRequired": "Artikelnamn krävs.",
     "validationPricePositive": "Priset måste vara större än noll.",
-    "validationQtyPositive": "Antal måste vara ett positivt heltal."
+    "validationQtyPositive": "Antal måste vara ett positivt heltal.",
+    "createSplitFailed": "Kunde inte skapa delningen.",
+    "createSessionFailed": "Kunde inte skapa sessionslank.",
+    "receiptImageAlt": "Kvitto"
   },
   "claim": {
     "loadingSession": "Laddar session...",

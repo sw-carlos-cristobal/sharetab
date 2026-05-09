@@ -5,7 +5,8 @@
     "snapBill": "レシートを撮影",
     "or": "または",
     "chooseGallery": "ギャラリーから選択",
-    "uploading": "アップロード中..."
+    "uploading": "アップロード中...",
+    "uploadFailed": "アップロードに失敗しました"
   },
   "processing": {
     "title": "レシートを処理中...",
@@ -57,7 +58,10 @@
     "shareHint": "誰が何を注文したかわからない場合は、リンクを共有して各自に品目を選んでもらいましょう。",
     "validationNameRequired": "品目名は必須です。",
     "validationPricePositive": "価格はゼロより大きくする必要があります。",
-    "validationQtyPositive": "数量は正の整数である必要があります。"
+    "validationQtyPositive": "数量は正の整数である必要があります。",
+    "createSplitFailed": "割り勘の作成に失敗しました。",
+    "createSessionFailed": "セッションの作成に失敗しました。",
+    "receiptImageAlt": "レシート"
   },
   "claim": {
     "loadingSession": "セッションを読み込み中...",

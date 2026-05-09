@@ -51,7 +51,9 @@
     "shareForClaiming": "Share Link — Let Members Claim Items",
     "creatingSession": "Creating session...",
     "loadingGroup": "Loading group...",
-    "groupLoadError": "Could not load group data. Please try again."
+    "groupLoadError": "Could not load group data. Please try again.",
+    "uploadFailed": "Upload failed",
+    "createSessionFailed": "Failed to create claiming session."
   },
   "receipt": {
     "hideImage": "Hide Receipt Image",
@@ -96,7 +98,8 @@
     "noExtractedData": "No extracted data available.",
     "validationNameRequired": "Item name is required.",
     "validationPricePositive": "Price must be greater than zero.",
-    "validationQtyPositive": "Quantity must be a positive whole number."
+    "validationQtyPositive": "Quantity must be a positive whole number.",
+    "receiptImageAlt": "Receipt"
   },
   "splits": {
     "selectAll": "Select all",

@@ -51,7 +51,9 @@
     "shareForClaiming": "Compartilhar link — Deixe os membros escolherem",
     "creatingSession": "Criando sessão...",
     "loadingGroup": "Carregando grupo...",
-    "groupLoadError": "Não foi possível carregar os dados do grupo. Tente novamente."
+    "groupLoadError": "Não foi possível carregar os dados do grupo. Tente novamente.",
+    "uploadFailed": "Falha no upload",
+    "createSessionFailed": "Falha ao criar a sessao."
   },
   "receipt": {
     "hideImage": "Ocultar imagem do recibo",
@@ -96,7 +98,8 @@
     "noExtractedData": "Nenhum dado extraído disponível.",
     "validationNameRequired": "O nome do item é obrigatório.",
     "validationPricePositive": "O preço deve ser maior que zero.",
-    "validationQtyPositive": "A quantidade deve ser um número inteiro positivo."
+    "validationQtyPositive": "A quantidade deve ser um número inteiro positivo.",
+    "receiptImageAlt": "Recibo"
   },
   "splits": {
     "selectAll": "Selecionar todos",

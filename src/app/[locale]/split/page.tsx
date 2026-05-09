@@ -6,7 +6,7 @@ import { useRouter } from "@/i18n/navigation";
 import { trpc } from "@/lib/trpc";
 import { formatCents, centsToDecimal, parseToCents } from "@/lib/money";
 import { calculateSplitTotals } from "@/lib/split-calculator";
-import { loadingMessages } from "@/lib/loading-messages";
+import { loadingMessageKeys } from "@/lib/loading-messages";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -42,6 +42,7 @@ export default function GuestSplitPage() {
   const router = useRouter();
   const locale = useLocale();
   const t = useTranslations("split");
+  const tc = useTranslations("common");
   const [step, setStep] = useState<Step>("upload");
   const [receiptId, setReceiptId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -87,9 +88,9 @@ export default function GuestSplitPage() {
   // Rotate loading messages
   useEffect(() => {
     if (step !== "processing") return;
-    setLoadingMsgIdx(Math.floor(Math.random() * loadingMessages.length));
+    setLoadingMsgIdx(Math.floor(Math.random() * loadingMessageKeys.length));
     const interval = setInterval(() => {
-      setLoadingMsgIdx((i) => (i + 1) % loadingMessages.length);
+      setLoadingMsgIdx((i) => (i + 1) % loadingMessageKeys.length);
     }, 5000);
     return () => clearInterval(interval);
   }, [step]);
@@ -130,7 +131,7 @@ export default function GuestSplitPage() {
       });
 
       if (!res.ok) {
-        let message = "Upload failed";
+        let message = t("upload.uploadFailed");
         try {
           const data = await res.json();
           message = data.error ?? message;
@@ -158,7 +159,7 @@ export default function GuestSplitPage() {
       setStep("people");
     } catch (err) {
       setUploading(false);
-      setErrorMessage(err instanceof Error ? err.message : "Upload failed");
+      setErrorMessage(err instanceof Error ? err.message : t("upload.uploadFailed"));
       setStep("upload");
     }
   }
@@ -379,7 +380,7 @@ export default function GuestSplitPage() {
       });
       router.push(`/split/${result.shareToken}`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to create split");
+      toast.error(err instanceof Error ? err.message : t("assign.createSplitFailed"));
     }
   }
 
@@ -396,7 +397,7 @@ export default function GuestSplitPage() {
       });
       router.push(`/split/${result.shareToken}/claim`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to create claiming session");
+      toast.error(err instanceof Error ? err.message : t("assign.createSessionFailed"));
     }
   }
 
@@ -478,7 +479,7 @@ export default function GuestSplitPage() {
           <div className="text-center space-y-2 max-w-xs">
             <p className="font-semibold text-lg">{t("processing.title")}</p>
             <p className="text-sm text-muted-foreground animate-fade-in">
-              {loadingMessages[loadingMsgIdx]}
+              {tc(loadingMessageKeys[loadingMsgIdx])}
             </p>
             <p className="text-xs text-muted-foreground">
               {t("processing.activeProvider")} <span className="font-medium text-foreground">{activeProvider}</span>
@@ -671,7 +672,7 @@ export default function GuestSplitPage() {
               <CardContent className="py-3">
                 <img
                   src={`/api/uploads/${imagePath}`}
-                  alt="Receipt"
+                  alt={t("assign.receiptImageAlt")}
                   className="mx-auto max-h-[400px] rounded-md object-contain"
                 />
               </CardContent>
@@ -714,7 +715,7 @@ export default function GuestSplitPage() {
               type="number"
               step="0.01"
               min="0"
-              placeholder={t("assign.tipDetected", { amount: (extracted.tip / 100).toFixed(2) })}
+              placeholder={t("assign.tipDetected", { amount: formatCents(extracted.tip, currency, locale) })}
               value={tipOverride}
               onChange={(e) => setTipOverride(e.target.value)}
               className="h-12"

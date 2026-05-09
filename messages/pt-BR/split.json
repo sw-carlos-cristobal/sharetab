@@ -5,7 +5,8 @@
     "snapBill": "Fotografar conta",
     "or": "Ou",
     "chooseGallery": "Escolher da galeria",
-    "uploading": "Enviando..."
+    "uploading": "Enviando...",
+    "uploadFailed": "Falha no upload"
   },
   "processing": {
     "title": "Processando recibo...",
@@ -57,7 +58,10 @@
     "shareHint": "Não sabe quem pediu o quê? Compartilhe o link e deixe cada pessoa escolher seus próprios itens.",
     "validationNameRequired": "O nome do item é obrigatório.",
     "validationPricePositive": "O preço deve ser maior que zero.",
-    "validationQtyPositive": "A quantidade deve ser um número inteiro positivo."
+    "validationQtyPositive": "A quantidade deve ser um número inteiro positivo.",
+    "createSplitFailed": "Falha ao criar a divisao.",
+    "createSessionFailed": "Falha ao criar a sessao.",
+    "receiptImageAlt": "Recibo"
   },
   "claim": {
     "loadingSession": "Carregando sessão...",

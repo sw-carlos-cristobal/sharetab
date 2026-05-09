@@ -372,7 +372,7 @@ export function ItemAssignment({
             >
               <img
                 src={`/api/uploads/${receipt.imagePath}`}
-                alt="Receipt"
+                alt={t("receiptImageAlt")}
                 draggable={false}
                 className="h-full w-full object-contain pointer-events-none"
                 style={{
@@ -470,7 +470,7 @@ export function ItemAssignment({
               type="number"
               step="0.01"
               min="0"
-              placeholder={t("tipDetected", { amount: (extracted.tip / 100).toFixed(2) })}
+              placeholder={t("tipDetected", { amount: formatCents(extracted.tip, extracted.currency, locale) })}
               value={tipOverride}
               onChange={(e) => setTipOverride(e.target.value)}
             />

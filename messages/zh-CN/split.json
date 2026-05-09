@@ -5,7 +5,8 @@
     "snapBill": "拍摄账单",
     "or": "或",
     "chooseGallery": "从相册选择",
-    "uploading": "上传中..."
+    "uploading": "上传中...",
+    "uploadFailed": "上传失败"
   },
   "processing": {
     "title": "正在处理小票...",
@@ -57,7 +58,10 @@
     "shareHint": "不知道谁点了什么？分享链接，让每个人自己选择项目。",
     "validationNameRequired": "请输入项目名称。",
     "validationPricePositive": "价格必须大于零。",
-    "validationQtyPositive": "数量必须是正整数。"
+    "validationQtyPositive": "数量必须是正整数。",
+    "createSplitFailed": "创建分账失败。",
+    "createSessionFailed": "创建会话失败。",
+    "receiptImageAlt": "收据"
   },
   "claim": {
     "loadingSession": "正在加载会话...",

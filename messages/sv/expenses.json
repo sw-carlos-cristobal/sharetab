@@ -51,7 +51,9 @@
     "shareForClaiming": "Dela länk — Låt medlemmar välja artiklar",
     "creatingSession": "Skapar session...",
     "loadingGroup": "Laddar grupp...",
-    "groupLoadError": "Kunde inte ladda gruppdata. Försök igen."
+    "groupLoadError": "Kunde inte ladda gruppdata. Försök igen.",
+    "uploadFailed": "Uppladdningen misslyckades",
+    "createSessionFailed": "Kunde inte skapa sessionen."
   },
   "receipt": {
     "hideImage": "Dölj kvittobild",
@@ -96,7 +98,8 @@
     "noExtractedData": "Inga extraherade data tillgängliga.",
     "validationNameRequired": "Artikelnamn krävs.",
     "validationPricePositive": "Priset måste vara större än noll.",
-    "validationQtyPositive": "Antal måste vara ett positivt heltal."
+    "validationQtyPositive": "Antal måste vara ett positivt heltal.",
+    "receiptImageAlt": "Kvitto"
   },
   "splits": {
     "selectAll": "Välj alla",
