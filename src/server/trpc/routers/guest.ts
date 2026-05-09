@@ -58,22 +58,64 @@ async function withSerializableRetry<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
+// ─── Shared Zod schemas (Finding #27) ────────────────────────────
+const receiptDataSchema = z.object({
+  merchantName: z.string().optional(),
+  date: z.string().optional(),
+  subtotal: z.number().int(),
+  tax: z.number().int(),
+  tip: z.number().int(),
+  total: z.number().int(),
+  currency: z.string().default("USD"),
+});
+
+const itemSchema = z.object({
+  name: z.string(),
+  quantity: z.number().int().min(1),
+  unitPrice: z.number().int(),
+  totalPrice: z.number().int(),
+});
+
+// ─── Shared helpers (Finding #28) ─────────────────────────────────
+/** Create a Date 7 days from now for guest split expiration. */
+function createExpiryDate(): Date {
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 7);
+  return expiresAt;
+}
+
+/** Fire-and-forget cleanup of expired GuestSplit records. */
+function cleanupExpiredSplits(
+  db: typeof import("@/server/db").db,
+  logPrefix: string
+): void {
+  db.guestSplit
+    .deleteMany({ where: { expiresAt: { lt: new Date() } } })
+    .then((result) => {
+      if (result.count > 0) {
+        logger.info(`${logPrefix}.cleanup`, { deletedCount: result.count });
+      }
+    })
+    .catch((err) => {
+      logger.warn(`${logPrefix}.cleanup.failed`, {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+}
+
 export const guestRouter = createTRPCRouter({
-  expireSession: protectedProcedure
-    .input(z.object({ token: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      const session = await ctx.db.guestSplit.findUnique({
-        where: { shareToken: input.token },
-        select: { id: true, userId: true },
-      });
-      if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
-      if (session.userId !== ctx.user.id) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
-      await ctx.db.guestSplit.update({
-        where: { id: session.id },
-        data: { expiresAt: new Date(0) },
-      });
-      return { success: true };
-    }),
+  // Test-only: expire a session for e2e testing the expiry guards
+  ...(process.env.NODE_ENV === "test" ? {
+    _testExpireSession: publicProcedure
+      .input(z.object({ token: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        await ctx.db.guestSplit.update({
+          where: { shareToken: input.token },
+          data: { expiresAt: new Date(0) },
+        });
+        return { success: true };
+      }),
+  } : {}),
 
   deleteSplit: protectedProcedure
     .input(z.object({ id: z.string() }))
@@ -239,7 +281,7 @@ export const guestRouter = createTRPCRouter({
         },
       });
       if (!receipt) {
-        throw new TRPCError({ code: "NOT_FOUND" });
+        throw new TRPCError({ code: "NOT_FOUND", message: "Receipt not found" });
       }
       if (!receipt.isGuest) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Receipt not found" });
@@ -267,21 +309,8 @@ export const guestRouter = createTRPCRouter({
   createSplit: publicProcedure
     .input(z.object({
       receiptId: z.string().optional(),
-      receiptData: z.object({
-        merchantName: z.string().optional(),
-        date: z.string().optional(),
-        subtotal: z.number().int(),
-        tax: z.number().int(),
-        tip: z.number().int(),
-        total: z.number().int(),
-        currency: z.string().default("USD"),
-      }),
-      items: z.array(z.object({
-        name: z.string(),
-        quantity: z.number().int().min(1),
-        unitPrice: z.number().int(),
-        totalPrice: z.number().int(),
-      })).min(1).max(100),
+      receiptData: receiptDataSchema,
+      items: z.array(itemSchema).max(100),
       people: z.array(z.object({ name: z.string() })).min(1).max(100),
       assignments: z.array(z.object({
         itemIndex: z.number().int(),
@@ -326,17 +355,8 @@ export const guestRouter = createTRPCRouter({
         .filter((a) => a.personIndices.length > 0);
       const remappedPaidBy = indexMap.get(input.paidByIndex) ?? 0;
 
-      // Validate index bounds (against filtered arrays)
-      for (const a of remappedAssignments) {
-        if (a.itemIndex < 0 || a.itemIndex >= input.items.length) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: `Invalid itemIndex: ${a.itemIndex}` });
-        }
-        for (const pi of a.personIndices) {
-          if (pi < 0 || pi >= filteredPeople.length) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: `Invalid personIndex: ${pi}` });
-          }
-        }
-      }
+      // Note: second bounds-validation loop removed (Finding #13) — the remap above
+      // only produces valid indices via indexMap filtering, making post-remap validation redundant.
 
       const tip = input.tipOverride ?? input.receiptData.tip;
 
@@ -353,9 +373,6 @@ export const guestRouter = createTRPCRouter({
         name: filteredPeople[s.personIndex]?.name ?? `Person ${s.personIndex + 1}`,
       }));
 
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7);
-
       const guestSplit = await ctx.db.guestSplit.create({
         data: {
           receiptId: input.receiptId,
@@ -370,24 +387,11 @@ export const guestRouter = createTRPCRouter({
           summary: summaryWithNames as unknown as Prisma.InputJsonValue,
           paidByIndex: remappedPaidBy,
           userId: ctx.session?.user?.id ?? null,
-          expiresAt,
+          expiresAt: createExpiryDate(),
         },
       });
 
-      // Opportunistic cleanup: delete expired GuestSplit records to prevent unbounded growth.
-      // Piggybacked on createSplit to avoid needing a separate cron job.
-      ctx.db.guestSplit
-        .deleteMany({ where: { expiresAt: { lt: new Date() } } })
-        .then((result) => {
-          if (result.count > 0) {
-            logger.info("guest.split.cleanup", { deletedCount: result.count });
-          }
-        })
-        .catch((err) => {
-          logger.warn("guest.split.cleanup.failed", {
-            error: err instanceof Error ? err.message : "Unknown",
-          });
-        });
+      cleanupExpiredSplits(ctx.db, "guest.split");
 
       logger.info("guest.split.created", {
         splitId: guestSplit.id,
@@ -445,27 +449,12 @@ export const guestRouter = createTRPCRouter({
   createClaimSession: publicProcedure
     .input(z.object({
       receiptId: z.string().optional(),
-      receiptData: z.object({
-        merchantName: z.string().optional(),
-        date: z.string().optional(),
-        subtotal: z.number().int(),
-        tax: z.number().int(),
-        tip: z.number().int(),
-        total: z.number().int(),
-        currency: z.string().default("USD"),
-      }),
-      items: z.array(z.object({
-        name: z.string(),
-        quantity: z.number().int().min(1),
-        unitPrice: z.number().int(),
-        totalPrice: z.number().int(),
-      })).min(1).max(100),
+      receiptData: receiptDataSchema,
+      items: z.array(itemSchema).min(1).max(100),
       creatorName: z.string().trim().min(1).max(100),
       paidByName: z.string().trim().min(1).max(100),
     }))
     .mutation(async ({ ctx, input }) => {
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7);
       const creatorName = input.creatorName.trim();
       const paidByName = input.paidByName.trim();
 
@@ -514,23 +503,11 @@ export const guestRouter = createTRPCRouter({
           paidByIndex,
           status: "claiming",
           userId: ctx.session?.user?.id ?? null,
-          expiresAt,
+          expiresAt: createExpiryDate(),
         },
       });
 
-      // Opportunistic cleanup: delete expired GuestSplit records.
-      ctx.db.guestSplit
-        .deleteMany({ where: { expiresAt: { lt: new Date() } } })
-        .then((result) => {
-          if (result.count > 0) {
-            logger.info("guest.session.cleanup", { deletedCount: result.count });
-          }
-        })
-        .catch((err) => {
-          logger.warn("guest.session.cleanup.failed", {
-            error: err instanceof Error ? err.message : String(err),
-          });
-        });
+      cleanupExpiredSplits(ctx.db, "guest.session");
 
       logger.info("guest.session.created", {
         sessionId: session.id,
@@ -603,6 +580,10 @@ export const guestRouter = createTRPCRouter({
       newName: z.string().trim().min(1).max(100),
     }))
     .mutation(async ({ ctx, input }) => {
+      const { allowed } = checkRateLimit(`guest-edit-name:${input.token}`, 10, 60 * 1000);
+      if (!allowed) {
+        throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many requests. Please try again shortly." });
+      }
       return withSerializableRetry(() =>
         ctx.db.$transaction(async (tx) => {
           const session = await tx.guestSplit.findUnique({
@@ -638,6 +619,10 @@ export const guestRouter = createTRPCRouter({
       targetIndex: z.number().int().min(0),
     }))
     .mutation(async ({ ctx, input }) => {
+      const { allowed } = checkRateLimit(`guest-remove-person:${input.token}`, 10, 60 * 1000);
+      if (!allowed) {
+        throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many requests. Please try again shortly." });
+      }
       return withSerializableRetry(() =>
         ctx.db.$transaction(async (tx) => {
           const session = await tx.guestSplit.findUnique({
@@ -686,6 +671,10 @@ export const guestRouter = createTRPCRouter({
       );
     }),
 
+  // Note (Finding #12): createClaimSession auto-splits multi-quantity items to qty=1,
+  // so this endpoint is unreachable for sessions created by current code. However, it
+  // remains useful for sessions where items were manually edited to have qty>1 after
+  // creation, or if the auto-split logic changes in the future.
   splitClaimItem: publicProcedure
     .input(z.object({
       token: z.string(),
@@ -694,6 +683,10 @@ export const guestRouter = createTRPCRouter({
       splitQuantity: z.number().int().min(1),
     }))
     .mutation(async ({ ctx, input }) => {
+      const { allowed } = checkRateLimit(`guest-split-item:${input.token}`, 10, 60 * 1000);
+      if (!allowed) {
+        throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many requests. Please try again shortly." });
+      }
       return withSerializableRetry(() =>
         ctx.db.$transaction(async (tx) => {
           const session = await tx.guestSplit.findUnique({

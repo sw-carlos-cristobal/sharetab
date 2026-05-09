@@ -49,7 +49,11 @@
     "fallbackChain": "폴백 체인:",
     "or": "또는",
     "shareForClaiming": "링크 공유 — 멤버가 직접 선택",
-    "creatingSession": "세션 생성 중..."
+    "creatingSession": "세션 생성 중...",
+    "loadingGroup": "그룹 불러오는 중...",
+    "groupLoadError": "그룹 데이터를 불러올 수 없습니다. 다시 시도해 주세요.",
+    "uploadFailed": "업로드 실패",
+    "createSessionFailed": "세션 생성에 실패했습니다."
   },
   "receipt": {
     "hideImage": "영수증 이미지 숨기기",
@@ -91,7 +95,11 @@
     "saveForLater": "나중을 위해 저장",
     "loadingItems": "항목 로딩 중...",
     "noReceiptData": "영수증 데이터를 불러올 수 없습니다.",
-    "noExtractedData": "추출된 데이터가 없습니다."
+    "noExtractedData": "추출된 데이터가 없습니다.",
+    "validationNameRequired": "항목 이름은 필수입니다.",
+    "validationPricePositive": "가격은 0보다 커야 합니다.",
+    "validationQtyPositive": "수량은 양의 정수여야 합니다.",
+    "receiptImageAlt": "영수증"
   },
   "splits": {
     "selectAll": "전체 선택",

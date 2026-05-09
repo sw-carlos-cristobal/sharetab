@@ -35,5 +35,32 @@
     "generic": "Något gick fel. Försök igen.",
     "notFound": "Hittade inte",
     "unauthorized": "Du måste vara inloggad för att komma åt den här sidan."
+  },
+  "loadingMessages": {
+    "msg0": "Teaching AI to read waiter's drunk handwriting...",
+    "msg1": "Calculating how much you really spent on 'appetizers'...",
+    "msg2": "Counting those extra fries nobody ordered (but everyone ate)...",
+    "msg3": "Detecting mystery charges and questionable decisions...",
+    "msg4": "Analyzing the damage to your wallet and dignity...",
+    "msg5": "Decoding restaurant math (spoiler: it never adds up)...",
+    "msg6": "Figuring out what 'MKT' means (it's never good news)...",
+    "msg7": "Converting hieroglyphics to numbers...",
+    "msg8": "Justifying that dessert you definitely didn't need...",
+    "msg9": "Calculating regret per dollar spent...",
+    "msg10": "Determining if you need to eat ramen for a week...",
+    "msg11": "Reading between the lines (and the wine stains)...",
+    "msg12": "Discovering you tipped on the tax on the tip...",
+    "msg13": "Finding creative spellings of 'Coca-Cola'...",
+    "msg14": "Wondering why sparkling water costs more than beer...",
+    "msg15": "Splitting hairs... and bills...",
+    "msg16": "Asking the receipt nicely to be more legible...",
+    "msg17": "Processing your poor life choices... financially speaking...",
+    "msg18": "Counting the number of times someone said 'let's just split it evenly'...",
+    "msg19": "Figuring out who ordered the $40 cocktail...",
+    "msg20": "Teaching robots to understand tip jars...",
+    "msg21": "Decrypting the thermal paper prophecy...",
+    "msg22": "Running advanced algorithms on your guacamole surcharge...",
+    "msg23": "Consulting the ancient art of receipt-reading...",
+    "msg24": "Translating smudged ink into cold hard numbers..."
   }
 }

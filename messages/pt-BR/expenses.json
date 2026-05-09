@@ -49,7 +49,11 @@
     "fallbackChain": "Cadeia de fallback:",
     "or": "ou",
     "shareForClaiming": "Compartilhar link — Deixe os membros escolherem",
-    "creatingSession": "Criando sessão..."
+    "creatingSession": "Criando sessão...",
+    "loadingGroup": "Carregando grupo...",
+    "groupLoadError": "Não foi possível carregar os dados do grupo. Tente novamente.",
+    "uploadFailed": "Falha no upload",
+    "createSessionFailed": "Falha ao criar a sessao."
   },
   "receipt": {
     "hideImage": "Ocultar imagem do recibo",
@@ -91,7 +95,11 @@
     "saveForLater": "Salvar para depois",
     "loadingItems": "Carregando itens...",
     "noReceiptData": "Não foi possível carregar os dados do recibo.",
-    "noExtractedData": "Nenhum dado extraído disponível."
+    "noExtractedData": "Nenhum dado extraído disponível.",
+    "validationNameRequired": "O nome do item é obrigatório.",
+    "validationPricePositive": "O preço deve ser maior que zero.",
+    "validationQtyPositive": "A quantidade deve ser um número inteiro positivo.",
+    "receiptImageAlt": "Recibo"
   },
   "splits": {
     "selectAll": "Selecionar todos",

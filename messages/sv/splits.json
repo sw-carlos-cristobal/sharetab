@@ -12,5 +12,6 @@
   "untitled": "Namnlos delning",
   "delete": "Ta bort delning",
   "deleteConfirm": "Ta bort denna delning? Detta kan inte ångras.",
-  "deleted": "Delning borttagen"
+  "deleted": "Delning borttagen",
+  "loading": "Laddar..."
 }

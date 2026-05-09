@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { formatCents, centsToDecimal, parseToCents } from "@/lib/money";
+import { calculateSplitTotals } from "@/lib/split-calculator";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Check, Users, Pencil, Trash2, Plus, Image as ImageIcon, Scissors, Bookmark } from "lucide-react";
+import { toast } from "sonner";
 
 type Member = { id: string; name: string | null };
 
@@ -148,8 +150,13 @@ export function ItemAssignment({
     return <p className="text-destructive">{t("noExtractedData")}</p>;
   }
 
-  const tip = tipOverride !== "" ? Math.round(parseFloat(tipOverride) * 100) : extracted.tip;
+  const parsedTip = parseFloat(tipOverride);
+  const tip = tipOverride !== "" && isFinite(parsedTip) ? Math.round(parsedTip * 100) : extracted.tip;
 
+  // Note (Finding #29): toggleAssignment and assignAllToEveryone are intentionally
+  // duplicated from split/page.tsx. This component uses Record<string, Set<string>>
+  // (id-based) while split/page uses Record<number, Set<number>> (index-based).
+  // The different key types make a shared abstraction more complex than the duplication.
   function toggleAssignment(itemId: string, userId: string) {
     setAssignments((prev) => {
       const next = { ...prev };
@@ -182,19 +189,22 @@ export function ItemAssignment({
   }
 
   function saveEdit(itemId: string) {
+    const trimmedName = editValues.name.trim();
+    if (!trimmedName) { toast.error(t("validationNameRequired")); return; }
     const totalPrice = parseToCents(editValues.totalPrice);
-    const quantity = parseInt(editValues.quantity) || 1;
+    if (totalPrice <= 0) { toast.error(t("validationPricePositive")); return; }
+    const quantity = parseInt(editValues.quantity);
+    if (!Number.isInteger(quantity) || quantity < 1) { toast.error(t("validationQtyPositive")); return; }
     updateItem.mutate({
       itemId,
-      name: editValues.name,
+      name: trimmedName,
       quantity,
       totalPrice,
       unitPrice: Math.round(totalPrice / quantity),
     });
   }
 
-  function handleAddItem(e: React.FormEvent) {
-    e.preventDefault();
+  function handleAddItem() {
     const totalPrice = parseToCents(newItem.totalPrice);
     const quantity = parseInt(newItem.quantity) || 1;
     if (!newItem.name || totalPrice <= 0) return;
@@ -207,51 +217,58 @@ export function ItemAssignment({
     });
   }
 
-  // Calculate per-person totals
-  function getPerPersonTotals(): Map<string, number> {
-    const userSubtotals = new Map<string, number>();
+  // Calculate per-person totals using shared calculateSplitTotals (Finding #30).
+  // Memoized to avoid recomputation on every render (Finding #36).
+  const perPersonTotals = useMemo(() => {
+    // Build member-id -> index mapping for calculateSplitTotals
+    const memberIdToIndex = new Map<string, number>();
+    members.forEach((m, i) => memberIdToIndex.set(m.id, i));
 
-    for (const item of items) {
-      const assigned = assignments[item.id];
-      if (!assigned || assigned.size === 0) continue;
+    const assignmentList = Object.entries(assignments)
+      .filter(([, userIds]) => userIds.size > 0)
+      .map(([receiptItemId, userIds]) => {
+        const itemIdx = items.findIndex((it) => it.id === receiptItemId);
+        return {
+          itemIndex: itemIdx,
+          personIndices: Array.from(userIds)
+            .map((uid) => memberIdToIndex.get(uid))
+            .filter((idx): idx is number => idx !== undefined),
+        };
+      })
+      .filter((a) => a.itemIndex >= 0 && a.personIndices.length > 0);
 
-      const perPerson = Math.floor(item.totalPrice / assigned.size);
-      const remainder = item.totalPrice - perPerson * assigned.size;
-      const userIds = Array.from(assigned);
+    const results = calculateSplitTotals({
+      items,
+      assignments: assignmentList,
+      tax: extracted!.tax,
+      tip,
+      peopleCount: members.length,
+    });
 
-      for (let i = 0; i < userIds.length; i++) {
-        const amount = perPerson + (i < remainder ? 1 : 0);
-        userSubtotals.set(userIds[i], (userSubtotals.get(userIds[i]) ?? 0) + amount);
-      }
+    // Map back from person indices to member IDs
+    const totals = new Map<string, number>();
+    for (const r of results) {
+      const member = members[r.personIndex];
+      if (member) totals.set(member.id, r.total);
     }
-
-    const actualSubtotal = Array.from(userSubtotals.values()).reduce((a, b) => a + b, 0);
-    const totalAmount = actualSubtotal + extracted!.tax + tip;
-
-    const userTotals = new Map<string, number>();
-    let allocated = 0;
-    const entries = Array.from(userSubtotals.entries());
-
-    for (let i = 0; i < entries.length; i++) {
-      const [userId, itemTotal] = entries[i];
-      if (i === entries.length - 1) {
-        userTotals.set(userId, totalAmount - allocated);
-      } else {
-        const proportion = actualSubtotal > 0 ? itemTotal / actualSubtotal : 0;
-        const userTax = Math.round(extracted!.tax * proportion);
-        const userTip = Math.round(tip * proportion);
-        const total = itemTotal + userTax + userTip;
-        userTotals.set(userId, total);
-        allocated += total;
-      }
-    }
-
-    return userTotals;
-  }
-
-  const perPersonTotals = getPerPersonTotals();
+    return totals;
+  }, [items, assignments, members, extracted, tip]);
   const assignedItemCount = Object.values(assignments).filter((s) => s.size > 0).length;
   const allAssigned = items.length > 0 && assignedItemCount === items.length;
+
+  // Precompute member initials to avoid recalculation every render (Finding #37)
+  const memberInitials = useMemo(
+    () =>
+      new Map(
+        members.map((m) => [
+          m.id,
+          m.name
+            ? m.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
+            : "?",
+        ])
+      ),
+    [members]
+  );
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -262,7 +279,7 @@ export function ItemAssignment({
       receiptId,
       title,
       paidById,
-      tipOverride: tipOverride !== "" ? Math.round(parseFloat(tipOverride) * 100) : undefined,
+      tipOverride: tipOverride !== "" && isFinite(parseFloat(tipOverride)) ? Math.round(parseFloat(tipOverride) * 100) : undefined,
       assignments: Object.entries(assignments)
         .filter(([, userIds]) => userIds.size > 0)
         .map(([receiptItemId, userIds]) => ({
@@ -355,7 +372,7 @@ export function ItemAssignment({
             >
               <img
                 src={`/api/uploads/${receipt.imagePath}`}
-                alt="Receipt"
+                alt={t("receiptImageAlt")}
                 draggable={false}
                 className="h-full w-full object-contain pointer-events-none"
                 style={{
@@ -453,7 +470,7 @@ export function ItemAssignment({
               type="number"
               step="0.01"
               min="0"
-              placeholder={t("tipDetected", { amount: (extracted.tip / 100).toFixed(2) })}
+              placeholder={t("tipDetected", { amount: formatCents(extracted.tip, extracted.currency, locale) })}
               value={tipOverride}
               onChange={(e) => setTipOverride(e.target.value)}
             />
@@ -483,7 +500,7 @@ export function ItemAssignment({
       {addingItem && (
         <Card className="border-primary/50" data-testid="add-item-form">
           <CardContent className="py-3">
-            <form onSubmit={handleAddItem} className="space-y-2">
+            <div className="space-y-2">
               <div className="flex gap-2">
                 <Input
                   placeholder={t("itemNamePlaceholder")}
@@ -511,14 +528,14 @@ export function ItemAssignment({
                 />
               </div>
               <div className="flex gap-2">
-                <Button type="submit" size="sm" disabled={addItem.isPending}>
+                <Button type="button" size="sm" disabled={addItem.isPending} onClick={handleAddItem}>
                   {addItem.isPending ? t("adding") : t("add")}
                 </Button>
                 <Button type="button" variant="ghost" size="sm" onClick={() => setAddingItem(false)}>
                   {t("cancel")}
                 </Button>
               </div>
-            </form>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -655,14 +672,6 @@ export function ItemAssignment({
                 <div className="flex flex-wrap gap-1.5">
                   {members.map((m) => {
                     const isAssigned = assigned.has(m.id);
-                    const initials = m.name
-                      ? m.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")
-                          .toUpperCase()
-                          .slice(0, 2)
-                      : "?";
                     return (
                       <button
                         key={m.id}
@@ -677,7 +686,7 @@ export function ItemAssignment({
                       >
                         <Avatar className="h-4 w-4">
                           <AvatarFallback className="text-[8px]">
-                            {initials}
+                            {memberInitials.get(m.id) ?? "?"}
                           </AvatarFallback>
                         </Avatar>
                         {m.name?.split(" ")[0] ?? "?"}

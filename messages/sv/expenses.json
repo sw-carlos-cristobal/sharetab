@@ -49,7 +49,11 @@
     "fallbackChain": "Reservkedja:",
     "or": "eller",
     "shareForClaiming": "Dela länk — Låt medlemmar välja artiklar",
-    "creatingSession": "Skapar session..."
+    "creatingSession": "Skapar session...",
+    "loadingGroup": "Laddar grupp...",
+    "groupLoadError": "Kunde inte ladda gruppdata. Försök igen.",
+    "uploadFailed": "Uppladdningen misslyckades",
+    "createSessionFailed": "Kunde inte skapa sessionen."
   },
   "receipt": {
     "hideImage": "Dölj kvittobild",
@@ -91,7 +95,11 @@
     "saveForLater": "Spara till senare",
     "loadingItems": "Laddar artiklar...",
     "noReceiptData": "Kunde inte ladda kvittodata.",
-    "noExtractedData": "Inga extraherade data tillgängliga."
+    "noExtractedData": "Inga extraherade data tillgängliga.",
+    "validationNameRequired": "Artikelnamn krävs.",
+    "validationPricePositive": "Priset måste vara större än noll.",
+    "validationQtyPositive": "Antal måste vara ett positivt heltal.",
+    "receiptImageAlt": "Kvitto"
   },
   "splits": {
     "selectAll": "Välj alla",

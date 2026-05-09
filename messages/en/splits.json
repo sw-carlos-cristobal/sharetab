@@ -12,5 +12,6 @@
   "untitled": "Untitled split",
   "delete": "Delete split",
   "deleteConfirm": "Delete this split? This cannot be undone.",
-  "deleted": "Split deleted"
+  "deleted": "Split deleted",
+  "loading": "Loading..."
 }

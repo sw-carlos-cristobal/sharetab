@@ -101,35 +101,19 @@ export default function ClaimPage({
   const removePerson = trpc.guest.removePerson.useMutation({
     onSuccess: (_data, variables) => {
       const removedIdx = variables.targetIndex;
-      if (removedIdx === myPersonIndex) {
-        // Removed yourself — clear localStorage and reset to join form
-        if (typeof window !== "undefined") {
-          window.localStorage.removeItem(`sharetab-claim:${token}`);
-        }
-        setClaimedItems(new Map());
-        setPersonIndex(null);
-        setMyPersonIndex(null);
-        setPersonToken(null);
-      } else {
-        // Remap claim indices — remove the deleted person, shift higher indices down
-        setClaimedItems((prev) => {
-          const next = new Map<number, Set<number>>();
-          for (const [pIdx, itemSet] of prev) {
-            if (pIdx === removedIdx) continue;
-            const newPIdx = pIdx > removedIdx ? pIdx - 1 : pIdx;
-            next.set(newPIdx, itemSet);
-          }
-          return next;
-        });
-        setPersonIndex((prev) => {
-          if (prev === null) return null;
-          return prev > removedIdx ? prev - 1 : prev;
-        });
-        setMyPersonIndex((prev) => {
-          if (prev === null) return null;
-          return prev > removedIdx ? prev - 1 : prev;
-        });
-      }
+      // Reset local claimed items — server has remapped indices (Finding #3)
+      setClaimedItems(new Map());
+      // Adjust personIndex / myPersonIndex to match server's new indices
+      setPersonIndex((prev) => {
+        if (prev === null) return null;
+        if (prev === removedIdx) return 0;
+        return prev > removedIdx ? prev - 1 : prev;
+      });
+      setMyPersonIndex((prev) => {
+        if (prev === null) return null;
+        if (prev === removedIdx) return 0;
+        return prev > removedIdx ? prev - 1 : prev;
+      });
       toast.success(t("personRemoved"));
     },
     onError: (err) => toast.error(err.message),
@@ -140,8 +124,8 @@ export default function ClaimPage({
       const splitIdx = variables.itemIndex;
       setSplittingItemIdx(null);
       setSplitQty("");
-      // Remap claimed item indices: items after the split point shift +1.
-      // Keep the claim on the original item; the new split item starts unclaimed.
+      // Remap claimed item indices: items after the split point shift +1 (Finding #4).
+      // Only invalidate the split item itself; preserve unsaved edits for other items.
       setClaimedItems((prev) => {
         const next = new Map<number, Set<number>>();
         for (const [personIdx, itemSet] of prev) {
@@ -582,7 +566,7 @@ export default function ClaimPage({
       {/* Header */}
       <div className="text-center space-y-1 pt-4">
         <h1 className="text-2xl font-bold">
-          {data.receiptData.merchantName ?? "Bill Split"}
+          {data.receiptData.merchantName ?? t("billSplit")}
         </h1>
         {data.receiptData.date && (
           <p className="text-sm text-muted-foreground">
@@ -688,6 +672,7 @@ export default function ClaimPage({
                       onChange={(e) => setEditingName(e.target.value)}
                       className="h-7 text-sm"
                       autoFocus
+                      aria-label={t("editName")}
                       data-testid={`edit-name-input-${idx}`}
                     />
                     <Button type="submit" size="sm" variant="ghost" className="h-7 px-2" disabled={editPersonName.isPending}>
@@ -891,6 +876,7 @@ export default function ClaimPage({
                             value={splitQty}
                             onChange={(e) => setSplitQty(e.target.value)}
                             className="w-16 h-7 text-xs"
+                            aria-label={t("splitOff")}
                             data-testid={`split-qty-input-${idx}`}
                           />
                           <span className="text-xs text-muted-foreground">{t("splitOfTotal", { total: item.quantity })}</span>
