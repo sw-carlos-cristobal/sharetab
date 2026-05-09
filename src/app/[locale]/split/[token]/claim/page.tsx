@@ -101,13 +101,27 @@ export default function ClaimPage({
   const removePerson = trpc.guest.removePerson.useMutation({
     onSuccess: (_data, variables) => {
       const removedIdx = variables.targetIndex;
-      setClaimedItems(new Map());
       if (removedIdx === myPersonIndex) {
-        // Removed yourself — reset to join form
+        // Removed yourself — clear localStorage and reset to join form
+        if (typeof window !== "undefined") {
+          window.localStorage.removeItem(`sharetab-claim:${token}`);
+        }
+        autoRejoinAttempted.current = true;
+        setClaimedItems(new Map());
         setPersonIndex(null);
         setMyPersonIndex(null);
         setPersonToken(null);
       } else {
+        // Remap claim indices — remove the deleted person, shift higher indices down
+        setClaimedItems((prev) => {
+          const next = new Map<number, Set<number>>();
+          for (const [pIdx, itemSet] of prev) {
+            if (pIdx === removedIdx) continue;
+            const newPIdx = pIdx > removedIdx ? pIdx - 1 : pIdx;
+            next.set(newPIdx, itemSet);
+          }
+          return next;
+        });
         setPersonIndex((prev) => {
           if (prev === null) return null;
           return prev > removedIdx ? prev - 1 : prev;
