@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, useMemo } from "react";
+import { use, useState, useMemo, useEffect, useRef } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { formatCents } from "@/lib/money";
@@ -101,14 +101,15 @@ export default function ClaimPage({
     onError: (err) => toast.error(err.message),
   });
 
+  const autoRejoinAttempted = useRef(false);
+
   const joinSession = trpc.guest.joinSession.useMutation({
-    onSuccess: (data) => {
-      const trimmed = name.trim();
+    onSuccess: (data, variables) => {
       setPersonIndex(data.personIndex);
       setMyPersonIndex(data.personIndex);
       setPersonToken(data.personToken);
       setStoredClaimIdentity(token, {
-        name: trimmed,
+        name: variables.name,
         personToken: data.personToken,
       });
       // Initialize claimed items from server assignments for ALL people
@@ -122,12 +123,32 @@ export default function ClaimPage({
         }
       }
       setClaimedItems(map);
-      toast.success(t("joinedSession"));
+      if (!autoRejoinAttempted.current) {
+        toast.success(t("joinedSession"));
+      }
     },
     onError: (error) => {
-      toast.error(error.message);
+      if (!autoRejoinAttempted.current) {
+        toast.error(error.message);
+      }
     },
   });
+
+  // Auto-rejoin from localStorage when session data loads
+  useEffect(() => {
+    if (autoRejoinAttempted.current || personIndex !== null || !session.data) return;
+    if (session.data.status !== "claiming") return;
+
+    const stored = getStoredClaimIdentity(token);
+    if (!stored) return;
+
+    autoRejoinAttempted.current = true;
+    joinSession.mutate({
+      token,
+      name: stored.name,
+      personToken: stored.personToken,
+    });
+  }, [session.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const claimItems = trpc.guest.claimItems.useMutation({
     onSuccess: () => {
