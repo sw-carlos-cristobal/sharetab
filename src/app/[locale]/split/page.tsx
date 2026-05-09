@@ -705,7 +705,7 @@ export default function GuestSplitPage() {
               <Users className="mr-2 h-4 w-4" />
               {t("assign.splitAllEqually")}
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setAddingItem(true)}>
+            <Button variant="outline" size="sm" onClick={() => setAddingItem(true)} data-testid="guest-add-item-btn">
               <Plus className="mr-2 h-4 w-4" />
               {t("assign.addItem")}
             </Button>
@@ -743,7 +743,7 @@ export default function GuestSplitPage() {
                     />
                   </div>
                   <div className="flex gap-2">
-                    <Button type="submit" size="sm">{t("assign.add")}</Button>
+                    <Button type="submit" size="sm" data-testid="guest-add-item-submit">{t("assign.add")}</Button>
                     <Button type="button" variant="ghost" size="sm" onClick={() => setAddingItem(false)}>{t("assign.cancel")}</Button>
                   </div>
                 </form>
@@ -819,6 +819,7 @@ export default function GuestSplitPage() {
                               className="text-muted-foreground hover:text-foreground p-1"
                               title={t("assign.split")}
                               aria-label={t("assign.split") + ` ${item.name}`}
+                              data-testid={`guest-split-btn-${itemIdx}`}
                             >
                               <Scissors className="h-3 w-3" />
                             </button>
@@ -841,6 +842,7 @@ export default function GuestSplitPage() {
                             value={splitQuantity}
                             onChange={(e) => setSplitQuantity(e.target.value)}
                             className="w-16 h-7 text-xs"
+                            data-testid={`guest-split-qty-${itemIdx}`}
                           />
                           <span className="text-xs text-muted-foreground">{t("assign.splitOfTotal", { total: item.quantity })}</span>
                           <Button
@@ -849,6 +851,7 @@ export default function GuestSplitPage() {
                             className="h-7 text-xs"
                             disabled={!validQty}
                             onClick={() => handleSplitItem(itemIdx)}
+                            data-testid={`guest-split-submit-${itemIdx}`}
                           >
                             {t("assign.split")}
                           </Button>
