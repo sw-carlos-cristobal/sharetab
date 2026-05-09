@@ -175,6 +175,7 @@ test.describe("Session mutation guards — expired", () => {
     const body = await getRes.json();
     const error = body[0]?.error;
     expect(error?.json?.data?.code).toBe("NOT_FOUND");
+    await authed.dispose();
     await ctx.dispose();
     await res.dispose();
   });
