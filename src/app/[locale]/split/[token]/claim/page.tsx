@@ -106,7 +106,6 @@ export default function ClaimPage({
         if (typeof window !== "undefined") {
           window.localStorage.removeItem(`sharetab-claim:${token}`);
         }
-        autoRejoinAttempted.current = true;
         setClaimedItems(new Map());
         setPersonIndex(null);
         setMyPersonIndex(null);
