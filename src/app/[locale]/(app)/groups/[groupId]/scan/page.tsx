@@ -84,7 +84,9 @@ function ScanReceiptContent({
     const currentMembers = members.filter((m) => m.name);
     if (currentMembers.length < 1) return;
 
-    const myName = authSession?.user?.name ?? currentMembers[0]?.name ?? "Unknown";
+    const myId = authSession?.user?.id;
+    const myMember = myId ? currentMembers.find(m => m.id === myId) : undefined;
+    const myName = myMember?.name ?? authSession?.user?.name ?? currentMembers[0]?.name ?? "Unknown";
 
     try {
       const result = await shareForClaiming.mutateAsync({
