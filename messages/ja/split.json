@@ -95,6 +95,11 @@
     "receiptImage": "レシート画像",
     "orRejoinAs": "または再参加：",
     "claimingFor": "選択中：",
-    "saveClaimsFor": "{name}の選択を保存"
+    "saveClaimsFor": "{name}の選択を保存",
+    "editName": "名前を編集",
+    "nameUpdated": "名前を更新しました",
+    "removePerson": "メンバーを削除",
+    "removePersonConfirm": "{name}をこのセッションから削除しますか？選択も削除されます。",
+    "personRemoved": "メンバーを削除しました"
   }
 }

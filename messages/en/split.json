@@ -95,6 +95,11 @@
     "receiptImage": "Receipt image",
     "orRejoinAs": "Or rejoin as:",
     "claimingFor": "Claiming for",
-    "saveClaimsFor": "Save claims for {name}"
+    "saveClaimsFor": "Save claims for {name}",
+    "editName": "Edit name",
+    "nameUpdated": "Name updated",
+    "removePerson": "Remove person",
+    "removePersonConfirm": "Remove {name} from this session? Their claims will be removed too.",
+    "personRemoved": "Person removed"
   }
 }

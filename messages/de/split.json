@@ -95,6 +95,11 @@
     "receiptImage": "Belegbild",
     "orRejoinAs": "Oder beitreten als:",
     "claimingFor": "Auswahl für",
-    "saveClaimsFor": "Auswahl speichern für {name}"
+    "saveClaimsFor": "Auswahl speichern für {name}",
+    "editName": "Name bearbeiten",
+    "nameUpdated": "Name aktualisiert",
+    "removePerson": "Person entfernen",
+    "removePersonConfirm": "Soll {name} aus dieser Sitzung entfernt werden? Die Auswahl wird ebenfalls entfernt.",
+    "personRemoved": "Person entfernt"
   }
 }

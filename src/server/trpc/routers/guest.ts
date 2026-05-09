@@ -557,6 +557,95 @@ export const guestRouter = createTRPCRouter({
       );
     }),
 
+  editPersonName: publicProcedure
+    .input(z.object({
+      token: z.string(),
+      personToken: z.string().uuid(),
+      targetIndex: z.number().int().min(0),
+      newName: z.string().trim().min(1).max(100),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      return withSerializableRetry(() =>
+        ctx.db.$transaction(async (tx) => {
+          const session = await tx.guestSplit.findUnique({
+            where: { shareToken: input.token },
+          });
+          if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
+          if (session.status !== "claiming") throw new TRPCError({ code: "BAD_REQUEST", message: "Session is finalized" });
+
+          const people = [...(session.people as GuestSessionPerson[])];
+          const isParticipant = people.some(p => p.personToken === input.personToken);
+          if (!isParticipant) throw new TRPCError({ code: "FORBIDDEN", message: "Not a participant" });
+          if (input.targetIndex >= people.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid person index" });
+
+          const normalizedNew = normalizeGuestName(input.newName);
+          const conflict = people.findIndex((p, i) => i !== input.targetIndex && normalizeGuestName(p.name) === normalizedNew);
+          if (conflict >= 0) throw new TRPCError({ code: "CONFLICT", message: "Name already taken" });
+
+          people[input.targetIndex] = { ...people[input.targetIndex]!, name: input.newName.trim() };
+          await tx.guestSplit.update({
+            where: { id: session.id },
+            data: { people: people as unknown as Prisma.InputJsonValue },
+          });
+          return { success: true };
+        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+      );
+    }),
+
+  removePerson: publicProcedure
+    .input(z.object({
+      token: z.string(),
+      personToken: z.string().uuid(),
+      targetIndex: z.number().int().min(0),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      return withSerializableRetry(() =>
+        ctx.db.$transaction(async (tx) => {
+          const session = await tx.guestSplit.findUnique({
+            where: { shareToken: input.token },
+          });
+          if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
+          if (session.status !== "claiming") throw new TRPCError({ code: "BAD_REQUEST", message: "Session is finalized" });
+
+          const people = [...(session.people as GuestSessionPerson[])];
+          const isParticipant = people.some(p => p.personToken === input.personToken);
+          if (!isParticipant) throw new TRPCError({ code: "FORBIDDEN", message: "Not a participant" });
+          if (input.targetIndex >= people.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid person index" });
+          if (people.length <= 1) throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot remove the last person" });
+
+          people.splice(input.targetIndex, 1);
+
+          // Remap assignments: remove the person and shift indices down
+          const assignments = (session.assignments as { itemIndex: number; personIndices: number[] }[])
+            .map(a => ({
+              itemIndex: a.itemIndex,
+              personIndices: a.personIndices
+                .filter(pi => pi !== input.targetIndex)
+                .map(pi => pi > input.targetIndex ? pi - 1 : pi),
+            }))
+            .filter(a => a.personIndices.length > 0);
+
+          // Adjust paidByIndex
+          let paidByIndex = session.paidByIndex;
+          if (input.targetIndex === paidByIndex) {
+            paidByIndex = 0;
+          } else if (input.targetIndex < paidByIndex) {
+            paidByIndex--;
+          }
+
+          await tx.guestSplit.update({
+            where: { id: session.id },
+            data: {
+              people: people as unknown as Prisma.InputJsonValue,
+              assignments: assignments as unknown as Prisma.InputJsonValue,
+              paidByIndex,
+            },
+          });
+          return { success: true };
+        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+      );
+    }),
+
   claimItems: publicProcedure
     .input(z.object({
       token: z.string(),

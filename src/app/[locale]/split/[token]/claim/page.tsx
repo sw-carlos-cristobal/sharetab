@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Check, Loader2, Users, Receipt, ArrowRight, Image as ImageIcon } from "lucide-react";
+import { Check, Loader2, Users, Receipt, ArrowRight, Image as ImageIcon, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "@/i18n/navigation";
 
@@ -78,12 +78,28 @@ export default function ClaimPage({
   const [claimedItems, setClaimedItems] = useState<Map<number, Set<number>>>(new Map());
   const [saving, setSaving] = useState(false);
   const [showImage, setShowImage] = useState(false);
+  const [editingPersonIdx, setEditingPersonIdx] = useState<number | null>(null);
+  const [editingName, setEditingName] = useState("");
 
   // --- tRPC ---
   const session = trpc.guest.getSession.useQuery(
     { token },
     { refetchInterval: (query) => (query.state.data?.status === "finalized" || query.state.error) ? false : 3000 }
   );
+
+  const editPersonName = trpc.guest.editPersonName.useMutation({
+    onSuccess: () => {
+      setEditingPersonIdx(null);
+      setEditingName("");
+      toast.success(t("nameUpdated"));
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const removePerson = trpc.guest.removePerson.useMutation({
+    onSuccess: () => toast.success(t("personRemoved")),
+    onError: (err) => toast.error(err.message),
+  });
 
   const joinSession = trpc.guest.joinSession.useMutation({
     onSuccess: (data) => {
@@ -541,27 +557,90 @@ export default function ClaimPage({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap gap-2">
+          <div className="space-y-2">
             {data.people.map((person, idx) => (
               <div
                 key={idx}
-                className={`flex items-center gap-2 rounded-full px-3 py-1.5 ${
+                className={`flex items-center gap-2 rounded-lg px-3 py-2 ${
                   idx === myPersonIndex
-                    ? "bg-primary/10 ring-2 ring-primary"
+                    ? "bg-primary/10 ring-1 ring-primary"
                     : "bg-muted"
                 }`}
               >
-                <Avatar className="h-6 w-6">
+                <Avatar className="h-6 w-6 shrink-0">
                   <AvatarFallback
                     className={`text-[10px] font-semibold ${colors[idx % colors.length]}`}
                   >
                     {initials(person.name)}
                   </AvatarFallback>
                 </Avatar>
-                <span className="text-sm font-medium">
-                  {person.name}
-                  {idx === myPersonIndex && ` ${t("you")}`}
-                </span>
+                {editingPersonIdx === idx ? (
+                  <form
+                    className="flex flex-1 items-center gap-1"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (!editingName.trim() || !personToken) return;
+                      editPersonName.mutate({
+                        token,
+                        personToken,
+                        targetIndex: idx,
+                        newName: editingName.trim(),
+                      });
+                    }}
+                  >
+                    <Input
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      className="h-7 text-sm"
+                      autoFocus
+                      data-testid={`edit-name-input-${idx}`}
+                    />
+                    <Button type="submit" size="sm" variant="ghost" className="h-7 px-2" disabled={editPersonName.isPending}>
+                      <Check className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button type="button" size="sm" variant="ghost" className="h-7 px-2" onClick={() => setEditingPersonIdx(null)}>
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </form>
+                ) : (
+                  <>
+                    <span className="flex-1 text-sm font-medium">
+                      {person.name}
+                      {idx === myPersonIndex && ` ${t("you")}`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingPersonIdx(idx);
+                        setEditingName(person.name);
+                      }}
+                      className="text-muted-foreground hover:text-foreground p-1"
+                      aria-label={t("editName")}
+                      data-testid={`edit-person-${idx}`}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    {data.people.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm(t("removePersonConfirm", { name: person.name }))) {
+                            removePerson.mutate({
+                              token,
+                              personToken: personToken!,
+                              targetIndex: idx,
+                            });
+                          }
+                        }}
+                        className="text-muted-foreground hover:text-destructive p-1"
+                        aria-label={t("removePerson")}
+                        data-testid={`remove-person-${idx}`}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </>
+                )}
               </div>
             ))}
           </div>

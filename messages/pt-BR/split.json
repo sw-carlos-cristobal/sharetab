@@ -95,6 +95,11 @@
     "receiptImage": "Imagem do recibo",
     "orRejoinAs": "Ou voltar como:",
     "claimingFor": "Selecionando para",
-    "saveClaimsFor": "Salvar seleção de {name}"
+    "saveClaimsFor": "Salvar seleção de {name}",
+    "editName": "Editar nome",
+    "nameUpdated": "Nome atualizado",
+    "removePerson": "Remover pessoa",
+    "removePersonConfirm": "Remover {name} desta sessão? As seleções também serão removidas.",
+    "personRemoved": "Pessoa removida"
   }
 }

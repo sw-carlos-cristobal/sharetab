@@ -95,6 +95,11 @@
     "receiptImage": "영수증 이미지",
     "orRejoinAs": "또는 다시 참가:",
     "claimingFor": "선택 대상:",
-    "saveClaimsFor": "{name}의 선택 저장"
+    "saveClaimsFor": "{name}의 선택 저장",
+    "editName": "이름 수정",
+    "nameUpdated": "이름이 수정되었습니다",
+    "removePerson": "참가자 제거",
+    "removePersonConfirm": "{name}을(를) 이 세션에서 제거하시겠습니까? 선택도 함께 제거됩니다.",
+    "personRemoved": "참가자가 제거되었습니다"
   }
 }

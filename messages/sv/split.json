@@ -95,6 +95,11 @@
     "receiptImage": "Kvittobild",
     "orRejoinAs": "Eller återanslut som:",
     "claimingFor": "Hävdar för",
-    "saveClaimsFor": "Spara val för {name}"
+    "saveClaimsFor": "Spara val för {name}",
+    "editName": "Redigera namn",
+    "nameUpdated": "Namn uppdaterat",
+    "removePerson": "Ta bort person",
+    "removePersonConfirm": "Ta bort {name} från denna session? Deras val tas också bort.",
+    "personRemoved": "Person borttagen"
   }
 }

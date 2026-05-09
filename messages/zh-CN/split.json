@@ -95,6 +95,11 @@
     "receiptImage": "小票图片",
     "orRejoinAs": "或以身份重新加入：",
     "claimingFor": "选择对象：",
-    "saveClaimsFor": "保存{name}的选择"
+    "saveClaimsFor": "保存{name}的选择",
+    "editName": "编辑名称",
+    "nameUpdated": "名称已更新",
+    "removePerson": "移除成员",
+    "removePersonConfirm": "从此会话中移除{name}？其选择也将被移除。",
+    "personRemoved": "成员已移除"
   }
 }
