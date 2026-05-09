@@ -48,7 +48,7 @@ export default function SplitsPage() {
         </Button>
       </div>
 
-      {isLoading && <p className="text-muted-foreground">Loading...</p>}
+      {isLoading && <p className="text-muted-foreground">{t("loading")}</p>}
 
       {!isLoading && splits.length === 0 && (
         <Card data-testid="splits-empty">

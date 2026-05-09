@@ -566,7 +566,7 @@ export default function ClaimPage({
       {/* Header */}
       <div className="text-center space-y-1 pt-4">
         <h1 className="text-2xl font-bold">
-          {data.receiptData.merchantName ?? "Bill Split"}
+          {data.receiptData.merchantName ?? t("billSplit")}
         </h1>
         {data.receiptData.date && (
           <p className="text-sm text-muted-foreground">

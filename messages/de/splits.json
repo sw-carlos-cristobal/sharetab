@@ -12,5 +12,6 @@
   "untitled": "Unbenannte Teilung",
   "delete": "Split löschen",
   "deleteConfirm": "Diesen Split löschen? Dies kann nicht rückgängig gemacht werden.",
-  "deleted": "Split gelöscht"
+  "deleted": "Split gelöscht",
+  "loading": "Laden..."
 }

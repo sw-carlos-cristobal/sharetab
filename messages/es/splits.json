@@ -12,5 +12,6 @@
   "untitled": "Division sin titulo",
   "delete": "Eliminar división",
   "deleteConfirm": "¿Eliminar esta división? Esta acción no se puede deshacer.",
-  "deleted": "División eliminada"
+  "deleted": "División eliminada",
+  "loading": "Cargando..."
 }
