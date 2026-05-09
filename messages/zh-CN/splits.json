@@ -9,5 +9,8 @@
   "items": "{count}项",
   "claiming": "进行中",
   "finalized": "已完成",
-  "untitled": "未命名分账"
+  "untitled": "未命名分账",
+  "delete": "删除分账",
+  "deleteConfirm": "删除此分账？此操作无法撤销。",
+  "deleted": "分账已删除"
 }

@@ -9,5 +9,8 @@
   "items": "{count} articles",
   "claiming": "En cours",
   "finalized": "Termine",
-  "untitled": "Partage sans titre"
+  "untitled": "Partage sans titre",
+  "delete": "Supprimer le partage",
+  "deleteConfirm": "Supprimer ce partage ? Cette action est irréversible.",
+  "deleted": "Partage supprimé"
 }

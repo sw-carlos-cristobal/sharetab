@@ -9,5 +9,8 @@
   "items": "{count} artiklar",
   "claiming": "Pagaende",
   "finalized": "Slutford",
-  "untitled": "Namnlos delning"
+  "untitled": "Namnlos delning",
+  "delete": "Ta bort delning",
+  "deleteConfirm": "Ta bort denna delning? Detta kan inte ångras.",
+  "deleted": "Delning borttagen"
 }

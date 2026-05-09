@@ -9,5 +9,8 @@
   "items": "{count}品",
   "claiming": "進行中",
   "finalized": "完了",
-  "untitled": "無題の割り勘"
+  "untitled": "無題の割り勘",
+  "delete": "分割を削除",
+  "deleteConfirm": "この分割を削除しますか？元に戻せません。",
+  "deleted": "分割を削除しました"
 }

@@ -59,6 +59,20 @@ async function withSerializableRetry<T>(run: () => Promise<T>): Promise<T> {
 }
 
 export const guestRouter = createTRPCRouter({
+  deleteSplit: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const split = await ctx.db.guestSplit.findUnique({
+        where: { id: input.id },
+        select: { userId: true },
+      });
+      if (!split || split.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Split not found" });
+      }
+      await ctx.db.guestSplit.delete({ where: { id: input.id } });
+      return { success: true };
+    }),
+
   mySplits: protectedProcedure
     .input(z.object({
       cursor: z.string().optional(),

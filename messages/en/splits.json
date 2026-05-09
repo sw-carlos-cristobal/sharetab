@@ -9,5 +9,8 @@
   "items": "{count} items",
   "claiming": "In progress",
   "finalized": "Complete",
-  "untitled": "Untitled split"
+  "untitled": "Untitled split",
+  "delete": "Delete split",
+  "deleteConfirm": "Delete this split? This cannot be undone.",
+  "deleted": "Split deleted"
 }

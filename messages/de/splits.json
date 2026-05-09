@@ -9,5 +9,8 @@
   "items": "{count} Artikel",
   "claiming": "In Bearbeitung",
   "finalized": "Abgeschlossen",
-  "untitled": "Unbenannte Teilung"
+  "untitled": "Unbenannte Teilung",
+  "delete": "Split löschen",
+  "deleteConfirm": "Diesen Split löschen? Dies kann nicht rückgängig gemacht werden.",
+  "deleted": "Split gelöscht"
 }

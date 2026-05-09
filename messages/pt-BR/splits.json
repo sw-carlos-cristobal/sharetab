@@ -9,5 +9,8 @@
   "items": "{count} itens",
   "claiming": "Em andamento",
   "finalized": "Concluido",
-  "untitled": "Divisao sem titulo"
+  "untitled": "Divisao sem titulo",
+  "delete": "Excluir divisão",
+  "deleteConfirm": "Excluir esta divisão? Esta ação não pode ser desfeita.",
+  "deleted": "Divisão excluída"
 }

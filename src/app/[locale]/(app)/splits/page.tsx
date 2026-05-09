@@ -6,7 +6,8 @@ import { formatCents } from "@/lib/money";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Scissors, Receipt } from "lucide-react";
+import { Scissors, Receipt, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { useTranslations, useLocale } from "next-intl";
 
 export default function SplitsPage() {
@@ -21,6 +22,14 @@ export default function SplitsPage() {
         initialCursor: undefined,
       },
     );
+
+  const utils = trpc.useUtils();
+  const deleteSplit = trpc.guest.deleteSplit.useMutation({
+    onSuccess: () => {
+      utils.guest.mySplits.invalidate();
+      toast.success(t("deleted"));
+    },
+  });
 
   const splits = data?.pages.flatMap((page) => page.splits) ?? [];
 
@@ -63,16 +72,16 @@ export default function SplitsPage() {
 
       <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(280px,1fr))]">
         {splits.map((split) => (
-          <Link
-            key={split.id}
-            href={
-              split.status === "finalized"
-                ? `/split/${split.shareToken}`
-                : `/split/${split.shareToken}/claim`
-            }
-          >
-            <Card className="border-l-[3px] border-l-primary/60 transition-all duration-200 hover:-translate-y-px hover:border-l-primary hover:shadow-md" data-testid={`split-card-${split.id}`}>
-              <CardHeader className="pb-2">
+          <Card key={split.id} className="relative border-l-[3px] border-l-primary/60 transition-all duration-200 hover:-translate-y-px hover:border-l-primary hover:shadow-md" data-testid={`split-card-${split.id}`}>
+            <Link
+              href={
+                split.status === "finalized"
+                  ? `/split/${split.shareToken}`
+                  : `/split/${split.shareToken}/claim`
+              }
+              className="block"
+            >
+              <CardHeader className="pb-2 pr-10">
                 <CardTitle className="flex items-center gap-2.5 text-base">
                   <Scissors className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <span className="flex-1 truncate">
@@ -107,8 +116,21 @@ export default function SplitsPage() {
                   </span>
                 </div>
               </CardContent>
-            </Card>
-          </Link>
+            </Link>
+            <button
+              type="button"
+              onClick={() => {
+                if (confirm(t("deleteConfirm"))) {
+                  deleteSplit.mutate({ id: split.id });
+                }
+              }}
+              className="absolute top-3 right-3 rounded-md p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+              aria-label={t("delete")}
+              data-testid={`delete-split-${split.id}`}
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </Card>
         ))}
       </div>
 
