@@ -207,7 +207,7 @@ export function ItemAssignment({
   function handleAddItem() {
     const totalPrice = parseToCents(newItem.totalPrice);
     const quantity = parseInt(newItem.quantity) || 1;
-    if (!newItem.name || totalPrice <= 0) return;
+    if (!newItem.name.trim() || totalPrice <= 0 || quantity < 1) return;
     addItem.mutate({
       receiptId,
       name: newItem.name,
