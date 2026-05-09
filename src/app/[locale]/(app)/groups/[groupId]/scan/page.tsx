@@ -251,7 +251,7 @@ function ScanReceiptContent({
             variant="outline"
             className="w-full"
             onClick={handleShareForClaiming}
-            disabled={shareForClaiming.isPending || !receiptData.data?.receipt?.extractedData || members.length < 1}
+            disabled={shareForClaiming.isPending || !receiptData.data?.receipt?.extractedData || !receiptData.data?.items?.length || members.length < 1}
             data-testid="group-share-claiming-btn"
           >
             <Users className="mr-2 h-4 w-4" />
