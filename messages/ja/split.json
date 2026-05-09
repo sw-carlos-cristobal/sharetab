@@ -54,7 +54,10 @@
     "assignAllItems": "すべての品目を割り当て（残り{remaining}）",
     "shareForClaiming": "リンクを共有 — 各自で品目を選択",
     "creatingSession": "セッションを作成中...",
-    "shareHint": "誰が何を注文したかわからない場合は、リンクを共有して各自に品目を選んでもらいましょう。"
+    "shareHint": "誰が何を注文したかわからない場合は、リンクを共有して各自に品目を選んでもらいましょう。",
+    "validationNameRequired": "品目名は必須です。",
+    "validationPricePositive": "価格はゼロより大きくする必要があります。",
+    "validationQtyPositive": "数量は正の整数である必要があります。"
   },
   "claim": {
     "loadingSession": "セッションを読み込み中...",

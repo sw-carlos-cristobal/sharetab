@@ -54,7 +54,10 @@
     "assignAllItems": "모든 항목 배정 ({remaining}개 남음)",
     "shareForClaiming": "링크 공유 — 각자 항목 선택하기",
     "creatingSession": "세션 생성 중...",
-    "shareHint": "누가 뭘 주문했는지 모르세요? 링크를 공유하고 각자 자신의 항목을 선택하게 하세요."
+    "shareHint": "누가 뭘 주문했는지 모르세요? 링크를 공유하고 각자 자신의 항목을 선택하게 하세요.",
+    "validationNameRequired": "항목 이름은 필수입니다.",
+    "validationPricePositive": "가격은 0보다 커야 합니다.",
+    "validationQtyPositive": "수량은 양의 정수여야 합니다."
   },
   "claim": {
     "loadingSession": "세션 로딩 중...",

@@ -188,6 +188,10 @@ export default function GuestSplitPage() {
   }
 
   // Assignment
+  // Note (Finding #29): toggleAssignment and assignAllToEveryone are intentionally
+  // duplicated from item-assignment.tsx. This component uses Record<number, Set<number>>
+  // (index-based) while item-assignment uses Record<string, Set<string>> (id-based).
+  // The different key types make a shared abstraction more complex than the duplication.
   function toggleAssignment(itemIdx: number, personIdx: number) {
     setAssignments((prev) => {
       const next = { ...prev };
@@ -227,11 +231,15 @@ export default function GuestSplitPage() {
 
   function saveEdit() {
     if (editingItem === null) return;
+    const trimmedName = editValues.name.trim();
+    if (!trimmedName) { toast.error(t("assign.validationNameRequired")); return; }
     const totalPrice = parseToCents(editValues.totalPrice);
-    const quantity = parseInt(editValues.quantity) || 1;
+    if (totalPrice <= 0) { toast.error(t("assign.validationPricePositive")); return; }
+    const quantity = parseInt(editValues.quantity);
+    if (!Number.isInteger(quantity) || quantity < 1) { toast.error(t("assign.validationQtyPositive")); return; }
     setItems((prev) => prev.map((item, i) =>
       i === editingItem
-        ? { name: editValues.name, quantity, unitPrice: Math.round(totalPrice / quantity), totalPrice }
+        ? { name: trimmedName, quantity, unitPrice: Math.round(totalPrice / quantity), totalPrice }
         : item
     ));
     setEditingItem(null);
@@ -308,7 +316,8 @@ export default function GuestSplitPage() {
   }
 
   // Calculate totals
-  const tip = tipOverride !== "" ? Math.round(parseFloat(tipOverride) * 100) : (extracted?.tip ?? 0);
+  const parsedTip = parseFloat(tipOverride);
+  const tip = tipOverride !== "" && isFinite(parsedTip) ? Math.round(parsedTip * 100) : (extracted?.tip ?? 0);
   const currency = extracted?.currency ?? "USD";
 
   const getPerPersonTotals = useCallback(() => {
@@ -366,7 +375,7 @@ export default function GuestSplitPage() {
         people: validPeople.map((n) => ({ name: n })),
         assignments: assignmentList,
         paidByIndex: remappedPaidBy,
-        tipOverride: tipOverride !== "" ? Math.round(parseFloat(tipOverride) * 100) : undefined,
+        tipOverride: tipOverride !== "" && isFinite(parseFloat(tipOverride)) ? Math.round(parseFloat(tipOverride) * 100) : undefined,
       });
       router.push(`/split/${result.shareToken}`);
     } catch (err) {

@@ -49,7 +49,9 @@
     "fallbackChain": "Chaîne de secours :",
     "or": "ou",
     "shareForClaiming": "Partager le lien — Laissez les membres choisir",
-    "creatingSession": "Création de la session..."
+    "creatingSession": "Création de la session...",
+    "loadingGroup": "Chargement du groupe...",
+    "groupLoadError": "Impossible de charger les données du groupe. Veuillez réessayer."
   },
   "receipt": {
     "hideImage": "Masquer l'image du reçu",
@@ -91,7 +93,10 @@
     "saveForLater": "Enregistrer pour plus tard",
     "loadingItems": "Chargement des articles...",
     "noReceiptData": "Impossible de charger les données du reçu.",
-    "noExtractedData": "Aucune donnée extraite disponible."
+    "noExtractedData": "Aucune donnée extraite disponible.",
+    "validationNameRequired": "Le nom de l'article est requis.",
+    "validationPricePositive": "Le prix doit être supérieur à zéro.",
+    "validationQtyPositive": "La quantité doit être un nombre entier positif."
   },
   "splits": {
     "selectAll": "Tout sélectionner",

@@ -49,7 +49,9 @@
     "fallbackChain": "フォールバックチェーン:",
     "or": "または",
     "shareForClaiming": "リンクを共有 — メンバーに選んでもらう",
-    "creatingSession": "セッションを作成中..."
+    "creatingSession": "セッションを作成中...",
+    "loadingGroup": "グループを読み込み中...",
+    "groupLoadError": "グループデータを読み込めませんでした。もう一度お試しください。"
   },
   "receipt": {
     "hideImage": "レシート画像を非表示",
@@ -91,7 +93,10 @@
     "saveForLater": "後で保存",
     "loadingItems": "品目を読み込み中...",
     "noReceiptData": "レシートデータを読み込めませんでした。",
-    "noExtractedData": "抽出されたデータがありません。"
+    "noExtractedData": "抽出されたデータがありません。",
+    "validationNameRequired": "品目名は必須です。",
+    "validationPricePositive": "価格はゼロより大きくする必要があります。",
+    "validationQtyPositive": "数量は正の整数である必要があります。"
   },
   "splits": {
     "selectAll": "すべて選択",

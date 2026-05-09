@@ -54,7 +54,10 @@
     "assignAllItems": "分配所有项目（剩余 {remaining}）",
     "shareForClaiming": "分享链接 — 让每个人选择自己的项目",
     "creatingSession": "正在创建会话...",
-    "shareHint": "不知道谁点了什么？分享链接，让每个人自己选择项目。"
+    "shareHint": "不知道谁点了什么？分享链接，让每个人自己选择项目。",
+    "validationNameRequired": "请输入项目名称。",
+    "validationPricePositive": "价格必须大于零。",
+    "validationQtyPositive": "数量必须是正整数。"
   },
   "claim": {
     "loadingSession": "正在加载会话...",

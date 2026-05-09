@@ -49,7 +49,9 @@
     "fallbackChain": "Fallback chain:",
     "or": "or",
     "shareForClaiming": "Share Link — Let Members Claim Items",
-    "creatingSession": "Creating session..."
+    "creatingSession": "Creating session...",
+    "loadingGroup": "Loading group...",
+    "groupLoadError": "Could not load group data. Please try again."
   },
   "receipt": {
     "hideImage": "Hide Receipt Image",
@@ -91,7 +93,10 @@
     "saveForLater": "Save for Later",
     "loadingItems": "Loading items...",
     "noReceiptData": "Could not load receipt data.",
-    "noExtractedData": "No extracted data available."
+    "noExtractedData": "No extracted data available.",
+    "validationNameRequired": "Item name is required.",
+    "validationPricePositive": "Price must be greater than zero.",
+    "validationQtyPositive": "Quantity must be a positive whole number."
   },
   "splits": {
     "selectAll": "Select all",

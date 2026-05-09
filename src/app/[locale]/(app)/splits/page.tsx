@@ -29,6 +29,7 @@ export default function SplitsPage() {
       utils.guest.mySplits.invalidate();
       toast.success(t("deleted"));
     },
+    onError: (err) => toast.error(err.message),
   });
 
   const splits = data?.pages.flatMap((page) => page.splits) ?? [];

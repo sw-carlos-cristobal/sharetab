@@ -49,7 +49,9 @@
     "fallbackChain": "Fallback-Kette:",
     "or": "oder",
     "shareForClaiming": "Link teilen — Mitglieder wählen lassen",
-    "creatingSession": "Sitzung wird erstellt..."
+    "creatingSession": "Sitzung wird erstellt...",
+    "loadingGroup": "Gruppe wird geladen...",
+    "groupLoadError": "Gruppendaten konnten nicht geladen werden. Bitte versuchen Sie es erneut."
   },
   "receipt": {
     "hideImage": "Belegbild ausblenden",
@@ -91,7 +93,10 @@
     "saveForLater": "Für später speichern",
     "loadingItems": "Artikel werden geladen...",
     "noReceiptData": "Belegdaten konnten nicht geladen werden.",
-    "noExtractedData": "Keine extrahierten Daten verfügbar."
+    "noExtractedData": "Keine extrahierten Daten verfügbar.",
+    "validationNameRequired": "Artikelname ist erforderlich.",
+    "validationPricePositive": "Der Preis muss größer als null sein.",
+    "validationQtyPositive": "Die Menge muss eine positive ganze Zahl sein."
   },
   "splits": {
     "selectAll": "Alle auswählen",

@@ -54,7 +54,10 @@
     "assignAllItems": "Tilldela alla artiklar ({remaining} kvar)",
     "shareForClaiming": "Dela länk — Låt alla välja sina artiklar",
     "creatingSession": "Skapar session...",
-    "shareHint": "Vet du inte vem som hade vad? Dela länken och låt varje person välja sina egna artiklar."
+    "shareHint": "Vet du inte vem som hade vad? Dela länken och låt varje person välja sina egna artiklar.",
+    "validationNameRequired": "Artikelnamn krävs.",
+    "validationPricePositive": "Priset måste vara större än noll.",
+    "validationQtyPositive": "Antal måste vara ett positivt heltal."
   },
   "claim": {
     "loadingSession": "Laddar session...",

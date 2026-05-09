@@ -672,6 +672,7 @@ export default function ClaimPage({
                       onChange={(e) => setEditingName(e.target.value)}
                       className="h-7 text-sm"
                       autoFocus
+                      aria-label={t("editName")}
                       data-testid={`edit-name-input-${idx}`}
                     />
                     <Button type="submit" size="sm" variant="ghost" className="h-7 px-2" disabled={editPersonName.isPending}>
@@ -875,6 +876,7 @@ export default function ClaimPage({
                             value={splitQty}
                             onChange={(e) => setSplitQty(e.target.value)}
                             className="w-16 h-7 text-xs"
+                            aria-label={t("splitOff")}
                             data-testid={`split-qty-input-${idx}`}
                           />
                           <span className="text-xs text-muted-foreground">{t("splitOfTotal", { total: item.quantity })}</span>

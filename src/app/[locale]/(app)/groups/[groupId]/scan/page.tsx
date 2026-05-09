@@ -169,6 +169,35 @@ function ScanReceiptContent({
     providerInfo.data?.configuredProviders?.join(" -> ") ?? "loading...";
   const activeProvider = providerInfo.data?.activeProvider ?? "checking...";
 
+  // Loading state for group data (Finding #22)
+  if (group.isLoading) {
+    return (
+      <div className="mx-auto max-w-lg flex flex-col items-center gap-4 py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-muted-foreground">{t("loadingGroup")}</p>
+      </div>
+    );
+  }
+
+  // Error state for group data (Finding #22)
+  if (group.error) {
+    return (
+      <div className="mx-auto max-w-lg space-y-6">
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" nativeButton={false} render={<Link href={`/groups/${groupId}`} />}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <h1 className="text-2xl font-bold">{t("title")}</h1>
+        </div>
+        <Card className="border-destructive/50">
+          <CardContent className="py-6">
+            <p className="text-destructive">{t("groupLoadError")}</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-lg space-y-6">
       <div className="flex items-center gap-2">
