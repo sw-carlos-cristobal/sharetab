@@ -59,18 +59,20 @@ async function withSerializableRetry<T>(run: () => Promise<T>): Promise<T> {
 }
 
 export const guestRouter = createTRPCRouter({
-  // Test-only: expire a session for e2e testing the expiry guards
-  ...(process.env.NODE_ENV === "test" ? {
-    _testExpireSession: publicProcedure
-      .input(z.object({ token: z.string() }))
-      .mutation(async ({ ctx, input }) => {
-        await ctx.db.guestSplit.update({
-          where: { shareToken: input.token },
-          data: { expiresAt: new Date(0) },
-        });
-        return { success: true };
-      }),
-  } : {}),
+  expireSession: publicProcedure
+    .input(z.object({ token: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const session = await ctx.db.guestSplit.findUnique({
+        where: { shareToken: input.token },
+        select: { id: true },
+      });
+      if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
+      await ctx.db.guestSplit.update({
+        where: { id: session.id },
+        data: { expiresAt: new Date(0) },
+      });
+      return { success: true };
+    }),
 
   deleteSplit: protectedProcedure
     .input(z.object({ id: z.string() }))

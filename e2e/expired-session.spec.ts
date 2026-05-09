@@ -75,15 +75,10 @@ test.describe("Session mutation guards — finalized", () => {
 });
 
 test.describe("Session mutation guards — expired", () => {
-  test.beforeEach(({}, testInfo) => {
-    if (process.env.CI)
-      testInfo.skip(true, "Expiry tests require NODE_ENV=test (_testExpireSession endpoint)");
-  });
-
   test("editPersonName rejects expired sessions", async () => {
     const { ctx, shareToken, personToken } = await createSessionWithToken();
 
-    await trpcMutation(ctx, "guest._testExpireSession", { token: shareToken });
+    await trpcMutation(ctx, "guest.expireSession", { token: shareToken });
 
     const res = await trpcMutation(ctx, "guest.editPersonName", {
       token: shareToken, personToken, targetIndex: 0, newName: "Carol",
@@ -96,7 +91,7 @@ test.describe("Session mutation guards — expired", () => {
   test("removePerson rejects expired sessions", async () => {
     const { ctx, shareToken, personToken } = await createSessionWithToken();
 
-    await trpcMutation(ctx, "guest._testExpireSession", { token: shareToken });
+    await trpcMutation(ctx, "guest.expireSession", { token: shareToken });
 
     const res = await trpcMutation(ctx, "guest.removePerson", {
       token: shareToken, personToken, targetIndex: 1,
@@ -109,7 +104,7 @@ test.describe("Session mutation guards — expired", () => {
   test("splitClaimItem rejects expired sessions", async () => {
     const { ctx, shareToken, personToken } = await createSessionWithToken();
 
-    await trpcMutation(ctx, "guest._testExpireSession", { token: shareToken });
+    await trpcMutation(ctx, "guest.expireSession", { token: shareToken });
 
     const res = await trpcMutation(ctx, "guest.splitClaimItem", {
       token: shareToken, personToken, itemIndex: 0, splitQuantity: 1,
@@ -122,7 +117,7 @@ test.describe("Session mutation guards — expired", () => {
   test("joinSession rejects expired sessions", async () => {
     const { ctx, shareToken } = await createSessionWithToken();
 
-    await trpcMutation(ctx, "guest._testExpireSession", { token: shareToken });
+    await trpcMutation(ctx, "guest.expireSession", { token: shareToken });
 
     const res = await trpcMutation(ctx, "guest.joinSession", {
       token: shareToken, name: "Carol",
@@ -135,7 +130,7 @@ test.describe("Session mutation guards — expired", () => {
   test("claimItems rejects expired sessions", async () => {
     const { ctx, shareToken, personToken } = await createSessionWithToken();
 
-    await trpcMutation(ctx, "guest._testExpireSession", { token: shareToken });
+    await trpcMutation(ctx, "guest.expireSession", { token: shareToken });
 
     const res = await trpcMutation(ctx, "guest.claimItems", {
       token: shareToken, personIndex: 0, personToken, claimedItemIndices: [0],
@@ -148,7 +143,7 @@ test.describe("Session mutation guards — expired", () => {
   test("finalizeSession rejects expired sessions", async () => {
     const { ctx, shareToken, personToken } = await createSessionWithToken();
 
-    await trpcMutation(ctx, "guest._testExpireSession", { token: shareToken });
+    await trpcMutation(ctx, "guest.expireSession", { token: shareToken });
 
     const res = await trpcMutation(ctx, "guest.finalizeSession", {
       token: shareToken, personIndex: 0, personToken,
@@ -161,7 +156,7 @@ test.describe("Session mutation guards — expired", () => {
   test("getSession rejects expired sessions", async () => {
     const { ctx, shareToken } = await createSessionWithToken();
 
-    await trpcMutation(ctx, "guest._testExpireSession", { token: shareToken });
+    await trpcMutation(ctx, "guest.expireSession", { token: shareToken });
 
     const res = await request.newContext({ baseURL: BASE });
     const getRes = await res.get(
