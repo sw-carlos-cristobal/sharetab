@@ -15,11 +15,11 @@ import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Camera, Loader2, Plus, Trash2, Check, Users, ArrowLeft, ArrowRight,
-  Share2, Copy, Pencil, Image as ImageIcon, RefreshCw, Scissors,
+  Share2, Pencil, Image as ImageIcon, RefreshCw, Scissors,
 } from "lucide-react";
 import { toast } from "sonner";
 
-type Step = "upload" | "processing" | "people" | "assign" | "review";
+type Step = "upload" | "processing" | "people" | "assign";
 
 type GuestItem = {
   name: string;
@@ -52,7 +52,6 @@ export default function GuestSplitPage() {
   const [items, setItems] = useState<GuestItem[]>([]);
   const [extracted, setExtracted] = useState<ExtractedData | null>(null);
   const [people, setPeople] = useState<string[]>([""]); // start with one empty name
-  const [newPersonName, setNewPersonName] = useState("");
   const [assignments, setAssignments] = useState<Record<number, Set<number>>>({}); // itemIdx -> Set<personIdx>
   const [paidByIndex, setPaidByIndex] = useState(0);
   const [tipOverride, setTipOverride] = useState("");
@@ -131,8 +130,12 @@ export default function GuestSplitPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error ?? "Upload failed");
+        let message = "Upload failed";
+        try {
+          const data = await res.json();
+          message = data.error ?? message;
+        } catch {}
+        throw new Error(message);
       }
 
       const data = await res.json();
@@ -158,14 +161,6 @@ export default function GuestSplitPage() {
       setErrorMessage(err instanceof Error ? err.message : "Upload failed");
       setStep("upload");
     }
-  }
-
-  // People management
-  function addPerson() {
-    const name = newPersonName.trim();
-    if (!name) return;
-    setPeople((p) => [...p, name]);
-    setNewPersonName("");
   }
 
   function removePerson(idx: number) {
@@ -208,9 +203,13 @@ export default function GuestSplitPage() {
   }
 
   function assignAllToEveryone() {
+    const validIndices = people
+      .map((name, idx) => ({ name, idx }))
+      .filter((p) => p.name.trim())
+      .map((p) => p.idx);
     const next: Record<number, Set<number>> = {};
     for (let i = 0; i < items.length; i++) {
-      next[i] = new Set(people.map((_, idx) => idx));
+      next[i] = new Set(validIndices);
     }
     setAssignments(next);
   }
@@ -330,20 +329,38 @@ export default function GuestSplitPage() {
     });
   }, [items, assignments, extracted, tip, people.length]);
 
-  const perPersonTotals = step === "assign" || step === "review" ? getPerPersonTotals() : [];
-  const assignedCount = Object.values(assignments).filter((s) => s.size > 0).length;
-  const allAssigned = assignedCount === items.length && items.length > 0;
+  const perPersonTotals = step === "assign" ? getPerPersonTotals() : [];
   const validPeople = people.filter((n) => n.trim().length > 0);
+  const validPeopleIndices = new Set(people.map((n, i) => n.trim() ? i : -1).filter((i) => i >= 0));
+  const assignedCount = Object.values(assignments).filter((s) => {
+    const validAssignees = Array.from(s).filter((pi) => validPeopleIndices.has(pi));
+    return validAssignees.length > 0;
+  }).length;
+  const allAssigned = assignedCount === items.length && items.length > 0;
 
   async function handleCreateSplit() {
     if (!extracted || !allAssigned || validPeople.length < 1) return;
+
+    // Build index mapping from unfiltered people → filtered validPeople
+    const indexMap = new Map<number, number>();
+    let validIdx = 0;
+    for (let i = 0; i < people.length; i++) {
+      if (people[i].trim()) {
+        indexMap.set(i, validIdx++);
+      }
+    }
 
     const assignmentList = Object.entries(assignments)
       .filter(([, s]) => s.size > 0)
       .map(([itemIdx, personSet]) => ({
         itemIndex: parseInt(itemIdx),
-        personIndices: Array.from(personSet),
-      }));
+        personIndices: Array.from(personSet)
+          .filter((pi) => indexMap.has(pi))
+          .map((pi) => indexMap.get(pi)!),
+      }))
+      .filter((a) => a.personIndices.length > 0);
+
+    const remappedPaidBy = indexMap.get(paidByIndex) ?? 0;
 
     try {
       const result = await createSplit.mutateAsync({
@@ -352,7 +369,7 @@ export default function GuestSplitPage() {
         items,
         people: validPeople.map((n) => ({ name: n })),
         assignments: assignmentList,
-        paidByIndex,
+        paidByIndex: remappedPaidBy,
         tipOverride: tipOverride !== "" ? Math.round(parseFloat(tipOverride) * 100) : undefined,
       });
       router.push(`/split/${result.shareToken}`);
@@ -369,8 +386,8 @@ export default function GuestSplitPage() {
         receiptId: receiptId ?? undefined,
         receiptData: { ...extracted, tip },
         items,
-        creatorName: validPeople[paidByIndex] || validPeople[0],
-        paidByName: validPeople[paidByIndex] || validPeople[0],
+        creatorName: people[paidByIndex]?.trim() || validPeople[0],
+        paidByName: people[paidByIndex]?.trim() || validPeople[0],
       });
       router.push(`/split/${result.shareToken}/claim`);
     } catch (err) {

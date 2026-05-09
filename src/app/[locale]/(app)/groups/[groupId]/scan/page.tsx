@@ -132,8 +132,12 @@ function ScanReceiptContent({
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error ?? "Upload failed");
+        let message = "Upload failed";
+        try {
+          const data = await res.json();
+          message = data.error ?? message;
+        } catch {}
+        throw new Error(message);
       }
 
       const data = await res.json();

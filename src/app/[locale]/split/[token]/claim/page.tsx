@@ -99,15 +99,67 @@ export default function ClaimPage({
   });
 
   const removePerson = trpc.guest.removePerson.useMutation({
-    onSuccess: () => toast.success(t("personRemoved")),
+    onSuccess: (_data, variables) => {
+      const removedIdx = variables.targetIndex;
+      if (removedIdx === myPersonIndex) {
+        // Removed yourself — clear localStorage and reset to join form
+        if (typeof window !== "undefined") {
+          window.localStorage.removeItem(`sharetab-claim:${token}`);
+        }
+        setClaimedItems(new Map());
+        setPersonIndex(null);
+        setMyPersonIndex(null);
+        setPersonToken(null);
+      } else {
+        // Remap claim indices — remove the deleted person, shift higher indices down
+        setClaimedItems((prev) => {
+          const next = new Map<number, Set<number>>();
+          for (const [pIdx, itemSet] of prev) {
+            if (pIdx === removedIdx) continue;
+            const newPIdx = pIdx > removedIdx ? pIdx - 1 : pIdx;
+            next.set(newPIdx, itemSet);
+          }
+          return next;
+        });
+        setPersonIndex((prev) => {
+          if (prev === null) return null;
+          return prev > removedIdx ? prev - 1 : prev;
+        });
+        setMyPersonIndex((prev) => {
+          if (prev === null) return null;
+          return prev > removedIdx ? prev - 1 : prev;
+        });
+      }
+      toast.success(t("personRemoved"));
+    },
     onError: (err) => toast.error(err.message),
   });
 
   const splitClaimItem = trpc.guest.splitClaimItem.useMutation({
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      const splitIdx = variables.itemIndex;
       setSplittingItemIdx(null);
       setSplitQty("");
-      setClaimedItems(new Map());
+      // Remap claimed item indices: items after the split point shift +1.
+      // Keep the claim on the original item; the new split item starts unclaimed.
+      setClaimedItems((prev) => {
+        const next = new Map<number, Set<number>>();
+        for (const [personIdx, itemSet] of prev) {
+          const remapped = new Set<number>();
+          for (const itemIdx of itemSet) {
+            if (itemIdx === splitIdx) {
+              // Keep claim on the original (now-reduced) item
+              remapped.add(itemIdx);
+            } else if (itemIdx > splitIdx) {
+              remapped.add(itemIdx + 1);
+            } else {
+              remapped.add(itemIdx);
+            }
+          }
+          next.set(personIdx, remapped);
+        }
+        return next;
+      });
     },
     onError: (err) => toast.error(err.message),
   });

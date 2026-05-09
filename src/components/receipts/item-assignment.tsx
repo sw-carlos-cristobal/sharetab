@@ -251,7 +251,7 @@ export function ItemAssignment({
 
   const perPersonTotals = getPerPersonTotals();
   const assignedItemCount = Object.values(assignments).filter((s) => s.size > 0).length;
-  const allAssigned = assignedItemCount === items.length;
+  const allAssigned = items.length > 0 && assignedItemCount === items.length;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
