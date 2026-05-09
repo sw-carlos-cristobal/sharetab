@@ -102,6 +102,11 @@
     "removePersonConfirm": "从此会话中移除{name}？其选择也将被移除。",
     "personRemoved": "成员已移除",
     "copyLink": "复制链接",
-    "linkCopied": "链接已复制到剪贴板"
+    "linkCopied": "链接已复制到剪贴板",
+    "splitItem": "拆分项目",
+    "splitOff": "拆分",
+    "splitOfTotal": "共{total}个",
+    "splitButton": "拆分",
+    "cancelButton": "取消"
   }
 }

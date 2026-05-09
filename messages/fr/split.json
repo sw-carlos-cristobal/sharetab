@@ -102,6 +102,11 @@
     "removePersonConfirm": "Retirer {name} de cette session ? Ses choix seront aussi supprimés.",
     "personRemoved": "Personne retirée",
     "copyLink": "Copier le lien",
-    "linkCopied": "Lien copié dans le presse-papiers"
+    "linkCopied": "Lien copié dans le presse-papiers",
+    "splitItem": "Diviser l'article",
+    "splitOff": "Séparer",
+    "splitOfTotal": "de {total}",
+    "splitButton": "Diviser",
+    "cancelButton": "Annuler"
   }
 }

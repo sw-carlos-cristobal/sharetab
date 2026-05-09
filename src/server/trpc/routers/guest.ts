@@ -637,6 +637,68 @@ export const guestRouter = createTRPCRouter({
       );
     }),
 
+  splitClaimItem: publicProcedure
+    .input(z.object({
+      token: z.string(),
+      personToken: z.string().uuid(),
+      itemIndex: z.number().int().min(0),
+      splitQuantity: z.number().int().min(1),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      return withSerializableRetry(() =>
+        ctx.db.$transaction(async (tx) => {
+          const session = await tx.guestSplit.findUnique({
+            where: { shareToken: input.token },
+          });
+          if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
+          if (session.status !== "claiming") throw new TRPCError({ code: "BAD_REQUEST", message: "Session is finalized" });
+
+          const people = session.people as GuestSessionPerson[];
+          const isParticipant = people.some(p => p.personToken === input.personToken);
+          if (!isParticipant) throw new TRPCError({ code: "FORBIDDEN", message: "Not a participant" });
+
+          const items = [...(session.items as { name: string; quantity: number; unitPrice: number; totalPrice: number }[])];
+          if (input.itemIndex >= items.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid item index" });
+
+          const item = items[input.itemIndex]!;
+          if (input.splitQuantity >= item.quantity) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Split quantity must be less than item quantity" });
+          }
+
+          const maxNewTotal = item.totalPrice - 1;
+          if (maxNewTotal <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Item price too low to split" });
+
+          const newTotalPrice = Math.min(item.unitPrice * input.splitQuantity, maxNewTotal);
+          const remainingQty = item.quantity - input.splitQuantity;
+          const remainingTotalPrice = item.totalPrice - newTotalPrice;
+
+          items[input.itemIndex] = { ...item, quantity: remainingQty, totalPrice: remainingTotalPrice };
+          items.splice(input.itemIndex + 1, 0, {
+            name: item.name,
+            quantity: input.splitQuantity,
+            unitPrice: item.unitPrice,
+            totalPrice: newTotalPrice,
+          });
+
+          // Remap assignments: shift indices after insertion point
+          const assignments = (session.assignments as { itemIndex: number; personIndices: number[] }[])
+            .map(a => ({
+              itemIndex: a.itemIndex > input.itemIndex ? a.itemIndex + 1 : a.itemIndex,
+              personIndices: [...a.personIndices],
+            }));
+
+          await tx.guestSplit.update({
+            where: { id: session.id },
+            data: {
+              items: items as unknown as Prisma.InputJsonValue,
+              assignments: assignments as unknown as Prisma.InputJsonValue,
+            },
+          });
+          return { success: true, itemCount: items.length };
+        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+      );
+    }),
+
   claimItems: publicProcedure
     .input(z.object({
       token: z.string(),

@@ -102,6 +102,11 @@
     "removePersonConfirm": "Soll {name} aus dieser Sitzung entfernt werden? Die Auswahl wird ebenfalls entfernt.",
     "personRemoved": "Person entfernt",
     "copyLink": "Link kopieren",
-    "linkCopied": "Link in die Zwischenablage kopiert"
+    "linkCopied": "Link in die Zwischenablage kopiert",
+    "splitItem": "Artikel aufteilen",
+    "splitOff": "Aufteilen",
+    "splitOfTotal": "von {total}",
+    "splitButton": "Aufteilen",
+    "cancelButton": "Abbrechen"
   }
 }

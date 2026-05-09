@@ -102,6 +102,11 @@
     "removePersonConfirm": "¿Eliminar a {name} de esta sesión? Sus selecciones también se eliminarán.",
     "personRemoved": "Persona eliminada",
     "copyLink": "Copiar enlace",
-    "linkCopied": "Enlace copiado al portapapeles"
+    "linkCopied": "Enlace copiado al portapapeles",
+    "splitItem": "Dividir artículo",
+    "splitOff": "Separar",
+    "splitOfTotal": "de {total}",
+    "splitButton": "Dividir",
+    "cancelButton": "Cancelar"
   }
 }

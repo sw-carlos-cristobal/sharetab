@@ -102,6 +102,11 @@
     "removePersonConfirm": "Ta bort {name} från denna session? Deras val tas också bort.",
     "personRemoved": "Person borttagen",
     "copyLink": "Kopiera länk",
-    "linkCopied": "Länk kopierad till urklipp"
+    "linkCopied": "Länk kopierad till urklipp",
+    "splitItem": "Dela artikel",
+    "splitOff": "Dela av",
+    "splitOfTotal": "av {total}",
+    "splitButton": "Dela",
+    "cancelButton": "Avbryt"
   }
 }

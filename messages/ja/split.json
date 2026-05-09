@@ -102,6 +102,11 @@
     "removePersonConfirm": "{name}をこのセッションから削除しますか？選択も削除されます。",
     "personRemoved": "メンバーを削除しました",
     "copyLink": "リンクをコピー",
-    "linkCopied": "リンクをクリップボードにコピーしました"
+    "linkCopied": "リンクをクリップボードにコピーしました",
+    "splitItem": "アイテムを分割",
+    "splitOff": "分割数",
+    "splitOfTotal": "{total}個中",
+    "splitButton": "分割",
+    "cancelButton": "キャンセル"
   }
 }

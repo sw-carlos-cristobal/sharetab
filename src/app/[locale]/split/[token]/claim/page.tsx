@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Check, Loader2, Users, Receipt, ArrowRight, Image as ImageIcon, Pencil, X, Link2 } from "lucide-react";
+import { Check, Loader2, Users, Receipt, ArrowRight, Image as ImageIcon, Pencil, X, Link2, Scissors } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "@/i18n/navigation";
 
@@ -80,6 +80,8 @@ export default function ClaimPage({
   const [showImage, setShowImage] = useState(false);
   const [editingPersonIdx, setEditingPersonIdx] = useState<number | null>(null);
   const [editingName, setEditingName] = useState("");
+  const [splittingItemIdx, setSplittingItemIdx] = useState<number | null>(null);
+  const [splitQty, setSplitQty] = useState("");
 
   // --- tRPC ---
   const session = trpc.guest.getSession.useQuery(
@@ -98,6 +100,15 @@ export default function ClaimPage({
 
   const removePerson = trpc.guest.removePerson.useMutation({
     onSuccess: () => toast.success(t("personRemoved")),
+    onError: (err) => toast.error(err.message),
+  });
+
+  const splitClaimItem = trpc.guest.splitClaimItem.useMutation({
+    onSuccess: () => {
+      setSplittingItemIdx(null);
+      setSplitQty("");
+      setClaimedItems(new Map());
+    },
     onError: (err) => toast.error(err.message),
   });
 
@@ -788,10 +799,79 @@ export default function ClaimPage({
                           </span>
                         )}
                       </span>
-                      <span className="font-semibold shrink-0">
-                        {formatCents(item.totalPrice, currency, locale)}
-                      </span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {item.quantity > 1 && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSplittingItemIdx(idx);
+                              setSplitQty("1");
+                            }}
+                            className="text-muted-foreground hover:text-foreground p-1"
+                            aria-label={t("splitItem")}
+                            data-testid={`split-claim-item-${idx}`}
+                          >
+                            <Scissors className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        <span className="font-semibold">
+                          {formatCents(item.totalPrice, currency, locale)}
+                        </span>
+                      </div>
                     </div>
+
+                    {/* Split form */}
+                    {splittingItemIdx === idx && (() => {
+                      const parsed = Number(splitQty);
+                      const validQty = Number.isSafeInteger(parsed) && parsed >= 1 && parsed < item.quantity;
+                      return (
+                        <div
+                          className="flex items-center gap-2 mt-2"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        >
+                          <span className="text-xs text-muted-foreground">{t("splitOff")}</span>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={item.quantity - 1}
+                            value={splitQty}
+                            onChange={(e) => setSplitQty(e.target.value)}
+                            className="w-16 h-7 text-xs"
+                            data-testid={`split-qty-input-${idx}`}
+                          />
+                          <span className="text-xs text-muted-foreground">{t("splitOfTotal", { total: item.quantity })}</span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="h-7 text-xs"
+                            disabled={splitClaimItem.isPending || !validQty}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!validQty || !personToken) return;
+                              splitClaimItem.mutate({
+                                token,
+                                personToken,
+                                itemIndex: idx,
+                                splitQuantity: parsed,
+                              });
+                            }}
+                          >
+                            {t("splitButton")}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={(e) => { e.stopPropagation(); setSplittingItemIdx(null); }}
+                          >
+                            {t("cancelButton")}
+                          </Button>
+                        </div>
+                      );
+                    })()}
 
                     {/* Other claimants */}
                     {otherClaimants.length > 0 && (

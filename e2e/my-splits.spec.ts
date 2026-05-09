@@ -46,12 +46,10 @@ test.describe("My Splits page", () => {
     await page.goto("/en/splits");
 
     await expect(page.getByTestId("splits-page")).toBeVisible({ timeout: 10000 });
-    // Should show the split card with merchant name
-    await expect(page.getByText("Test Bistro")).toBeVisible({ timeout: 10000 });
-    // Should show the total
-    await expect(page.getByText("$37.00")).toBeVisible();
-    // Should show people count
-    await expect(page.getByText("2 people")).toBeVisible();
+    // Should show at least one split card with merchant name, total, and people count
+    await expect(page.getByText("Test Bistro").first()).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("$37.00").first()).toBeVisible();
+    await expect(page.getByText("2 people").first()).toBeVisible();
   });
 
   test("split card links to the split result page", async ({ page }) => {

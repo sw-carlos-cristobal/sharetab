@@ -102,6 +102,11 @@
     "removePersonConfirm": "{name}을(를) 이 세션에서 제거하시겠습니까? 선택도 함께 제거됩니다.",
     "personRemoved": "참가자가 제거되었습니다",
     "copyLink": "링크 복사",
-    "linkCopied": "링크가 클립보드에 복사되었습니다"
+    "linkCopied": "링크가 클립보드에 복사되었습니다",
+    "splitItem": "항목 분할",
+    "splitOff": "분할 수",
+    "splitOfTotal": "{total}개 중",
+    "splitButton": "분할",
+    "cancelButton": "취소"
   }
 }
