@@ -101,19 +101,33 @@ export default function ClaimPage({
   const removePerson = trpc.guest.removePerson.useMutation({
     onSuccess: (_data, variables) => {
       const removedIdx = variables.targetIndex;
-      // Reset local claimed items — server has remapped indices (Finding #3)
-      setClaimedItems(new Map());
-      // Adjust personIndex / myPersonIndex to match server's new indices
-      setPersonIndex((prev) => {
-        if (prev === null) return null;
-        if (prev === removedIdx) return 0;
-        return prev > removedIdx ? prev - 1 : prev;
-      });
-      setMyPersonIndex((prev) => {
-        if (prev === null) return null;
-        if (prev === removedIdx) return 0;
-        return prev > removedIdx ? prev - 1 : prev;
-      });
+      if (removedIdx === myPersonIndex) {
+        if (typeof window !== "undefined") {
+          window.localStorage.removeItem(`sharetab-claim:${token}`);
+        }
+        setClaimedItems(new Map());
+        setPersonIndex(null);
+        setMyPersonIndex(null);
+        setPersonToken(null);
+      } else {
+        setClaimedItems((prev) => {
+          const next = new Map<number, Set<number>>();
+          for (const [pIdx, itemSet] of prev) {
+            if (pIdx === removedIdx) continue;
+            const newPIdx = pIdx > removedIdx ? pIdx - 1 : pIdx;
+            next.set(newPIdx, itemSet);
+          }
+          return next;
+        });
+        setPersonIndex((prev) => {
+          if (prev === null) return null;
+          return prev > removedIdx ? prev - 1 : prev;
+        });
+        setMyPersonIndex((prev) => {
+          if (prev === null) return null;
+          return prev > removedIdx ? prev - 1 : prev;
+        });
+      }
       toast.success(t("personRemoved"));
     },
     onError: (err) => toast.error(err.message),

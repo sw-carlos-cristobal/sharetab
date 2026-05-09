@@ -340,9 +340,12 @@ export default function GuestSplitPage() {
   }, [items, assignments, extracted, tip, people.length]);
 
   const perPersonTotals = step === "assign" ? getPerPersonTotals() : [];
-  const assignedCount = Object.values(assignments).filter((s) => s.size > 0).length;
-  const allAssigned = assignedCount === items.length && items.length > 0;
   const validPeople = people.filter((n) => n.trim().length > 0);
+  const validPeopleIndices = new Set(people.map((n, i) => n.trim() ? i : -1).filter((i) => i >= 0));
+  const assignedCount = Object.values(assignments).filter((s) => {
+    return Array.from(s).some((pi) => validPeopleIndices.has(pi));
+  }).length;
+  const allAssigned = assignedCount === items.length && items.length > 0;
 
   async function handleCreateSplit() {
     if (!extracted || !allAssigned || validPeople.length < 1) return;
