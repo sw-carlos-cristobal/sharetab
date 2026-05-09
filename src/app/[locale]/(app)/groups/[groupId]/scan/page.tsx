@@ -10,6 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ArrowLeft, Loader2, Camera, RefreshCw, Users } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { toast } from "sonner";
 import { ItemAssignment } from "@/components/receipts/item-assignment";
 import { loadingMessages } from "@/lib/loading-messages";
 
@@ -36,6 +38,7 @@ function ScanReceiptContent({
   const router = useRouter();
   const searchParams = useSearchParams();
   const t = useTranslations("expenses.scan");
+  const { data: authSession } = useSession();
   const resumeReceiptId = searchParams.get("receiptId");
   const group = trpc.groups.get.useQuery({ groupId });
   const providerInfo = trpc.receipts.getScanProviderInfo.useQuery();
@@ -81,6 +84,8 @@ function ScanReceiptContent({
     const currentMembers = members.filter((m) => m.name);
     if (currentMembers.length < 1) return;
 
+    const myName = authSession?.user?.name ?? currentMembers[0]?.name ?? "Unknown";
+
     try {
       const result = await shareForClaiming.mutateAsync({
         receiptId,
@@ -90,7 +95,7 @@ function ScanReceiptContent({
           subtotal: extracted.subtotal,
           tax: extracted.tax,
           tip: extracted.tip ?? 0,
-          total: extracted.subtotal + extracted.tax + (extracted.tip ?? 0),
+          total: extracted.total ?? (extracted.subtotal + extracted.tax + (extracted.tip ?? 0)),
           currency: extracted.currency ?? "USD",
         },
         items: items.map((i) => ({
@@ -99,12 +104,12 @@ function ScanReceiptContent({
           unitPrice: i.unitPrice,
           totalPrice: i.totalPrice,
         })),
-        creatorName: currentMembers[0].name,
-        paidByName: currentMembers[0].name,
+        creatorName: myName,
+        paidByName: myName,
       });
       router.push(`/split/${result.shareToken}/claim`);
-    } catch {
-      // Error handled by mutation
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to create claiming session");
     }
   }
 
