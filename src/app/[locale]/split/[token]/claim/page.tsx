@@ -101,19 +101,22 @@ export default function ClaimPage({
   const removePerson = trpc.guest.removePerson.useMutation({
     onSuccess: (_data, variables) => {
       const removedIdx = variables.targetIndex;
-      // Reset local claimed items — server has remapped indices (Finding #3)
       setClaimedItems(new Map());
-      // Adjust personIndex / myPersonIndex to match server's new indices
-      setPersonIndex((prev) => {
-        if (prev === null) return null;
-        if (prev === removedIdx) return 0;
-        return prev > removedIdx ? prev - 1 : prev;
-      });
-      setMyPersonIndex((prev) => {
-        if (prev === null) return null;
-        if (prev === removedIdx) return 0;
-        return prev > removedIdx ? prev - 1 : prev;
-      });
+      if (removedIdx === myPersonIndex) {
+        // Removed yourself — reset to join form
+        setPersonIndex(null);
+        setMyPersonIndex(null);
+        setPersonToken(null);
+      } else {
+        setPersonIndex((prev) => {
+          if (prev === null) return null;
+          return prev > removedIdx ? prev - 1 : prev;
+        });
+        setMyPersonIndex((prev) => {
+          if (prev === null) return null;
+          return prev > removedIdx ? prev - 1 : prev;
+        });
+      }
       toast.success(t("personRemoved"));
     },
     onError: (err) => toast.error(err.message),
@@ -124,8 +127,8 @@ export default function ClaimPage({
       const splitIdx = variables.itemIndex;
       setSplittingItemIdx(null);
       setSplitQty("");
-      // Remap claimed item indices: items after the split point shift +1 (Finding #4).
-      // Only invalidate the split item itself; preserve unsaved edits for other items.
+      // Remap claimed item indices: items after the split point shift +1.
+      // Keep the claim on the original item; the new split item starts unclaimed.
       setClaimedItems((prev) => {
         const next = new Map<number, Set<number>>();
         for (const [personIdx, itemSet] of prev) {

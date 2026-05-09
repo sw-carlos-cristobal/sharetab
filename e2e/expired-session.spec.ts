@@ -75,6 +75,11 @@ test.describe("Session mutation guards — finalized", () => {
 });
 
 test.describe("Session mutation guards — expired", () => {
+  test.beforeEach(({}, testInfo) => {
+    if (process.env.CI)
+      testInfo.skip(true, "Expiry tests require NODE_ENV=test (_testExpireSession endpoint)");
+  });
+
   test("editPersonName rejects expired sessions", async () => {
     const { ctx, shareToken, personToken } = await createSessionWithToken();
 
