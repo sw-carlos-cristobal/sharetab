@@ -6,11 +6,11 @@ const BASE = process.env.BASE_URL || "http://localhost:3001";
 
 test.describe("My Splits page", () => {
   test("shows empty state when user has no splits", async ({ page }) => {
-    await login(page, users.alice.email, users.alice.password);
+    await login(page, users.charlie.email, users.charlie.password);
     await page.goto("/en/splits");
 
     await expect(page.getByTestId("splits-page")).toBeVisible({ timeout: 10000 });
-    await expect(page.getByTestId("splits-empty")).toBeVisible();
+    await expect(page.getByTestId("splits-empty")).toBeVisible({ timeout: 10000 });
   });
 
   test("shows split card after user creates a guest split", async ({ page }) => {

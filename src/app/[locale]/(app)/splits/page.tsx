@@ -42,9 +42,9 @@ export default function SplitsPage() {
       {isLoading && <p className="text-muted-foreground">Loading...</p>}
 
       {!isLoading && splits.length === 0 && (
-        <Card>
+        <Card data-testid="splits-empty">
           <CardContent className="py-12 text-center">
-            <Scissors className="mx-auto h-10 w-10 text-muted-foreground/50" data-testid="splits-empty" />
+            <Scissors className="mx-auto h-10 w-10 text-muted-foreground/50" />
             <p className="mt-3 text-muted-foreground">{t("empty")}</p>
             <p className="mt-1 text-sm text-muted-foreground">
               {t("emptyDescription")}
