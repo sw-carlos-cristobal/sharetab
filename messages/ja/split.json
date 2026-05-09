@@ -100,6 +100,8 @@
     "nameUpdated": "名前を更新しました",
     "removePerson": "メンバーを削除",
     "removePersonConfirm": "{name}をこのセッションから削除しますか？選択も削除されます。",
-    "personRemoved": "メンバーを削除しました"
+    "personRemoved": "メンバーを削除しました",
+    "copyLink": "リンクをコピー",
+    "linkCopied": "リンクをクリップボードにコピーしました"
   }
 }

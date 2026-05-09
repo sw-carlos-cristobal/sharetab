@@ -100,6 +100,8 @@
     "nameUpdated": "Nome atualizado",
     "removePerson": "Remover pessoa",
     "removePersonConfirm": "Remover {name} desta sessão? As seleções também serão removidas.",
-    "personRemoved": "Pessoa removida"
+    "personRemoved": "Pessoa removida",
+    "copyLink": "Copiar link",
+    "linkCopied": "Link copiado para a área de transferência"
   }
 }

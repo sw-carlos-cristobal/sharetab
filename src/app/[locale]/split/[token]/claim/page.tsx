@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Check, Loader2, Users, Receipt, ArrowRight, Image as ImageIcon, Pencil, X } from "lucide-react";
+import { Check, Loader2, Users, Receipt, ArrowRight, Image as ImageIcon, Pencil, X, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "@/i18n/navigation";
 
@@ -247,6 +247,11 @@ export default function ClaimPage({
     });
   }
 
+  async function copyLink() {
+    await navigator.clipboard.writeText(window.location.href);
+    toast.success(t("linkCopied"));
+  }
+
   async function saveClaims() {
     if (personIndex === null || !personToken) return;
     setSaving(true);
@@ -347,6 +352,18 @@ export default function ClaimPage({
             </div>
           </CardContent>
         </Card>
+
+        {/* Copy link */}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={copyLink}
+          data-testid="copy-link-btn"
+        >
+          <Link2 className="mr-2 h-4 w-4" />
+          {t("copyLink")}
+        </Button>
 
         {/* Receipt image viewer */}
         {data.receiptImagePath && (
@@ -512,13 +529,25 @@ export default function ClaimPage({
       <Card className="bg-primary/5 border-primary/20">
         <CardContent className="py-4">
           <div className="flex justify-between items-center">
-            <span className="font-semibold text-lg">Total Bill</span>
+            <span className="font-semibold text-lg">{t("totalBill")}</span>
             <span className="text-2xl font-bold text-primary">
               {formatCents(data.receiptData.total, currency, locale)}
             </span>
           </div>
         </CardContent>
       </Card>
+
+      {/* Copy link */}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={copyLink}
+        data-testid="copy-link-btn"
+      >
+        <Link2 className="mr-2 h-4 w-4" />
+        {t("copyLink")}
+      </Button>
 
       {/* Receipt image viewer */}
       {data.receiptImagePath && (

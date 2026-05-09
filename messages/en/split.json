@@ -100,6 +100,8 @@
     "nameUpdated": "Name updated",
     "removePerson": "Remove person",
     "removePersonConfirm": "Remove {name} from this session? Their claims will be removed too.",
-    "personRemoved": "Person removed"
+    "personRemoved": "Person removed",
+    "copyLink": "Copy link",
+    "linkCopied": "Link copied to clipboard"
   }
 }
