@@ -278,7 +278,7 @@ export const guestRouter = createTRPCRouter({
         quantity: z.number().int().min(1),
         unitPrice: z.number().int(),
         totalPrice: z.number().int(),
-      })).max(100),
+      })).min(1).max(100),
       people: z.array(z.object({ name: z.string() })).min(1).max(100),
       assignments: z.array(z.object({
         itemIndex: z.number().int(),
