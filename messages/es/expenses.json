@@ -46,7 +46,10 @@
     "cancel": "Cancelar",
     "uploading": "Subiendo...",
     "activeProvider": "Proveedor activo:",
-    "fallbackChain": "Cadena de respaldo:"
+    "fallbackChain": "Cadena de respaldo:",
+    "or": "o",
+    "shareForClaiming": "Compartir enlace — Dejar que los miembros reclamen artículos",
+    "creatingSession": "Creando sesión..."
   },
   "receipt": {
     "hideImage": "Ocultar imagen del recibo",

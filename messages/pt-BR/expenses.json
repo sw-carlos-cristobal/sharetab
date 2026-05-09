@@ -46,7 +46,10 @@
     "cancel": "Cancelar",
     "uploading": "Enviando...",
     "activeProvider": "Provedor ativo:",
-    "fallbackChain": "Cadeia de fallback:"
+    "fallbackChain": "Cadeia de fallback:",
+    "or": "ou",
+    "shareForClaiming": "Compartilhar link — Deixe os membros escolherem",
+    "creatingSession": "Criando sessão..."
   },
   "receipt": {
     "hideImage": "Ocultar imagem do recibo",

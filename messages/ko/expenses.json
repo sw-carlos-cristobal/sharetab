@@ -46,7 +46,10 @@
     "cancel": "취소",
     "uploading": "업로드 중...",
     "activeProvider": "활성 제공자:",
-    "fallbackChain": "폴백 체인:"
+    "fallbackChain": "폴백 체인:",
+    "or": "또는",
+    "shareForClaiming": "링크 공유 — 멤버가 직접 선택",
+    "creatingSession": "세션 생성 중..."
   },
   "receipt": {
     "hideImage": "영수증 이미지 숨기기",

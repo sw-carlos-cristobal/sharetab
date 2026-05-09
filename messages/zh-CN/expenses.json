@@ -46,7 +46,10 @@
     "cancel": "取消",
     "uploading": "上传中...",
     "activeProvider": "当前提供商：",
-    "fallbackChain": "备用链："
+    "fallbackChain": "备用链：",
+    "or": "或",
+    "shareForClaiming": "分享链接 — 让成员自行选择",
+    "creatingSession": "正在创建会话..."
   },
   "receipt": {
     "hideImage": "隐藏小票图片",

@@ -9,7 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Loader2, Camera, RefreshCw } from "lucide-react";
+import { ArrowLeft, Loader2, Camera, RefreshCw, Users } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { toast } from "sonner";
 import { ItemAssignment } from "@/components/receipts/item-assignment";
 import { loadingMessages } from "@/lib/loading-messages";
 
@@ -36,6 +38,7 @@ function ScanReceiptContent({
   const router = useRouter();
   const searchParams = useSearchParams();
   const t = useTranslations("expenses.scan");
+  const { data: authSession } = useSession();
   const resumeReceiptId = searchParams.get("receiptId");
   const group = trpc.groups.get.useQuery({ groupId });
   const providerInfo = trpc.receipts.getScanProviderInfo.useQuery();
@@ -66,6 +69,51 @@ function ScanReceiptContent({
     },
   });
 
+  const shareForClaiming = trpc.guest.createClaimSession.useMutation();
+  const receiptData = trpc.receipts.getReceiptItems.useQuery(
+    { receiptId: receiptId! },
+    { enabled: step === "assign" && !!receiptId }
+  );
+
+  async function handleShareForClaiming() {
+    if (!receiptId || !receiptData.data) return;
+    const { receipt, items } = receiptData.data;
+    const extracted = receipt.extractedData;
+    if (!extracted) return;
+
+    const currentMembers = members.filter((m) => m.name);
+    if (currentMembers.length < 1) return;
+
+    const myId = authSession?.user?.id;
+    const myMember = myId ? currentMembers.find(m => m.id === myId) : undefined;
+    const myName = myMember?.name ?? authSession?.user?.name ?? currentMembers[0]?.name ?? "Unknown";
+
+    try {
+      const result = await shareForClaiming.mutateAsync({
+        receiptId,
+        receiptData: {
+          merchantName: extracted.merchantName,
+          date: extracted.date,
+          subtotal: extracted.subtotal,
+          tax: extracted.tax,
+          tip: extracted.tip ?? 0,
+          total: extracted.total ?? (extracted.subtotal + extracted.tax + (extracted.tip ?? 0)),
+          currency: extracted.currency ?? "USD",
+        },
+        items: items.map((i) => ({
+          name: i.name,
+          quantity: i.quantity,
+          unitPrice: i.unitPrice,
+          totalPrice: i.totalPrice,
+        })),
+        creatorName: myName,
+        paidByName: myName,
+      });
+      router.push(`/split/${result.shareToken}/claim`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to create claiming session");
+    }
+  }
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -194,6 +242,21 @@ function ScanReceiptContent({
             onComplete={handleExpenseCreated}
             onSaveForLater={() => router.push(`/groups/${groupId}`)}
           />
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-xs">{t("or")}</span>
+            <div className="flex-1 h-px bg-border" />
+          </div>
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={handleShareForClaiming}
+            disabled={shareForClaiming.isPending || !authSession?.user?.id || !receiptData.data?.receipt?.extractedData || !receiptData.data?.items?.length || members.length < 1}
+            data-testid="group-share-claiming-btn"
+          >
+            <Users className="mr-2 h-4 w-4" />
+            {shareForClaiming.isPending ? t("creatingSession") : t("shareForClaiming")}
+          </Button>
           <div className="space-y-2">
             {!showRescan ? (
               <Button
