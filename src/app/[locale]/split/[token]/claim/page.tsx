@@ -4,7 +4,7 @@ import { use, useState, useMemo, useEffect, useRef } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { formatCents } from "@/lib/money";
-import { normalizeGuestName, storedClaimIdentitySchema, type StoredClaimIdentity } from "@/lib/guest-session";
+import { storedClaimIdentitySchema, type StoredClaimIdentity } from "@/lib/guest-session";
 import { calculateSplitTotals } from "@/lib/split-calculator";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -146,7 +146,6 @@ export default function ClaimPage({
     joinSession.mutate({
       token,
       name: stored.name,
-      personToken: stored.personToken,
     });
   }, [session.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -245,15 +244,7 @@ export default function ClaimPage({
       toast.error(t("pleaseEnterName"));
       return;
     }
-    const storedIdentity = getStoredClaimIdentity(token);
-    joinSession.mutate({
-      token,
-      name: trimmed,
-      personToken:
-        storedIdentity && normalizeGuestName(storedIdentity.name) === normalizeGuestName(trimmed)
-          ? storedIdentity.personToken
-          : undefined,
-    });
+    joinSession.mutate({ token, name: trimmed });
   }
 
   function toggleClaim(itemIndex: number) {
@@ -478,17 +469,8 @@ export default function ClaimPage({
                       type="button"
                       onClick={() => {
                         setName(person.name);
-                        // Auto-submit after a brief delay so the user sees the name fill in
                         setTimeout(() => {
-                          const storedIdentity = getStoredClaimIdentity(token);
-                          joinSession.mutate({
-                            token,
-                            name: person.name,
-                            personToken:
-                              storedIdentity && normalizeGuestName(storedIdentity.name) === normalizeGuestName(person.name)
-                                ? storedIdentity.personToken
-                                : undefined,
-                          });
+                          joinSession.mutate({ token, name: person.name });
                         }, 100);
                       }}
                       className="flex items-center gap-2 rounded-full bg-muted px-3 py-1.5 hover:bg-muted/80 transition-colors"

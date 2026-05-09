@@ -196,11 +196,10 @@ test.describe("Guest claiming sessions", () => {
     expect(result1.personIndex).toBe(0);
     const personToken = result1.personToken;
 
-    // Join again with the same name (case-insensitive) and the same personToken
+    // Join again with the same name (case-insensitive) — no token needed
     const join2 = await trpcMutation(ctx, "guest.joinSession", {
       token: shareToken,
       name: "alice",
-      personToken,
     });
     const result2 = (await join2.json()).result?.data?.json;
     expect(result2.personIndex).toBe(0);

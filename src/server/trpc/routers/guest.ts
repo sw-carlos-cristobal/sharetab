@@ -498,7 +498,6 @@ export const guestRouter = createTRPCRouter({
     .input(z.object({
       token: z.string(),
       name: z.string().trim().min(1).max(100),
-      personToken: z.string().uuid().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       return withSerializableRetry(() =>
@@ -528,15 +527,7 @@ export const guestRouter = createTRPCRouter({
               });
               return { personIndex: existingIndex, personToken };
             }
-
-            if (input.personToken === existingPerson.personToken) {
-              return { personIndex: existingIndex, personToken: existingPerson.personToken };
-            }
-
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: "This name is already claimed by another participant",
-            });
+            return { personIndex: existingIndex, personToken: existingPerson.personToken };
           }
 
           if (people.length >= 100) {
