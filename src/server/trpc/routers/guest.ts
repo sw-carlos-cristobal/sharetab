@@ -59,7 +59,7 @@ async function withSerializableRetry<T>(run: () => Promise<T>): Promise<T> {
 }
 
 export const guestRouter = createTRPCRouter({
-  expireSession: publicProcedure
+  expireSession: protectedProcedure
     .input(z.object({ token: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const session = await ctx.db.guestSplit.findUnique({
