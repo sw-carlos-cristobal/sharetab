@@ -20,7 +20,10 @@
     "totalSpent": "총 지출",
     "youOwe": "{name}에게 갚을 금액",
     "owesYou": "{name}이(가) 갚을 금액",
-    "settledUp": "정산 완료"
+    "settledUp": "정산 완료",
+    "payViaVenmo": "Venmo로 결제",
+    "venmoPaymentConfirm": "{name}에게 {amount}의 Venmo 결제를 완료하셨나요?",
+    "settledViaVenmo": "Venmo로 결제 완료"
   },
   "settings": {
     "title": "그룹 설정",

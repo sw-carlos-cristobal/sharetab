@@ -20,7 +20,10 @@
     "totalSpent": "合計支出",
     "youOwe": "あなたが{name}に支払う金額",
     "owesYou": "{name}があなたに支払う金額",
-    "settledUp": "精算済み"
+    "settledUp": "精算済み",
+    "payViaVenmo": "Venmoで支払う",
+    "venmoPaymentConfirm": "{name}への{amount}のVenmo支払いを完了しましたか？",
+    "settledViaVenmo": "Venmoで支払い済み"
   },
   "settings": {
     "title": "グループ設定",

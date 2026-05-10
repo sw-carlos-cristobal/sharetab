@@ -20,7 +20,10 @@
     "totalSpent": "总支出",
     "youOwe": "你欠{name}",
     "owesYou": "{name}欠你",
-    "settledUp": "已结清"
+    "settledUp": "已结清",
+    "payViaVenmo": "通过Venmo支付",
+    "venmoPaymentConfirm": "您是否完成了通过Venmo向{name}支付{amount}？",
+    "settledViaVenmo": "已通过Venmo支付"
   },
   "settings": {
     "title": "群组设置",

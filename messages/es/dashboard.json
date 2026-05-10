@@ -14,5 +14,6 @@
   "groups": "Grupos",
   "showMore": "Mostrar más",
   "members": "{count, plural, one {# miembro} other {# miembros}}",
-  "archivedGroups": "{count, plural, one {# grupo archivado} other {# grupos archivados}}"
+  "archivedGroups": "{count, plural, one {# grupo archivado} other {# grupos archivados}}",
+  "payViaVenmo": "Pagar con Venmo"
 }
