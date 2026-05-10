@@ -591,6 +591,7 @@ export const guestRouter = createTRPCRouter({
       personToken: z.string().uuid(),
       targetIndex: z.number().int().min(0),
       newName: z.string().trim().min(1).max(100),
+      groupSize: z.number().int().min(1).max(20).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const { allowed } = checkRateLimit(`guest-edit-name:${input.token}`, 10, 60 * 1000);
@@ -615,7 +616,11 @@ export const guestRouter = createTRPCRouter({
           const conflict = people.findIndex((p, i) => i !== input.targetIndex && normalizeGuestName(p.name) === normalizedNew);
           if (conflict >= 0) throw new TRPCError({ code: "CONFLICT", message: "Name already taken" });
 
-          people[input.targetIndex] = { ...people[input.targetIndex]!, name: input.newName.trim() };
+          people[input.targetIndex] = {
+            ...people[input.targetIndex]!,
+            name: input.newName.trim(),
+            ...(input.groupSize != null ? { groupSize: input.groupSize } : {}),
+          };
           await tx.guestSplit.update({
             where: { id: session.id },
             data: { people: people as unknown as Prisma.InputJsonValue },

@@ -81,6 +81,7 @@ export default function ClaimPage({
   const [showImage, setShowImage] = useState(false);
   const [editingPersonIdx, setEditingPersonIdx] = useState<number | null>(null);
   const [editingName, setEditingName] = useState("");
+  const [editingGroupSize, setEditingGroupSize] = useState(1);
   const [splittingItemIdx, setSplittingItemIdx] = useState<number | null>(null);
   const [splitQty, setSplitQty] = useState("");
 
@@ -818,16 +819,27 @@ export default function ClaimPage({
                         personToken,
                         targetIndex: idx,
                         newName: editingName.trim(),
+                        groupSize: editingGroupSize,
                       });
                     }}
                   >
                     <Input
                       value={editingName}
                       onChange={(e) => setEditingName(e.target.value)}
-                      className="h-7 text-sm"
+                      className="h-7 text-sm flex-1"
                       autoFocus
                       aria-label={t("editName")}
                       data-testid={`edit-name-input-${idx}`}
+                    />
+                    <Input
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={editingGroupSize}
+                      onChange={(e) => setEditingGroupSize(parseInt(e.target.value) || 1)}
+                      className="h-7 w-14 text-sm"
+                      aria-label={t("groupSize")}
+                      data-testid={`edit-group-size-${idx}`}
                     />
                     <Button type="submit" size="sm" variant="ghost" className="h-7 px-2" disabled={editPersonName.isPending}>
                       <Check className="h-3.5 w-3.5" />
@@ -848,6 +860,7 @@ export default function ClaimPage({
                       onClick={() => {
                         setEditingPersonIdx(idx);
                         setEditingName(person.name);
+                        setEditingGroupSize(person.groupSize ?? 1);
                       }}
                       className="text-muted-foreground hover:text-foreground p-1"
                       aria-label={t("editName")}
