@@ -114,6 +114,8 @@
     "splitOff": "Aufteilen",
     "splitOfTotal": "von {total}",
     "splitButton": "Aufteilen",
-    "cancelButton": "Abbrechen"
+    "cancelButton": "Abbrechen",
+    "alreadyClaimed": "Bereits ausgewählt",
+    "claimConflict": "{count} Artikel auch ausgewählt von {names}"
   }
 }

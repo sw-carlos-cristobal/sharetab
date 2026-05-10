@@ -211,8 +211,13 @@ export default function ClaimPage({
   }, [session.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const claimItems = trpc.guest.claimItems.useMutation({
-    onSuccess: () => {
-      toast.success(t("claimsSavedToast"));
+    onSuccess: (result) => {
+      if (result.conflicts && result.conflicts.length > 0) {
+        const names = [...new Set(result.conflicts.flatMap(c => c.claimedBy))];
+        toast.warning(t("claimConflict", { names: names.join(", "), count: result.conflicts.length }));
+      } else {
+        toast.success(t("claimsSavedToast"));
+      }
     },
     onError: (error) => {
       toast.error(error.message);
@@ -246,6 +251,23 @@ export default function ClaimPage({
     }
     return false;
   }, [currentClaims, currentServerClaims, personIndex]);
+
+  // Which items are claimed by anyone (for sorting unclaimed first)
+  const claimedByAnyone = useMemo(() => {
+    if (!session.data) return new Set<number>();
+    return new Set(
+      session.data.assignments
+        .filter(a => a.personIndices.length > 0)
+        .map(a => a.itemIndex)
+    );
+  }, [session.data]);
+
+  const sortedItemIndices = useMemo(() => {
+    if (!session.data) return [];
+    const unclaimed = session.data.items.map((_, idx) => idx).filter(idx => !claimedByAnyone.has(idx));
+    const claimed = session.data.items.map((_, idx) => idx).filter(idx => claimedByAnyone.has(idx));
+    return [...unclaimed, ...claimed];
+  }, [session.data, claimedByAnyone]);
 
   // Calculate per-person totals using the full local claims Map merged with server assignments
   const splitTotals = useMemo(() => {
@@ -794,7 +816,8 @@ export default function ClaimPage({
             </Badge>
           )}
         </h3>
-        {data.items.map((item, idx) => {
+        {sortedItemIndices.map((idx, sortPosition) => {
+          const item = data.items[idx]!;
           const isClaimed = (claimedItems.get(personIndex!) ?? new Set()).has(idx);
           // Find other claimants from server state
           const otherClaimants =
@@ -802,157 +825,170 @@ export default function ClaimPage({
               .find((a) => a.itemIndex === idx)
               ?.personIndices.filter((pi) => pi !== personIndex) ?? [];
 
-          return (
-            <Card
-              key={idx}
-              role="button"
-              aria-pressed={isClaimed}
-              tabIndex={0}
-              data-testid={`claim-item-${idx}`}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  toggleClaim(idx);
-                }
-              }}
-              className={`cursor-pointer transition-all ${
-                isClaimed
-                  ? "ring-2 ring-primary bg-primary/5"
-                  : "hover:bg-muted/50"
-              }`}
-              onClick={() => toggleClaim(idx)}
-            >
-              <CardContent className="py-3">
-                <div className="flex items-center gap-3">
-                  {/* Claim indicator */}
-                  <div
-                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors ${
-                      isClaimed
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-muted-foreground"
-                    }`}
-                  >
-                    {isClaimed && <Check className="h-4 w-4" />}
-                  </div>
+          // Show separator before the first claimed item
+          const isFirstClaimed =
+            claimedByAnyone.has(idx) &&
+            (sortPosition === 0 || !claimedByAnyone.has(sortedItemIndices[sortPosition - 1]!));
 
-                  {/* Item details */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <span
-                        className={`font-medium truncate ${
-                          isClaimed ? "text-foreground" : "text-muted-foreground"
-                        }`}
-                      >
-                        {item.name}
-                        {item.quantity > 1 && (
-                          <span className="text-muted-foreground ml-1">
-                            x{item.quantity}
-                          </span>
-                        )}
-                      </span>
-                      <div className="flex items-center gap-1 shrink-0">
-                        {item.quantity > 1 && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSplittingItemIdx(idx);
-                              setSplitQty("1");
-                            }}
-                            className="text-muted-foreground hover:text-foreground p-1"
-                            aria-label={t("splitItem")}
-                            data-testid={`split-claim-item-${idx}`}
-                          >
-                            <Scissors className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                        <span className="font-semibold">
-                          {formatCents(item.totalPrice, currency, locale)}
-                        </span>
-                      </div>
+          return (
+            <div key={idx}>
+              {isFirstClaimed && (
+                <div className="flex items-center gap-2 py-1">
+                  <div className="flex-1 h-px bg-border" />
+                  <span className="text-xs text-muted-foreground">{t("alreadyClaimed")}</span>
+                  <div className="flex-1 h-px bg-border" />
+                </div>
+              )}
+              <Card
+                role="button"
+                aria-pressed={isClaimed}
+                tabIndex={0}
+                data-testid={`claim-item-${idx}`}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    toggleClaim(idx);
+                  }
+                }}
+                className={`cursor-pointer transition-all ${
+                  isClaimed
+                    ? "ring-2 ring-primary bg-primary/5"
+                    : "hover:bg-muted/50"
+                }`}
+                onClick={() => toggleClaim(idx)}
+              >
+                <CardContent className="py-3">
+                  <div className="flex items-center gap-3">
+                    {/* Claim indicator */}
+                    <div
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors ${
+                        isClaimed
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {isClaimed && <Check className="h-4 w-4" />}
                     </div>
 
-                    {/* Split form */}
-                    {splittingItemIdx === idx && (() => {
-                      const parsed = Number(splitQty);
-                      const validQty = Number.isSafeInteger(parsed) && parsed >= 1 && parsed < item.quantity;
-                      return (
-                        <div
-                          className="flex items-center gap-2 mt-2"
-                          onClick={(e) => e.stopPropagation()}
-                          onKeyDown={(e) => e.stopPropagation()}
+                    {/* Item details */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span
+                          className={`font-medium truncate ${
+                            isClaimed ? "text-foreground" : "text-muted-foreground"
+                          }`}
                         >
-                          <span className="text-xs text-muted-foreground">{t("splitOff")}</span>
-                          <Input
-                            type="number"
-                            min={1}
-                            max={item.quantity - 1}
-                            value={splitQty}
-                            onChange={(e) => setSplitQty(e.target.value)}
-                            className="w-16 h-7 text-xs"
-                            aria-label={t("splitOff")}
-                            data-testid={`split-qty-input-${idx}`}
-                          />
-                          <span className="text-xs text-muted-foreground">{t("splitOfTotal", { total: item.quantity })}</span>
-                          <Button
-                            type="button"
-                            size="sm"
-                            className="h-7 text-xs"
-                            disabled={splitClaimItem.isPending || !validQty}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (!validQty || !personToken) return;
-                              splitClaimItem.mutate({
-                                token,
-                                personToken,
-                                itemIndex: idx,
-                                splitQuantity: parsed,
-                              });
-                            }}
-                          >
-                            {t("splitButton")}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 text-xs"
-                            onClick={(e) => { e.stopPropagation(); setSplittingItemIdx(null); }}
-                          >
-                            {t("cancelButton")}
-                          </Button>
-                        </div>
-                      );
-                    })()}
-
-                    {/* Other claimants */}
-                    {otherClaimants.length > 0 && (
-                      <div className="flex items-center gap-1 mt-1">
-                        <span className="text-xs text-muted-foreground">
-                          {t("alsoClaimedBy")}
+                          {item.name}
+                          {item.quantity > 1 && (
+                            <span className="text-muted-foreground ml-1">
+                              x{item.quantity}
+                            </span>
+                          )}
                         </span>
-                        <div className="flex -space-x-1">
-                          {otherClaimants.map((pi) => (
-                            <Avatar key={pi} className="h-5 w-5 border-2 border-background">
-                              <AvatarFallback
-                                className={`text-[8px] font-semibold ${colors[pi % colors.length]}`}
-                              >
-                                {initials(data.people[pi]?.name ?? "?")}
-                              </AvatarFallback>
-                            </Avatar>
-                          ))}
+                        <div className="flex items-center gap-1 shrink-0">
+                          {item.quantity > 1 && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSplittingItemIdx(idx);
+                                setSplitQty("1");
+                              }}
+                              className="text-muted-foreground hover:text-foreground p-1"
+                              aria-label={t("splitItem")}
+                              data-testid={`split-claim-item-${idx}`}
+                            >
+                              <Scissors className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                          <span className="font-semibold">
+                            {formatCents(item.totalPrice, currency, locale)}
+                          </span>
                         </div>
-                        <span className="text-xs text-muted-foreground">
-                          {otherClaimants
-                            .map((pi) => data.people[pi]?.name ?? "?")
-                            .join(", ")}
-                        </span>
                       </div>
-                    )}
+
+                      {/* Split form */}
+                      {splittingItemIdx === idx && (() => {
+                        const parsed = Number(splitQty);
+                        const validQty = Number.isSafeInteger(parsed) && parsed >= 1 && parsed < item.quantity;
+                        return (
+                          <div
+                            className="flex items-center gap-2 mt-2"
+                            onClick={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => e.stopPropagation()}
+                          >
+                            <span className="text-xs text-muted-foreground">{t("splitOff")}</span>
+                            <Input
+                              type="number"
+                              min={1}
+                              max={item.quantity - 1}
+                              value={splitQty}
+                              onChange={(e) => setSplitQty(e.target.value)}
+                              className="w-16 h-7 text-xs"
+                              aria-label={t("splitOff")}
+                              data-testid={`split-qty-input-${idx}`}
+                            />
+                            <span className="text-xs text-muted-foreground">{t("splitOfTotal", { total: item.quantity })}</span>
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="h-7 text-xs"
+                              disabled={splitClaimItem.isPending || !validQty}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!validQty || !personToken) return;
+                                splitClaimItem.mutate({
+                                  token,
+                                  personToken,
+                                  itemIndex: idx,
+                                  splitQuantity: parsed,
+                                });
+                              }}
+                            >
+                              {t("splitButton")}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={(e) => { e.stopPropagation(); setSplittingItemIdx(null); }}
+                            >
+                              {t("cancelButton")}
+                            </Button>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Other claimants */}
+                      {otherClaimants.length > 0 && (
+                        <div className="flex items-center gap-1 mt-1">
+                          <span className="text-xs text-muted-foreground">
+                            {t("alsoClaimedBy")}
+                          </span>
+                          <div className="flex -space-x-1">
+                            {otherClaimants.map((pi) => (
+                              <Avatar key={pi} className="h-5 w-5 border-2 border-background">
+                                <AvatarFallback
+                                  className={`text-[8px] font-semibold ${colors[pi % colors.length]}`}
+                                >
+                                  {initials(data.people[pi]?.name ?? "?")}
+                                </AvatarFallback>
+                              </Avatar>
+                            ))}
+                          </div>
+                          <span className="text-xs text-muted-foreground">
+                            {otherClaimants
+                              .map((pi) => data.people[pi]?.name ?? "?")
+                              .join(", ")}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
           );
         })}
       </div>
