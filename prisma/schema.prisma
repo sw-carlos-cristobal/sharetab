@@ -55,6 +55,7 @@ model User {
   image           String?
   defaultCurrency String    @default("USD")
   locale          String    @default("en")
+  venmoUsername   String?
   suspendedAt     DateTime?
   isPlaceholder   Boolean   @default(false)
   placeholderName String?
@@ -338,6 +339,7 @@ enum AdminAction {
   MERIDIAN_LOGOUT
   MERIDIAN_NOTIFY_PREFERENCE_CHANGED
   AI_PROVIDER_TESTED
+  VENMO_SETTING_CHANGED
 }
 
 model SystemSetting {

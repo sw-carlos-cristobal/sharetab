@@ -30,6 +30,7 @@ import { MeridianAuthSection } from "@/components/admin/meridian-auth-section";
 import { OpenAICodexAuthSection } from "@/components/admin/openai-codex-auth-section";
 import { UserManagementSection } from "@/components/admin/user-management-section";
 import { GroupOverviewSection } from "@/components/admin/group-overview-section";
+import { VenmoSettingsSection } from "@/components/admin/venmo-settings-section";
 
 export default function AdminPage() {
   const { data: session } = useSession();
@@ -56,6 +57,7 @@ export default function AdminPage() {
         <RegistrationControlSection />
         <Separator />
         <AnnouncementSection />
+        <VenmoSettingsSection />
         <Separator />
         <AIStatsSection />
         <AIProviderTestSection />

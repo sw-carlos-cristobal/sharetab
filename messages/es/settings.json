@@ -7,6 +7,8 @@
     "save": "Guardar",
     "saving": "Guardando...",
     "saved": "¡Perfil actualizado!",
+    "venmo": "Cuenta Venmo",
+    "venmoPlaceholder": "@usuario",
     "language": "Idioma",
     "languageDescription": "Elige tu idioma preferido"
   },

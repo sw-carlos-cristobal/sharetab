@@ -141,19 +141,37 @@ export const authRouter = createTRPCRouter({
       return { success: true };
     }),
 
+  getProfile: protectedProcedure.query(async ({ ctx }) => {
+    const user = await ctx.db.user.findUnique({
+      where: { id: ctx.user.id },
+      select: { name: true, email: true, venmoUsername: true, locale: true, defaultCurrency: true },
+    });
+    if (!user) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+    }
+    return user;
+  }),
+
   updateProfile: protectedProcedure
     .input(
       z.object({
         name: z.string().min(1).max(100).optional(),
         defaultCurrency: z.string().length(3).optional(),
         locale: z.enum(locales).optional(),
+        venmoUsername: z.string().max(50).nullable().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const data = {
+        ...input,
+        ...(input.venmoUsername !== undefined
+          ? { venmoUsername: input.venmoUsername?.trim() || null }
+          : {}),
+      };
       const user = await ctx.db.user.update({
         where: { id: ctx.user.id },
-        data: input,
+        data,
       });
-      return { id: user.id, name: user.name, email: user.email, locale: user.locale };
+      return { id: user.id, name: user.name, email: user.email, locale: user.locale, venmoUsername: user.venmoUsername };
     }),
 });
