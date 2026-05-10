@@ -116,6 +116,10 @@
     "splitButton": "分割",
     "cancelButton": "キャンセル",
     "alreadyClaimed": "選択済み",
-    "claimConflict": "{count}件のアイテムが{names}にも選択されています"
+    "claimConflict": "{count}件のアイテムが{names}にも選択されています",
+    "finalizeSplit": "分割を確定",
+    "finalizing": "確定中...",
+    "finalizeConfirm": "この分割を確定しますか？一人当たりの金額が計算され、セッションがロックされます。",
+    "splitFinalized": "分割が確定されました！"
   }
 }

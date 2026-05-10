@@ -116,6 +116,10 @@
     "splitButton": "Dela",
     "cancelButton": "Avbryt",
     "alreadyClaimed": "Redan vald",
-    "claimConflict": "{count} artikel/artiklar också valda av {names}"
+    "claimConflict": "{count} artikel/artiklar också valda av {names}",
+    "finalizeSplit": "Slutför delning",
+    "finalizing": "Slutför...",
+    "finalizeConfirm": "Slutför denna delning? Totaler per person beräknas och sessionen låses.",
+    "splitFinalized": "Delning slutförd!"
   }
 }

@@ -116,6 +116,10 @@
     "splitButton": "Aufteilen",
     "cancelButton": "Abbrechen",
     "alreadyClaimed": "Bereits ausgewählt",
-    "claimConflict": "{count} Artikel auch ausgewählt von {names}"
+    "claimConflict": "{count} Artikel auch ausgewählt von {names}",
+    "finalizeSplit": "Aufteilung abschließen",
+    "finalizing": "Wird abgeschlossen...",
+    "finalizeConfirm": "Aufteilung abschließen? Die Beträge pro Person werden berechnet und die Sitzung wird gesperrt.",
+    "splitFinalized": "Aufteilung abgeschlossen!"
   }
 }

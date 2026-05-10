@@ -116,6 +116,10 @@
     "splitButton": "Dividir",
     "cancelButton": "Cancelar",
     "alreadyClaimed": "Já selecionado",
-    "claimConflict": "{count} item(ns) também selecionado(s) por {names}"
+    "claimConflict": "{count} item(ns) também selecionado(s) por {names}",
+    "finalizeSplit": "Finalizar divisão",
+    "finalizing": "Finalizando...",
+    "finalizeConfirm": "Finalizar esta divisão? Os totais por pessoa serão calculados e a sessão será bloqueada.",
+    "splitFinalized": "Divisão finalizada!"
   }
 }

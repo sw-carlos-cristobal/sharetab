@@ -133,6 +133,13 @@ export default function ClaimPage({
     onError: (err) => toast.error(err.message),
   });
 
+  const finalizeSession = trpc.guest.finalizeSession.useMutation({
+    onSuccess: () => {
+      toast.success(t("splitFinalized"));
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
   const splitClaimItem = trpc.guest.splitClaimItem.useMutation({
     onSuccess: (_data, variables) => {
       const splitIdx = variables.itemIndex;
@@ -402,20 +409,73 @@ export default function ClaimPage({
   // --- Finalized state ---
   if (data.status === "finalized") {
     return (
-      <div className="text-center space-y-6 py-20">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-          <Check className="h-8 w-8 text-primary" />
-        </div>
-        <div className="space-y-2">
+      <div className="space-y-6 pb-8">
+        <div className="text-center space-y-2 pt-4">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+            <Check className="h-8 w-8 text-primary" />
+          </div>
           <h2 className="text-xl font-bold">{t("sessionFinalized")}</h2>
-          <p className="text-muted-foreground">
-            {t("sessionFinalizedDescription")}
-          </p>
+          <p className="text-muted-foreground">{t("sessionFinalizedDescription")}</p>
         </div>
-        <Button nativeButton={false} render={<Link href={`/split/${token}`} />}>
-          <ArrowRight className="mr-2 h-4 w-4" />
-          {t("viewSummary")}
-        </Button>
+
+        {/* Total */}
+        <Card className="bg-primary/5 border-primary/20">
+          <CardContent className="py-4">
+            <div className="flex justify-between items-center">
+              <span className="font-semibold text-lg">{t("totalBill")}</span>
+              <span className="text-2xl font-bold text-primary">
+                {formatCents(data.receiptData.total, currency, locale)}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Per-person summary */}
+        {data.summary && (
+          <div className="space-y-3">
+            <h3 className="font-semibold text-base">{t("perPersonTotals")}</h3>
+            {data.summary.map((person: { name: string; total: number }, idx: number) => (
+              <Card key={idx}>
+                <CardContent className="py-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className={`text-xs font-semibold ${colors[idx % colors.length]}`}>
+                          {initials(person.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="font-medium">{person.name}</span>
+                    </div>
+                    <span className="text-lg font-bold text-primary">
+                      {formatCents(person.total, currency, locale)}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="space-y-3">
+          <Button
+            className="w-full"
+            nativeButton={false}
+            render={<Link href={`/split/${token}`} />}
+          >
+            <ArrowRight className="mr-2 h-4 w-4" />
+            {t("viewSummary")}
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={copyLink}
+            data-testid="copy-link-btn"
+          >
+            <Link2 className="mr-2 h-4 w-4" />
+            {t("copyLink")}
+          </Button>
+        </div>
       </div>
     );
   }
@@ -1073,6 +1133,33 @@ export default function ClaimPage({
       {/* Save button - sticky bottom */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t">
         <div className="mx-auto max-w-lg">
+          {/* Finalize button -- only when no unsaved changes */}
+          {!hasUnsavedChanges && personToken && (
+            <Button
+              variant="outline"
+              className="w-full h-12 mb-2"
+              onClick={() => {
+                if (confirm(t("finalizeConfirm"))) {
+                  finalizeSession.mutate({
+                    token,
+                    personIndex: personIndex!,
+                    personToken,
+                  });
+                }
+              }}
+              disabled={finalizeSession.isPending}
+              data-testid="finalize-btn"
+            >
+              {finalizeSession.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  {t("finalizing")}
+                </>
+              ) : (
+                t("finalizeSplit")
+              )}
+            </Button>
+          )}
           <Button
             className="w-full h-14"
             onClick={saveClaims}

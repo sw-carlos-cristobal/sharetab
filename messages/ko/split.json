@@ -116,6 +116,10 @@
     "splitButton": "분할",
     "cancelButton": "취소",
     "alreadyClaimed": "이미 선택됨",
-    "claimConflict": "{count}개 항목이 {names}에 의해서도 선택됨"
+    "claimConflict": "{count}개 항목이 {names}에 의해서도 선택됨",
+    "finalizeSplit": "분할 확정",
+    "finalizing": "확정 중...",
+    "finalizeConfirm": "이 분할을 확정하시겠습니까? 인당 금액이 계산되고 세션이 잠깁니다.",
+    "splitFinalized": "분할이 확정되었습니다!"
   }
 }
