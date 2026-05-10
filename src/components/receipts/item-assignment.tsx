@@ -198,7 +198,7 @@ export function ItemAssignment({
     if (!newItem.name.trim() || totalPrice <= 0 || quantity < 1) return;
     addItem.mutate({
       receiptId,
-      name: newItem.name,
+      name: newItem.name.trim(),
       quantity,
       unitPrice: Math.round(totalPrice / quantity),
       totalPrice,

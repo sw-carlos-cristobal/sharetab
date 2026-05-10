@@ -53,7 +53,7 @@
     "loadingGroup": "Chargement du groupe...",
     "groupLoadError": "Impossible de charger les données du groupe. Veuillez réessayer.",
     "uploadFailed": "Échec du téléchargement",
-    "createSessionFailed": "Échec de la creation de la session."
+    "createSessionFailed": "Échec de la création de la session."
   },
   "receipt": {
     "hideImage": "Masquer l'image du reçu",

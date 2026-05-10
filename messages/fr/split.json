@@ -59,8 +59,8 @@
     "validationNameRequired": "Le nom de l'article est requis.",
     "validationPricePositive": "Le prix doit être supérieur à zéro.",
     "validationQtyPositive": "La quantité doit être un nombre entier positif.",
-    "createSplitFailed": "Échec de la creation du partage.",
-    "createSessionFailed": "Échec de la creation de la session.",
+    "createSplitFailed": "Échec de la création du partage.",
+    "createSessionFailed": "Échec de la création de la session.",
     "receiptImageAlt": "Reçu"
   },
   "claim": {
