@@ -13,6 +13,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Copy, Share2, Receipt, ArrowRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "@/i18n/navigation";
+import { buildVenmoPayUrl } from "@/lib/venmo";
 
 export default function SharedSplitPage({
   params,
@@ -205,7 +206,7 @@ export default function SharedSplitPage({
 
                 {venmoSetting.data?.enabled && currency === "USD" && venmoHandle.trim() && person.personIndex !== data.paidByIndex && (
                   <a
-                    href={`https://venmo.com/${encodeURIComponent(venmoHandle.trim().replace(/^@/, ''))}?txn=pay&amount=${(person.total / 100).toFixed(2)}&note=${encodeURIComponent(`ShareTab: ${data.receiptData.merchantName ?? 'Bill split'}`)}`}
+                    href={buildVenmoPayUrl(venmoHandle, person.total, `ShareTab: ${data.receiptData.merchantName ?? 'Bill split'}`)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="mt-3 flex items-center justify-center gap-2 rounded-lg bg-[#008CFF] px-4 py-2 text-sm font-medium text-white hover:bg-[#0070CC] transition-colors"

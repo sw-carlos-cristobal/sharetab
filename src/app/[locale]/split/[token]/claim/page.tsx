@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Check, Loader2, Users, Receipt, ArrowRight, Image as ImageIcon, Pencil, X, Link2, Scissors } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "@/i18n/navigation";
+import { buildVenmoPayUrl } from "@/lib/venmo";
 
 // Shared avatar color palette (matches the existing split page)
 const colors = [
@@ -516,7 +517,7 @@ export default function ClaimPage({
                   </div>
                   {venmoSetting.data?.enabled && currency === "USD" && venmoHandle.trim() && person.personIndex !== data.paidByIndex && (
                     <a
-                      href={`https://venmo.com/${encodeURIComponent(venmoHandle.trim().replace(/^@/, ''))}?txn=pay&amount=${(person.total / 100).toFixed(2)}&note=${encodeURIComponent(`ShareTab: ${data.receiptData.merchantName ?? 'Bill split'}`)}`}
+                      href={buildVenmoPayUrl(venmoHandle, person.total, `ShareTab: ${data.receiptData.merchantName ?? 'Bill split'}`)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="mt-3 flex items-center justify-center gap-2 rounded-lg bg-[#008CFF] px-4 py-2 text-sm font-medium text-white hover:bg-[#0070CC] transition-colors"
