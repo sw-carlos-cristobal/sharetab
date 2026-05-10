@@ -69,6 +69,7 @@ export default function ClaimPage({
   const { token } = use(params);
   const locale = useLocale();
   const t = useTranslations("split.claim");
+  const tv = useTranslations("split.venmo");
 
   // --- State ---
   const [name, setName] = useState("");
@@ -84,6 +85,10 @@ export default function ClaimPage({
   const [editingGroupSize, setEditingGroupSize] = useState(1);
   const [splittingItemIdx, setSplittingItemIdx] = useState<number | null>(null);
   const [splitQty, setSplitQty] = useState("");
+  const [venmoHandle, setVenmoHandle] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return localStorage.getItem("sharetab-venmo-handle") ?? "";
+  });
 
   // --- tRPC ---
   const session = trpc.guest.getSession.useQuery(
@@ -471,6 +476,20 @@ export default function ClaimPage({
           </CardContent>
         </Card>
 
+        {/* Venmo handle input */}
+        <div className="flex items-center justify-center gap-2">
+          <Input
+            placeholder={tv("handlePlaceholder")}
+            value={venmoHandle}
+            onChange={(e) => {
+              setVenmoHandle(e.target.value);
+              localStorage.setItem("sharetab-venmo-handle", e.target.value);
+            }}
+            className="h-8 text-sm max-w-48"
+            data-testid="venmo-handle-input"
+          />
+        </div>
+
         {/* Per-person summary */}
         {data.summary && data.summary.length > 0 && (
           <div className="space-y-3">
@@ -491,6 +510,17 @@ export default function ClaimPage({
                       {formatCents(person.total, currency, locale)}
                     </span>
                   </div>
+                  {venmoHandle && person.personIndex !== data.paidByIndex && (
+                    <a
+                      href={`https://venmo.com/${encodeURIComponent(venmoHandle)}?txn=pay&amount=${(person.total / 100).toFixed(2)}&note=${encodeURIComponent(`ShareTab: ${data.receiptData.merchantName ?? 'Bill split'}`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-3 flex items-center justify-center gap-2 rounded-lg bg-[#008CFF] px-4 py-2 text-sm font-medium text-white hover:bg-[#0070CC] transition-colors"
+                      data-testid={`venmo-pay-${person.personIndex}`}
+                    >
+                      {tv("payVia", { amount: formatCents(person.total, currency, locale) })}
+                    </a>
+                  )}
                 </CardContent>
               </Card>
             ))}

@@ -63,6 +63,11 @@
     "createSessionFailed": "创建会话失败。",
     "receiptImageAlt": "收据"
   },
+  "venmo": {
+    "handle": "Venmo用户名",
+    "handlePlaceholder": "输入Venmo用户名",
+    "payVia": "通过Venmo支付{amount}"
+  },
   "claim": {
     "loadingSession": "正在加载会话...",
     "sessionNotFound": "未找到会话",

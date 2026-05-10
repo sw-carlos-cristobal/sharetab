@@ -63,6 +63,11 @@
     "createSessionFailed": "세션 생성에 실패했습니다.",
     "receiptImageAlt": "영수증"
   },
+  "venmo": {
+    "handle": "Venmo 사용자명",
+    "handlePlaceholder": "Venmo 사용자명 입력",
+    "payVia": "Venmo로 {amount} 결제"
+  },
   "claim": {
     "loadingSession": "세션 로딩 중...",
     "sessionNotFound": "세션을 찾을 수 없습니다",

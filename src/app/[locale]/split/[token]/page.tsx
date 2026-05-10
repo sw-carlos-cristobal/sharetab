@@ -1,11 +1,12 @@
 "use client";
 
-import { use } from "react";
-import { useLocale } from "next-intl";
+import { use, useState, useEffect } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { formatCents } from "@/lib/money";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Copy, Share2, Receipt, ArrowRight, Loader2 } from "lucide-react";
@@ -19,7 +20,14 @@ export default function SharedSplitPage({
 }) {
   const { token } = use(params);
   const locale = useLocale();
+  const tv = useTranslations("split.venmo");
+  const [venmoHandle, setVenmoHandle] = useState("");
   const split = trpc.guest.getSplit.useQuery({ token });
+
+  useEffect(() => {
+    const saved = localStorage.getItem("sharetab-venmo-handle");
+    if (saved) setVenmoHandle(saved);
+  }, []);
 
   if (split.isLoading) {
     return (
@@ -105,6 +113,18 @@ export default function SharedSplitPage({
         <p className="text-sm text-muted-foreground">
           Paid by <span className="font-medium text-foreground">{paidBy}</span>
         </p>
+        <div className="flex items-center justify-center gap-2 mt-2">
+          <Input
+            placeholder={tv("handlePlaceholder")}
+            value={venmoHandle}
+            onChange={(e) => {
+              setVenmoHandle(e.target.value);
+              localStorage.setItem("sharetab-venmo-handle", e.target.value);
+            }}
+            className="h-8 text-sm max-w-48"
+            data-testid="venmo-handle-input"
+          />
+        </div>
       </div>
 
       {/* Total */}
@@ -167,6 +187,18 @@ export default function SharedSplitPage({
                     </div>
                   )}
                 </div>
+
+                {venmoHandle && person.personIndex !== data.paidByIndex && (
+                  <a
+                    href={`https://venmo.com/${encodeURIComponent(venmoHandle)}?txn=pay&amount=${(person.total / 100).toFixed(2)}&note=${encodeURIComponent(`ShareTab: ${data.receiptData.merchantName ?? 'Bill split'}`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-3 flex items-center justify-center gap-2 rounded-lg bg-[#008CFF] px-4 py-2 text-sm font-medium text-white hover:bg-[#0070CC] transition-colors"
+                    data-testid={`venmo-pay-${idx}`}
+                  >
+                    {tv("payVia", { amount: formatCents(person.total, currency, locale) })}
+                  </a>
+                )}
               </CardContent>
             </Card>
           );

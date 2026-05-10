@@ -63,6 +63,11 @@
     "createSessionFailed": "Failed to create claiming session.",
     "receiptImageAlt": "Receipt"
   },
+  "venmo": {
+    "handle": "Venmo username",
+    "handlePlaceholder": "Enter Venmo username",
+    "payVia": "Pay {amount} via Venmo"
+  },
   "claim": {
     "loadingSession": "Loading session...",
     "sessionNotFound": "Session not found",
