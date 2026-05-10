@@ -120,6 +120,8 @@
     "finalizeSplit": "分割を確定",
     "finalizing": "確定中...",
     "finalizeConfirm": "この分割を確定しますか？一人当たりの金額が計算され、セッションがロックされます。",
-    "splitFinalized": "分割が確定されました！"
+    "splitFinalized": "分割が確定されました！",
+    "groupSize": "グループの人数",
+    "groupSizeHint": "カップルやグループの場合は2以上を入力"
   }
 }

@@ -72,6 +72,7 @@ export default function ClaimPage({
 
   // --- State ---
   const [name, setName] = useState("");
+  const [groupSize, setGroupSize] = useState(1);
   const [personIndex, setPersonIndex] = useState<number | null>(null);
   const [myPersonIndex, setMyPersonIndex] = useState<number | null>(null);
   const [personToken, setPersonToken] = useState<string | null>(null);
@@ -80,6 +81,7 @@ export default function ClaimPage({
   const [showImage, setShowImage] = useState(false);
   const [editingPersonIdx, setEditingPersonIdx] = useState<number | null>(null);
   const [editingName, setEditingName] = useState("");
+  const [editingGroupSize, setEditingGroupSize] = useState(1);
   const [splittingItemIdx, setSplittingItemIdx] = useState<number | null>(null);
   const [splitQty, setSplitQty] = useState("");
 
@@ -305,6 +307,11 @@ export default function ClaimPage({
 
     const serverAssignments = session.data.assignments;
 
+    // Build personWeights from group sizes
+    const personWeights = session.data.people.map((p) => p.groupSize ?? 1);
+    const hasWeights = personWeights.some((w) => w > 1);
+    const weightsParam = hasWeights ? { personWeights } : {};
+
     if (claimedItems.size > 0) {
       // Build assignment map from server state
       const assignmentMap = new Map<number, Set<number>>();
@@ -338,6 +345,7 @@ export default function ClaimPage({
         tax: session.data.receiptData.tax,
         tip: session.data.receiptData.tip,
         peopleCount: session.data.people.length,
+        ...weightsParam,
       });
     }
 
@@ -347,6 +355,7 @@ export default function ClaimPage({
       tax: session.data.receiptData.tax,
       tip: session.data.receiptData.tip,
       peopleCount: session.data.people.length,
+      ...weightsParam,
     });
   }, [session.data, claimedItems]);
 
@@ -357,7 +366,7 @@ export default function ClaimPage({
       toast.error(t("pleaseEnterName"));
       return;
     }
-    joinSession.mutate({ token, name: trimmed });
+    joinSession.mutate({ token, name: trimmed, ...(groupSize > 1 ? { groupSize } : {}) });
   }
 
   function toggleClaim(itemIndex: number) {
@@ -603,7 +612,10 @@ export default function ClaimPage({
                         {initials(person.name)}
                       </AvatarFallback>
                     </Avatar>
-                    <span className="text-sm font-medium">{person.name}</span>
+                    <span className="text-sm font-medium">
+                      {person.name}
+                      {person.groupSize > 1 && ` (×${person.groupSize})`}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -632,6 +644,22 @@ export default function ClaimPage({
                 autoFocus
                 data-testid="claim-name-input"
               />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="group-size" className="text-sm font-medium">{t("groupSize")}</label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="group-size"
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={groupSize}
+                  onChange={(e) => setGroupSize(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
+                  className="w-20"
+                  data-testid="group-size-input"
+                />
+                <span className="text-xs text-muted-foreground">{t("groupSizeHint")}</span>
+              </div>
             </div>
             {/* Rejoin as existing participant */}
             {data.people.length > 0 && (
@@ -792,16 +820,27 @@ export default function ClaimPage({
                         personToken,
                         targetIndex: idx,
                         newName: editingName.trim(),
+                        groupSize: editingGroupSize,
                       });
                     }}
                   >
                     <Input
                       value={editingName}
                       onChange={(e) => setEditingName(e.target.value)}
-                      className="h-7 text-sm"
+                      className="h-7 text-sm flex-1"
                       autoFocus
                       aria-label={t("editName")}
                       data-testid={`edit-name-input-${idx}`}
+                    />
+                    <Input
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={editingGroupSize}
+                      onChange={(e) => setEditingGroupSize(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
+                      className="h-7 w-14 text-sm"
+                      aria-label={t("groupSize")}
+                      data-testid={`edit-group-size-${idx}`}
                     />
                     <Button type="submit" size="sm" variant="ghost" className="h-7 px-2" disabled={editPersonName.isPending}>
                       <Check className="h-3.5 w-3.5" />
@@ -814,6 +853,7 @@ export default function ClaimPage({
                   <>
                     <span className="flex-1 text-sm font-medium">
                       {person.name}
+                      {person.groupSize > 1 && ` (×${person.groupSize})`}
                       {idx === myPersonIndex && ` ${t("you")}`}
                     </span>
                     <button
@@ -821,6 +861,7 @@ export default function ClaimPage({
                       onClick={() => {
                         setEditingPersonIdx(idx);
                         setEditingName(person.name);
+                        setEditingGroupSize(person.groupSize ?? 1);
                       }}
                       className="text-muted-foreground hover:text-foreground p-1"
                       aria-label={t("editName")}
@@ -891,6 +932,7 @@ export default function ClaimPage({
               </Avatar>
               <span className="text-sm font-medium">
                 {person.name}
+                {person.groupSize > 1 && ` (×${person.groupSize})`}
                 {idx === myPersonIndex && ` ${t("you")}`}
               </span>
             </button>

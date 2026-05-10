@@ -8,8 +8,9 @@ export function calculateSplitTotals(params: {
   tax: number;
   tip: number;
   peopleCount: number;
+  personWeights?: number[]; // weight for each person index (default all 1)
 }): { personIndex: number; itemTotal: number; tax: number; tip: number; total: number }[] {
-  const { items, assignments, tax, tip } = params;
+  const { items, assignments, tax, tip, personWeights } = params;
 
   // Calculate per-person item subtotals
   const personSubtotals = new Map<number, number>();
@@ -18,13 +19,35 @@ export function calculateSplitTotals(params: {
     const item = items[assignment.itemIndex];
     if (!item || assignment.personIndices.length === 0) continue;
 
-    const perPerson = Math.floor(item.totalPrice / assignment.personIndices.length);
-    const remainder = item.totalPrice - perPerson * assignment.personIndices.length;
+    if (personWeights) {
+      // Weighted proportional splitting
+      const totalWeight = Math.max(
+        1,
+        assignment.personIndices.reduce((sum, pi) => sum + (personWeights[pi] ?? 1), 0)
+      );
+      let allocated = 0;
+      for (let i = 0; i < assignment.personIndices.length; i++) {
+        const personIdx = assignment.personIndices[i];
+        const weight = personWeights[personIdx] ?? 1;
+        let amount: number;
+        if (i === assignment.personIndices.length - 1) {
+          amount = item.totalPrice - allocated;
+        } else {
+          amount = Math.floor(item.totalPrice * weight / totalWeight);
+        }
+        allocated += amount;
+        personSubtotals.set(personIdx, (personSubtotals.get(personIdx) ?? 0) + amount);
+      }
+    } else {
+      // Equal splitting (original behavior)
+      const perPerson = Math.floor(item.totalPrice / assignment.personIndices.length);
+      const remainder = item.totalPrice - perPerson * assignment.personIndices.length;
 
-    for (let i = 0; i < assignment.personIndices.length; i++) {
-      const personIdx = assignment.personIndices[i];
-      const amount = perPerson + (i < remainder ? 1 : 0);
-      personSubtotals.set(personIdx, (personSubtotals.get(personIdx) ?? 0) + amount);
+      for (let i = 0; i < assignment.personIndices.length; i++) {
+        const personIdx = assignment.personIndices[i];
+        const amount = perPerson + (i < remainder ? 1 : 0);
+        personSubtotals.set(personIdx, (personSubtotals.get(personIdx) ?? 0) + amount);
+      }
     }
   }
 

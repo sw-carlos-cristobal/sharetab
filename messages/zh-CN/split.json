@@ -120,6 +120,8 @@
     "finalizeSplit": "完成分账",
     "finalizing": "正在完成...",
     "finalizeConfirm": "确定完成分账？将计算每人金额并锁定会话。",
-    "splitFinalized": "分账已完成！"
+    "splitFinalized": "分账已完成！",
+    "groupSize": "您的组人数",
+    "groupSizeHint": "如果是情侣或团体请输入2以上"
   }
 }

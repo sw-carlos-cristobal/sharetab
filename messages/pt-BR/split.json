@@ -120,6 +120,8 @@
     "finalizeSplit": "Finalizar divisão",
     "finalizing": "Finalizando...",
     "finalizeConfirm": "Finalizar esta divisão? Os totais por pessoa serão calculados e a sessão será bloqueada.",
-    "splitFinalized": "Divisão finalizada!"
+    "splitFinalized": "Divisão finalizada!",
+    "groupSize": "Pessoas no seu grupo",
+    "groupSizeHint": "Digite 2+ se estiver entrando como casal ou grupo"
   }
 }

@@ -120,6 +120,8 @@
     "finalizeSplit": "Finaliser le partage",
     "finalizing": "Finalisation...",
     "finalizeConfirm": "Finaliser ce partage ? Les totaux par personne seront calculés et la session sera verrouillée.",
-    "splitFinalized": "Partage finalisé !"
+    "splitFinalized": "Partage finalisé !",
+    "groupSize": "Personnes dans votre groupe",
+    "groupSizeHint": "Entrez 2+ si vous rejoignez en couple ou en groupe"
   }
 }

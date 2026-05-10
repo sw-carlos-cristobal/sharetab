@@ -120,6 +120,8 @@
     "finalizeSplit": "Aufteilung abschließen",
     "finalizing": "Wird abgeschlossen...",
     "finalizeConfirm": "Aufteilung abschließen? Die Beträge pro Person werden berechnet und die Sitzung wird gesperrt.",
-    "splitFinalized": "Aufteilung abgeschlossen!"
+    "splitFinalized": "Aufteilung abgeschlossen!",
+    "groupSize": "Personen in Ihrer Gruppe",
+    "groupSizeHint": "Geben Sie 2+ ein, wenn Sie als Paar oder Gruppe beitreten"
   }
 }
