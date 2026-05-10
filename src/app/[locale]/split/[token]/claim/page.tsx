@@ -220,6 +220,8 @@ export default function ClaimPage({
 
   const claimItems = trpc.guest.claimItems.useMutation({
     onSuccess: (result) => {
+      // Sync local Map from server after save so hasAnyUnsavedChanges resets
+      session.refetch();
       if (result.conflicts && result.conflicts.length > 0) {
         const names = [...new Set(result.conflicts.flatMap(c => c.claimedBy))];
         toast.warning(t("claimConflict", { names: names.join(", "), count: result.conflicts.length }));
