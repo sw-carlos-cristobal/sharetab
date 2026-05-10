@@ -1,11 +1,23 @@
 import { test, expect, request } from "@playwright/test";
-import { trpcMutation } from "./helpers";
+import { users, authedContext, trpcMutation } from "./helpers";
 
 const BASE = process.env.BASE_URL || "http://localhost:3001";
 
 test.use({ viewport: { width: 430, height: 932 } });
 
 test.describe("Venmo deeplink payments", () => {
+  test.beforeAll(async () => {
+    const ctx = await authedContext(users.alice.email, users.alice.password);
+    await trpcMutation(ctx, "admin.setVenmoEnabled", { enabled: true });
+    await ctx.dispose();
+  });
+
+  test.afterAll(async () => {
+    const ctx = await authedContext(users.alice.email, users.alice.password);
+    await trpcMutation(ctx, "admin.setVenmoEnabled", { enabled: false });
+    await ctx.dispose();
+  });
+
   test("venmo handle input appears on split result page", async ({ browser }) => {
     const ctx = await request.newContext({ baseURL: BASE });
 
@@ -36,12 +48,11 @@ test.describe("Venmo deeplink payments", () => {
     const page = await browserCtx.newPage();
     await page.goto(`/en/split/${shareToken}`);
 
-    // Venmo handle input should be visible
     const venmoInput = page.getByTestId("venmo-handle-input");
     await expect(venmoInput).toBeVisible({ timeout: 15000 });
 
     // No pay buttons yet (no handle entered)
-    await expect(page.locator('[data-testid^="venmo-pay-"]')).not.toBeVisible();
+    await expect(page.locator('[data-testid^="venmo-pay-"]')).toHaveCount(0);
 
     await page.close();
     await browserCtx.close();
@@ -81,14 +92,11 @@ test.describe("Venmo deeplink payments", () => {
 
     await expect(page.getByTestId("venmo-handle-input")).toBeVisible({ timeout: 15000 });
 
-    // Enter venmo handle
     await page.getByTestId("venmo-handle-input").fill("alice-venmo");
-    await page.waitForTimeout(500);
 
     // Pay buttons should appear for Bob and Charlie (not Alice — she paid)
     const payButtons = page.locator('[data-testid^="venmo-pay-"]');
-    const count = await payButtons.count();
-    expect(count).toBeGreaterThanOrEqual(2);
+    await expect(payButtons).toHaveCount(2, { timeout: 5000 });
 
     // Verify first pay button has correct Venmo URL
     const firstPayHref = await payButtons.first().getAttribute("href");
@@ -97,7 +105,7 @@ test.describe("Venmo deeplink payments", () => {
 
     // Screenshot: pay buttons visible
     await page.evaluate(() => window.scrollTo({ top: 300, behavior: "instant" }));
-    await page.waitForTimeout(500);
+    await expect(payButtons.first()).toBeVisible();
     await page.screenshot({ path: "docs/screenshots/venmo-pay-buttons.png" });
 
     await page.close();
@@ -132,7 +140,6 @@ test.describe("Venmo deeplink payments", () => {
 
     await expect(page.getByTestId("venmo-handle-input")).toBeVisible({ timeout: 15000 });
 
-    // Enter handle
     await page.getByTestId("venmo-handle-input").fill("my-venmo");
 
     // Verify localStorage
@@ -184,9 +191,7 @@ test.describe("Venmo deeplink payments", () => {
     // Verify URL components
     expect(href).toContain("venmo.com/alice-pays");
     expect(href).toContain("txn=pay");
-    // Amount should be Bob's share in dollars
     expect(href).toMatch(/amount=\d+\.\d{2}/);
-    // Note should mention Pizza Palace
     expect(href).toContain("Pizza%20Palace");
 
     await page.close();

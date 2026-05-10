@@ -27,16 +27,17 @@ export default function SharedSplitPage({
   const split = trpc.guest.getSplit.useQuery({ token });
   const venmoSetting = trpc.admin.getVenmoEnabled.useQuery();
   const profile = trpc.auth.getProfile.useQuery(undefined, {
-    enabled: !!authSession?.user,
+    enabled: !!authSession?.user && !!venmoSetting.data?.enabled,
   });
 
-  // Auto-populate from user profile if logged in, otherwise fall back to localStorage
   useEffect(() => {
     if (profile.data?.venmoUsername) {
       setVenmoHandle(profile.data.venmoUsername);
     } else {
-      const saved = localStorage.getItem("sharetab-venmo-handle");
-      if (saved) setVenmoHandle(saved);
+      try {
+        const saved = localStorage.getItem("sharetab-venmo-handle");
+        if (saved) setVenmoHandle(saved);
+      } catch { /* storage unavailable */ }
     }
   }, [profile.data?.venmoUsername]);
 
@@ -124,14 +125,15 @@ export default function SharedSplitPage({
         <p className="text-sm text-muted-foreground">
           Paid by <span className="font-medium text-foreground">{paidBy}</span>
         </p>
-        {venmoSetting.data?.enabled && (
+        {venmoSetting.data?.enabled && currency === "USD" && (
           <div className="flex items-center justify-center gap-2 mt-2">
             <Input
               placeholder={tv("handlePlaceholder")}
+              aria-label={tv("handle")}
               value={venmoHandle}
               onChange={(e) => {
                 setVenmoHandle(e.target.value);
-                localStorage.setItem("sharetab-venmo-handle", e.target.value);
+                try { localStorage.setItem("sharetab-venmo-handle", e.target.value); } catch { /* storage unavailable */ }
               }}
               className="h-8 text-sm max-w-48"
               data-testid="venmo-handle-input"
@@ -201,9 +203,9 @@ export default function SharedSplitPage({
                   )}
                 </div>
 
-                {venmoSetting.data?.enabled && venmoHandle && person.personIndex !== data.paidByIndex && (
+                {venmoSetting.data?.enabled && currency === "USD" && venmoHandle.trim() && person.personIndex !== data.paidByIndex && (
                   <a
-                    href={`https://venmo.com/${encodeURIComponent(venmoHandle)}?txn=pay&amount=${(person.total / 100).toFixed(2)}&note=${encodeURIComponent(`ShareTab: ${data.receiptData.merchantName ?? 'Bill split'}`)}`}
+                    href={`https://venmo.com/${encodeURIComponent(venmoHandle.trim().replace(/^@/, ''))}?txn=pay&amount=${(person.total / 100).toFixed(2)}&note=${encodeURIComponent(`ShareTab: ${data.receiptData.merchantName ?? 'Bill split'}`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="mt-3 flex items-center justify-center gap-2 rounded-lg bg-[#008CFF] px-4 py-2 text-sm font-medium text-white hover:bg-[#0070CC] transition-colors"
