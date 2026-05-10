@@ -526,7 +526,7 @@ export const guestRouter = createTRPCRouter({
     .input(z.object({
       token: z.string(),
       name: z.string().trim().min(1).max(100),
-      groupSize: z.number().int().min(1).max(20).default(1),
+      groupSize: z.number().int().min(1).max(20).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       return withSerializableRetry(() =>
@@ -549,15 +549,15 @@ export const guestRouter = createTRPCRouter({
             const existingPerson = people[existingIndex]!;
             if (!existingPerson.personToken) {
               const personToken = randomUUID();
-              people[existingIndex] = { ...existingPerson, personToken, groupSize: input.groupSize };
+              people[existingIndex] = { ...existingPerson, personToken, ...(input.groupSize != null ? { groupSize: input.groupSize } : {}) };
               await tx.guestSplit.update({
                 where: { id: session.id },
                 data: { people: people as unknown as Prisma.InputJsonValue },
               });
               return { personIndex: existingIndex, personToken };
             }
-            // Update groupSize on rejoin if changed
-            if (input.groupSize !== (existingPerson.groupSize ?? 1)) {
+            // Update groupSize on rejoin only if explicitly provided and different
+            if (input.groupSize != null && input.groupSize !== (existingPerson.groupSize ?? 1)) {
               people[existingIndex] = { ...existingPerson, groupSize: input.groupSize };
               await tx.guestSplit.update({
                 where: { id: session.id },
@@ -572,7 +572,7 @@ export const guestRouter = createTRPCRouter({
           }
 
           const personToken = randomUUID();
-          people.push({ name: input.name.trim(), personToken, groupSize: input.groupSize });
+          people.push({ name: input.name.trim(), personToken, ...(input.groupSize != null ? { groupSize: input.groupSize } : {}) });
           await tx.guestSplit.update({
             where: { id: session.id },
             data: { people: people as unknown as Prisma.InputJsonValue },

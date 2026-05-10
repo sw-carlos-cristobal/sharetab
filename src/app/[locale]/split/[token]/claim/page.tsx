@@ -366,7 +366,7 @@ export default function ClaimPage({
       toast.error(t("pleaseEnterName"));
       return;
     }
-    joinSession.mutate({ token, name: trimmed, groupSize });
+    joinSession.mutate({ token, name: trimmed, ...(groupSize > 1 ? { groupSize } : {}) });
   }
 
   function toggleClaim(itemIndex: number) {
@@ -672,7 +672,7 @@ export default function ClaimPage({
                       onClick={() => {
                         setName(person.name);
                         setTimeout(() => {
-                          joinSession.mutate({ token, name: person.name, groupSize: person.groupSize ?? 1 });
+                          joinSession.mutate({ token, name: person.name });
                         }, 100);
                       }}
                       className="flex items-center gap-2 rounded-full bg-muted px-3 py-1.5 hover:bg-muted/80 transition-colors"
