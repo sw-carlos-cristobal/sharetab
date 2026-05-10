@@ -142,6 +142,10 @@ test.describe("Venmo settle from group balances", () => {
       // Wait for debt summary to load
       await expect(page.getByText(/you owe/i).first()).toBeVisible({ timeout: 15000 });
 
+      // Venmo pay button should appear on dashboard
+      const venmoPayBtn = page.locator('[data-testid^="venmo-pay-"]').first();
+      await expect(venmoPayBtn).toBeVisible({ timeout: 5000 });
+
       // Scroll to see the debt cards
       await page.evaluate(() => window.scrollTo({ top: 400, behavior: "instant" }));
       await page.waitForTimeout(1000);
