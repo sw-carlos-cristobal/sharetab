@@ -223,6 +223,8 @@ describe("admin router procedures existence", () => {
     expect(procedures).toContain("revokeSystemInvite");
     expect(procedures).toContain("getAnnouncement");
     expect(procedures).toContain("setAnnouncement");
+    expect(procedures).toContain("getVenmoEnabled");
+    expect(procedures).toContain("setVenmoEnabled");
     expect(procedures).toContain("getGlobalActivity");
     expect(procedures).toContain("getAIStats");
     expect(procedures).toContain("sendTestEmail");

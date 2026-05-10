@@ -91,6 +91,7 @@ export default function ClaimPage({
   });
 
   // --- tRPC ---
+  const venmoSetting = trpc.admin.getVenmoEnabled.useQuery();
   const session = trpc.guest.getSession.useQuery(
     { token },
     { refetchInterval: (query) => (query.state.data?.status === "finalized" || query.state.error) ? false : 3000 }
@@ -477,18 +478,20 @@ export default function ClaimPage({
         </Card>
 
         {/* Venmo handle input */}
-        <div className="flex items-center justify-center gap-2">
-          <Input
-            placeholder={tv("handlePlaceholder")}
-            value={venmoHandle}
-            onChange={(e) => {
-              setVenmoHandle(e.target.value);
-              localStorage.setItem("sharetab-venmo-handle", e.target.value);
-            }}
-            className="h-8 text-sm max-w-48"
-            data-testid="venmo-handle-input"
-          />
-        </div>
+        {venmoSetting.data?.enabled && (
+          <div className="flex items-center justify-center gap-2">
+            <Input
+              placeholder={tv("handlePlaceholder")}
+              value={venmoHandle}
+              onChange={(e) => {
+                setVenmoHandle(e.target.value);
+                localStorage.setItem("sharetab-venmo-handle", e.target.value);
+              }}
+              className="h-8 text-sm max-w-48"
+              data-testid="venmo-handle-input"
+            />
+          </div>
+        )}
 
         {/* Per-person summary */}
         {data.summary && data.summary.length > 0 && (
@@ -510,7 +513,7 @@ export default function ClaimPage({
                       {formatCents(person.total, currency, locale)}
                     </span>
                   </div>
-                  {venmoHandle && person.personIndex !== data.paidByIndex && (
+                  {venmoSetting.data?.enabled && venmoHandle && person.personIndex !== data.paidByIndex && (
                     <a
                       href={`https://venmo.com/${encodeURIComponent(venmoHandle)}?txn=pay&amount=${(person.total / 100).toFixed(2)}&note=${encodeURIComponent(`ShareTab: ${data.receiptData.merchantName ?? 'Bill split'}`)}`}
                       target="_blank"

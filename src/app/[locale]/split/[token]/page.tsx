@@ -23,6 +23,7 @@ export default function SharedSplitPage({
   const tv = useTranslations("split.venmo");
   const [venmoHandle, setVenmoHandle] = useState("");
   const split = trpc.guest.getSplit.useQuery({ token });
+  const venmoSetting = trpc.admin.getVenmoEnabled.useQuery();
 
   useEffect(() => {
     const saved = localStorage.getItem("sharetab-venmo-handle");
@@ -113,18 +114,20 @@ export default function SharedSplitPage({
         <p className="text-sm text-muted-foreground">
           Paid by <span className="font-medium text-foreground">{paidBy}</span>
         </p>
-        <div className="flex items-center justify-center gap-2 mt-2">
-          <Input
-            placeholder={tv("handlePlaceholder")}
-            value={venmoHandle}
-            onChange={(e) => {
-              setVenmoHandle(e.target.value);
-              localStorage.setItem("sharetab-venmo-handle", e.target.value);
-            }}
-            className="h-8 text-sm max-w-48"
-            data-testid="venmo-handle-input"
-          />
-        </div>
+        {venmoSetting.data?.enabled && (
+          <div className="flex items-center justify-center gap-2 mt-2">
+            <Input
+              placeholder={tv("handlePlaceholder")}
+              value={venmoHandle}
+              onChange={(e) => {
+                setVenmoHandle(e.target.value);
+                localStorage.setItem("sharetab-venmo-handle", e.target.value);
+              }}
+              className="h-8 text-sm max-w-48"
+              data-testid="venmo-handle-input"
+            />
+          </div>
+        )}
       </div>
 
       {/* Total */}
@@ -188,7 +191,7 @@ export default function SharedSplitPage({
                   )}
                 </div>
 
-                {venmoHandle && person.personIndex !== data.paidByIndex && (
+                {venmoSetting.data?.enabled && venmoHandle && person.personIndex !== data.paidByIndex && (
                   <a
                     href={`https://venmo.com/${encodeURIComponent(venmoHandle)}?txn=pay&amount=${(person.total / 100).toFixed(2)}&note=${encodeURIComponent(`ShareTab: ${data.receiptData.merchantName ?? 'Bill split'}`)}`}
                     target="_blank"
