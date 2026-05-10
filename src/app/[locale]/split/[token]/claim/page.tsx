@@ -1144,7 +1144,9 @@ export default function ClaimPage({
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t">
         <div className="mx-auto max-w-lg">
           {/* Finalize button -- only when no unsaved changes and all items claimed */}
-          {!hasUnsavedChanges && personToken && myPersonIndex !== null && !finalizeSession.isPending && data.assignments.length > 0 && (
+          {!hasUnsavedChanges && personToken && myPersonIndex !== null && !finalizeSession.isPending &&
+           data.assignments.length > 0 &&
+           data.items.every((_, idx) => data.assignments.some(a => a.itemIndex === idx && a.personIndices.length > 0)) && (
             <Button
               variant="outline"
               className="w-full h-12 mb-2"
