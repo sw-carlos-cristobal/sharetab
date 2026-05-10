@@ -827,8 +827,9 @@ export default function ClaimPage({
 
           // Show separator before the first claimed item
           const isFirstClaimed =
+            sortPosition > 0 &&
             claimedByAnyone.has(idx) &&
-            (sortPosition === 0 || !claimedByAnyone.has(sortedItemIndices[sortPosition - 1]!));
+            !claimedByAnyone.has(sortedItemIndices[sortPosition - 1]!);
 
           return (
             <div key={idx}>
