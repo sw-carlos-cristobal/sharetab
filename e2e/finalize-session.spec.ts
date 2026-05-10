@@ -4,7 +4,7 @@ import { trpcMutation } from "./helpers";
 const BASE = process.env.BASE_URL || "http://localhost:3001";
 
 test.describe("Finalize claim session", () => {
-  test("finalize button appears when no unsaved changes", async ({ browser }) => {
+  test("finalize button appears after claims are saved", async ({ browser }) => {
     const ctx = await request.newContext({ baseURL: BASE });
 
     const createRes = await trpcMutation(ctx, "guest.createClaimSession", {
@@ -24,13 +24,22 @@ test.describe("Finalize claim session", () => {
       paidByName: "Alice",
     });
     const shareToken = (await createRes.json()).result?.data?.json?.shareToken;
+
+    // Alice claims both items via API
+    const joinRes = await trpcMutation(ctx, "guest.joinSession", {
+      token: shareToken, name: "Alice",
+    });
+    const { personToken } = (await joinRes.json()).result?.data?.json;
+    await trpcMutation(ctx, "guest.claimItems", {
+      token: shareToken, personIndex: 0, personToken, claimedItemIndices: [0, 1],
+    });
     await ctx.dispose();
 
     const browserCtx = await browser.newContext();
     const page = await browserCtx.newPage();
     await page.goto(`/en/split/${shareToken}/claim`);
 
-    // Join as Alice
+    // Join as Alice (auto-rejoin from localStorage won't work, join manually)
     await expect(page.getByTestId("claim-join-form")).toBeVisible({ timeout: 15000 });
     await page.getByTestId("claim-name-input").fill("Alice");
     await page.getByTestId("claim-join-btn").click();
@@ -39,7 +48,7 @@ test.describe("Finalize claim session", () => {
     // Wait for join toast to clear
     await expect(page.locator('[data-sonner-toast]')).toBeHidden({ timeout: 10000 });
 
-    // Finalize button should be visible (no unsaved changes yet)
+    // Finalize button should be visible (claims saved, no unsaved changes)
     const finalizeBtn = page.getByTestId("finalize-btn");
     await finalizeBtn.scrollIntoViewIfNeeded();
     await expect(finalizeBtn).toBeVisible();

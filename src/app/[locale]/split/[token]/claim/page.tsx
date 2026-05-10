@@ -356,8 +356,11 @@ export default function ClaimPage({
   }
 
   async function copyResultLink() {
-    const resultUrl = window.location.href.replace(/\/claim$/, "");
-    await navigator.clipboard.writeText(resultUrl);
+    const url = new URL(window.location.href);
+    url.pathname = url.pathname.replace(/\/claim$/, "");
+    url.search = "";
+    url.hash = "";
+    await navigator.clipboard.writeText(url.toString());
     toast.success(t("linkCopied"));
   }
 
@@ -438,7 +441,7 @@ export default function ClaimPage({
         </Card>
 
         {/* Per-person summary */}
-        {data.summary && (
+        {data.summary && data.summary.length > 0 && (
           <div className="space-y-3">
             <h3 className="font-semibold text-base">{t("perPersonTotals")}</h3>
             {data.summary.map((person: { name: string; total: number; personIndex: number }) => (
@@ -1141,7 +1144,7 @@ export default function ClaimPage({
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t">
         <div className="mx-auto max-w-lg">
           {/* Finalize button -- only when no unsaved changes and all items claimed */}
-          {!hasUnsavedChanges && personToken && myPersonIndex !== null && !finalizeSession.isPending && (
+          {!hasUnsavedChanges && personToken && myPersonIndex !== null && !finalizeSession.isPending && data.assignments.length > 0 && (
             <Button
               variant="outline"
               className="w-full h-12 mb-2"
