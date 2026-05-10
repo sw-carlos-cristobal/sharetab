@@ -52,7 +52,7 @@ test.describe("Venmo profile integration", () => {
     expect(profile.venmoUsername).toBe("alice-api-test");
 
     // Clean up
-    await trpcMutation(ctx, "auth.updateProfile", { venmoUsername: "" });
+    await trpcMutation(ctx, "auth.updateProfile", { venmoUsername: null });
     await ctx.dispose();
   });
 

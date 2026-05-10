@@ -146,6 +146,9 @@ export const authRouter = createTRPCRouter({
       where: { id: ctx.user.id },
       select: { name: true, email: true, venmoUsername: true, locale: true, defaultCurrency: true },
     });
+    if (!user) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+    }
     return user;
   }),
 
@@ -159,9 +162,15 @@ export const authRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const data = {
+        ...input,
+        ...(input.venmoUsername !== undefined
+          ? { venmoUsername: input.venmoUsername?.trim() || null }
+          : {}),
+      };
       const user = await ctx.db.user.update({
         where: { id: ctx.user.id },
-        data: input,
+        data,
       });
       return { id: user.id, name: user.name, email: user.email, locale: user.locale, venmoUsername: user.venmoUsername };
     }),

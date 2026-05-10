@@ -16,7 +16,7 @@ export default function SettingsPage() {
   const router = useRouter();
   const [name, setName] = useState(session?.user?.name ?? "");
   const [venmoUsername, setVenmoUsername] = useState("");
-  const [venmoLoaded, setVenmoLoaded] = useState(false);
+  const [venmoTouched, setVenmoTouched] = useState(false);
   const [hasSaved, setHasSaved] = useState(false);
 
   const profile = trpc.auth.getProfile.useQuery();
@@ -28,11 +28,10 @@ export default function SettingsPage() {
   }, [session?.user?.name, hasSaved]);
 
   useEffect(() => {
-    if (profile.data && !hasSaved && !venmoLoaded) {
+    if (profile.data && !venmoTouched) {
       setVenmoUsername(profile.data.venmoUsername ?? "");
-      setVenmoLoaded(true);
     }
-  }, [profile.data, hasSaved, venmoLoaded]);
+  }, [profile.data, venmoTouched]);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -55,7 +54,10 @@ export default function SettingsPage() {
 
   function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    updateProfile.mutate({ name, ...(venmoLoaded ? { venmoUsername: venmoUsername.trim() || null } : {}) });
+    updateProfile.mutate({
+      name,
+      ...(venmoTouched || profile.data ? { venmoUsername: venmoUsername.trim() || null } : {}),
+    });
   }
 
   function handleChangePassword(e: React.FormEvent) {
@@ -92,7 +94,7 @@ export default function SettingsPage() {
               <Input
                 id="venmo"
                 value={venmoUsername}
-                onChange={(e) => setVenmoUsername(e.target.value)}
+                onChange={(e) => { setVenmoTouched(true); setVenmoUsername(e.target.value); }}
                 placeholder={t("profile.venmoPlaceholder")}
                 data-testid="venmo-username-input"
               />
