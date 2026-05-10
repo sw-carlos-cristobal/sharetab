@@ -29,8 +29,8 @@ export function VenmoSettingsSection() {
           <Button
             variant={venmo.data?.enabled ? "default" : "outline"}
             size="sm"
-            onClick={() => setVenmo.mutate({ enabled: !venmo.data?.enabled })}
-            disabled={setVenmo.isPending || venmo.isLoading}
+            onClick={() => setVenmo.mutate({ enabled: !(venmo.data?.enabled ?? false) })}
+            disabled={setVenmo.isPending || venmo.isLoading || !venmo.data}
             data-testid="venmo-toggle-btn"
           >
             {venmo.data?.enabled ? "Enabled" : "Disabled"}

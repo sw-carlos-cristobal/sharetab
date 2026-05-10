@@ -55,7 +55,7 @@ export default function SettingsPage() {
 
   function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    updateProfile.mutate({ name, venmoUsername: venmoUsername || undefined });
+    updateProfile.mutate({ name, venmoUsername: venmoUsername.trim() || null });
   }
 
   function handleChangePassword(e: React.FormEvent) {

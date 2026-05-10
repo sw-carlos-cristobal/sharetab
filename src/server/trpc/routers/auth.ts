@@ -155,7 +155,7 @@ export const authRouter = createTRPCRouter({
         name: z.string().min(1).max(100).optional(),
         defaultCurrency: z.string().length(3).optional(),
         locale: z.enum(locales).optional(),
-        venmoUsername: z.string().max(50).optional(),
+        venmoUsername: z.string().max(50).nullable().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
