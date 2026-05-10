@@ -14,5 +14,6 @@
   "groups": "그룹",
   "showMore": "더 보기",
   "members": "{count, plural, other {#명}}",
-  "archivedGroups": "{count, plural, other {보관된 그룹 #개}}"
+  "archivedGroups": "{count, plural, other {보관된 그룹 #개}}",
+  "payViaVenmo": "Venmo로 결제"
 }

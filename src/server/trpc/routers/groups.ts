@@ -43,7 +43,7 @@ export const groupsRouter = createTRPCRouter({
       where: { id: input.groupId },
       include: {
         members: {
-          include: { user: { select: { id: true, name: true, email: true, image: true, isPlaceholder: true, placeholderName: true } } },
+          include: { user: { select: { id: true, name: true, email: true, image: true, isPlaceholder: true, placeholderName: true, venmoUsername: true } } },
         },
       },
     });

@@ -20,7 +20,10 @@
     "totalSpent": "Totalt spenderat",
     "youOwe": "Du är skyldig {name}",
     "owesYou": "{name} är skyldig dig",
-    "settledUp": "Ordnade upp sig"
+    "settledUp": "Ordnade upp sig",
+    "payViaVenmo": "Betala via Venmo",
+    "venmoPaymentConfirm": "Slutförde du Venmo-betalningen på {amount} till {name}?",
+    "settledViaVenmo": "Betald via Venmo"
   },
   "settings": {
     "title": "Gruppinställningar",
