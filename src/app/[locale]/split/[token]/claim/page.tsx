@@ -646,14 +646,15 @@ export default function ClaimPage({
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">{t("groupSize")}</label>
+              <label htmlFor="group-size" className="text-sm font-medium">{t("groupSize")}</label>
               <div className="flex items-center gap-2">
                 <Input
+                  id="group-size"
                   type="number"
                   min={1}
                   max={20}
                   value={groupSize}
-                  onChange={(e) => setGroupSize(parseInt(e.target.value) || 1)}
+                  onChange={(e) => setGroupSize(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
                   className="w-20"
                   data-testid="group-size-input"
                 />
