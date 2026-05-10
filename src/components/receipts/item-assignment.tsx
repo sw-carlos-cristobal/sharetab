@@ -136,22 +136,10 @@ export function ItemAssignment({
   }, [receiptData.data]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  if (receiptData.isLoading) {
-    return <p className="text-muted-foreground">{t("loadingItems")}</p>;
-  }
-
-  if (!receiptData.data) {
-    return <p className="text-destructive">{t("noReceiptData")}</p>;
-  }
-
-  const { receipt, items } = receiptData.data;
-  const extracted = receipt.extractedData;
-  if (!extracted) {
-    return <p className="text-destructive">{t("noExtractedData")}</p>;
-  }
-
+  const { receipt, items } = receiptData.data ?? { receipt: null, items: [] };
+  const extracted = receipt?.extractedData ?? null;
   const parsedTip = parseFloat(tipOverride);
-  const tip = tipOverride !== "" && isFinite(parsedTip) ? Math.round(parsedTip * 100) : extracted.tip;
+  const tip = extracted && tipOverride !== "" && isFinite(parsedTip) ? Math.round(parsedTip * 100) : (extracted?.tip ?? 0);
 
   // Note (Finding #29): toggleAssignment and assignAllToEveryone are intentionally
   // duplicated from split/page.tsx. This component uses Record<string, Set<string>>
@@ -240,7 +228,7 @@ export function ItemAssignment({
     const results = calculateSplitTotals({
       items,
       assignments: assignmentList,
-      tax: extracted!.tax,
+      tax: extracted?.tax ?? 0,
       tip,
       peopleCount: members.length,
     });
@@ -269,6 +257,20 @@ export function ItemAssignment({
       ),
     [members]
   );
+
+  if (receiptData.isLoading) {
+    return <p className="text-muted-foreground">{t("loadingItems")}</p>;
+  }
+  if (!receiptData.data) {
+    return <p className="text-destructive">{t("noReceiptData")}</p>;
+  }
+  if (!extracted) {
+    return <p className="text-destructive">{t("noExtractedData")}</p>;
+  }
+
+  // After early returns, these are guaranteed non-null
+  const safeReceipt = receipt!;
+  const safeExtracted = extracted;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -306,7 +308,7 @@ export function ItemAssignment({
   return (
     <form onSubmit={handleSubmit} className="space-y-4" data-testid="item-assignment-form">
       {/* Receipt image toggle */}
-      {receipt.imagePath && (
+      {safeReceipt.imagePath && (
         <Button
           type="button"
           variant="outline"
@@ -318,7 +320,7 @@ export function ItemAssignment({
         </Button>
       )}
 
-      {showImage && receipt.imagePath && (
+      {showImage && safeReceipt.imagePath && (
         <Card>
           <CardContent className="p-0 overflow-hidden rounded-lg">
             <div
@@ -371,7 +373,7 @@ export function ItemAssignment({
               onTouchEnd={() => { lastTouchDist.current = null; dragStart.current = null; }}
             >
               <img
-                src={`/api/uploads/${receipt.imagePath}`}
+                src={`/api/uploads/${safeReceipt.imagePath}`}
                 alt={t("receiptImageAlt")}
                 draggable={false}
                 className="h-full w-full object-contain pointer-events-none"
@@ -406,28 +408,28 @@ export function ItemAssignment({
           <CardTitle className="text-base">{t("receiptSummary")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-1 text-sm">
-          {extracted.merchantName && (
+          {safeExtracted.merchantName && (
             <div className="flex justify-between">
               <span className="text-muted-foreground">{t("merchant")}</span>
-              <span>{extracted.merchantName}</span>
+              <span>{safeExtracted.merchantName}</span>
             </div>
           )}
           <div className="flex justify-between">
             <span className="text-muted-foreground">{t("subtotal")}</span>
-            <span>{formatCents(extracted.subtotal, extracted.currency, locale)}</span>
+            <span>{formatCents(safeExtracted.subtotal, safeExtracted.currency, locale)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">{t("tax")}</span>
-            <span>{formatCents(extracted.tax, extracted.currency, locale)}</span>
+            <span>{formatCents(safeExtracted.tax, safeExtracted.currency, locale)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">{t("tip")}</span>
-            <span>{formatCents(tip, extracted.currency, locale)}</span>
+            <span>{formatCents(tip, safeExtracted.currency, locale)}</span>
           </div>
           <Separator />
           <div className="flex justify-between font-semibold">
             <span>{t("total")}</span>
-            <span>{formatCents(extracted.subtotal + extracted.tax + tip, extracted.currency, locale)}</span>
+            <span>{formatCents(safeExtracted.subtotal + safeExtracted.tax + tip, safeExtracted.currency, locale)}</span>
           </div>
         </CardContent>
       </Card>
@@ -470,7 +472,7 @@ export function ItemAssignment({
               type="number"
               step="0.01"
               min="0"
-              placeholder={t("tipDetected", { amount: formatCents(extracted.tip, extracted.currency, locale) })}
+              placeholder={t("tipDetected", { amount: formatCents(safeExtracted.tip, safeExtracted.currency, locale) })}
               value={tipOverride}
               onChange={(e) => setTipOverride(e.target.value)}
             />
@@ -627,7 +629,7 @@ export function ItemAssignment({
                       )}
                     </div>
                     <span className="font-semibold">
-                      {formatCents(item.totalPrice, extracted.currency, locale)}
+                      {formatCents(item.totalPrice, safeExtracted.currency, locale)}
                     </span>
                   </div>
                 )}
@@ -713,7 +715,7 @@ export function ItemAssignment({
                 <div key={m.id} className="flex justify-between text-sm">
                   <span>{m.name ?? t("unnamed")}</span>
                   <span className="font-medium">
-                    {formatCents(total, extracted.currency, locale)}
+                    {formatCents(total, safeExtracted.currency, locale)}
                   </span>
                 </div>
               );
