@@ -97,7 +97,7 @@ export default function SettingsPage() {
                 data-testid="venmo-username-input"
               />
             </div>
-            <Button type="submit" disabled={updateProfile.isPending}>
+            <Button type="submit" disabled={updateProfile.isPending} data-testid="save-profile-btn">
               {updateProfile.isPending ? t("profile.saving") : t("profile.save")}
             </Button>
             {updateProfile.isSuccess && (

@@ -224,7 +224,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* People you owe */}
-        <Card>
+        <Card data-testid="you-owe-section">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium">
               <ArrowUpRight className="h-4 w-4 text-red-600 dark:text-red-400" />

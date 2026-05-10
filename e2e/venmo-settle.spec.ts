@@ -52,7 +52,7 @@ test.describe("Venmo settle from group balances", () => {
       await page.goto(`/en/groups/${groupId}`);
 
       // Wait for the debt to show
-      await expect(page.getByText("Balances")).toBeVisible({ timeout: 15000 });
+      await expect(page.getByTestId("balances-title")).toBeVisible({ timeout: 15000 });
       // Venmo button should appear
       const venmoBtn = page.locator('[data-testid^="venmo-settle-"]').first();
       await expect(venmoBtn).toBeVisible({ timeout: 5000 });
@@ -97,7 +97,7 @@ test.describe("Venmo settle from group balances", () => {
       await login(page, users.bob.email, users.bob.password);
       await page.goto(`/en/groups/${groupId}`);
 
-      await expect(page.getByText("Balances")).toBeVisible({ timeout: 15000 });
+      await expect(page.getByTestId("balances-title")).toBeVisible({ timeout: 15000 });
 
       // No venmo button (Alice has no handle)
       await expect(page.locator('[data-testid^="venmo-settle-"]')).not.toBeVisible();
@@ -140,7 +140,7 @@ test.describe("Venmo settle from group balances", () => {
       await page.goto("/en/dashboard");
 
       // Wait for debt summary to load
-      await expect(page.getByText(/you owe/i).first()).toBeVisible({ timeout: 15000 });
+      await expect(page.getByTestId("you-owe-section")).toBeVisible({ timeout: 15000 });
 
       // Venmo pay button should appear on dashboard
       const venmoPayBtn = page.locator('[data-testid^="venmo-pay-"]').first();

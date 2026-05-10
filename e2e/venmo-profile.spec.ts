@@ -28,7 +28,7 @@ test.describe("Venmo profile integration", () => {
     await venmoInput.fill("alice-venmo-test");
 
     // Save
-    await page.getByRole("button", { name: /save/i }).click();
+    await page.getByTestId("save-profile-btn").click();
     await page.waitForTimeout(2000);
 
     // Reload and verify it persisted
@@ -37,7 +37,7 @@ test.describe("Venmo profile integration", () => {
 
     // Clean up — clear the venmo username
     await page.getByTestId("venmo-username-input").fill("");
-    await page.getByRole("button", { name: /save/i }).click();
+    await page.getByTestId("save-profile-btn").click();
   });
 
   test("API: getProfile returns venmoUsername", async () => {

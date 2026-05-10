@@ -208,7 +208,7 @@ export default function GroupDetailPage({
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Balances</CardTitle>
+              <CardTitle className="text-base" data-testid="balances-title">Balances</CardTitle>
               <Button
                 variant="outline"
                 size="sm"

@@ -11,22 +11,22 @@ test.describe("Venmo admin toggle", () => {
     await page.goto("/en/admin");
 
     // Find the Venmo section
-    await expect(page.getByText("Venmo Payments")).toBeVisible({ timeout: 15000 });
+    const toggleBtn = page.getByTestId("venmo-toggle-btn");
+    await expect(toggleBtn).toBeVisible({ timeout: 15000 });
 
     // Should default to disabled
-    const toggleBtn = page.getByRole("button", { name: /disabled/i });
-    await expect(toggleBtn).toBeVisible();
+    await expect(toggleBtn).toContainText("Disabled");
 
     // Enable it
     await toggleBtn.click();
-    await expect(page.getByRole("button", { name: /enabled/i })).toBeVisible({ timeout: 5000 });
+    await expect(toggleBtn).toContainText("Enabled", { timeout: 5000 });
 
     // Screenshot: Venmo enabled in admin
     await page.screenshot({ path: "docs/screenshots/venmo-admin-enabled.png" });
 
     // Disable it again
-    await page.getByRole("button", { name: /enabled/i }).click();
-    await expect(page.getByRole("button", { name: /disabled/i })).toBeVisible({ timeout: 5000 });
+    await toggleBtn.click();
+    await expect(toggleBtn).toContainText("Disabled", { timeout: 5000 });
   });
 
   test("API: getVenmoEnabled returns correct state", async () => {
@@ -83,7 +83,7 @@ test.describe("Venmo admin toggle", () => {
     await page.goto(`/en/split/${shareToken}`);
 
     // Wait for page to load
-    await expect(page.getByText("Toggle Test")).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('[data-testid^="person-card-"]').first()).toBeVisible({ timeout: 15000 });
 
     // Venmo handle input should NOT be visible
     await expect(page.getByTestId("venmo-handle-input")).not.toBeVisible();
