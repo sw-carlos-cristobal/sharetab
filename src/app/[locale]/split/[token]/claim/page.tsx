@@ -135,6 +135,7 @@ export default function ClaimPage({
 
   const finalizeSession = trpc.guest.finalizeSession.useMutation({
     onSuccess: () => {
+      session.refetch();
       toast.success(t("splitFinalized"));
     },
     onError: (err) => toast.error(err.message),
@@ -354,6 +355,12 @@ export default function ClaimPage({
     toast.success(t("linkCopied"));
   }
 
+  async function copyResultLink() {
+    const resultUrl = window.location.href.replace(/\/claim$/, "");
+    await navigator.clipboard.writeText(resultUrl);
+    toast.success(t("linkCopied"));
+  }
+
   async function saveClaims() {
     if (personIndex === null || !personToken) return;
     setSaving(true);
@@ -434,13 +441,13 @@ export default function ClaimPage({
         {data.summary && (
           <div className="space-y-3">
             <h3 className="font-semibold text-base">{t("perPersonTotals")}</h3>
-            {data.summary.map((person: { name: string; total: number }, idx: number) => (
-              <Card key={idx}>
+            {data.summary.map((person: { name: string; total: number; personIndex: number }) => (
+              <Card key={person.personIndex}>
                 <CardContent className="py-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <Avatar className="h-8 w-8">
-                        <AvatarFallback className={`text-xs font-semibold ${colors[idx % colors.length]}`}>
+                        <AvatarFallback className={`text-xs font-semibold ${colors[person.personIndex % colors.length]}`}>
                           {initials(person.name)}
                         </AvatarFallback>
                       </Avatar>
@@ -469,7 +476,7 @@ export default function ClaimPage({
           <Button
             variant="outline"
             className="w-full"
-            onClick={copyLink}
+            onClick={copyResultLink}
             data-testid="copy-link-btn"
           >
             <Link2 className="mr-2 h-4 w-4" />
@@ -1133,8 +1140,8 @@ export default function ClaimPage({
       {/* Save button - sticky bottom */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t">
         <div className="mx-auto max-w-lg">
-          {/* Finalize button -- only when no unsaved changes */}
-          {!hasUnsavedChanges && personToken && (
+          {/* Finalize button -- only when no unsaved changes and all items claimed */}
+          {!hasUnsavedChanges && personToken && myPersonIndex !== null && !finalizeSession.isPending && (
             <Button
               variant="outline"
               className="w-full h-12 mb-2"
@@ -1142,7 +1149,7 @@ export default function ClaimPage({
                 if (confirm(t("finalizeConfirm"))) {
                   finalizeSession.mutate({
                     token,
-                    personIndex: personIndex!,
+                    personIndex: myPersonIndex,
                     personToken,
                   });
                 }
@@ -1150,14 +1157,13 @@ export default function ClaimPage({
               disabled={finalizeSession.isPending}
               data-testid="finalize-btn"
             >
-              {finalizeSession.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  {t("finalizing")}
-                </>
-              ) : (
-                t("finalizeSplit")
-              )}
+              {t("finalizeSplit")}
+            </Button>
+          )}
+          {finalizeSession.isPending && (
+            <Button variant="outline" className="w-full h-12 mb-2" disabled>
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              {t("finalizing")}
             </Button>
           )}
           <Button
