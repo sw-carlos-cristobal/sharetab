@@ -133,6 +133,14 @@ export default function ClaimPage({
     onError: (err) => toast.error(err.message),
   });
 
+  const finalizeSession = trpc.guest.finalizeSession.useMutation({
+    onSuccess: () => {
+      session.refetch();
+      toast.success(t("splitFinalized"));
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
   const splitClaimItem = trpc.guest.splitClaimItem.useMutation({
     onSuccess: (_data, variables) => {
       const splitIdx = variables.itemIndex;
@@ -212,6 +220,8 @@ export default function ClaimPage({
 
   const claimItems = trpc.guest.claimItems.useMutation({
     onSuccess: (result) => {
+      // Sync local Map from server after save so hasAnyUnsavedChanges resets
+      session.refetch();
       if (result.conflicts && result.conflicts.length > 0) {
         const names = [...new Set(result.conflicts.flatMap(c => c.claimedBy))];
         toast.warning(t("claimConflict", { names: names.join(", "), count: result.conflicts.length }));
@@ -251,6 +261,26 @@ export default function ClaimPage({
     }
     return false;
   }, [currentClaims, currentServerClaims, personIndex]);
+
+  // Check if ANY person has unsaved local edits (not just the currently selected one)
+  const hasAnyUnsavedChanges = useMemo(() => {
+    for (const [pIdx, localSet] of claimedItems) {
+      const serverSet = serverClaimsMap.get(pIdx) ?? new Set<number>();
+      if (localSet.size !== serverSet.size) return true;
+      for (const idx of localSet) {
+        if (!serverSet.has(idx)) return true;
+      }
+    }
+    return false;
+  }, [claimedItems, serverClaimsMap]);
+
+  // All items have at least one saved claimant
+  const allItemsClaimed = useMemo(() => {
+    if (!session.data) return false;
+    return session.data.items.every((_, idx) =>
+      session.data!.assignments.some(a => a.itemIndex === idx && a.personIndices.length > 0)
+    );
+  }, [session.data]);
 
   // Which items are claimed by anyone (for sorting unclaimed first)
   const claimedByAnyone = useMemo(() => {
@@ -347,6 +377,15 @@ export default function ClaimPage({
     toast.success(t("linkCopied"));
   }
 
+  async function copyResultLink() {
+    const url = new URL(window.location.href);
+    url.pathname = url.pathname.replace(/\/claim$/, "");
+    url.search = "";
+    url.hash = "";
+    await navigator.clipboard.writeText(url.toString());
+    toast.success(t("linkCopied"));
+  }
+
   async function saveClaims() {
     if (personIndex === null || !personToken) return;
     setSaving(true);
@@ -402,20 +441,73 @@ export default function ClaimPage({
   // --- Finalized state ---
   if (data.status === "finalized") {
     return (
-      <div className="text-center space-y-6 py-20">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-          <Check className="h-8 w-8 text-primary" />
-        </div>
-        <div className="space-y-2">
+      <div className="space-y-6 pb-8">
+        <div className="text-center space-y-2 pt-4">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+            <Check className="h-8 w-8 text-primary" />
+          </div>
           <h2 className="text-xl font-bold">{t("sessionFinalized")}</h2>
-          <p className="text-muted-foreground">
-            {t("sessionFinalizedDescription")}
-          </p>
+          <p className="text-muted-foreground">{t("sessionFinalizedDescription")}</p>
         </div>
-        <Button nativeButton={false} render={<Link href={`/split/${token}`} />}>
-          <ArrowRight className="mr-2 h-4 w-4" />
-          {t("viewSummary")}
-        </Button>
+
+        {/* Total */}
+        <Card className="bg-primary/5 border-primary/20">
+          <CardContent className="py-4">
+            <div className="flex justify-between items-center">
+              <span className="font-semibold text-lg">{t("totalBill")}</span>
+              <span className="text-2xl font-bold text-primary">
+                {formatCents(data.receiptData.total, currency, locale)}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Per-person summary */}
+        {data.summary && data.summary.length > 0 && (
+          <div className="space-y-3">
+            <h3 className="font-semibold text-base">{t("perPersonTotals")}</h3>
+            {data.summary.map((person: { name: string; total: number; personIndex: number }) => (
+              <Card key={person.personIndex}>
+                <CardContent className="py-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className={`text-xs font-semibold ${colors[person.personIndex % colors.length]}`}>
+                          {initials(person.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="font-medium">{person.name}</span>
+                    </div>
+                    <span className="text-lg font-bold text-primary">
+                      {formatCents(person.total, currency, locale)}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="space-y-3">
+          <Button
+            className="w-full"
+            nativeButton={false}
+            render={<Link href={`/split/${token}`} />}
+          >
+            <ArrowRight className="mr-2 h-4 w-4" />
+            {t("viewSummary")}
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={copyResultLink}
+            data-testid="copy-link-btn"
+          >
+            <Link2 className="mr-2 h-4 w-4" />
+            {t("copyLink")}
+          </Button>
+        </div>
       </div>
     );
   }
@@ -1073,6 +1165,32 @@ export default function ClaimPage({
       {/* Save button - sticky bottom */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t">
         <div className="mx-auto max-w-lg">
+          {/* Finalize button -- only when no unsaved changes and all items claimed */}
+          {!hasAnyUnsavedChanges && personToken && myPersonIndex !== null && !finalizeSession.isPending && allItemsClaimed && (
+            <Button
+              variant="outline"
+              className="w-full h-12 mb-2"
+              onClick={() => {
+                if (confirm(t("finalizeConfirm"))) {
+                  finalizeSession.mutate({
+                    token,
+                    personIndex: myPersonIndex,
+                    personToken,
+                  });
+                }
+              }}
+              disabled={finalizeSession.isPending}
+              data-testid="finalize-btn"
+            >
+              {t("finalizeSplit")}
+            </Button>
+          )}
+          {finalizeSession.isPending && (
+            <Button variant="outline" className="w-full h-12 mb-2" disabled>
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              {t("finalizing")}
+            </Button>
+          )}
           <Button
             className="w-full h-14"
             onClick={saveClaims}

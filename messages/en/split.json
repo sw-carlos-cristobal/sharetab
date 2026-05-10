@@ -116,6 +116,10 @@
     "splitButton": "Split",
     "cancelButton": "Cancel",
     "alreadyClaimed": "Already claimed",
-    "claimConflict": "{count} item(s) also claimed by {names}"
+    "claimConflict": "{count} item(s) also claimed by {names}",
+    "finalizeSplit": "Finalize Split",
+    "finalizing": "Finalizing...",
+    "finalizeConfirm": "Finalize this split? Per-person totals will be calculated and the session will be locked.",
+    "splitFinalized": "Split finalized!"
   }
 }

@@ -116,6 +116,10 @@
     "splitButton": "Diviser",
     "cancelButton": "Annuler",
     "alreadyClaimed": "Déjà réclamé",
-    "claimConflict": "{count} article(s) également réclamé(s) par {names}"
+    "claimConflict": "{count} article(s) également réclamé(s) par {names}",
+    "finalizeSplit": "Finaliser le partage",
+    "finalizing": "Finalisation...",
+    "finalizeConfirm": "Finaliser ce partage ? Les totaux par personne seront calculés et la session sera verrouillée.",
+    "splitFinalized": "Partage finalisé !"
   }
 }
