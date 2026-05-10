@@ -142,4 +142,126 @@ describe("calculateSplitTotals", () => {
     expect(totalAll).toBe(3333 + 267 + 500);
     expect(results).toHaveLength(3);
   });
+
+  // --- personWeights tests ---
+
+  test("weighted split: 2 people with weights [2, 1] splitting $30 item", () => {
+    const results = calculateSplitTotals({
+      items: [{ totalPrice: 3000 }], // $30.00
+      assignments: [{ itemIndex: 0, personIndices: [0, 1] }],
+      tax: 0,
+      tip: 0,
+      peopleCount: 2,
+      personWeights: [2, 1],
+    });
+
+    expect(results).toHaveLength(2);
+    expect(results.find(r => r.personIndex === 0)!.itemTotal).toBe(2000); // 2/3 of $30
+    expect(results.find(r => r.personIndex === 1)!.itemTotal).toBe(1000); // 1/3 of $30
+  });
+
+  test("weighted split distributes tax/tip proportionally to subtotals", () => {
+    const results = calculateSplitTotals({
+      items: [{ totalPrice: 3000 }],
+      assignments: [{ itemIndex: 0, personIndices: [0, 1] }],
+      tax: 300, // $3 tax
+      tip: 600, // $6 tip
+      peopleCount: 2,
+      personWeights: [2, 1],
+    });
+
+    expect(results).toHaveLength(2);
+    const person0 = results.find(r => r.personIndex === 0)!;
+    const person1 = results.find(r => r.personIndex === 1)!;
+    // Person 0 has $20 subtotal (2/3), person 1 has $10 (1/3)
+    // Tax: person 0 = $2, person 1 = $1
+    expect(person0.tax).toBe(200);
+    // Tip: person 0 = $4, person 1 = $2
+    expect(person0.tip).toBe(400);
+    // Totals sum correctly
+    expect(person0.total + person1.total).toBe(3000 + 300 + 600);
+  });
+
+  test("weighted split with remainder handling (odd cents)", () => {
+    const results = calculateSplitTotals({
+      items: [{ totalPrice: 1000 }], // $10.00
+      assignments: [{ itemIndex: 0, personIndices: [0, 1] }],
+      tax: 0,
+      tip: 0,
+      peopleCount: 2,
+      personWeights: [2, 1], // 2/3 = 666.67 cents → floor to 666, remainder goes to last
+    });
+
+    expect(results).toHaveLength(2);
+    const person0 = results.find(r => r.personIndex === 0)!;
+    const person1 = results.find(r => r.personIndex === 1)!;
+    // 1000 * 2/3 = 666.67 → floor = 666; last person gets 1000 - 666 = 334
+    expect(person0.itemTotal).toBe(666);
+    expect(person1.itemTotal).toBe(334);
+    expect(person0.itemTotal + person1.itemTotal).toBe(1000);
+  });
+
+  test("weighted split: individual items unaffected by weights", () => {
+    const results = calculateSplitTotals({
+      items: [{ totalPrice: 500 }, { totalPrice: 800 }],
+      assignments: [
+        { itemIndex: 0, personIndices: [0] }, // Individual: person 0 only
+        { itemIndex: 1, personIndices: [1] }, // Individual: person 1 only
+      ],
+      tax: 0,
+      tip: 0,
+      peopleCount: 2,
+      personWeights: [3, 1], // Weights don't matter for individual items
+    });
+
+    expect(results).toHaveLength(2);
+    expect(results.find(r => r.personIndex === 0)!.itemTotal).toBe(500);
+    expect(results.find(r => r.personIndex === 1)!.itemTotal).toBe(800);
+  });
+
+  test("weighted split: mixed shared and individual items", () => {
+    const results = calculateSplitTotals({
+      items: [{ totalPrice: 600 }, { totalPrice: 900 }],
+      assignments: [
+        { itemIndex: 0, personIndices: [0] },      // Person 0 individual
+        { itemIndex: 1, personIndices: [0, 1] },   // Shared between 0 and 1
+      ],
+      tax: 100,
+      tip: 0,
+      peopleCount: 2,
+      personWeights: [2, 1], // Person 0 weight=2, person 1 weight=1
+    });
+
+    expect(results).toHaveLength(2);
+    const person0 = results.find(r => r.personIndex === 0)!;
+    const person1 = results.find(r => r.personIndex === 1)!;
+    // Person 0: 600 individual + 900*2/3=600 shared = 1200
+    // Person 1: 900*1/3=300 shared = 300
+    expect(person0.itemTotal).toBe(1200);
+    expect(person1.itemTotal).toBe(300);
+    // Total sums
+    expect(person0.total + person1.total).toBe(600 + 900 + 100);
+  });
+
+  test("weighted split: backward compat — no personWeights equals equal split", () => {
+    const withoutWeights = calculateSplitTotals({
+      items: [{ totalPrice: 1000 }],
+      assignments: [{ itemIndex: 0, personIndices: [0, 1] }],
+      tax: 100,
+      tip: 50,
+      peopleCount: 2,
+    });
+
+    const withEqualWeights = calculateSplitTotals({
+      items: [{ totalPrice: 1000 }],
+      assignments: [{ itemIndex: 0, personIndices: [0, 1] }],
+      tax: 100,
+      tip: 50,
+      peopleCount: 2,
+      personWeights: [1, 1],
+    });
+
+    // Equal weights should produce same result as no weights
+    expect(withoutWeights).toEqual(withEqualWeights);
+  });
 });

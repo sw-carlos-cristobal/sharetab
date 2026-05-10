@@ -120,6 +120,8 @@
     "finalizeSplit": "Finalize Split",
     "finalizing": "Finalizing...",
     "finalizeConfirm": "Finalize this split? Per-person totals will be calculated and the session will be locked.",
-    "splitFinalized": "Split finalized!"
+    "splitFinalized": "Split finalized!",
+    "groupSize": "People in your group",
+    "groupSizeHint": "Enter 2+ if joining as a couple or group"
   }
 }

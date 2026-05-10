@@ -15,12 +15,13 @@ import {
 type GuestSessionPerson = {
   name: string;
   personToken?: string;
+  groupSize?: number; // defaults to 1, > 1 means this person represents a group
 };
 
 const GUEST_TRANSACTION_RETRY_ATTEMPTS = 3;
 
 function toPublicPeople(people: GuestSessionPerson[]) {
-  return people.map(({ name }) => ({ name }));
+  return people.map(({ name, groupSize }) => ({ name, groupSize: groupSize ?? 1 }));
 }
 
 function cloneAssignments(
@@ -525,6 +526,7 @@ export const guestRouter = createTRPCRouter({
     .input(z.object({
       token: z.string(),
       name: z.string().trim().min(1).max(100),
+      groupSize: z.number().int().min(1).max(20).default(1),
     }))
     .mutation(async ({ ctx, input }) => {
       return withSerializableRetry(() =>
@@ -547,12 +549,20 @@ export const guestRouter = createTRPCRouter({
             const existingPerson = people[existingIndex]!;
             if (!existingPerson.personToken) {
               const personToken = randomUUID();
-              people[existingIndex] = { ...existingPerson, personToken };
+              people[existingIndex] = { ...existingPerson, personToken, groupSize: input.groupSize };
               await tx.guestSplit.update({
                 where: { id: session.id },
                 data: { people: people as unknown as Prisma.InputJsonValue },
               });
               return { personIndex: existingIndex, personToken };
+            }
+            // Update groupSize on rejoin if changed
+            if (input.groupSize !== (existingPerson.groupSize ?? 1)) {
+              people[existingIndex] = { ...existingPerson, groupSize: input.groupSize };
+              await tx.guestSplit.update({
+                where: { id: session.id },
+                data: { people: people as unknown as Prisma.InputJsonValue },
+              });
             }
             return { personIndex: existingIndex, personToken: existingPerson.personToken };
           }
@@ -562,7 +572,7 @@ export const guestRouter = createTRPCRouter({
           }
 
           const personToken = randomUUID();
-          people.push({ name: input.name.trim(), personToken });
+          people.push({ name: input.name.trim(), personToken, groupSize: input.groupSize });
           await tx.guestSplit.update({
             where: { id: session.id },
             data: { people: people as unknown as Prisma.InputJsonValue },
@@ -943,12 +953,17 @@ export const guestRouter = createTRPCRouter({
 
           const tip = input.tipOverride ?? receiptData.tip;
 
+          // Build personWeights from each person's groupSize for proportional splitting
+          const personWeights = people.map((p) => p.groupSize ?? 1);
+          const hasWeights = personWeights.some((w) => w > 1);
+
           const summary = calculateSplitTotals({
             items,
             assignments,
             tax: receiptData.tax,
             tip,
             peopleCount: people.length,
+            ...(hasWeights ? { personWeights } : {}),
           });
 
           const summaryWithNames = summary.map((s) => ({

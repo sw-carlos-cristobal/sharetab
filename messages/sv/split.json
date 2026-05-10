@@ -120,6 +120,8 @@
     "finalizeSplit": "Slutför delning",
     "finalizing": "Slutför...",
     "finalizeConfirm": "Slutför denna delning? Totaler per person beräknas och sessionen låses.",
-    "splitFinalized": "Delning slutförd!"
+    "splitFinalized": "Delning slutförd!",
+    "groupSize": "Antal i din grupp",
+    "groupSizeHint": "Ange 2+ om ni går med som par eller grupp"
   }
 }

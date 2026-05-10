@@ -72,6 +72,7 @@ export default function ClaimPage({
 
   // --- State ---
   const [name, setName] = useState("");
+  const [groupSize, setGroupSize] = useState(1);
   const [personIndex, setPersonIndex] = useState<number | null>(null);
   const [myPersonIndex, setMyPersonIndex] = useState<number | null>(null);
   const [personToken, setPersonToken] = useState<string | null>(null);
@@ -305,6 +306,11 @@ export default function ClaimPage({
 
     const serverAssignments = session.data.assignments;
 
+    // Build personWeights from group sizes
+    const personWeights = session.data.people.map((p) => p.groupSize ?? 1);
+    const hasWeights = personWeights.some((w) => w > 1);
+    const weightsParam = hasWeights ? { personWeights } : {};
+
     if (claimedItems.size > 0) {
       // Build assignment map from server state
       const assignmentMap = new Map<number, Set<number>>();
@@ -338,6 +344,7 @@ export default function ClaimPage({
         tax: session.data.receiptData.tax,
         tip: session.data.receiptData.tip,
         peopleCount: session.data.people.length,
+        ...weightsParam,
       });
     }
 
@@ -347,6 +354,7 @@ export default function ClaimPage({
       tax: session.data.receiptData.tax,
       tip: session.data.receiptData.tip,
       peopleCount: session.data.people.length,
+      ...weightsParam,
     });
   }, [session.data, claimedItems]);
 
@@ -357,7 +365,7 @@ export default function ClaimPage({
       toast.error(t("pleaseEnterName"));
       return;
     }
-    joinSession.mutate({ token, name: trimmed });
+    joinSession.mutate({ token, name: trimmed, groupSize });
   }
 
   function toggleClaim(itemIndex: number) {
@@ -603,7 +611,10 @@ export default function ClaimPage({
                         {initials(person.name)}
                       </AvatarFallback>
                     </Avatar>
-                    <span className="text-sm font-medium">{person.name}</span>
+                    <span className="text-sm font-medium">
+                      {person.name}
+                      {person.groupSize > 1 && ` (×${person.groupSize})`}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -633,6 +644,21 @@ export default function ClaimPage({
                 data-testid="claim-name-input"
               />
             </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">{t("groupSize")}</label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={groupSize}
+                  onChange={(e) => setGroupSize(parseInt(e.target.value) || 1)}
+                  className="w-20"
+                  data-testid="group-size-input"
+                />
+                <span className="text-xs text-muted-foreground">{t("groupSizeHint")}</span>
+              </div>
+            </div>
             {/* Rejoin as existing participant */}
             {data.people.length > 0 && (
               <div className="space-y-2">
@@ -645,7 +671,7 @@ export default function ClaimPage({
                       onClick={() => {
                         setName(person.name);
                         setTimeout(() => {
-                          joinSession.mutate({ token, name: person.name });
+                          joinSession.mutate({ token, name: person.name, groupSize: person.groupSize ?? 1 });
                         }, 100);
                       }}
                       className="flex items-center gap-2 rounded-full bg-muted px-3 py-1.5 hover:bg-muted/80 transition-colors"
@@ -814,6 +840,7 @@ export default function ClaimPage({
                   <>
                     <span className="flex-1 text-sm font-medium">
                       {person.name}
+                      {person.groupSize > 1 && ` (×${person.groupSize})`}
                       {idx === myPersonIndex && ` ${t("you")}`}
                     </span>
                     <button
@@ -891,6 +918,7 @@ export default function ClaimPage({
               </Avatar>
               <span className="text-sm font-medium">
                 {person.name}
+                {person.groupSize > 1 && ` (×${person.groupSize})`}
                 {idx === myPersonIndex && ` ${t("you")}`}
               </span>
             </button>

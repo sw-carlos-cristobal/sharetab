@@ -120,6 +120,8 @@
     "finalizeSplit": "Finalizar división",
     "finalizing": "Finalizando...",
     "finalizeConfirm": "¿Finalizar esta división? Se calcularán los totales por persona y la sesión se bloqueará.",
-    "splitFinalized": "¡División finalizada!"
+    "splitFinalized": "¡División finalizada!",
+    "groupSize": "Personas en tu grupo",
+    "groupSizeHint": "Ingresa 2+ si te unes como pareja o grupo"
   }
 }
