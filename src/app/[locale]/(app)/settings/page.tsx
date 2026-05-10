@@ -15,7 +15,10 @@ export default function SettingsPage() {
   const { data: session, update } = useSession();
   const router = useRouter();
   const [name, setName] = useState(session?.user?.name ?? "");
+  const [venmoUsername, setVenmoUsername] = useState("");
   const [hasSaved, setHasSaved] = useState(false);
+
+  const profile = trpc.auth.getProfile.useQuery();
 
   useEffect(() => {
     // Only sync from session on initial load, not after a save
@@ -24,6 +27,12 @@ export default function SettingsPage() {
       setName(session.user.name);
     }
   }, [session?.user?.name, hasSaved]);
+
+  useEffect(() => {
+    if (profile.data?.venmoUsername && !hasSaved) {
+      setVenmoUsername(profile.data.venmoUsername);
+    }
+  }, [profile.data?.venmoUsername, hasSaved]);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -46,7 +55,7 @@ export default function SettingsPage() {
 
   function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    updateProfile.mutate({ name });
+    updateProfile.mutate({ name, venmoUsername: venmoUsername || undefined });
   }
 
   function handleChangePassword(e: React.FormEvent) {
@@ -76,6 +85,16 @@ export default function SettingsPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="venmo">{t("profile.venmo")}</Label>
+              <Input
+                id="venmo"
+                value={venmoUsername}
+                onChange={(e) => setVenmoUsername(e.target.value)}
+                placeholder={t("profile.venmoPlaceholder")}
+                data-testid="venmo-username-input"
               />
             </div>
             <Button type="submit" disabled={updateProfile.isPending} data-testid="save-profile-btn">

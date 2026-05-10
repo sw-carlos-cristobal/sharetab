@@ -835,6 +835,35 @@ export const adminRouter = createTRPCRouter({
       return { success: true };
     }),
 
+  // ─── Venmo Payments Toggle ──────────────────────────────
+
+  getVenmoEnabled: publicProcedure.query(async ({ ctx }) => {
+    const setting = await ctx.db.systemSetting.findUnique({
+      where: { key: "venmoEnabled" },
+    });
+    return { enabled: setting?.value === "true" };
+  }),
+
+  setVenmoEnabled: adminProcedure
+    .input(z.object({ enabled: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db.systemSetting.upsert({
+        where: { key: "venmoEnabled" },
+        update: { value: String(input.enabled) },
+        create: { key: "venmoEnabled", value: String(input.enabled) },
+      });
+
+      await logAdminAction(
+        ctx.db,
+        ctx.user.id,
+        "VENMO_SETTING_CHANGED",
+        null,
+        { enabled: input.enabled }
+      );
+
+      return { success: true };
+    }),
+
   // ─── Email Test ──────────────────────────────────────────
 
   sendTestEmail: adminProcedure.mutation(async ({ ctx }) => {
