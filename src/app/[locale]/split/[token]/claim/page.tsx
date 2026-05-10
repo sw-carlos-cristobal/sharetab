@@ -837,7 +837,7 @@ export default function ClaimPage({
                       min={1}
                       max={20}
                       value={editingGroupSize}
-                      onChange={(e) => setEditingGroupSize(parseInt(e.target.value) || 1)}
+                      onChange={(e) => setEditingGroupSize(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
                       className="h-7 w-14 text-sm"
                       aria-label={t("groupSize")}
                       data-testid={`edit-group-size-${idx}`}
