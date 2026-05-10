@@ -59,15 +59,26 @@ test.describe("Claim page — item sorting", () => {
     // The "Already claimed" divider should be visible
     await expect(page.getByText(/already claimed/i)).toBeVisible({ timeout: 5000 });
 
-    // Get item order — unclaimed items (Croissant, Muffin) should be before claimed (Latte, Cappuccino)
+    // Verify item count
     const itemCards = page.locator('[data-testid^="claim-item-"]');
     const count = await itemCards.count();
     expect(count).toBe(4);
 
-    // First two items should be unclaimed (no ring-2 ring-primary from server state)
-    // Last two should have "Also claimed by" text
-    const lastItem = itemCards.last();
-    await expect(lastItem.getByText("Alice")).toBeVisible();
+    // Verify sort order: unclaimed items (Croissant idx=2, Muffin idx=3) first,
+    // claimed items (Latte idx=0, Cappuccino idx=1) last
+    const firstItemText = await itemCards.nth(0).textContent();
+    const secondItemText = await itemCards.nth(1).textContent();
+    const thirdItemText = await itemCards.nth(2).textContent();
+    const fourthItemText = await itemCards.nth(3).textContent();
+
+    // First two should be unclaimed (Croissant, Muffin)
+    expect(firstItemText).toContain("Croissant");
+    expect(secondItemText).toContain("Muffin");
+    // Last two should be claimed (Latte, Cappuccino) with Alice shown
+    expect(thirdItemText).toContain("Latte");
+    expect(fourthItemText).toContain("Cappuccino");
+    expect(thirdItemText).toContain("Alice");
+    expect(fourthItemText).toContain("Alice");
 
     await page.close();
     await browserCtx.close();
@@ -126,8 +137,10 @@ test.describe("Claim page — conflict detection", () => {
     await page.getByTestId("claim-join-btn").click();
     await expect(page.locator('[data-testid^="claim-item-"]').first()).toBeVisible({ timeout: 15000 });
 
+    // Wait for the "Joined" toast to disappear
+    await expect(page.locator('[data-sonner-toast]')).toBeHidden({ timeout: 10000 });
+
     // Bob claims item 0 (Pizza — already claimed by Alice) and item 2 (Salad)
-    // Item 0 is in the "already claimed" section, so find it
     await page.getByTestId("claim-item-0").click();
     await page.getByTestId("claim-item-2").click();
 
@@ -136,9 +149,12 @@ test.describe("Claim page — conflict detection", () => {
     await saveBtn.scrollIntoViewIfNeeded();
     await saveBtn.click();
 
-    // Should show a conflict warning toast (item also claimed by Alice)
-    // The toast appears in a [data-sonner-toast] element
-    await expect(page.locator('[data-sonner-toast]')).toBeVisible({ timeout: 10000 });
+    // Should show a conflict warning toast mentioning Alice and the item count
+    const toast = page.locator('[data-sonner-toast]').last();
+    await expect(toast).toBeVisible({ timeout: 10000 });
+    const toastText = await toast.textContent();
+    expect(toastText).toContain("Alice");
+    expect(toastText).toMatch(/1/); // 1 conflicting item
 
     await page.close();
     await browserCtx.close();
