@@ -114,6 +114,8 @@
     "splitOff": "拆分",
     "splitOfTotal": "共{total}个",
     "splitButton": "拆分",
-    "cancelButton": "取消"
+    "cancelButton": "取消",
+    "alreadyClaimed": "已被选择",
+    "claimConflict": "{count}个项目也被{names}选择"
   }
 }

@@ -114,6 +114,8 @@
     "splitOff": "Separar",
     "splitOfTotal": "de {total}",
     "splitButton": "Dividir",
-    "cancelButton": "Cancelar"
+    "cancelButton": "Cancelar",
+    "alreadyClaimed": "Ya reclamado",
+    "claimConflict": "{count} artículo(s) también reclamado(s) por {names}"
   }
 }

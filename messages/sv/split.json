@@ -114,6 +114,8 @@
     "splitOff": "Dela av",
     "splitOfTotal": "av {total}",
     "splitButton": "Dela",
-    "cancelButton": "Avbryt"
+    "cancelButton": "Avbryt",
+    "alreadyClaimed": "Redan vald",
+    "claimConflict": "{count} artikel/artiklar också valda av {names}"
   }
 }

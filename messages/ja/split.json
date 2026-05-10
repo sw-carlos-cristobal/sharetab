@@ -114,6 +114,8 @@
     "splitOff": "分割数",
     "splitOfTotal": "{total}個中",
     "splitButton": "分割",
-    "cancelButton": "キャンセル"
+    "cancelButton": "キャンセル",
+    "alreadyClaimed": "選択済み",
+    "claimConflict": "{count}件のアイテムが{names}にも選択されています"
   }
 }

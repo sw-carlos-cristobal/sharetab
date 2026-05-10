@@ -825,7 +825,22 @@ export const guestRouter = createTRPCRouter({
             data: { assignments: cleanedAssignments as unknown as Prisma.InputJsonValue },
           });
 
-          return { success: true };
+          // Check for conflicts: items in this person's claim set that are also claimed by others
+          const assignmentMap = new Map(cleanedAssignments.map(a => [a.itemIndex, a]));
+          const conflicts: { itemIndex: number; claimedBy: string[] }[] = [];
+          for (const claimedIdx of claimedSet) {
+            const assignment = assignmentMap.get(claimedIdx);
+            if (assignment && assignment.personIndices.length > 1) {
+              const otherNames = assignment.personIndices
+                .filter(pi => pi !== input.personIndex)
+                .map(pi => people[pi]?.name ?? "Someone");
+              if (otherNames.length > 0) {
+                conflicts.push({ itemIndex: claimedIdx, claimedBy: otherNames });
+              }
+            }
+          }
+
+          return { success: true, conflicts };
         }, {
           isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
         })

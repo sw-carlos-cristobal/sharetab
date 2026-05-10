@@ -114,6 +114,8 @@
     "splitOff": "Split off",
     "splitOfTotal": "of {total}",
     "splitButton": "Split",
-    "cancelButton": "Cancel"
+    "cancelButton": "Cancel",
+    "alreadyClaimed": "Already claimed",
+    "claimConflict": "{count} item(s) also claimed by {names}"
   }
 }

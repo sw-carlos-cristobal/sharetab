@@ -114,6 +114,8 @@
     "splitOff": "분할 수",
     "splitOfTotal": "{total}개 중",
     "splitButton": "분할",
-    "cancelButton": "취소"
+    "cancelButton": "취소",
+    "alreadyClaimed": "이미 선택됨",
+    "claimConflict": "{count}개 항목이 {names}에 의해서도 선택됨"
   }
 }
