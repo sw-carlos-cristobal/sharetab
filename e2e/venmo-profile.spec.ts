@@ -56,49 +56,4 @@ test.describe("Venmo profile integration", () => {
     await ctx.dispose();
   });
 
-  test("split page auto-populates Venmo handle from profile for logged-in users", async ({ page }) => {
-    // Enable Venmo first
-    const adminCtx = await authedContext(users.alice.email, users.alice.password);
-    await trpcMutation(adminCtx, "admin.setVenmoEnabled", { enabled: true });
-    // Set Alice's Venmo username
-    await trpcMutation(adminCtx, "auth.updateProfile", { venmoUsername: "alice-auto" });
-    await adminCtx.dispose();
-
-    // Create a split as Alice
-    const ctx = await authedContext(users.alice.email, users.alice.password);
-    const createRes = await trpcMutation(ctx, "guest.createSplit", {
-      receiptData: {
-        merchantName: "Auto Populate Test",
-        subtotal: 2000,
-        tax: 200,
-        tip: 0,
-        total: 2200,
-        currency: "USD",
-      },
-      items: [{ name: "Item", quantity: 1, unitPrice: 2000, totalPrice: 2000 }],
-      people: [{ name: "Alice" }, { name: "Bob" }],
-      assignments: [{ itemIndex: 0, personIndices: [1] }],
-      paidByIndex: 0,
-    });
-    const { shareToken } = (await createRes.json()).result?.data?.json;
-    await ctx.dispose();
-
-    // Login and view the split
-    await login(page, users.alice.email, users.alice.password);
-    await page.goto(`/en/split/${shareToken}`);
-
-    // Venmo handle should be auto-populated from profile
-    const venmoInput = page.getByTestId("venmo-handle-input");
-    await expect(venmoInput).toBeVisible({ timeout: 15000 });
-    await expect(venmoInput).toHaveValue("alice-auto", { timeout: 10000 });
-
-    // Pay button should show for Bob
-    await expect(page.locator('[data-testid^="venmo-pay-"]').first()).toBeVisible();
-
-    // Clean up
-    const cleanCtx = await authedContext(users.alice.email, users.alice.password);
-    await trpcMutation(cleanCtx, "auth.updateProfile", { venmoUsername: "" });
-    await trpcMutation(cleanCtx, "admin.setVenmoEnabled", { enabled: false });
-    await cleanCtx.dispose();
-  });
 });

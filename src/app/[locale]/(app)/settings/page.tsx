@@ -16,23 +16,23 @@ export default function SettingsPage() {
   const router = useRouter();
   const [name, setName] = useState(session?.user?.name ?? "");
   const [venmoUsername, setVenmoUsername] = useState("");
+  const [venmoLoaded, setVenmoLoaded] = useState(false);
   const [hasSaved, setHasSaved] = useState(false);
 
   const profile = trpc.auth.getProfile.useQuery();
 
   useEffect(() => {
-    // Only sync from session on initial load, not after a save
-    // (the session JWT may still have the stale name)
     if (session?.user?.name && !hasSaved) {
       setName(session.user.name);
     }
   }, [session?.user?.name, hasSaved]);
 
   useEffect(() => {
-    if (profile.data?.venmoUsername && !hasSaved) {
-      setVenmoUsername(profile.data.venmoUsername);
+    if (profile.data && !hasSaved && !venmoLoaded) {
+      setVenmoUsername(profile.data.venmoUsername ?? "");
+      setVenmoLoaded(true);
     }
-  }, [profile.data?.venmoUsername, hasSaved]);
+  }, [profile.data, hasSaved, venmoLoaded]);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -55,7 +55,7 @@ export default function SettingsPage() {
 
   function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    updateProfile.mutate({ name, venmoUsername: venmoUsername.trim() || null });
+    updateProfile.mutate({ name, ...(venmoLoaded ? { venmoUsername: venmoUsername.trim() || null } : {}) });
   }
 
   function handleChangePassword(e: React.FormEvent) {
