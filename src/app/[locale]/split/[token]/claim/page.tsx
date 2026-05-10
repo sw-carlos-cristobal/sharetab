@@ -260,6 +260,26 @@ export default function ClaimPage({
     return false;
   }, [currentClaims, currentServerClaims, personIndex]);
 
+  // Check if ANY person has unsaved local edits (not just the currently selected one)
+  const hasAnyUnsavedChanges = useMemo(() => {
+    for (const [pIdx, localSet] of claimedItems) {
+      const serverSet = serverClaimsMap.get(pIdx) ?? new Set<number>();
+      if (localSet.size !== serverSet.size) return true;
+      for (const idx of localSet) {
+        if (!serverSet.has(idx)) return true;
+      }
+    }
+    return false;
+  }, [claimedItems, serverClaimsMap]);
+
+  // All items have at least one saved claimant
+  const allItemsClaimed = useMemo(() => {
+    if (!session.data) return false;
+    return session.data.items.every((_, idx) =>
+      session.data!.assignments.some(a => a.itemIndex === idx && a.personIndices.length > 0)
+    );
+  }, [session.data]);
+
   // Which items are claimed by anyone (for sorting unclaimed first)
   const claimedByAnyone = useMemo(() => {
     if (!session.data) return new Set<number>();
@@ -1144,9 +1164,7 @@ export default function ClaimPage({
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t">
         <div className="mx-auto max-w-lg">
           {/* Finalize button -- only when no unsaved changes and all items claimed */}
-          {!hasUnsavedChanges && personToken && myPersonIndex !== null && !finalizeSession.isPending &&
-           data.assignments.length > 0 &&
-           data.items.every((_, idx) => data.assignments.some(a => a.itemIndex === idx && a.personIndices.length > 0)) && (
+          {!hasAnyUnsavedChanges && personToken && myPersonIndex !== null && !finalizeSession.isPending && allItemsClaimed && (
             <Button
               variant="outline"
               className="w-full h-12 mb-2"
