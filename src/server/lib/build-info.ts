@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { logger } from "./logger";
 
 interface BuildInfo {
   version: string;
@@ -15,7 +16,11 @@ export function getBuildInfo(): BuildInfo {
   try {
     const pkg = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), "package.json"), "utf-8"));
     version = pkg.version;
-  } catch {}
+  } catch (error) {
+    logger.warn("build-info.version.failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 
   let commitSha = "unknown";
   try {
@@ -25,7 +30,11 @@ export function getBuildInfo(): BuildInfo {
       try {
         const { execFileSync } = require("child_process");
         commitSha = execFileSync("git", ["rev-parse", "--short", "HEAD"], { encoding: "utf-8" }).trim();
-      } catch {}
+      } catch (error) {
+        logger.warn("build-info.commitSha.failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
   }
 

@@ -5,7 +5,8 @@
     "snapBill": "Photographier l'addition",
     "or": "Ou",
     "chooseGallery": "Choisir dans la galerie",
-    "uploading": "Envoi en cours..."
+    "uploading": "Envoi en cours...",
+    "uploadFailed": "Échec du téléchargement"
   },
   "processing": {
     "title": "Traitement du reçu...",
@@ -54,7 +55,13 @@
     "assignAllItems": "Attribuer tous les articles ({remaining} restants)",
     "shareForClaiming": "Partager le lien — Chacun choisit ses articles",
     "creatingSession": "Création de la session...",
-    "shareHint": "Vous ne savez pas qui a pris quoi ? Partagez le lien et laissez chacun choisir ses propres articles."
+    "shareHint": "Vous ne savez pas qui a pris quoi ? Partagez le lien et laissez chacun choisir ses propres articles.",
+    "validationNameRequired": "Le nom de l'article est requis.",
+    "validationPricePositive": "Le prix doit être supérieur à zéro.",
+    "validationQtyPositive": "La quantité doit être un nombre entier positif.",
+    "createSplitFailed": "Échec de la création du partage.",
+    "createSessionFailed": "Échec de la création de la session.",
+    "receiptImageAlt": "Reçu"
   },
   "claim": {
     "loadingSession": "Chargement de la session...",

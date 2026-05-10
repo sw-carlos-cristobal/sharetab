@@ -12,5 +12,6 @@
   "untitled": "未命名分账",
   "delete": "删除分账",
   "deleteConfirm": "删除此分账？此操作无法撤销。",
-  "deleted": "分账已删除"
+  "deleted": "分账已删除",
+  "loading": "加载中..."
 }

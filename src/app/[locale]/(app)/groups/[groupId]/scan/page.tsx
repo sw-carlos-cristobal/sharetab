@@ -13,7 +13,7 @@ import { ArrowLeft, Loader2, Camera, RefreshCw, Users } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { ItemAssignment } from "@/components/receipts/item-assignment";
-import { loadingMessages } from "@/lib/loading-messages";
+import { loadingMessageKeys } from "@/lib/loading-messages";
 
 type Step = "upload" | "processing" | "assign" | "error";
 
@@ -38,6 +38,7 @@ function ScanReceiptContent({
   const router = useRouter();
   const searchParams = useSearchParams();
   const t = useTranslations("expenses.scan");
+  const tc = useTranslations("common");
   const { data: authSession } = useSession();
   const resumeReceiptId = searchParams.get("receiptId");
   const group = trpc.groups.get.useQuery({ groupId });
@@ -54,9 +55,9 @@ function ScanReceiptContent({
   // Rotate loading messages while processing
   useEffect(() => {
     if (step !== "processing") return;
-    setLoadingMsgIdx(Math.floor(Math.random() * loadingMessages.length));
+    setLoadingMsgIdx(Math.floor(Math.random() * loadingMessageKeys.length));
     const interval = setInterval(() => {
-      setLoadingMsgIdx((i) => (i + 1) % loadingMessages.length);
+      setLoadingMsgIdx((i) => (i + 1) % loadingMessageKeys.length);
     }, 5000);
     return () => clearInterval(interval);
   }, [step]);
@@ -111,7 +112,7 @@ function ScanReceiptContent({
       });
       router.push(`/split/${result.shareToken}/claim`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to create claiming session");
+      toast.error(err instanceof Error ? err.message : t("createSessionFailed"));
     }
   }
 
@@ -132,7 +133,7 @@ function ScanReceiptContent({
       });
 
       if (!res.ok) {
-        let message = "Upload failed";
+        let message = t("uploadFailed");
         try {
           const data = await res.json();
           message = data.error ?? message;
@@ -149,7 +150,7 @@ function ScanReceiptContent({
       processReceipt.mutate({ receiptId: data.receiptId, groupId });
     } catch (err) {
       setUploading(false);
-      setErrorMessage(err instanceof Error ? err.message : "Upload failed");
+      setErrorMessage(err instanceof Error ? err.message : t("uploadFailed"));
       setStep("error");
     }
   }
@@ -168,6 +169,35 @@ function ScanReceiptContent({
   const configuredProviderChain =
     providerInfo.data?.configuredProviders?.join(" -> ") ?? "loading...";
   const activeProvider = providerInfo.data?.activeProvider ?? "checking...";
+
+  // Loading state for group data (Finding #22)
+  if (group.isLoading) {
+    return (
+      <div className="mx-auto max-w-lg flex flex-col items-center gap-4 py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-muted-foreground">{t("loadingGroup")}</p>
+      </div>
+    );
+  }
+
+  // Error state for group data (Finding #22)
+  if (group.error) {
+    return (
+      <div className="mx-auto max-w-lg space-y-6">
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" nativeButton={false} render={<Link href={`/groups/${groupId}`} />}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <h1 className="text-2xl font-bold">{t("title")}</h1>
+        </div>
+        <Card className="border-destructive/50">
+          <CardContent className="py-6">
+            <p className="text-destructive">{t("groupLoadError")}</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-lg space-y-6">
@@ -229,7 +259,7 @@ function ScanReceiptContent({
                 {" · "}{t("chain")} <span className="font-medium text-foreground">{configuredProviderChain}</span>
               </p>
               <p className="text-sm text-muted-foreground">
-                {loadingMessages[loadingMsgIdx]}
+                {tc(loadingMessageKeys[loadingMsgIdx])}
               </p>
             </div>
           </CardContent>

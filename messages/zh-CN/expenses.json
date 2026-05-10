@@ -49,7 +49,11 @@
     "fallbackChain": "备用链：",
     "or": "或",
     "shareForClaiming": "分享链接 — 让成员自行选择",
-    "creatingSession": "正在创建会话..."
+    "creatingSession": "正在创建会话...",
+    "loadingGroup": "正在加载群组...",
+    "groupLoadError": "无法加载群组数据。请重试。",
+    "uploadFailed": "上传失败",
+    "createSessionFailed": "创建会话失败。"
   },
   "receipt": {
     "hideImage": "隐藏小票图片",
@@ -91,7 +95,11 @@
     "saveForLater": "稍后保存",
     "loadingItems": "正在加载项目...",
     "noReceiptData": "无法加载小票数据。",
-    "noExtractedData": "没有可用的提取数据。"
+    "noExtractedData": "没有可用的提取数据。",
+    "validationNameRequired": "请输入项目名称。",
+    "validationPricePositive": "价格必须大于零。",
+    "validationQtyPositive": "数量必须是正整数。",
+    "receiptImageAlt": "收据"
   },
   "splits": {
     "selectAll": "全选",

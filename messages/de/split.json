@@ -5,7 +5,8 @@
     "snapBill": "Rechnung fotografieren",
     "or": "Oder",
     "chooseGallery": "Aus Galerie wählen",
-    "uploading": "Wird hochgeladen..."
+    "uploading": "Wird hochgeladen...",
+    "uploadFailed": "Upload fehlgeschlagen"
   },
   "processing": {
     "title": "Beleg wird verarbeitet...",
@@ -54,7 +55,13 @@
     "assignAllItems": "Alle Artikel zuordnen ({remaining} übrig)",
     "shareForClaiming": "Link teilen — Jeder wählt seine Artikel",
     "creatingSession": "Session wird erstellt...",
-    "shareHint": "Wissen Sie nicht, wer was hatte? Teilen Sie den Link und lassen Sie jede Person ihre eigenen Artikel auswählen."
+    "shareHint": "Wissen Sie nicht, wer was hatte? Teilen Sie den Link und lassen Sie jede Person ihre eigenen Artikel auswählen.",
+    "validationNameRequired": "Artikelname ist erforderlich.",
+    "validationPricePositive": "Der Preis muss größer als null sein.",
+    "validationQtyPositive": "Die Menge muss eine positive ganze Zahl sein.",
+    "createSplitFailed": "Aufteilung konnte nicht erstellt werden.",
+    "createSessionFailed": "Sitzung konnte nicht erstellt werden.",
+    "receiptImageAlt": "Beleg"
   },
   "claim": {
     "loadingSession": "Session wird geladen...",

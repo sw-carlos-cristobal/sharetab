@@ -5,7 +5,8 @@
     "snapBill": "Fotografiar cuenta",
     "or": "O",
     "chooseGallery": "Elegir de la galería",
-    "uploading": "Subiendo..."
+    "uploading": "Subiendo...",
+    "uploadFailed": "Error al subir"
   },
   "processing": {
     "title": "Procesando recibo...",
@@ -54,7 +55,13 @@
     "assignAllItems": "Asignar todos los artículos ({remaining} restantes)",
     "shareForClaiming": "Compartir enlace — Que cada uno elija sus artículos",
     "creatingSession": "Creando sesión...",
-    "shareHint": "¿No sabes quién pidió qué? Comparte el enlace y deja que cada persona elija sus artículos."
+    "shareHint": "¿No sabes quién pidió qué? Comparte el enlace y deja que cada persona elija sus artículos.",
+    "validationNameRequired": "El nombre del artículo es obligatorio.",
+    "validationPricePositive": "El precio debe ser mayor que cero.",
+    "validationQtyPositive": "La cantidad debe ser un número entero positivo.",
+    "createSplitFailed": "Error al crear la división.",
+    "createSessionFailed": "Error al crear la sesión de reclamo.",
+    "receiptImageAlt": "Recibo"
   },
   "claim": {
     "loadingSession": "Cargando sesión...",
