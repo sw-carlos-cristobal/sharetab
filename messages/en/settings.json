@@ -7,6 +7,8 @@
     "save": "Save",
     "saving": "Saving...",
     "saved": "Profile updated!",
+    "venmo": "Venmo username",
+    "venmoPlaceholder": "@username",
     "language": "Language",
     "languageDescription": "Choose your preferred language"
   },

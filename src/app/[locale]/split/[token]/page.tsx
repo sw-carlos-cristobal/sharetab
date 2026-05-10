@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { formatCents } from "@/lib/money";
@@ -22,13 +23,22 @@ export default function SharedSplitPage({
   const locale = useLocale();
   const tv = useTranslations("split.venmo");
   const [venmoHandle, setVenmoHandle] = useState("");
+  const { data: authSession } = useSession();
   const split = trpc.guest.getSplit.useQuery({ token });
   const venmoSetting = trpc.admin.getVenmoEnabled.useQuery();
+  const profile = trpc.auth.getProfile.useQuery(undefined, {
+    enabled: !!authSession?.user,
+  });
 
+  // Auto-populate from user profile if logged in, otherwise fall back to localStorage
   useEffect(() => {
-    const saved = localStorage.getItem("sharetab-venmo-handle");
-    if (saved) setVenmoHandle(saved);
-  }, []);
+    if (profile.data?.venmoUsername) {
+      setVenmoHandle(profile.data.venmoUsername);
+    } else {
+      const saved = localStorage.getItem("sharetab-venmo-handle");
+      if (saved) setVenmoHandle(saved);
+    }
+  }, [profile.data?.venmoUsername]);
 
   if (split.isLoading) {
     return (

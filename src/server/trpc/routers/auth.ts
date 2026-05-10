@@ -141,12 +141,21 @@ export const authRouter = createTRPCRouter({
       return { success: true };
     }),
 
+  getProfile: protectedProcedure.query(async ({ ctx }) => {
+    const user = await ctx.db.user.findUnique({
+      where: { id: ctx.user.id },
+      select: { name: true, email: true, venmoUsername: true, locale: true, defaultCurrency: true },
+    });
+    return user;
+  }),
+
   updateProfile: protectedProcedure
     .input(
       z.object({
         name: z.string().min(1).max(100).optional(),
         defaultCurrency: z.string().length(3).optional(),
         locale: z.enum(locales).optional(),
+        venmoUsername: z.string().max(50).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -154,6 +163,6 @@ export const authRouter = createTRPCRouter({
         where: { id: ctx.user.id },
         data: input,
       });
-      return { id: user.id, name: user.name, email: user.email, locale: user.locale };
+      return { id: user.id, name: user.name, email: user.email, locale: user.locale, venmoUsername: user.venmoUsername };
     }),
 });

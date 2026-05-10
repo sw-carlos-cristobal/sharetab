@@ -55,6 +55,7 @@ model User {
   image           String?
   defaultCurrency String    @default("USD")
   locale          String    @default("en")
+  venmoUsername   String?
   suspendedAt     DateTime?
   isPlaceholder   Boolean   @default(false)
   placeholderName String?

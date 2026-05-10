@@ -7,6 +7,8 @@
     "save": "Enregistrer",
     "saving": "Enregistrement...",
     "saved": "Profil mis à jour !",
+    "venmo": "Nom d'utilisateur Venmo",
+    "venmoPlaceholder": "@utilisateur",
     "language": "Langue",
     "languageDescription": "Choisissez votre langue préférée"
   },
