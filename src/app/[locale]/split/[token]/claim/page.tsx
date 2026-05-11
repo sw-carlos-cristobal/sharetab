@@ -499,8 +499,8 @@ export default function ClaimPage({
           </CardContent>
         </Card>
 
-        {/* Venmo handle input */}
-        {venmoSetting.data?.enabled && currency === "USD" && (
+        {/* Venmo handle */}
+        {venmoSetting.data?.enabled && currency === "USD" && (data.isCreator ? (
           <div className="flex items-center justify-center gap-2">
             <Input
               placeholder={tv("handlePlaceholder")}
@@ -520,7 +520,11 @@ export default function ClaimPage({
               data-testid="venmo-handle-input"
             />
           </div>
-        )}
+        ) : venmoHandle && (
+          <p className="text-sm text-muted-foreground text-center" data-testid="venmo-handle-display">
+            Venmo: @{venmoHandle.replace(/^@/, '')}
+          </p>
+        ))}
 
         {/* Per-person summary */}
         {data.summary && data.summary.length > 0 && (

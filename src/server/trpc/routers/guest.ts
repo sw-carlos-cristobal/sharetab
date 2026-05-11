@@ -455,6 +455,7 @@ export const guestRouter = createTRPCRouter({
         summary: split.summary as { personIndex: number; name: string; itemTotal: number; tax: number; tip: number; total: number }[],
         paidByIndex: split.paidByIndex,
         payerVenmoHandle: split.payerVenmoHandle,
+        isCreator: !!split.userId && split.userId === ctx.session?.user?.id,
         createdAt: split.createdAt,
         expiresAt: split.expiresAt,
       };
@@ -935,6 +936,7 @@ export const guestRouter = createTRPCRouter({
         summary: session.summary as { personIndex: number; name: string; itemTotal: number; tax: number; tip: number; total: number }[] | null,
         paidByIndex: session.paidByIndex,
         payerVenmoHandle: session.payerVenmoHandle,
+        isCreator: !!session.userId && session.userId === ctx.session?.user?.id,
         receiptImagePath,
         createdAt: session.createdAt,
         expiresAt: session.expiresAt,
@@ -1049,13 +1051,16 @@ export const guestRouter = createTRPCRouter({
 
       const split = await ctx.db.guestSplit.findUnique({
         where: { shareToken: input.token },
-        select: { id: true, expiresAt: true },
+        select: { id: true, userId: true, expiresAt: true },
       });
       if (!split) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Split not found" });
       }
       if (split.expiresAt < new Date()) {
         throw new TRPCError({ code: "NOT_FOUND", message: "This split has expired" });
+      }
+      if (!split.userId || split.userId !== ctx.session?.user?.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Only the split creator can update the Venmo handle" });
       }
 
       await ctx.db.guestSplit.update({

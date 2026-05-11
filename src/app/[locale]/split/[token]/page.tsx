@@ -136,25 +136,31 @@ export default function SharedSplitPage({
           Paid by <span className="font-medium text-foreground">{paidBy}</span>
         </p>
         {venmoSetting.data?.enabled && currency === "USD" && (
-          <div className="flex items-center justify-center gap-2 mt-2">
-            <Input
-              placeholder={tv("handlePlaceholder")}
-              aria-label={tv("handle")}
-              value={venmoHandle}
-              onChange={(e) => {
-                setVenmoHandle(e.target.value);
-                try { localStorage.setItem("sharetab-venmo-handle", e.target.value); } catch { /* storage unavailable */ }
-              }}
-              onBlur={() => {
-                const trimmed = venmoHandle.trim() || null;
-                if (trimmed !== (split.data?.payerVenmoHandle ?? null)) {
-                  setPayerVenmoHandle.mutate({ token, handle: trimmed });
-                }
-              }}
-              className="h-8 text-sm max-w-48"
-              data-testid="venmo-handle-input"
-            />
-          </div>
+          split.data?.isCreator ? (
+            <div className="flex items-center justify-center gap-2 mt-2">
+              <Input
+                placeholder={tv("handlePlaceholder")}
+                aria-label={tv("handle")}
+                value={venmoHandle}
+                onChange={(e) => {
+                  setVenmoHandle(e.target.value);
+                  try { localStorage.setItem("sharetab-venmo-handle", e.target.value); } catch { /* storage unavailable */ }
+                }}
+                onBlur={() => {
+                  const trimmed = venmoHandle.trim() || null;
+                  if (trimmed !== (split.data?.payerVenmoHandle ?? null)) {
+                    setPayerVenmoHandle.mutate({ token, handle: trimmed });
+                  }
+                }}
+                className="h-8 text-sm max-w-48"
+                data-testid="venmo-handle-input"
+              />
+            </div>
+          ) : venmoHandle ? (
+            <p className="text-sm text-muted-foreground mt-1" data-testid="venmo-handle-display">
+              Venmo: @{venmoHandle.replace(/^@/, '')}
+            </p>
+          ) : null
         )}
       </div>
 

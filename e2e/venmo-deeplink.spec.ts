@@ -235,10 +235,11 @@ test.describe("Venmo deeplink payments", () => {
     const page = await browserCtx.newPage();
     await page.goto(`/en/split/${shareToken}`);
 
-    // The venmo handle input should be auto-populated from the split record
-    const venmoInput = page.getByTestId("venmo-handle-input");
-    await expect(venmoInput).toBeVisible({ timeout: 15000 });
-    await expect(venmoInput).toHaveValue("alice-venmo-e2e", { timeout: 10000 });
+    // Guest sees the handle as read-only text (not an editable input)
+    const venmoDisplay = page.getByTestId("venmo-handle-display");
+    await expect(venmoDisplay).toBeVisible({ timeout: 15000 });
+    await expect(venmoDisplay).toContainText("alice-venmo-e2e");
+    await expect(page.getByTestId("venmo-handle-input")).toHaveCount(0);
 
     // Pay buttons should appear for Bob (non-payer)
     const payButtons = page.locator('[data-testid^="venmo-pay-"]');
