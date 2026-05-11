@@ -309,8 +309,8 @@ test.describe("Venmo deeplink payments", () => {
     await creatorPage.goto(`/en/split/${shareToken}`);
 
     await expect(creatorPage.getByTestId("venmo-handle-input")).toBeVisible({ timeout: 15000 });
-    // Bob's card (non-payer) has pay button, Alice's card (payer) does not
-    await expect(creatorPage.locator('[data-testid^="venmo-pay-"]')).toHaveCount(1, { timeout: 5000 });
+    // Payer sees NO pay buttons (they all point to their own handle)
+    await expect(creatorPage.locator('[data-testid^="venmo-pay-"]')).toHaveCount(0);
     await creatorPage.screenshot({ path: "docs/screenshots/venmo-creator-payer-view.png", fullPage: true });
 
     await creatorPage.close();

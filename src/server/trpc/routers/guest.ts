@@ -466,6 +466,7 @@ export const guestRouter = createTRPCRouter({
         paidByIndex: split.paidByIndex,
         payerVenmoHandle: split.payerVenmoHandle,
         isCreator: !!split.userId && split.userId === ctx.session?.user?.id,
+        isPayer: !!split.payerVenmoHandle && !!split.userId && split.userId === ctx.session?.user?.id,
         createdAt: split.createdAt,
         expiresAt: split.expiresAt,
       };
