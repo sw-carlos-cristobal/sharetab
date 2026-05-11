@@ -202,7 +202,7 @@ export const expensesRouter = createTRPCRouter({
       if (!isOwnerOrAdmin && !isCreatorOrPayer) {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "Only the expense creator, payer, or group admin can modify this expense",
+          message: "Only the expense creator, payer, or group owner/admin can modify this expense",
         });
       }
 
@@ -294,7 +294,7 @@ export const expensesRouter = createTRPCRouter({
       if (!isOwnerOrAdmin && !isCreatorOrPayer) {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "Only the expense creator, payer, or group admin can delete this expense",
+          message: "Only the expense creator, payer, or group owner/admin can delete this expense",
         });
       }
 
