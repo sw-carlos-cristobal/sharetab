@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useState, useMemo, useEffect, useRef } from "react";
+import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { formatCents } from "@/lib/money";
@@ -90,9 +91,13 @@ export default function ClaimPage({
     if (typeof window === "undefined") return "";
     try { return localStorage.getItem("sharetab-venmo-handle") ?? ""; } catch { return ""; }
   });
+  const { data: authSession } = useSession();
 
   // --- tRPC ---
   const venmoSetting = trpc.admin.getVenmoEnabled.useQuery();
+  const profile = trpc.auth.getProfile.useQuery(undefined, {
+    enabled: !!authSession?.user && !!venmoSetting.data?.enabled,
+  });
   const session = trpc.guest.getSession.useQuery(
     { token },
     { refetchInterval: (query) => (query.state.data?.status === "finalized" || query.state.error) ? false : 3000 }
@@ -211,6 +216,12 @@ export default function ClaimPage({
       }
     },
   });
+
+  useEffect(() => {
+    if (profile.data?.venmoUsername && !venmoHandle) {
+      setVenmoHandle(profile.data.venmoUsername);
+    }
+  }, [profile.data?.venmoUsername, venmoHandle]);
 
   // Auto-rejoin from localStorage when session data loads
   useEffect(() => {
