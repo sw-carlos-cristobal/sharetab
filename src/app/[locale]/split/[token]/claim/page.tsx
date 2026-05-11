@@ -87,10 +87,7 @@ export default function ClaimPage({
   const [editingGroupSize, setEditingGroupSize] = useState(1);
   const [splittingItemIdx, setSplittingItemIdx] = useState<number | null>(null);
   const [splitQty, setSplitQty] = useState("");
-  const [venmoHandle, setVenmoHandle] = useState(() => {
-    if (typeof window === "undefined") return "";
-    try { return localStorage.getItem("sharetab-venmo-handle") ?? ""; } catch { return ""; }
-  });
+  const [venmoHandle, setVenmoHandle] = useState("");
   const venmoInitRef = useRef(false);
   const { data: authSession, status: authStatus } = useSession();
 

@@ -1,7 +1,5 @@
-import { test, expect, request } from "@playwright/test";
+import { test, expect } from "@playwright/test";
 import { login, users, authedContext, trpcMutation, trpcQuery, trpcResult } from "./helpers";
-
-const BASE = process.env.BASE_URL || "http://localhost:3001";
 
 test.use({ viewport: { width: 430, height: 932 } });
 

@@ -12,6 +12,22 @@ import {
   getConfiguredProviderPriority,
 } from "@/server/ai/registry";
 
+async function getCreatorPayerVenmoHandle(
+  db: typeof import("@/server/db").db,
+  userId: string | undefined | null,
+  payerName: string | undefined
+): Promise<string | null> {
+  if (!userId || !payerName) return null;
+  const creator = await db.user.findUnique({
+    where: { id: userId },
+    select: { venmoUsername: true, name: true },
+  });
+  if (creator?.venmoUsername && creator.name && normalizeGuestName(creator.name) === normalizeGuestName(payerName)) {
+    return creator.venmoUsername;
+  }
+  return null;
+}
+
 type GuestSessionPerson = {
   name: string;
   personToken?: string;
@@ -377,18 +393,9 @@ export const guestRouter = createTRPCRouter({
         name: filteredPeople[s.personIndex]?.name ?? `Person ${s.personIndex + 1}`,
       }));
 
-      // Auto-populate payer's Venmo handle only when the creator is the payer
-      let payerVenmoHandle: string | null = null;
-      if (ctx.session?.user?.id) {
-        const creator = await ctx.db.user.findUnique({
-          where: { id: ctx.session.user.id },
-          select: { venmoUsername: true, name: true },
-        });
-        const payerName = filteredPeople[remappedPaidBy]?.name;
-        if (creator?.venmoUsername && creator.name && payerName && normalizeGuestName(creator.name) === normalizeGuestName(payerName)) {
-          payerVenmoHandle = creator.venmoUsername;
-        }
-      }
+      const payerVenmoHandle = await getCreatorPayerVenmoHandle(
+        ctx.db, ctx.session?.user?.id, filteredPeople[remappedPaidBy]?.name
+      );
 
       const guestSplit = await ctx.db.guestSplit.create({
         data: {
@@ -513,18 +520,9 @@ export const guestRouter = createTRPCRouter({
         }
       }
 
-      // Auto-populate payer's Venmo handle only when the creator is the payer
-      let claimPayerVenmoHandle: string | null = null;
-      if (ctx.session?.user?.id) {
-        const paidByPerson = people[paidByIndex];
-        const creator = await ctx.db.user.findUnique({
-          where: { id: ctx.session.user.id },
-          select: { venmoUsername: true, name: true },
-        });
-        if (creator?.venmoUsername && creator.name && paidByPerson?.name && normalizeGuestName(creator.name) === normalizeGuestName(paidByPerson.name)) {
-          claimPayerVenmoHandle = creator.venmoUsername;
-        }
-      }
+      const claimPayerVenmoHandle = await getCreatorPayerVenmoHandle(
+        ctx.db, ctx.session?.user?.id, people[paidByIndex]?.name
+      );
 
       const session = await ctx.db.guestSplit.create({
         data: {
