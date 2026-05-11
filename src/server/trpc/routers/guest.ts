@@ -340,9 +340,11 @@ export const guestRouter = createTRPCRouter({
       tipOverride: z.number().int().min(0).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const ip = ctx.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "global";
-      const maxSplits = parseInt(process.env.GUEST_SPLIT_RATE_LIMIT_MAX ?? "10", 10) || 10;
-      const { allowed } = checkRateLimit(`guest-create-split:${ip}`, maxSplits, 60 * 60 * 1000);
+      const ip = ctx.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+        || ctx.headers.get("x-real-ip")?.trim()
+        || "global";
+      const maxGuest = parseInt(process.env.GUEST_RATE_LIMIT_MAX ?? "10", 10) || 10;
+      const { allowed } = checkRateLimit(`guest-create-split:${ip}`, maxGuest, 60 * 60 * 1000);
       if (!allowed) {
         throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many splits created. Please try again later." });
       }
@@ -495,9 +497,11 @@ export const guestRouter = createTRPCRouter({
       paidByName: z.string().trim().min(1).max(100),
     }))
     .mutation(async ({ ctx, input }) => {
-      const ip = ctx.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "global";
-      const maxClaims = parseInt(process.env.GUEST_SPLIT_RATE_LIMIT_MAX ?? "10", 10) || 10;
-      const { allowed } = checkRateLimit(`guest-create-claim:${ip}`, maxClaims, 60 * 60 * 1000);
+      const ip = ctx.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+        || ctx.headers.get("x-real-ip")?.trim()
+        || "global";
+      const maxGuest = parseInt(process.env.GUEST_RATE_LIMIT_MAX ?? "10", 10) || 10;
+      const { allowed } = checkRateLimit(`guest-create-claim:${ip}`, maxGuest, 60 * 60 * 1000);
       if (!allowed) {
         throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many sessions created. Please try again later." });
       }
