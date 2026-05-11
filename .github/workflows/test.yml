@@ -96,6 +96,7 @@ jobs:
           BASE_URL: http://localhost:3000
           AUTH_RATE_LIMIT_MAX: "1000"
           REGISTER_RATE_LIMIT_MAX: "1000"
+          GUEST_RATE_LIMIT_MAX: "1000"
           ADMIN_EMAIL: alice@example.com
           AI_PROVIDER_PRIORITY: mock
           EMAIL_SERVER_HOST: localhost
