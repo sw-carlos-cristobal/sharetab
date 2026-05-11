@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, useRef, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
@@ -97,6 +97,9 @@ export default function GroupDetailPage({
       toast.error(err.message);
     },
   });
+
+  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (settleTimerRef.current) clearTimeout(settleTimerRef.current); }, []);
 
   if (group.isLoading && !group.isError) {
     return <p className="text-muted-foreground">Loading...</p>;
@@ -266,10 +269,13 @@ export default function GroupDetailPage({
                       variant="ghost"
                       size="sm"
                       className="shrink-0 text-[#008CFF] hover:text-[#0070CC]"
+                      disabled={settleVenmo.isPending}
                       onClick={(e) => {
                         e.stopPropagation();
+                        if (settleTimerRef.current) return;
                         window.open(venmoUrl, "_blank", "noopener,noreferrer");
-                        setTimeout(() => {
+                        settleTimerRef.current = setTimeout(() => {
+                          settleTimerRef.current = null;
                           if (confirm(t("detail.venmoPaymentConfirm", { amount: formatCents(debt.amount, g.currency, locale), name: toName }))) {
                             settleVenmo.mutate({
                               groupId,
