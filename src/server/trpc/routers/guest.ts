@@ -341,7 +341,8 @@ export const guestRouter = createTRPCRouter({
     }))
     .mutation(async ({ ctx, input }) => {
       const ip = ctx.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "global";
-      const { allowed } = checkRateLimit(`guest-create-split:${ip}`, 10, 60 * 60 * 1000);
+      const maxSplits = parseInt(process.env.GUEST_SPLIT_RATE_LIMIT_MAX ?? "10");
+      const { allowed } = checkRateLimit(`guest-create-split:${ip}`, maxSplits, 60 * 60 * 1000);
       if (!allowed) {
         throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many splits created. Please try again later." });
       }
@@ -495,7 +496,8 @@ export const guestRouter = createTRPCRouter({
     }))
     .mutation(async ({ ctx, input }) => {
       const ip = ctx.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "global";
-      const { allowed } = checkRateLimit(`guest-create-claim:${ip}`, 10, 60 * 60 * 1000);
+      const maxClaims = parseInt(process.env.GUEST_SPLIT_RATE_LIMIT_MAX ?? "10");
+      const { allowed } = checkRateLimit(`guest-create-claim:${ip}`, maxClaims, 60 * 60 * 1000);
       if (!allowed) {
         throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many sessions created. Please try again later." });
       }
