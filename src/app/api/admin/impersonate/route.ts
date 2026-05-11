@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { auth } from "@/server/auth";
 import { db } from "@/server/db";
 import { logAdminAction } from "@/server/trpc/routers/admin";
+import { signPayload } from "@/server/lib/signed-cookie";
 
 const COOKIE_NAME = "sharetab-impersonate";
 
@@ -41,7 +42,6 @@ export async function POST(req: Request) {
     return Response.json({ error: "User not found" }, { status: 404 });
   }
 
-  // Store impersonation data as JSON in a secure cookie
   const impersonationData = JSON.stringify({
     adminId: session.user.id,
     adminEmail: session.user.email,
@@ -52,7 +52,7 @@ export async function POST(req: Request) {
   });
 
   const cookieStore = await cookies();
-  cookieStore.set(COOKIE_NAME, impersonationData, {
+  cookieStore.set(COOKIE_NAME, signPayload(impersonationData), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
