@@ -20,7 +20,10 @@
     "totalSpent": "Total gasto",
     "youOwe": "Você deve a {name}",
     "owesYou": "{name} deve a você",
-    "settledUp": "Acertado"
+    "settledUp": "Acertado",
+    "payViaVenmo": "Pagar via Venmo",
+    "venmoPaymentConfirm": "Você completou o pagamento de {amount} para {name} pelo Venmo?",
+    "settledViaVenmo": "Pago via Venmo"
   },
   "settings": {
     "title": "Configurações do grupo",

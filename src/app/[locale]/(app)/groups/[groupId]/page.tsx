@@ -1,9 +1,11 @@
 "use client";
 
-import { use, useState } from "react";
-import { useLocale } from "next-intl";
+import { use, useState, useRef, useEffect } from "react";
+import { useSession } from "next-auth/react";
+import { useLocale, useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { formatCents } from "@/lib/money";
+import { buildVenmoPayUrl, isValidVenmoHandle } from "@/lib/venmo";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +24,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Link } from "@/i18n/navigation";
+import { toast } from "sonner";
 import { InviteDialog } from "@/components/groups/invite-dialog";
 import { SettleDialog } from "@/components/groups/settle-dialog";
 
@@ -71,13 +74,32 @@ export default function GroupDetailPage({
     amount?: number;
   }>({ open: false });
 
+  const t = useTranslations("groups");
+  const { data: authSession } = useSession();
   const group = trpc.groups.get.useQuery({ groupId });
   const expenses = trpc.expenses.list.useQuery({ groupId, limit: 10 });
   const debts = trpc.balances.getSimplifiedDebts.useQuery({ groupId });
   const pendingReceipts = trpc.receipts.listPending.useQuery({ groupId });
+  const venmoSetting = trpc.admin.getVenmoEnabled.useQuery();
   const deletePending = trpc.receipts.deletePending.useMutation({
     onSuccess: () => pendingReceipts.refetch(),
   });
+
+  const utils = trpc.useUtils();
+  const settleVenmo = trpc.settlements.create.useMutation({
+    onSuccess: () => {
+      utils.balances.getGroupBalances.invalidate({ groupId });
+      utils.balances.getSimplifiedDebts.invalidate({ groupId });
+      utils.balances.getDashboard.invalidate();
+      utils.settlements.list.invalidate({ groupId });
+    },
+    onError: (err) => {
+      toast.error(err.message);
+    },
+  });
+
+  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (settleTimerRef.current) clearTimeout(settleTimerRef.current); }, []);
 
   if (group.isLoading && !group.isError) {
     return <p className="text-muted-foreground">Loading...</p>;
@@ -211,31 +233,67 @@ export default function GroupDetailPage({
             {debts.data.debts.map((debt, i) => {
               const from = memberMap.get(debt.from);
               const to = memberMap.get(debt.to);
+              const toName = to?.name ?? to?.email ?? "Unknown";
+              const isMyDebt = debt.from === authSession?.user?.id;
+              const showVenmo = venmoSetting.data?.enabled && g.currency === "USD" && isMyDebt && to?.venmoUsername && isValidVenmoHandle(to.venmoUsername);
+              const venmoUrl = showVenmo
+                ? buildVenmoPayUrl(to.venmoUsername!, debt.amount, `ShareTab: ${g.name}`)
+                : null;
               return (
-                <button
-                  key={i}
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-lg p-2.5 text-sm transition-all hover:bg-muted/70 hover:shadow-sm"
-                  onClick={() =>
-                    setSettleState({
-                      open: true,
-                      from: debt.from,
-                      to: debt.to,
-                      amount: debt.amount,
-                    })
-                  }
-                >
-                  <span className="truncate text-xs font-medium text-red-600 sm:text-sm dark:text-red-400">
-                    {from?.name ?? from?.email ?? "Unknown"}
-                  </span>
-                  <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  <span className="truncate text-xs font-medium text-emerald-600 sm:text-sm dark:text-emerald-400">
-                    {to?.name ?? to?.email ?? "Unknown"}
-                  </span>
-                  <span className="ml-auto shrink-0 font-semibold tabular-nums text-red-600 dark:text-red-400">
-                    {formatCents(debt.amount, g.currency, locale)}
-                  </span>
-                </button>
+                <div key={i} className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="flex flex-1 items-center gap-2 rounded-lg p-2.5 text-sm transition-all hover:bg-muted/70 hover:shadow-sm"
+                    onClick={() =>
+                      setSettleState({
+                        open: true,
+                        from: debt.from,
+                        to: debt.to,
+                        amount: debt.amount,
+                      })
+                    }
+                  >
+                    <span className="truncate text-xs font-medium text-red-600 sm:text-sm dark:text-red-400">
+                      {from?.name ?? from?.email ?? "Unknown"}
+                    </span>
+                    <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <span className="truncate text-xs font-medium text-emerald-600 sm:text-sm dark:text-emerald-400">
+                      {toName}
+                    </span>
+                    <span className="ml-auto shrink-0 font-semibold tabular-nums text-red-600 dark:text-red-400">
+                      {formatCents(debt.amount, g.currency, locale)}
+                    </span>
+                  </button>
+                  {venmoUrl && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="shrink-0 text-[#008CFF] hover:text-[#0070CC]"
+                      disabled={settleVenmo.isPending}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (settleTimerRef.current) return;
+                        window.open(venmoUrl, "_blank", "noopener,noreferrer");
+                        settleTimerRef.current = setTimeout(() => {
+                          settleTimerRef.current = null;
+                          if (confirm(t("detail.venmoPaymentConfirm", { amount: formatCents(debt.amount, g.currency, locale), name: toName }))) {
+                            settleVenmo.mutate({
+                              groupId,
+                              fromId: debt.from,
+                              toId: debt.to,
+                              amount: debt.amount,
+                              currency: g.currency,
+                              note: t("detail.settledViaVenmo"),
+                            });
+                          }
+                        }, 2000);
+                      }}
+                      data-testid={`venmo-settle-${i}`}
+                    >
+                      {t("detail.payViaVenmo")}
+                    </Button>
+                  )}
+                </div>
               );
             })}
           </CardContent>
