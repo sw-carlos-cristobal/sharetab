@@ -91,6 +91,7 @@ export default function ClaimPage({
     if (typeof window === "undefined") return "";
     try { return localStorage.getItem("sharetab-venmo-handle") ?? ""; } catch { return ""; }
   });
+  const venmoInitRef = useRef(false);
   const { data: authSession } = useSession();
 
   // --- tRPC ---
@@ -98,6 +99,7 @@ export default function ClaimPage({
   const profile = trpc.auth.getProfile.useQuery(undefined, {
     enabled: !!authSession?.user && !!venmoSetting.data?.enabled,
   });
+  const setPayerVenmoHandle = trpc.guest.setPayerVenmoHandle.useMutation();
   const session = trpc.guest.getSession.useQuery(
     { token },
     { refetchInterval: (query) => (query.state.data?.status === "finalized" || query.state.error) ? false : 3000 }
@@ -217,11 +219,19 @@ export default function ClaimPage({
     },
   });
 
+  // Initialize venmo handle: split record > profile > localStorage (already set in initial state)
   useEffect(() => {
-    if (profile.data?.venmoUsername) {
+    if (venmoInitRef.current) return;
+    if (session.data?.payerVenmoHandle) {
+      setVenmoHandle(session.data.payerVenmoHandle);
+      venmoInitRef.current = true;
+    } else if (profile.data?.venmoUsername) {
       setVenmoHandle(profile.data.venmoUsername);
+      venmoInitRef.current = true;
+    } else if (session.data && !session.isLoading) {
+      venmoInitRef.current = true;
     }
-  }, [profile.data?.venmoUsername]);
+  }, [session.data, profile.data?.venmoUsername, session.isLoading]);
 
   // Auto-rejoin from localStorage when session data loads
   useEffect(() => {
@@ -499,6 +509,12 @@ export default function ClaimPage({
               onChange={(e) => {
                 setVenmoHandle(e.target.value);
                 try { localStorage.setItem("sharetab-venmo-handle", e.target.value); } catch { /* storage unavailable */ }
+              }}
+              onBlur={() => {
+                const trimmed = venmoHandle.trim() || null;
+                if (trimmed !== (session.data?.payerVenmoHandle ?? null)) {
+                  setPayerVenmoHandle.mutate({ token, handle: trimmed });
+                }
               }}
               className="h-8 text-sm max-w-48"
               data-testid="venmo-handle-input"

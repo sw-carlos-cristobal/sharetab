@@ -1,5 +1,5 @@
 import { test, expect, request } from "@playwright/test";
-import { users, authedContext, trpcMutation } from "./helpers";
+import { users, authedContext, trpcMutation, trpcQuery, trpcResult } from "./helpers";
 
 const BASE = process.env.BASE_URL || "http://localhost:3001";
 
@@ -193,6 +193,105 @@ test.describe("Venmo deeplink payments", () => {
     expect(href).toContain("txn=pay");
     expect(href).toMatch(/amount=\d+\.\d{2}/);
     expect(href).toContain("Pizza%20Palace");
+
+    await page.close();
+    await browserCtx.close();
+  });
+
+  test("guest sees payer venmo handle auto-populated from creator profile", async ({ browser }) => {
+    // Set Alice's venmoUsername via profile update
+    const aliceCtx = await authedContext(users.alice.email, users.alice.password);
+    await trpcMutation(aliceCtx, "auth.updateProfile", { venmoUsername: "alice-venmo-e2e" });
+
+    // Create a split as authenticated Alice
+    const createRes = await trpcMutation(aliceCtx, "guest.createSplit", {
+      receiptData: {
+        merchantName: "Auto-Populate Test",
+        subtotal: 2000,
+        tax: 200,
+        tip: 300,
+        total: 2500,
+        currency: "USD",
+      },
+      items: [
+        { name: "Burger", quantity: 1, unitPrice: 2000, totalPrice: 2000 },
+      ],
+      people: [{ name: "Alice" }, { name: "Bob" }],
+      assignments: [
+        { itemIndex: 0, personIndices: [0, 1] },
+      ],
+      paidByIndex: 0,
+    });
+    const { shareToken } = (await createRes.json()).result?.data?.json;
+
+    // Verify the split record has the handle stored
+    const splitRes = await trpcQuery(aliceCtx, "guest.getSplit", { token: shareToken });
+    const splitData = await trpcResult(splitRes);
+    expect(splitData.payerVenmoHandle).toBe("alice-venmo-e2e");
+    await aliceCtx.dispose();
+
+    // Open the split as an unauthenticated guest in a fresh browser context
+    const browserCtx = await browser.newContext({ viewport: { width: 430, height: 932 } });
+    const page = await browserCtx.newPage();
+    await page.goto(`/en/split/${shareToken}`);
+
+    // The venmo handle input should be auto-populated from the split record
+    const venmoInput = page.getByTestId("venmo-handle-input");
+    await expect(venmoInput).toBeVisible({ timeout: 15000 });
+    await expect(venmoInput).toHaveValue("alice-venmo-e2e", { timeout: 10000 });
+
+    // Pay buttons should appear for Bob (non-payer)
+    const payButtons = page.locator('[data-testid^="venmo-pay-"]');
+    await expect(payButtons).toHaveCount(1, { timeout: 5000 });
+    const href = await payButtons.first().getAttribute("href");
+    expect(href).toContain("venmo.com/alice-venmo-e2e");
+
+    await page.close();
+    await browserCtx.close();
+  });
+
+  test("changing venmo handle persists to split record across reload", async ({ browser }) => {
+    const ctx = await request.newContext({ baseURL: BASE });
+
+    const createRes = await trpcMutation(ctx, "guest.createSplit", {
+      receiptData: {
+        merchantName: "Persist Split Test",
+        subtotal: 1500,
+        tax: 150,
+        tip: 200,
+        total: 1850,
+        currency: "USD",
+      },
+      items: [
+        { name: "Tea", quantity: 1, unitPrice: 1500, totalPrice: 1500 },
+      ],
+      people: [{ name: "Alice" }, { name: "Bob" }],
+      assignments: [{ itemIndex: 0, personIndices: [0, 1] }],
+      paidByIndex: 0,
+    });
+    const { shareToken } = (await createRes.json()).result?.data?.json;
+    await ctx.dispose();
+
+    const browserCtx = await browser.newContext({ viewport: { width: 430, height: 932 } });
+    const page = await browserCtx.newPage();
+    await page.goto(`/en/split/${shareToken}`);
+
+    const venmoInput = page.getByTestId("venmo-handle-input");
+    await expect(venmoInput).toBeVisible({ timeout: 15000 });
+
+    // Type a new handle and blur to trigger save
+    await venmoInput.fill("updated-handle");
+    await venmoInput.blur();
+
+    // Wait for the mutation to complete
+    await page.waitForTimeout(1000);
+
+    // Clear localStorage to prove persistence comes from the split record
+    await page.evaluate(() => localStorage.removeItem("sharetab-venmo-handle"));
+
+    // Reload and verify the handle is still there (from the split record, not localStorage)
+    await page.reload();
+    await expect(page.getByTestId("venmo-handle-input")).toHaveValue("updated-handle", { timeout: 15000 });
 
     await page.close();
     await browserCtx.close();

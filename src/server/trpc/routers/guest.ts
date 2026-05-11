@@ -377,6 +377,16 @@ export const guestRouter = createTRPCRouter({
         name: filteredPeople[s.personIndex]?.name ?? `Person ${s.personIndex + 1}`,
       }));
 
+      // Auto-populate payer's Venmo handle from their profile
+      let payerVenmoHandle: string | null = null;
+      if (ctx.session?.user?.id) {
+        const creator = await ctx.db.user.findUnique({
+          where: { id: ctx.session.user.id },
+          select: { venmoUsername: true },
+        });
+        payerVenmoHandle = creator?.venmoUsername ?? null;
+      }
+
       const guestSplit = await ctx.db.guestSplit.create({
         data: {
           receiptId: input.receiptId,
@@ -390,6 +400,7 @@ export const guestRouter = createTRPCRouter({
           assignments: remappedAssignments as unknown as Prisma.InputJsonValue,
           summary: summaryWithNames as unknown as Prisma.InputJsonValue,
           paidByIndex: remappedPaidBy,
+          payerVenmoHandle,
           userId: ctx.session?.user?.id ?? null,
           expiresAt: createExpiryDate(),
         },
@@ -443,6 +454,7 @@ export const guestRouter = createTRPCRouter({
         assignments: split.assignments as { itemIndex: number; personIndices: number[] }[],
         summary: split.summary as { personIndex: number; name: string; itemTotal: number; tax: number; tip: number; total: number }[],
         paidByIndex: split.paidByIndex,
+        payerVenmoHandle: split.payerVenmoHandle,
         createdAt: split.createdAt,
         expiresAt: split.expiresAt,
       };
@@ -497,6 +509,16 @@ export const guestRouter = createTRPCRouter({
         }
       }
 
+      // Auto-populate payer's Venmo handle from their profile
+      let claimPayerVenmoHandle: string | null = null;
+      if (ctx.session?.user?.id) {
+        const creator = await ctx.db.user.findUnique({
+          where: { id: ctx.session.user.id },
+          select: { venmoUsername: true },
+        });
+        claimPayerVenmoHandle = creator?.venmoUsername ?? null;
+      }
+
       const session = await ctx.db.guestSplit.create({
         data: {
           receiptId: input.receiptId,
@@ -505,6 +527,7 @@ export const guestRouter = createTRPCRouter({
           people: people as unknown as Prisma.InputJsonValue,
           assignments: [] as unknown as Prisma.InputJsonValue,
           paidByIndex,
+          payerVenmoHandle: claimPayerVenmoHandle,
           status: "claiming",
           userId: ctx.session?.user?.id ?? null,
           expiresAt: createExpiryDate(),
@@ -911,6 +934,7 @@ export const guestRouter = createTRPCRouter({
         assignments: session.assignments as { itemIndex: number; personIndices: number[] }[],
         summary: session.summary as { personIndex: number; name: string; itemTotal: number; tax: number; tip: number; total: number }[] | null,
         paidByIndex: session.paidByIndex,
+        payerVenmoHandle: session.payerVenmoHandle,
         receiptImagePath,
         createdAt: session.createdAt,
         expiresAt: session.expiresAt,
@@ -1003,5 +1027,42 @@ export const guestRouter = createTRPCRouter({
           isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
         })
       );
+    }),
+
+  setPayerVenmoHandle: publicProcedure
+    .input(z.object({
+      token: z.string(),
+      handle: z.string().max(100).nullable(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { allowed } = checkRateLimit(
+        `venmo-handle:${input.token}`,
+        10,
+        60 * 1000
+      );
+      if (!allowed) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: "Too many requests. Please try again shortly.",
+        });
+      }
+
+      const split = await ctx.db.guestSplit.findUnique({
+        where: { shareToken: input.token },
+        select: { id: true, expiresAt: true },
+      });
+      if (!split) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Split not found" });
+      }
+      if (split.expiresAt < new Date()) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "This split has expired" });
+      }
+
+      await ctx.db.guestSplit.update({
+        where: { id: split.id },
+        data: { payerVenmoHandle: input.handle?.trim() || null },
+      });
+
+      return { success: true };
     }),
 });

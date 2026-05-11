@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, useEffect } from "react";
+import { use, useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
@@ -24,23 +24,32 @@ export default function SharedSplitPage({
   const locale = useLocale();
   const tv = useTranslations("split.venmo");
   const [venmoHandle, setVenmoHandle] = useState("");
+  const venmoInitRef = useRef(false);
   const { data: authSession } = useSession();
   const split = trpc.guest.getSplit.useQuery({ token });
   const venmoSetting = trpc.admin.getVenmoEnabled.useQuery();
   const profile = trpc.auth.getProfile.useQuery(undefined, {
     enabled: !!authSession?.user && !!venmoSetting.data?.enabled,
   });
+  const setPayerVenmoHandle = trpc.guest.setPayerVenmoHandle.useMutation();
 
+  // Initialize venmo handle once: split record > profile > localStorage
   useEffect(() => {
-    if (profile.data?.venmoUsername) {
+    if (venmoInitRef.current) return;
+    if (split.data?.payerVenmoHandle) {
+      setVenmoHandle(split.data.payerVenmoHandle);
+      venmoInitRef.current = true;
+    } else if (profile.data?.venmoUsername) {
       setVenmoHandle(profile.data.venmoUsername);
-    } else {
+      venmoInitRef.current = true;
+    } else if (split.data && !split.isLoading) {
       try {
         const saved = localStorage.getItem("sharetab-venmo-handle");
         if (saved) setVenmoHandle(saved);
       } catch { /* storage unavailable */ }
+      venmoInitRef.current = true;
     }
-  }, [profile.data?.venmoUsername]);
+  }, [split.data, profile.data?.venmoUsername, split.isLoading]);
 
   if (split.isLoading) {
     return (
@@ -135,6 +144,12 @@ export default function SharedSplitPage({
               onChange={(e) => {
                 setVenmoHandle(e.target.value);
                 try { localStorage.setItem("sharetab-venmo-handle", e.target.value); } catch { /* storage unavailable */ }
+              }}
+              onBlur={() => {
+                const trimmed = venmoHandle.trim() || null;
+                if (trimmed !== (split.data?.payerVenmoHandle ?? null)) {
+                  setPayerVenmoHandle.mutate({ token, handle: trimmed });
+                }
               }}
               className="h-8 text-sm max-w-48"
               data-testid="venmo-handle-input"
