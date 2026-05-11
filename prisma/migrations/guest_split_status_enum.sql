@@ -39,3 +39,15 @@ DO $$ BEGIN
     ALTER TABLE "GuestSplit" ALTER COLUMN "status" SET DEFAULT 'FINALIZED';
   END IF;
 END $$;
+
+-- Step 3: Backfill updatedAt for existing rows (required by @updatedAt)
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'GuestSplit' AND column_name = 'updatedAt'
+  ) THEN
+    ALTER TABLE "GuestSplit" ADD COLUMN "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT NOW();
+  ELSE
+    UPDATE "GuestSplit" SET "updatedAt" = "createdAt" WHERE "updatedAt" IS NULL;
+  END IF;
+END $$;
