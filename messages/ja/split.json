@@ -63,6 +63,11 @@
     "createSessionFailed": "セッションの作成に失敗しました。",
     "receiptImageAlt": "レシート"
   },
+  "venmo": {
+    "handle": "Venmoユーザー名",
+    "handlePlaceholder": "Venmoユーザー名を入力",
+    "payVia": "Venmoで{amount}を支払う"
+  },
   "claim": {
     "loadingSession": "セッションを読み込み中...",
     "sessionNotFound": "セッションが見つかりません",

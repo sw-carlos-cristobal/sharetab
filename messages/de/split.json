@@ -63,6 +63,11 @@
     "createSessionFailed": "Sitzung konnte nicht erstellt werden.",
     "receiptImageAlt": "Beleg"
   },
+  "venmo": {
+    "handle": "Venmo-Benutzername",
+    "handlePlaceholder": "Venmo-Benutzername eingeben",
+    "payVia": "Zahle {amount} über Venmo"
+  },
   "claim": {
     "loadingSession": "Session wird geladen...",
     "sessionNotFound": "Session nicht gefunden",

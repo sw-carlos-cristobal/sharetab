@@ -63,6 +63,11 @@
     "createSessionFailed": "Kunde inte skapa sessionslänk.",
     "receiptImageAlt": "Kvitto"
   },
+  "venmo": {
+    "handle": "Venmo-användarnamn",
+    "handlePlaceholder": "Ange Venmo-användarnamn",
+    "payVia": "Betala {amount} via Venmo"
+  },
   "claim": {
     "loadingSession": "Laddar session...",
     "sessionNotFound": "Sessionen hittades inte",

@@ -1,16 +1,19 @@
 "use client";
 
-import { use } from "react";
-import { useLocale } from "next-intl";
+import { use, useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
+import { useLocale, useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { formatCents } from "@/lib/money";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Copy, Share2, Receipt, ArrowRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "@/i18n/navigation";
+import { buildVenmoPayUrl, isValidVenmoHandle } from "@/lib/venmo";
 
 export default function SharedSplitPage({
   params,
@@ -19,7 +22,25 @@ export default function SharedSplitPage({
 }) {
   const { token } = use(params);
   const locale = useLocale();
+  const tv = useTranslations("split.venmo");
+  const [venmoHandle, setVenmoHandle] = useState("");
+  const { data: authSession } = useSession();
   const split = trpc.guest.getSplit.useQuery({ token });
+  const venmoSetting = trpc.admin.getVenmoEnabled.useQuery();
+  const profile = trpc.auth.getProfile.useQuery(undefined, {
+    enabled: !!authSession?.user && !!venmoSetting.data?.enabled,
+  });
+
+  useEffect(() => {
+    if (profile.data?.venmoUsername) {
+      setVenmoHandle(profile.data.venmoUsername);
+    } else {
+      try {
+        const saved = localStorage.getItem("sharetab-venmo-handle");
+        if (saved) setVenmoHandle(saved);
+      } catch { /* storage unavailable */ }
+    }
+  }, [profile.data?.venmoUsername]);
 
   if (split.isLoading) {
     return (
@@ -105,6 +126,21 @@ export default function SharedSplitPage({
         <p className="text-sm text-muted-foreground">
           Paid by <span className="font-medium text-foreground">{paidBy}</span>
         </p>
+        {venmoSetting.data?.enabled && currency === "USD" && (
+          <div className="flex items-center justify-center gap-2 mt-2">
+            <Input
+              placeholder={tv("handlePlaceholder")}
+              aria-label={tv("handle")}
+              value={venmoHandle}
+              onChange={(e) => {
+                setVenmoHandle(e.target.value);
+                try { localStorage.setItem("sharetab-venmo-handle", e.target.value); } catch { /* storage unavailable */ }
+              }}
+              className="h-8 text-sm max-w-48"
+              data-testid="venmo-handle-input"
+            />
+          </div>
+        )}
       </div>
 
       {/* Total */}
@@ -167,6 +203,18 @@ export default function SharedSplitPage({
                     </div>
                   )}
                 </div>
+
+                {venmoSetting.data?.enabled && currency === "USD" && isValidVenmoHandle(venmoHandle) && person.personIndex !== data.paidByIndex && (
+                  <a
+                    href={buildVenmoPayUrl(venmoHandle, person.total, `ShareTab: ${data.receiptData.merchantName ?? 'Bill split'}`)!}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-3 flex items-center justify-center gap-2 rounded-lg bg-[#008CFF] px-4 py-2 text-sm font-medium text-white hover:bg-[#0070CC] transition-colors"
+                    data-testid={`venmo-pay-${idx}`}
+                  >
+                    {tv("payVia", { amount: formatCents(person.total, currency, locale) })}
+                  </a>
+                )}
               </CardContent>
             </Card>
           );

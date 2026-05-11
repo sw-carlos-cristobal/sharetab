@@ -63,6 +63,11 @@
     "createSessionFailed": "Falha ao criar a sessão.",
     "receiptImageAlt": "Recibo"
   },
+  "venmo": {
+    "handle": "Usuário do Venmo",
+    "handlePlaceholder": "Digite o usuário do Venmo",
+    "payVia": "Pagar {amount} via Venmo"
+  },
   "claim": {
     "loadingSession": "Carregando sessão...",
     "sessionNotFound": "Sessão não encontrada",

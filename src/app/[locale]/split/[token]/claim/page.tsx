@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useState, useMemo, useEffect, useRef } from "react";
+import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { formatCents } from "@/lib/money";
@@ -14,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Check, Loader2, Users, Receipt, ArrowRight, Image as ImageIcon, Pencil, X, Link2, Scissors } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "@/i18n/navigation";
+import { buildVenmoPayUrl, isValidVenmoHandle } from "@/lib/venmo";
 
 // Shared avatar color palette (matches the existing split page)
 const colors = [
@@ -69,6 +71,7 @@ export default function ClaimPage({
   const { token } = use(params);
   const locale = useLocale();
   const t = useTranslations("split.claim");
+  const tv = useTranslations("split.venmo");
 
   // --- State ---
   const [name, setName] = useState("");
@@ -84,8 +87,17 @@ export default function ClaimPage({
   const [editingGroupSize, setEditingGroupSize] = useState(1);
   const [splittingItemIdx, setSplittingItemIdx] = useState<number | null>(null);
   const [splitQty, setSplitQty] = useState("");
+  const [venmoHandle, setVenmoHandle] = useState(() => {
+    if (typeof window === "undefined") return "";
+    try { return localStorage.getItem("sharetab-venmo-handle") ?? ""; } catch { return ""; }
+  });
+  const { data: authSession } = useSession();
 
   // --- tRPC ---
+  const venmoSetting = trpc.admin.getVenmoEnabled.useQuery();
+  const profile = trpc.auth.getProfile.useQuery(undefined, {
+    enabled: !!authSession?.user && !!venmoSetting.data?.enabled,
+  });
   const session = trpc.guest.getSession.useQuery(
     { token },
     { refetchInterval: (query) => (query.state.data?.status === "finalized" || query.state.error) ? false : 3000 }
@@ -204,6 +216,12 @@ export default function ClaimPage({
       }
     },
   });
+
+  useEffect(() => {
+    if (profile.data?.venmoUsername) {
+      setVenmoHandle(profile.data.venmoUsername);
+    }
+  }, [profile.data?.venmoUsername]);
 
   // Auto-rejoin from localStorage when session data loads
   useEffect(() => {
@@ -471,6 +489,23 @@ export default function ClaimPage({
           </CardContent>
         </Card>
 
+        {/* Venmo handle input */}
+        {venmoSetting.data?.enabled && currency === "USD" && (
+          <div className="flex items-center justify-center gap-2">
+            <Input
+              placeholder={tv("handlePlaceholder")}
+              aria-label={tv("handle")}
+              value={venmoHandle}
+              onChange={(e) => {
+                setVenmoHandle(e.target.value);
+                try { localStorage.setItem("sharetab-venmo-handle", e.target.value); } catch { /* storage unavailable */ }
+              }}
+              className="h-8 text-sm max-w-48"
+              data-testid="venmo-handle-input"
+            />
+          </div>
+        )}
+
         {/* Per-person summary */}
         {data.summary && data.summary.length > 0 && (
           <div className="space-y-3">
@@ -491,6 +526,17 @@ export default function ClaimPage({
                       {formatCents(person.total, currency, locale)}
                     </span>
                   </div>
+                  {venmoSetting.data?.enabled && currency === "USD" && isValidVenmoHandle(venmoHandle) && person.personIndex !== data.paidByIndex && (
+                    <a
+                      href={buildVenmoPayUrl(venmoHandle, person.total, `ShareTab: ${data.receiptData.merchantName ?? 'Bill split'}`)!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-3 flex items-center justify-center gap-2 rounded-lg bg-[#008CFF] px-4 py-2 text-sm font-medium text-white hover:bg-[#0070CC] transition-colors"
+                      data-testid={`venmo-pay-${person.personIndex}`}
+                    >
+                      {tv("payVia", { amount: formatCents(person.total, currency, locale) })}
+                    </a>
+                  )}
                 </CardContent>
               </Card>
             ))}

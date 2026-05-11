@@ -63,6 +63,11 @@
     "createSessionFailed": "Error al crear la sesión de reclamo.",
     "receiptImageAlt": "Recibo"
   },
+  "venmo": {
+    "handle": "Usuario de Venmo",
+    "handlePlaceholder": "Ingresa usuario de Venmo",
+    "payVia": "Pagar {amount} por Venmo"
+  },
   "claim": {
     "loadingSession": "Cargando sesión...",
     "sessionNotFound": "Sesión no encontrada",
