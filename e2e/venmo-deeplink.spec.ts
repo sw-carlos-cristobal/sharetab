@@ -274,7 +274,7 @@ test.describe("Venmo deeplink payments", () => {
     await browserCtx.close();
   });
 
-  test("payer card has no pay button, non-payer cards do", async ({ browser }) => {
+  test("payer sees zero pay buttons, guest sees them on non-payer cards", async ({ browser }) => {
     const aliceCtx = await authedContext(users.alice.email, users.alice.password);
     await trpcMutation(aliceCtx, "auth.updateProfile", { venmoUsername: "alice-payer-test" });
 
@@ -309,8 +309,9 @@ test.describe("Venmo deeplink payments", () => {
     await creatorPage.goto(`/en/split/${shareToken}`);
 
     await expect(creatorPage.getByTestId("venmo-handle-input")).toBeVisible({ timeout: 15000 });
-    // Bob's card (non-payer) has pay button, Alice's card (payer) does not
-    await expect(creatorPage.locator('[data-testid^="venmo-pay-"]')).toHaveCount(1, { timeout: 5000 });
+    // Payer sees NO pay buttons — they all point to the payer's own handle
+    await expect(creatorPage.locator('[data-testid^="venmo-pay-"]')).toHaveCount(0);
+    await creatorPage.screenshot({ path: "docs/screenshots/venmo-payer-no-buttons.png", fullPage: true });
     await creatorPage.screenshot({ path: "docs/screenshots/venmo-creator-payer-view.png", fullPage: true });
 
     await creatorPage.close();
