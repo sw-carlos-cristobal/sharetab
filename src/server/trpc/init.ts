@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { auth } from "../auth";
 import { db } from "../db";
 import { logger } from "../lib/logger";
+import { verifyAndParse } from "../lib/signed-cookie";
 
 const IMPERSONATE_COOKIE = "sharetab-impersonate";
 
@@ -13,21 +14,21 @@ export const createTRPCContext = async (opts?: { req?: Request }) => {
   const headers = opts?.req?.headers ?? new Headers();
 
   // Check for impersonation cookie
-  let impersonating: {
+  interface ImpersonationData {
     adminId: string;
     adminEmail: string;
     targetId: string;
     targetName: string | null;
     targetEmail: string;
-  } | null = null;
+  }
+  let impersonating: ImpersonationData | null = null;
 
   try {
     const cookieStore = await cookies();
     const impCookie = cookieStore.get(IMPERSONATE_COOKIE);
     if (impCookie?.value && session?.user) {
-      const data = JSON.parse(impCookie.value);
-      // Only apply if the real session belongs to the admin who started it
-      if (data.adminId === session.user.id) {
+      const data = verifyAndParse<ImpersonationData>(impCookie.value);
+      if (data && data.adminId === session.user.id) {
         impersonating = data;
         // Swap session user to the impersonated user
         if (session.user) {
