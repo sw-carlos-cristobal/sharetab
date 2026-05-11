@@ -26,6 +26,7 @@ model Account {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
+  @@index([userId])
 }
 
 model Session {
@@ -34,6 +35,8 @@ model Session {
   userId       String
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model VerificationToken {
@@ -111,6 +114,7 @@ model GroupMember {
   joinedAt DateTime @default(now())
 
   @@unique([userId, groupId])
+  @@index([groupId])
 }
 
 model GroupInvite {
@@ -127,6 +131,8 @@ model GroupInvite {
   group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
+
+  @@index([groupId])
 }
 
 enum GroupRole {
@@ -162,6 +168,7 @@ model Expense {
 
   @@index([groupId])
   @@index([paidById])
+  @@index([addedById])
 }
 
 model ExpenseShare {
@@ -176,6 +183,7 @@ model ExpenseShare {
   user    User    @relation(fields: [userId], references: [id])
 
   @@unique([expenseId, userId])
+  @@index([userId])
 }
 
 enum SplitMode {
@@ -211,6 +219,9 @@ model Receipt {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([groupId])
+  @@index([uploadedById])
 }
 
 model ReceiptItem {
@@ -264,6 +275,8 @@ model Settlement {
   settledAt DateTime @default(now())
 
   @@index([groupId])
+  @@index([fromId])
+  @@index([toId])
 }
 
 // ─── ACTIVITY LOG ──────────────────────────────────────────
@@ -285,6 +298,7 @@ model ActivityLog {
   createdAt DateTime @default(now())
 
   @@index([groupId, createdAt])
+  @@index([userId])
 }
 
 enum ActivityType {
@@ -381,4 +395,7 @@ model GuestSplit {
   createdBy   User?    @relation("GuestSplits", fields: [userId], references: [id])
   expiresAt   DateTime
   createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }
