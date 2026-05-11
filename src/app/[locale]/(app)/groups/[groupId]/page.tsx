@@ -268,7 +268,7 @@ export default function GroupDetailPage({
                       className="shrink-0 text-[#008CFF] hover:text-[#0070CC]"
                       onClick={(e) => {
                         e.stopPropagation();
-                        window.open(venmoUrl, "_blank");
+                        window.open(venmoUrl, "_blank", "noopener,noreferrer");
                         setTimeout(() => {
                           if (confirm(t("detail.venmoPaymentConfirm", { amount: formatCents(debt.amount, g.currency, locale), name: toName }))) {
                             settleVenmo.mutate({
