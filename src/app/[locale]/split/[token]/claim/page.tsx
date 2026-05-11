@@ -546,7 +546,7 @@ export default function ClaimPage({
                       {formatCents(person.total, currency, locale)}
                     </span>
                   </div>
-                  {venmoSetting.data?.enabled && currency === "USD" && isValidVenmoHandle(venmoHandle) && person.personIndex !== data.paidByIndex && (
+                  {venmoSetting.data?.enabled && currency === "USD" && isValidVenmoHandle(venmoHandle) && !data.isCreator && person.personIndex !== data.paidByIndex && (
                     <a
                       href={buildVenmoPayUrl(venmoHandle, person.total, `ShareTab: ${data.receiptData.merchantName ?? 'Bill split'}`)!}
                       target="_blank"

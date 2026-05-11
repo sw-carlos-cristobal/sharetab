@@ -225,7 +225,7 @@ export default function SharedSplitPage({
                   )}
                 </div>
 
-                {venmoSetting.data?.enabled && currency === "USD" && isValidVenmoHandle(venmoHandle) && person.personIndex !== data.paidByIndex && (
+                {venmoSetting.data?.enabled && currency === "USD" && isValidVenmoHandle(venmoHandle) && !split.data?.isCreator && person.personIndex !== data.paidByIndex && (
                   <a
                     href={buildVenmoPayUrl(venmoHandle, person.total, `ShareTab: ${data.receiptData.merchantName ?? 'Bill split'}`)!}
                     target="_blank"
