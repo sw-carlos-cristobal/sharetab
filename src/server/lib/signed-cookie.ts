@@ -1,6 +1,10 @@
 import { createHmac, timingSafeEqual } from "crypto";
 
-const getSecret = () => process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET ?? "";
+function getSecret(): string {
+  const secret = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET;
+  if (!secret) throw new Error("AUTH_SECRET or NEXTAUTH_SECRET must be set");
+  return secret;
+}
 
 export function signPayload(payload: string): string {
   const signature = createHmac("sha256", getSecret()).update(payload).digest("hex");
