@@ -495,7 +495,7 @@ export const guestRouter = createTRPCRouter({
       paidByName: z.string().trim().min(1).max(100),
     }))
     .mutation(async ({ ctx, input }) => {
-      const ip = ctx.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "global";
+      const ip = ctx.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "global";
       const maxClaims = parseInt(process.env.GUEST_SPLIT_RATE_LIMIT_MAX ?? "10", 10) || 10;
       const { allowed } = checkRateLimit(`guest-create-claim:${ip}`, maxClaims, 60 * 60 * 1000);
       if (!allowed) {
