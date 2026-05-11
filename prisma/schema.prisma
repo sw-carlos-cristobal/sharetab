@@ -377,6 +377,11 @@ model SystemInvite {
   createdAt DateTime @default(now())
 }
 
+enum GuestSplitStatus {
+  CLAIMING
+  FINALIZED
+}
+
 // ─── GUEST SPLITS (no auth required) ──────────────────────
 
 model GuestSplit {
@@ -388,13 +393,14 @@ model GuestSplit {
   people      Json     // [{name}]
   assignments Json     // [{itemIndex, personIndices}]
   summary     Json?    // [{name, itemTotal, tax, tip, total}]
-  paidByIndex      Int      @default(0)
+  paidByIndex      Int              @default(0)
   payerVenmoHandle String?
-  status           String   @default("finalized") // "claiming" | "finalized"
+  status           GuestSplitStatus @default(FINALIZED)
   userId           String?
   createdBy   User?    @relation("GuestSplits", fields: [userId], references: [id])
   expiresAt   DateTime
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([userId])
   @@index([expiresAt])

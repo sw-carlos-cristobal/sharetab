@@ -236,7 +236,7 @@ test.describe("Finalize claim session", () => {
     const body = await getRes.json();
     const session = body[0]?.result?.data?.json;
 
-    expect(session.status).toBe("finalized");
+    expect(session.status).toBe("FINALIZED");
     expect(session.summary).toHaveLength(2);
 
     // Totals should sum to 2500

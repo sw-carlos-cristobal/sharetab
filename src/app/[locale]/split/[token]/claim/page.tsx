@@ -102,7 +102,7 @@ export default function ClaimPage({
   });
   const session = trpc.guest.getSession.useQuery(
     { token },
-    { refetchInterval: (query) => (query.state.data?.status === "finalized" || query.state.error) ? false : 3000 }
+    { refetchInterval: (query) => (query.state.data?.status === "FINALIZED" || query.state.error) ? false : 3000 }
   );
 
   const editPersonName = trpc.guest.editPersonName.useMutation({
@@ -236,7 +236,7 @@ export default function ClaimPage({
   // Auto-rejoin from localStorage when session data loads
   useEffect(() => {
     if (autoRejoinAttempted.current || personIndex !== null || !session.data) return;
-    if (session.data.status !== "claiming") return;
+    if (session.data.status !== "CLAIMING") return;
 
     const stored = getStoredClaimIdentity(token);
     if (!stored) return;
@@ -476,7 +476,7 @@ export default function ClaimPage({
   const currency = data.receiptData.currency;
 
   // --- Finalized state ---
-  if (data.status === "finalized") {
+  if (data.status === "FINALIZED") {
     return (
       <div className="space-y-6 pb-8">
         <div className="text-center space-y-2 pt-4">

@@ -191,7 +191,7 @@ test.describe("Group claiming units", () => {
     );
     const session = (await getRes.json())[0]?.result?.data?.json;
 
-    expect(session.status).toBe("finalized");
+    expect(session.status).toBe("FINALIZED");
     expect(session.summary).toHaveLength(2);
 
     const coupleSummary = session.summary.find(
