@@ -136,16 +136,14 @@ test.describe("Expense Authorization", () => {
 
     // Try to delete — accept the confirm dialog
     page.on("dialog", (dialog) => dialog.accept());
-    const deleteBtn = page.getByRole("button", { name: /Delete/i });
-    if (await deleteBtn.isVisible()) {
-      await deleteBtn.click();
-      // Wait for error toast to appear
-      await page.waitForTimeout(2000);
-      // Screenshot: Bob sees FORBIDDEN error after trying to delete
-      await page.screenshot({ path: "docs/screenshots/expense-auth-forbidden-delete.png", fullPage: true });
-      // Should still be on the expense page (not redirected)
-      await expect(page.getByText("Protected Expense UI")).toBeVisible();
-    }
+    await expect(page.getByRole("button", { name: /Delete/i })).toBeVisible();
+    await page.getByRole("button", { name: /Delete/i }).click();
+    // Wait for error toast to appear
+    await page.waitForTimeout(2000);
+    // Screenshot: Bob sees FORBIDDEN error after trying to delete
+    await page.screenshot({ path: "docs/screenshots/expense-auth-forbidden-delete.png", fullPage: true });
+    // Should still be on the expense page (not redirected)
+    await expect(page.getByText("Protected Expense UI")).toBeVisible();
 
     await dispose();
   });
