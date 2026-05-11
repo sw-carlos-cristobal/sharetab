@@ -47,6 +47,7 @@ DO $$ BEGIN
     WHERE table_name = 'GuestSplit' AND column_name = 'updatedAt'
   ) THEN
     ALTER TABLE "GuestSplit" ADD COLUMN "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT NOW();
+    UPDATE "GuestSplit" SET "updatedAt" = "createdAt";
   ELSE
     UPDATE "GuestSplit" SET "updatedAt" = "createdAt" WHERE "updatedAt" IS NULL;
   END IF;
