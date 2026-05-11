@@ -1,5 +1,5 @@
 import { test, expect, request } from "@playwright/test";
-import { users, authedContext, trpcMutation, trpcQuery, trpcResult } from "./helpers";
+import { login, users, authedContext, trpcMutation, trpcQuery, trpcResult } from "./helpers";
 
 const BASE = process.env.BASE_URL || "http://localhost:3001";
 
@@ -246,8 +246,27 @@ test.describe("Venmo deeplink payments", () => {
     const href = await payButtons.first().getAttribute("href");
     expect(href).toContain("venmo.com/alice-venmo-e2e");
 
+    // Screenshot: guest sees payer's handle auto-populated
+    await page.screenshot({ path: "docs/screenshots/venmo-guest-sees-payer-handle.png", fullPage: true });
+
     await page.close();
     await browserCtx.close();
+
+    // Screenshot: creator sees own handle on the same split (logged in)
+    const creatorCtx = await browser.newContext({ viewport: { width: 430, height: 932 } });
+    const creatorPage = await creatorCtx.newPage();
+    await login(creatorPage, users.alice.email, users.alice.password);
+    await creatorPage.goto(`/en/split/${shareToken}`);
+    await expect(creatorPage.getByTestId("venmo-handle-input")).toHaveValue("alice-venmo-e2e", { timeout: 15000 });
+    await creatorPage.screenshot({ path: "docs/screenshots/venmo-creator-sees-own-handle.png", fullPage: true });
+
+    // Clean up Alice's venmo handle
+    const cleanCtx = await authedContext(users.alice.email, users.alice.password);
+    await trpcMutation(cleanCtx, "auth.updateProfile", { venmoUsername: null });
+    await cleanCtx.dispose();
+
+    await creatorPage.close();
+    await creatorCtx.close();
   });
 
   test("changing venmo handle persists to split record across reload", async ({ browser }) => {
