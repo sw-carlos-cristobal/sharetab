@@ -316,4 +316,64 @@ test.describe("Venmo deeplink payments", () => {
     await page.close();
     await browserCtx.close();
   });
+
+  test("creator/payer does not see pay buttons on their own split", async ({ browser }) => {
+    const aliceCtx = await authedContext(users.alice.email, users.alice.password);
+    await trpcMutation(aliceCtx, "auth.updateProfile", { venmoUsername: "alice-payer-test" });
+
+    // Create split where Alice is the payer
+    const createRes = await trpcMutation(aliceCtx, "guest.createSplit", {
+      receiptData: {
+        merchantName: "Payer No Buttons Test",
+        subtotal: 3000,
+        tax: 300,
+        tip: 0,
+        total: 3300,
+        currency: "USD",
+      },
+      items: [
+        { name: "Pasta", quantity: 1, unitPrice: 1500, totalPrice: 1500 },
+        { name: "Salad", quantity: 1, unitPrice: 1500, totalPrice: 1500 },
+      ],
+      people: [{ name: "Alice" }, { name: "Bob" }],
+      assignments: [
+        { itemIndex: 0, personIndices: [0] },
+        { itemIndex: 1, personIndices: [1] },
+      ],
+      paidByIndex: 0,
+    });
+    const { shareToken } = (await createRes.json()).result?.data?.json;
+    await aliceCtx.dispose();
+
+    // Creator (Alice) views the split — should see input but NO pay buttons
+    const creatorBrowser = await browser.newContext({ viewport: { width: 430, height: 932 } });
+    const creatorPage = await creatorBrowser.newPage();
+    await login(creatorPage, users.alice.email, users.alice.password);
+    await creatorPage.goto(`/en/split/${shareToken}`);
+
+    await expect(creatorPage.getByTestId("venmo-handle-input")).toBeVisible({ timeout: 15000 });
+    await expect(creatorPage.locator('[data-testid^="venmo-pay-"]')).toHaveCount(0);
+    await creatorPage.screenshot({ path: "docs/screenshots/venmo-creator-no-pay-buttons.png", fullPage: true });
+
+    await creatorPage.close();
+    await creatorBrowser.close();
+
+    // Guest (Bob) views the same split — should see read-only handle AND pay button
+    const guestBrowser = await browser.newContext({ viewport: { width: 430, height: 932 } });
+    const guestPage = await guestBrowser.newPage();
+    await guestPage.goto(`/en/split/${shareToken}`);
+
+    await expect(guestPage.getByTestId("venmo-handle-display")).toBeVisible({ timeout: 15000 });
+    const payButtons = guestPage.locator('[data-testid^="venmo-pay-"]');
+    await expect(payButtons).toHaveCount(1, { timeout: 5000 });
+    await guestPage.screenshot({ path: "docs/screenshots/venmo-guest-sees-pay-buttons.png", fullPage: true });
+
+    // Clean up
+    const cleanCtx = await authedContext(users.alice.email, users.alice.password);
+    await trpcMutation(cleanCtx, "auth.updateProfile", { venmoUsername: null });
+    await cleanCtx.dispose();
+
+    await guestPage.close();
+    await guestBrowser.close();
+  });
 });
