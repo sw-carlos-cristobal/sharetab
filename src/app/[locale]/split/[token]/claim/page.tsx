@@ -92,7 +92,7 @@ export default function ClaimPage({
     try { return localStorage.getItem("sharetab-venmo-handle") ?? ""; } catch { return ""; }
   });
   const venmoInitRef = useRef(false);
-  const { data: authSession } = useSession();
+  const { data: authSession, status: authStatus } = useSession();
 
   // --- tRPC ---
   const venmoSetting = trpc.admin.getVenmoEnabled.useQuery();
@@ -231,10 +231,10 @@ export default function ClaimPage({
     } else if (session.data?.isCreator && profile.data?.venmoUsername) {
       setVenmoHandle(profile.data.venmoUsername);
       venmoInitRef.current = true;
-    } else if (session.data && !session.isLoading && (profile.isFetched || !authSession?.user)) {
+    } else if (session.data && !session.isLoading && authStatus !== "loading" && (profile.isFetched || !authSession?.user)) {
       venmoInitRef.current = true;
     }
-  }, [session.data, profile.data?.venmoUsername, profile.isFetched, session.isLoading, authSession?.user]);
+  }, [session.data, profile.data?.venmoUsername, profile.isFetched, session.isLoading, authSession?.user, authStatus]);
 
   // Auto-rejoin from localStorage when session data loads
   useEffect(() => {
@@ -546,7 +546,7 @@ export default function ClaimPage({
                       {formatCents(person.total, currency, locale)}
                     </span>
                   </div>
-                  {venmoSetting.data?.enabled && currency === "USD" && isValidVenmoHandle(venmoHandle) && !(data.isCreator && data.payerVenmoHandle) && person.personIndex !== data.paidByIndex && (
+                  {venmoSetting.data?.enabled && currency === "USD" && isValidVenmoHandle(venmoHandle) && person.personIndex !== data.paidByIndex && (
                     <a
                       href={buildVenmoPayUrl(venmoHandle, person.total, `ShareTab: ${data.receiptData.merchantName ?? 'Bill split'}`)!}
                       target="_blank"

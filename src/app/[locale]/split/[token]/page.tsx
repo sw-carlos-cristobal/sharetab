@@ -25,7 +25,7 @@ export default function SharedSplitPage({
   const tv = useTranslations("split.venmo");
   const [venmoHandle, setVenmoHandle] = useState("");
   const venmoInitRef = useRef(false);
-  const { data: authSession } = useSession();
+  const { data: authSession, status: authStatus } = useSession();
   const split = trpc.guest.getSplit.useQuery({ token });
   const venmoSetting = trpc.admin.getVenmoEnabled.useQuery();
   const profile = trpc.auth.getProfile.useQuery(undefined, {
@@ -45,10 +45,10 @@ export default function SharedSplitPage({
     } else if (split.data?.isCreator && profile.data?.venmoUsername) {
       setVenmoHandle(profile.data.venmoUsername);
       venmoInitRef.current = true;
-    } else if (split.data && !split.isLoading && (profile.isFetched || !authSession?.user)) {
+    } else if (split.data && !split.isLoading && authStatus !== "loading" && (profile.isFetched || !authSession?.user)) {
       venmoInitRef.current = true;
     }
-  }, [split.data, profile.data?.venmoUsername, profile.isFetched, split.isLoading, authSession?.user]);
+  }, [split.data, profile.data?.venmoUsername, profile.isFetched, split.isLoading, authSession?.user, authStatus]);
 
   if (split.isLoading) {
     return (
@@ -221,7 +221,7 @@ export default function SharedSplitPage({
                   )}
                 </div>
 
-                {venmoSetting.data?.enabled && currency === "USD" && isValidVenmoHandle(venmoHandle) && !(split.data?.isCreator && split.data?.payerVenmoHandle) && person.personIndex !== data.paidByIndex && (
+                {venmoSetting.data?.enabled && currency === "USD" && isValidVenmoHandle(venmoHandle) && person.personIndex !== data.paidByIndex && (
                   <a
                     href={buildVenmoPayUrl(venmoHandle, person.total, `ShareTab: ${data.receiptData.merchantName ?? 'Bill split'}`)!}
                     target="_blank"

@@ -276,14 +276,14 @@ test.describe("Venmo deeplink payments", () => {
     await browserCtx.close();
   });
 
-  test("creator/payer does not see pay buttons on their own split", async ({ browser }) => {
+  test("payer card has no pay button, non-payer cards do", async ({ browser }) => {
     const aliceCtx = await authedContext(users.alice.email, users.alice.password);
     await trpcMutation(aliceCtx, "auth.updateProfile", { venmoUsername: "alice-payer-test" });
 
     // Create split where Alice is the payer
     const createRes = await trpcMutation(aliceCtx, "guest.createSplit", {
       receiptData: {
-        merchantName: "Payer No Buttons Test",
+        merchantName: "Payer Button Test",
         subtotal: 3000,
         tax: 300,
         tip: 0,
@@ -304,15 +304,16 @@ test.describe("Venmo deeplink payments", () => {
     const { shareToken } = (await createRes.json()).result?.data?.json;
     await aliceCtx.dispose();
 
-    // Creator (Alice) views the split — should see input but NO pay buttons
+    // Creator (Alice/payer) views — editable input, pay button only on Bob's card (not Alice's)
     const creatorBrowser = await browser.newContext({ viewport: { width: 430, height: 932 } });
     const creatorPage = await creatorBrowser.newPage();
     await login(creatorPage, users.alice.email, users.alice.password);
     await creatorPage.goto(`/en/split/${shareToken}`);
 
     await expect(creatorPage.getByTestId("venmo-handle-input")).toBeVisible({ timeout: 15000 });
-    await expect(creatorPage.locator('[data-testid^="venmo-pay-"]')).toHaveCount(0);
-    await creatorPage.screenshot({ path: "docs/screenshots/venmo-creator-no-pay-buttons.png", fullPage: true });
+    // Bob's card (non-payer) has pay button, Alice's card (payer) does not
+    await expect(creatorPage.locator('[data-testid^="venmo-pay-"]')).toHaveCount(1, { timeout: 5000 });
+    await creatorPage.screenshot({ path: "docs/screenshots/venmo-creator-payer-view.png", fullPage: true });
 
     await creatorPage.close();
     await creatorBrowser.close();
