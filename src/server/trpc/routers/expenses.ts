@@ -195,6 +195,17 @@ export const expensesRouter = createTRPCRouter({
         throw new TRPCError({ code: "NOT_FOUND" });
       }
 
+      const isOwnerOrAdmin =
+        ctx.membership.role === "OWNER" || ctx.membership.role === "ADMIN";
+      const isCreatorOrPayer =
+        existing.paidById === ctx.user.id || existing.addedById === ctx.user.id;
+      if (!isOwnerOrAdmin && !isCreatorOrPayer) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only the expense creator, payer, or group owner/admin can modify this expense",
+        });
+      }
+
       // Validate paidById is a member of the group (if provided)
       if (input.paidById) {
         const paidByMember = await ctx.db.groupMember.findFirst({
@@ -269,11 +280,33 @@ export const expensesRouter = createTRPCRouter({
   delete: groupMemberProcedure
     .input(z.object({ groupId: z.string(), expenseId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      const groupCheck = await ctx.db.group.findUnique({
+        where: { id: input.groupId },
+        select: { archivedAt: true },
+      });
+      if (groupCheck?.archivedAt) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Cannot delete expenses from an archived group",
+        });
+      }
+
       const expense = await ctx.db.expense.findUnique({
         where: { id: input.expenseId },
       });
       if (!expense || expense.groupId !== input.groupId) {
         throw new TRPCError({ code: "NOT_FOUND" });
+      }
+
+      const isOwnerOrAdmin =
+        ctx.membership.role === "OWNER" || ctx.membership.role === "ADMIN";
+      const isCreatorOrPayer =
+        expense.paidById === ctx.user.id || expense.addedById === ctx.user.id;
+      if (!isOwnerOrAdmin && !isCreatorOrPayer) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only the expense creator, payer, or group owner/admin can delete this expense",
+        });
       }
 
       await ctx.db.expense.delete({ where: { id: input.expenseId } });
