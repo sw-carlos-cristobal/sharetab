@@ -18,10 +18,9 @@ test.describe("Venmo deeplink payments", () => {
     await ctx.dispose();
   });
 
-  test("venmo handle input appears on split result page", async ({ browser }) => {
-    const ctx = await request.newContext({ baseURL: BASE });
-
-    const createRes = await trpcMutation(ctx, "guest.createSplit", {
+  test("creator sees editable venmo handle input on split result page", async ({ browser }) => {
+    const aliceCtx = await authedContext(users.alice.email, users.alice.password);
+    const createRes = await trpcMutation(aliceCtx, "guest.createSplit", {
       receiptData: {
         merchantName: "Venmo Test Cafe",
         subtotal: 3000,
@@ -34,7 +33,7 @@ test.describe("Venmo deeplink payments", () => {
         { name: "Latte", quantity: 1, unitPrice: 1500, totalPrice: 1500 },
         { name: "Muffin", quantity: 1, unitPrice: 1500, totalPrice: 1500 },
       ],
-      people: [{ name: "Alice" }, { name: "Bob" }],
+      people: [{ name: "Alice Johnson" }, { name: "Bob" }],
       assignments: [
         { itemIndex: 0, personIndices: [0] },
         { itemIndex: 1, personIndices: [1] },
@@ -42,26 +41,28 @@ test.describe("Venmo deeplink payments", () => {
       paidByIndex: 0,
     });
     const { shareToken } = (await createRes.json()).result?.data?.json;
-    await ctx.dispose();
+    await aliceCtx.dispose();
 
     const browserCtx = await browser.newContext({ viewport: { width: 430, height: 932 } });
     const page = await browserCtx.newPage();
+    await login(page, users.alice.email, users.alice.password);
     await page.goto(`/en/split/${shareToken}`);
 
     const venmoInput = page.getByTestId("venmo-handle-input");
     await expect(venmoInput).toBeVisible({ timeout: 15000 });
 
-    // No pay buttons yet (no handle entered)
+    // No pay buttons yet (creator is payer — buttons hidden)
     await expect(page.locator('[data-testid^="venmo-pay-"]')).toHaveCount(0);
 
     await page.close();
     await browserCtx.close();
   });
 
-  test("entering venmo handle shows pay buttons for non-payers", async ({ browser }) => {
-    const ctx = await request.newContext({ baseURL: BASE });
-
-    const createRes = await trpcMutation(ctx, "guest.createSplit", {
+  test("guest sees pay buttons when payer handle is set", async ({ browser }) => {
+    // Create as authenticated Alice with venmo handle set
+    const aliceCtx = await authedContext(users.alice.email, users.alice.password);
+    await trpcMutation(aliceCtx, "auth.updateProfile", { venmoUsername: "alice-venmo" });
+    const createRes = await trpcMutation(aliceCtx, "guest.createSplit", {
       receiptData: {
         merchantName: "Pay Button Test",
         subtotal: 4000,
@@ -75,7 +76,7 @@ test.describe("Venmo deeplink payments", () => {
         { name: "Salad", quantity: 1, unitPrice: 1000, totalPrice: 1000 },
         { name: "Dessert", quantity: 1, unitPrice: 1000, totalPrice: 1000 },
       ],
-      people: [{ name: "Alice" }, { name: "Bob" }, { name: "Charlie" }],
+      people: [{ name: "Alice Johnson" }, { name: "Bob" }, { name: "Charlie" }],
       assignments: [
         { itemIndex: 0, personIndices: [0] },
         { itemIndex: 1, personIndices: [1] },
@@ -84,80 +85,37 @@ test.describe("Venmo deeplink payments", () => {
       paidByIndex: 0,
     });
     const { shareToken } = (await createRes.json()).result?.data?.json;
-    await ctx.dispose();
+    await aliceCtx.dispose();
 
+    // Guest views the split — pay buttons should show for non-payers
     const browserCtx = await browser.newContext({ viewport: { width: 430, height: 932 } });
     const page = await browserCtx.newPage();
     await page.goto(`/en/split/${shareToken}`);
 
-    await expect(page.getByTestId("venmo-handle-input")).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId("venmo-handle-display")).toBeVisible({ timeout: 15000 });
 
-    await page.getByTestId("venmo-handle-input").fill("alice-venmo");
-
-    // Pay buttons should appear for Bob and Charlie (not Alice — she paid)
     const payButtons = page.locator('[data-testid^="venmo-pay-"]');
     await expect(payButtons).toHaveCount(2, { timeout: 5000 });
 
-    // Verify first pay button has correct Venmo URL
     const firstPayHref = await payButtons.first().getAttribute("href");
     expect(firstPayHref).toContain("venmo.com/alice-venmo");
     expect(firstPayHref).toContain("txn=pay");
 
-    // Screenshot: pay buttons visible
-    await page.evaluate(() => window.scrollTo({ top: 300, behavior: "instant" }));
-    await expect(payButtons.first()).toBeVisible();
     await page.screenshot({ path: "docs/screenshots/venmo-pay-buttons.png" });
 
-    await page.close();
-    await browserCtx.close();
-  });
-
-  test("venmo handle persists in localStorage", async ({ browser }) => {
-    const ctx = await request.newContext({ baseURL: BASE });
-
-    const createRes = await trpcMutation(ctx, "guest.createSplit", {
-      receiptData: {
-        merchantName: "Persist Test",
-        subtotal: 1000,
-        tax: 100,
-        tip: 0,
-        total: 1100,
-        currency: "USD",
-      },
-      items: [
-        { name: "Coffee", quantity: 1, unitPrice: 1000, totalPrice: 1000 },
-      ],
-      people: [{ name: "Alice" }, { name: "Bob" }],
-      assignments: [{ itemIndex: 0, personIndices: [1] }],
-      paidByIndex: 0,
-    });
-    const { shareToken } = (await createRes.json()).result?.data?.json;
-    await ctx.dispose();
-
-    const browserCtx = await browser.newContext({ viewport: { width: 430, height: 932 } });
-    const page = await browserCtx.newPage();
-    await page.goto(`/en/split/${shareToken}`);
-
-    await expect(page.getByTestId("venmo-handle-input")).toBeVisible({ timeout: 15000 });
-
-    await page.getByTestId("venmo-handle-input").fill("my-venmo");
-
-    // Verify localStorage
-    const stored = await page.evaluate(() => localStorage.getItem("sharetab-venmo-handle"));
-    expect(stored).toBe("my-venmo");
-
-    // Reload — handle should persist
-    await page.reload();
-    await expect(page.getByTestId("venmo-handle-input")).toHaveValue("my-venmo", { timeout: 15000 });
+    // Clean up
+    const cleanCtx = await authedContext(users.alice.email, users.alice.password);
+    await trpcMutation(cleanCtx, "auth.updateProfile", { venmoUsername: null });
+    await cleanCtx.dispose();
 
     await page.close();
     await browserCtx.close();
   });
 
   test("venmo deeplink has correct amount and note", async ({ browser }) => {
-    const ctx = await request.newContext({ baseURL: BASE });
-
-    const createRes = await trpcMutation(ctx, "guest.createSplit", {
+    const aliceCtx = await authedContext(users.alice.email, users.alice.password);
+    await trpcMutation(aliceCtx, "auth.updateProfile", { venmoUsername: "alice-pays" });
+    const createRes = await trpcMutation(aliceCtx, "guest.createSplit", {
       receiptData: {
         merchantName: "Pizza Palace",
         subtotal: 2500,
@@ -169,30 +127,32 @@ test.describe("Venmo deeplink payments", () => {
       items: [
         { name: "Large Pizza", quantity: 1, unitPrice: 2500, totalPrice: 2500 },
       ],
-      people: [{ name: "Alice" }, { name: "Bob" }],
+      people: [{ name: "Alice Johnson" }, { name: "Bob" }],
       assignments: [{ itemIndex: 0, personIndices: [0, 1] }],
       paidByIndex: 0,
     });
     const { shareToken } = (await createRes.json()).result?.data?.json;
-    await ctx.dispose();
+    await aliceCtx.dispose();
 
+    // Guest views — verify deeplink URL
     const browserCtx = await browser.newContext({ viewport: { width: 430, height: 932 } });
     const page = await browserCtx.newPage();
     await page.goto(`/en/split/${shareToken}`);
 
-    await expect(page.getByTestId("venmo-handle-input")).toBeVisible({ timeout: 15000 });
-    await page.getByTestId("venmo-handle-input").fill("alice-pays");
-
-    // Find Bob's pay button
+    await expect(page.getByTestId("venmo-handle-display")).toBeVisible({ timeout: 15000 });
     const payBtn = page.locator('[data-testid^="venmo-pay-"]').first();
     await expect(payBtn).toBeVisible();
     const href = await payBtn.getAttribute("href");
 
-    // Verify URL components
     expect(href).toContain("venmo.com/alice-pays");
     expect(href).toContain("txn=pay");
     expect(href).toMatch(/amount=\d+\.\d{2}/);
     expect(href).toContain("Pizza%20Palace");
+
+    // Clean up
+    const cleanCtx = await authedContext(users.alice.email, users.alice.password);
+    await trpcMutation(cleanCtx, "auth.updateProfile", { venmoUsername: null });
+    await cleanCtx.dispose();
 
     await page.close();
     await browserCtx.close();

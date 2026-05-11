@@ -141,10 +141,7 @@ export default function SharedSplitPage({
                 placeholder={tv("handlePlaceholder")}
                 aria-label={tv("handle")}
                 value={venmoHandle}
-                onChange={(e) => {
-                  setVenmoHandle(e.target.value);
-                  try { localStorage.setItem("sharetab-venmo-handle", e.target.value); } catch { /* storage unavailable */ }
-                }}
+                onChange={(e) => setVenmoHandle(e.target.value)}
                 onBlur={() => {
                   const trimmed = venmoHandle.trim() || null;
                   if (trimmed !== (split.data?.payerVenmoHandle ?? null)) {
@@ -224,7 +221,7 @@ export default function SharedSplitPage({
                   )}
                 </div>
 
-                {venmoSetting.data?.enabled && currency === "USD" && isValidVenmoHandle(venmoHandle) && !split.data?.isCreator && person.personIndex !== data.paidByIndex && (
+                {venmoSetting.data?.enabled && currency === "USD" && isValidVenmoHandle(venmoHandle) && !(split.data?.isCreator && split.data?.payerVenmoHandle) && person.personIndex !== data.paidByIndex && (
                   <a
                     href={buildVenmoPayUrl(venmoHandle, person.total, `ShareTab: ${data.receiptData.merchantName ?? 'Bill split'}`)!}
                     target="_blank"

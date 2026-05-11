@@ -509,10 +509,7 @@ export default function ClaimPage({
               placeholder={tv("handlePlaceholder")}
               aria-label={tv("handle")}
               value={venmoHandle}
-              onChange={(e) => {
-                setVenmoHandle(e.target.value);
-                try { localStorage.setItem("sharetab-venmo-handle", e.target.value); } catch { /* storage unavailable */ }
-              }}
+              onChange={(e) => setVenmoHandle(e.target.value)}
               onBlur={() => {
                 const trimmed = venmoHandle.trim() || null;
                 if (trimmed !== (session.data?.payerVenmoHandle ?? null)) {
@@ -523,11 +520,11 @@ export default function ClaimPage({
               data-testid="venmo-handle-input"
             />
           </div>
-        ) : venmoHandle && (
+        ) : venmoHandle ? (
           <p className="text-sm text-muted-foreground text-center" data-testid="venmo-handle-display">
             Venmo: @{venmoHandle.replace(/^@/, '')}
           </p>
-        ))}
+        ) : null)}
 
         {/* Per-person summary */}
         {data.summary && data.summary.length > 0 && (
@@ -549,7 +546,7 @@ export default function ClaimPage({
                       {formatCents(person.total, currency, locale)}
                     </span>
                   </div>
-                  {venmoSetting.data?.enabled && currency === "USD" && isValidVenmoHandle(venmoHandle) && !data.isCreator && person.personIndex !== data.paidByIndex && (
+                  {venmoSetting.data?.enabled && currency === "USD" && isValidVenmoHandle(venmoHandle) && !(data.isCreator && data.payerVenmoHandle) && person.personIndex !== data.paidByIndex && (
                     <a
                       href={buildVenmoPayUrl(venmoHandle, person.total, `ShareTab: ${data.receiptData.merchantName ?? 'Bill split'}`)!}
                       target="_blank"
