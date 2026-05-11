@@ -31,25 +31,24 @@ export default function SharedSplitPage({
   const profile = trpc.auth.getProfile.useQuery(undefined, {
     enabled: !!authSession?.user && !!venmoSetting.data?.enabled,
   });
-  const setPayerVenmoHandle = trpc.guest.setPayerVenmoHandle.useMutation();
+  const utils = trpc.useUtils();
+  const setPayerVenmoHandle = trpc.guest.setPayerVenmoHandle.useMutation({
+    onSuccess: () => { utils.guest.getSplit.invalidate({ token }); },
+  });
 
-  // Initialize venmo handle once: split record > profile > localStorage
+  // Initialize venmo handle once from split record, then creator's profile as fallback
   useEffect(() => {
     if (venmoInitRef.current) return;
     if (split.data?.payerVenmoHandle) {
       setVenmoHandle(split.data.payerVenmoHandle);
       venmoInitRef.current = true;
-    } else if (profile.data?.venmoUsername) {
+    } else if (split.data?.isCreator && profile.data?.venmoUsername) {
       setVenmoHandle(profile.data.venmoUsername);
       venmoInitRef.current = true;
-    } else if (split.data && !split.isLoading) {
-      try {
-        const saved = localStorage.getItem("sharetab-venmo-handle");
-        if (saved) setVenmoHandle(saved);
-      } catch { /* storage unavailable */ }
+    } else if (split.data && !split.isLoading && (profile.isFetched || !authSession?.user)) {
       venmoInitRef.current = true;
     }
-  }, [split.data, profile.data?.venmoUsername, split.isLoading]);
+  }, [split.data, profile.data?.venmoUsername, profile.isFetched, split.isLoading, authSession?.user]);
 
   if (split.isLoading) {
     return (

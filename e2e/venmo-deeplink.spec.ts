@@ -216,7 +216,7 @@ test.describe("Venmo deeplink payments", () => {
       items: [
         { name: "Burger", quantity: 1, unitPrice: 2000, totalPrice: 2000 },
       ],
-      people: [{ name: "Alice" }, { name: "Bob" }],
+      people: [{ name: "Alice Johnson" }, { name: "Bob" }],
       assignments: [
         { itemIndex: 0, personIndices: [0, 1] },
       ],
@@ -224,7 +224,7 @@ test.describe("Venmo deeplink payments", () => {
     });
     const { shareToken } = (await createRes.json()).result?.data?.json;
 
-    // Verify the split record has the handle stored
+    // Verify the split record has the handle stored (name must match profile)
     const splitRes = await trpcQuery(aliceCtx, "guest.getSplit", { token: shareToken });
     const splitData = await trpcResult(splitRes);
     expect(splitData.payerVenmoHandle).toBe("alice-venmo-e2e");
@@ -271,9 +271,9 @@ test.describe("Venmo deeplink payments", () => {
   });
 
   test("changing venmo handle persists to split record across reload", async ({ browser }) => {
-    const ctx = await request.newContext({ baseURL: BASE });
-
-    const createRes = await trpcMutation(ctx, "guest.createSplit", {
+    // Create as authenticated Alice (so userId is set and isCreator works)
+    const aliceCtx = await authedContext(users.alice.email, users.alice.password);
+    const createRes = await trpcMutation(aliceCtx, "guest.createSplit", {
       receiptData: {
         merchantName: "Persist Split Test",
         subtotal: 1500,
@@ -285,15 +285,17 @@ test.describe("Venmo deeplink payments", () => {
       items: [
         { name: "Tea", quantity: 1, unitPrice: 1500, totalPrice: 1500 },
       ],
-      people: [{ name: "Alice" }, { name: "Bob" }],
+      people: [{ name: "Alice Johnson" }, { name: "Bob" }],
       assignments: [{ itemIndex: 0, personIndices: [0, 1] }],
       paidByIndex: 0,
     });
     const { shareToken } = (await createRes.json()).result?.data?.json;
-    await ctx.dispose();
+    await aliceCtx.dispose();
 
+    // Login as Alice and open the split
     const browserCtx = await browser.newContext({ viewport: { width: 430, height: 932 } });
     const page = await browserCtx.newPage();
+    await login(page, users.alice.email, users.alice.password);
     await page.goto(`/en/split/${shareToken}`);
 
     const venmoInput = page.getByTestId("venmo-handle-input");
@@ -303,13 +305,10 @@ test.describe("Venmo deeplink payments", () => {
     await venmoInput.fill("updated-handle");
     await venmoInput.blur();
 
-    // Wait for the mutation to complete
-    await page.waitForTimeout(1000);
+    // Wait for mutation by checking network idle
+    await page.waitForResponse((r) => r.url().includes("setPayerVenmoHandle") && r.status() === 200, { timeout: 10000 });
 
-    // Clear localStorage to prove persistence comes from the split record
-    await page.evaluate(() => localStorage.removeItem("sharetab-venmo-handle"));
-
-    // Reload and verify the handle is still there (from the split record, not localStorage)
+    // Reload and verify the handle persisted from the split record
     await page.reload();
     await expect(page.getByTestId("venmo-handle-input")).toHaveValue("updated-handle", { timeout: 15000 });
 
@@ -335,7 +334,7 @@ test.describe("Venmo deeplink payments", () => {
         { name: "Pasta", quantity: 1, unitPrice: 1500, totalPrice: 1500 },
         { name: "Salad", quantity: 1, unitPrice: 1500, totalPrice: 1500 },
       ],
-      people: [{ name: "Alice" }, { name: "Bob" }],
+      people: [{ name: "Alice Johnson" }, { name: "Bob" }],
       assignments: [
         { itemIndex: 0, personIndices: [0] },
         { itemIndex: 1, personIndices: [1] },

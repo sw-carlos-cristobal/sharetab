@@ -99,7 +99,10 @@ export default function ClaimPage({
   const profile = trpc.auth.getProfile.useQuery(undefined, {
     enabled: !!authSession?.user && !!venmoSetting.data?.enabled,
   });
-  const setPayerVenmoHandle = trpc.guest.setPayerVenmoHandle.useMutation();
+  const utils = trpc.useUtils();
+  const setPayerVenmoHandle = trpc.guest.setPayerVenmoHandle.useMutation({
+    onSuccess: () => { utils.guest.getSession.invalidate({ token }); },
+  });
   const session = trpc.guest.getSession.useQuery(
     { token },
     { refetchInterval: (query) => (query.state.data?.status === "finalized" || query.state.error) ? false : 3000 }
@@ -219,19 +222,19 @@ export default function ClaimPage({
     },
   });
 
-  // Initialize venmo handle: split record > profile > localStorage (already set in initial state)
+  // Initialize venmo handle from split record, then creator's profile as fallback
   useEffect(() => {
     if (venmoInitRef.current) return;
     if (session.data?.payerVenmoHandle) {
       setVenmoHandle(session.data.payerVenmoHandle);
       venmoInitRef.current = true;
-    } else if (profile.data?.venmoUsername) {
+    } else if (session.data?.isCreator && profile.data?.venmoUsername) {
       setVenmoHandle(profile.data.venmoUsername);
       venmoInitRef.current = true;
-    } else if (session.data && !session.isLoading) {
+    } else if (session.data && !session.isLoading && (profile.isFetched || !authSession?.user)) {
       venmoInitRef.current = true;
     }
-  }, [session.data, profile.data?.venmoUsername, session.isLoading]);
+  }, [session.data, profile.data?.venmoUsername, profile.isFetched, session.isLoading, authSession?.user]);
 
   // Auto-rejoin from localStorage when session data loads
   useEffect(() => {

@@ -377,14 +377,17 @@ export const guestRouter = createTRPCRouter({
         name: filteredPeople[s.personIndex]?.name ?? `Person ${s.personIndex + 1}`,
       }));
 
-      // Auto-populate payer's Venmo handle from their profile
+      // Auto-populate payer's Venmo handle only when the creator is the payer
       let payerVenmoHandle: string | null = null;
-      if (ctx.session?.user?.id) {
+      if (ctx.session?.user?.id && remappedPaidBy === 0) {
         const creator = await ctx.db.user.findUnique({
           where: { id: ctx.session.user.id },
-          select: { venmoUsername: true },
+          select: { venmoUsername: true, name: true },
         });
-        payerVenmoHandle = creator?.venmoUsername ?? null;
+        const payerName = filteredPeople[0]?.name;
+        if (creator?.venmoUsername && creator.name && payerName && creator.name.toLowerCase() === payerName.toLowerCase()) {
+          payerVenmoHandle = creator.venmoUsername;
+        }
       }
 
       const guestSplit = await ctx.db.guestSplit.create({
@@ -510,14 +513,17 @@ export const guestRouter = createTRPCRouter({
         }
       }
 
-      // Auto-populate payer's Venmo handle from their profile
+      // Auto-populate payer's Venmo handle only when the creator is the payer
       let claimPayerVenmoHandle: string | null = null;
       if (ctx.session?.user?.id) {
+        const paidByPerson = people[paidByIndex];
         const creator = await ctx.db.user.findUnique({
           where: { id: ctx.session.user.id },
-          select: { venmoUsername: true },
+          select: { venmoUsername: true, name: true },
         });
-        claimPayerVenmoHandle = creator?.venmoUsername ?? null;
+        if (creator?.venmoUsername && creator.name && paidByPerson?.name && creator.name.toLowerCase() === paidByPerson.name.toLowerCase()) {
+          claimPayerVenmoHandle = creator.venmoUsername;
+        }
       }
 
       const session = await ctx.db.guestSplit.create({
@@ -1031,10 +1037,10 @@ export const guestRouter = createTRPCRouter({
       );
     }),
 
-  setPayerVenmoHandle: publicProcedure
+  setPayerVenmoHandle: protectedProcedure
     .input(z.object({
       token: z.string(),
-      handle: z.string().max(100).nullable(),
+      handle: z.string().max(50).nullable(),
     }))
     .mutation(async ({ ctx, input }) => {
       const { allowed } = checkRateLimit(
@@ -1059,7 +1065,7 @@ export const guestRouter = createTRPCRouter({
       if (split.expiresAt < new Date()) {
         throw new TRPCError({ code: "NOT_FOUND", message: "This split has expired" });
       }
-      if (!split.userId || split.userId !== ctx.session?.user?.id) {
+      if (split.userId !== ctx.user.id) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Only the split creator can update the Venmo handle" });
       }
 
