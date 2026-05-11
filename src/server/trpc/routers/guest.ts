@@ -466,7 +466,13 @@ export const guestRouter = createTRPCRouter({
         paidByIndex: split.paidByIndex,
         payerVenmoHandle: split.payerVenmoHandle,
         isCreator: !!split.userId && split.userId === ctx.session?.user?.id,
-        isPayer: !!split.payerVenmoHandle && !!split.userId && split.userId === ctx.session?.user?.id,
+        isPayer: await (async () => {
+          if (!ctx.session?.user?.id) return false;
+          const viewer = await ctx.db.user.findUnique({ where: { id: ctx.session.user.id }, select: { name: true } });
+          const people = split.people as GuestSessionPerson[];
+          const payerName = people[split.paidByIndex]?.name;
+          return !!viewer?.name && !!payerName && normalizeGuestName(viewer.name) === normalizeGuestName(payerName);
+        })(),
         createdAt: split.createdAt,
         expiresAt: split.expiresAt,
       };
