@@ -14,6 +14,5 @@
   "groups": "Grupper",
   "showMore": "Visa mer",
   "members": "{count, plural, one {# medlem} other {# medlemmar}}",
-  "archivedGroups": "{count, plural, one {# arkiverad grupp} other {# arkiverade grupper}}",
-  "payViaVenmo": "Betala via Venmo"
+  "archivedGroups": "{count, plural, one {# arkiverad grupp} other {# arkiverade grupper}}"
 }

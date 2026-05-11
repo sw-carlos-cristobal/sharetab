@@ -1,9 +1,11 @@
 "use client";
 
 import { use, useState } from "react";
+import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { formatCents } from "@/lib/money";
+import { buildVenmoPayUrl, isValidVenmoHandle } from "@/lib/venmo";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +24,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Link } from "@/i18n/navigation";
+import { toast } from "sonner";
 import { InviteDialog } from "@/components/groups/invite-dialog";
 import { SettleDialog } from "@/components/groups/settle-dialog";
 
@@ -72,6 +75,7 @@ export default function GroupDetailPage({
   }>({ open: false });
 
   const t = useTranslations("groups");
+  const { data: authSession } = useSession();
   const group = trpc.groups.get.useQuery({ groupId });
   const expenses = trpc.expenses.list.useQuery({ groupId, limit: 10 });
   const debts = trpc.balances.getSimplifiedDebts.useQuery({ groupId });
@@ -88,6 +92,9 @@ export default function GroupDetailPage({
       utils.balances.getSimplifiedDebts.invalidate({ groupId });
       utils.balances.getDashboard.invalidate();
       utils.settlements.list.invalidate({ groupId });
+    },
+    onError: (err) => {
+      toast.error(err.message);
     },
   });
 
@@ -224,10 +231,11 @@ export default function GroupDetailPage({
               const from = memberMap.get(debt.from);
               const to = memberMap.get(debt.to);
               const toName = to?.name ?? to?.email ?? "Unknown";
-              const venmoEnabled = venmoSetting.data?.enabled && to?.venmoUsername;
-              const venmoUrl = venmoEnabled
-                ? `https://venmo.com/${encodeURIComponent(to.venmoUsername!)}?txn=pay&amount=${(debt.amount / 100).toFixed(2)}&note=${encodeURIComponent(`ShareTab: ${g.name}`)}`
-                : "";
+              const isMyDebt = debt.from === authSession?.user?.id;
+              const showVenmo = venmoSetting.data?.enabled && g.currency === "USD" && isMyDebt && to?.venmoUsername && isValidVenmoHandle(to.venmoUsername);
+              const venmoUrl = showVenmo
+                ? buildVenmoPayUrl(to.venmoUsername!, debt.amount, `ShareTab: ${g.name}`)
+                : null;
               return (
                 <div key={i} className="flex items-center gap-2">
                   <button
@@ -253,7 +261,7 @@ export default function GroupDetailPage({
                       {formatCents(debt.amount, g.currency, locale)}
                     </span>
                   </button>
-                  {venmoEnabled && (
+                  {venmoUrl && (
                     <Button
                       variant="ghost"
                       size="sm"

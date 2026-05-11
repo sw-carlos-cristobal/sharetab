@@ -14,6 +14,5 @@
   "groups": "群组",
   "showMore": "显示更多",
   "members": "{count, plural, other {#位成员}}",
-  "archivedGroups": "{count, plural, other {#个已归档群组}}",
-  "payViaVenmo": "通过Venmo支付"
+  "archivedGroups": "{count, plural, other {#个已归档群组}}"
 }

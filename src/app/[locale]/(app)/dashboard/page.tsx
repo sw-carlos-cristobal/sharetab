@@ -109,7 +109,6 @@ export default function DashboardPage() {
   const locale = useLocale();
   const dashboard = trpc.balances.getDashboard.useQuery();
   const overallDebts = trpc.balances.getOverallDebts.useQuery();
-  const venmoSetting = trpc.admin.getVenmoEnabled.useQuery();
   const groups = trpc.groups.list.useQuery();
   const archivedGroups = trpc.groups.listArchived.useQuery();
   const [showAllGroups, setShowAllGroups] = useState(false);
@@ -245,43 +244,24 @@ export default function DashboardPage() {
               </p>
             )}
             <div className="divide-y divide-border/60">
-              {overallDebts.data?.youOwe.map((person) => {
-                const venmoEnabled = venmoSetting.data?.enabled && person.venmoUsername;
-                const venmoUrl = venmoEnabled
-                  ? `https://venmo.com/${encodeURIComponent(person.venmoUsername!)}?txn=pay&amount=${(person.amount / 100).toFixed(2)}&note=${encodeURIComponent("ShareTab payment")}`
-                  : "";
-                return (
-                  <div
-                    key={person.userId}
-                    className="flex items-center justify-between rounded-md px-1 py-2.5 transition-colors hover:bg-muted/50"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white shadow-sm ${avatarColor(person.userId)}`}
-                      >
-                        {getInitials(person.userName)}
-                      </div>
-                      <span className="text-sm font-medium">{person.userName}</span>
+              {overallDebts.data?.youOwe.map((person) => (
+                <div
+                  key={person.userId}
+                  className="flex items-center justify-between rounded-md px-1 py-2.5 transition-colors hover:bg-muted/50"
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white shadow-sm ${avatarColor(person.userId)}`}
+                    >
+                      {getInitials(person.userName)}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold tabular-nums text-red-600 dark:text-red-400">
-                        {formatCents(person.amount, "USD", locale)}
-                      </span>
-                      {venmoEnabled && (
-                        <a
-                          href={venmoUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="rounded-md bg-[#008CFF] px-2.5 py-1 text-xs font-medium text-white hover:bg-[#0070CC] transition-colors"
-                          data-testid={`venmo-pay-${person.userId}`}
-                        >
-                          {t("payViaVenmo")}
-                        </a>
-                      )}
-                    </div>
+                    <span className="text-sm font-medium">{person.userName}</span>
                   </div>
-                );
-              })}
+                  <span className="text-sm font-semibold tabular-nums text-red-600 dark:text-red-400">
+                    {formatCents(person.amount, "USD", locale)}
+                  </span>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>
