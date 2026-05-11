@@ -280,6 +280,17 @@ export const expensesRouter = createTRPCRouter({
   delete: groupMemberProcedure
     .input(z.object({ groupId: z.string(), expenseId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      const groupCheck = await ctx.db.group.findUnique({
+        where: { id: input.groupId },
+        select: { archivedAt: true },
+      });
+      if (groupCheck?.archivedAt) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Cannot delete expenses from an archived group",
+        });
+      }
+
       const expense = await ctx.db.expense.findUnique({
         where: { id: input.expenseId },
       });

@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { users, authedContext, trpcMutation, trpcQuery, trpcResult, trpcError, createTestGroup, login, navigateToGroup } from "./helpers";
+import { users, trpcMutation, trpcError, createTestGroup, login } from "./helpers";
 
 test.describe("Expense Authorization", () => {
   test("non-owner member cannot update another member's expense via API", async () => {
@@ -21,7 +21,9 @@ test.describe("Expense Authorization", () => {
         { userId: memberIds[users.bob.email], amount: 1000 },
       ],
     });
+    expect(createRes.ok()).toBe(true);
     const expense = (await createRes.json()).result?.data?.json;
+    expect(expense?.id).toBeDefined();
 
     const bobCtx = memberContexts[0];
     const updateRes = await trpcMutation(bobCtx, "expenses.update", {
@@ -54,7 +56,9 @@ test.describe("Expense Authorization", () => {
         { userId: memberIds[users.bob.email], amount: 1500 },
       ],
     });
+    expect(createRes.ok()).toBe(true);
     const expense = (await createRes.json()).result?.data?.json;
+    expect(expense?.id).toBeDefined();
 
     const bobCtx = memberContexts[0];
     const deleteRes = await trpcMutation(bobCtx, "expenses.delete", {
@@ -86,7 +90,9 @@ test.describe("Expense Authorization", () => {
         { userId: memberIds[users.bob.email], amount: 2500 },
       ],
     });
+    expect(createRes.ok()).toBe(true);
     const expense = (await createRes.json()).result?.data?.json;
+    expect(expense?.id).toBeDefined();
 
     const updateRes = await trpcMutation(owner, "expenses.update", {
       groupId,
@@ -99,6 +105,44 @@ test.describe("Expense Authorization", () => {
     await dispose();
   });
 
+  test("payer (non-creator MEMBER) can update their own expense", async () => {
+    const { owner, groupId, memberIds, memberContexts, dispose } = await createTestGroup(
+      users.alice.email, users.alice.password,
+      [{ email: users.bob.email, password: users.bob.password }],
+      "Auth Payer Update"
+    );
+
+    const bobId = memberIds[users.bob.email];
+    const aliceId = memberIds[users.alice.email];
+    // Alice (OWNER) creates an expense where Bob is the payer
+    const createRes = await trpcMutation(owner, "expenses.create", {
+      groupId,
+      title: "Bob paid for lunch",
+      amount: 4000,
+      paidById: bobId,
+      splitMode: "EQUAL",
+      shares: [
+        { userId: aliceId, amount: 2000 },
+        { userId: bobId, amount: 2000 },
+      ],
+    });
+    expect(createRes.ok()).toBe(true);
+    const expense = (await createRes.json()).result?.data?.json;
+    expect(expense?.id).toBeDefined();
+
+    // Bob (MEMBER, payer) should be able to update
+    const bobCtx = memberContexts[0];
+    const updateRes = await trpcMutation(bobCtx, "expenses.update", {
+      groupId,
+      expenseId: expense.id,
+      title: "Updated by payer Bob",
+    });
+    const updated = (await updateRes.json()).result?.data?.json;
+    expect(updated.title).toBe("Updated by payer Bob");
+
+    await dispose();
+  });
+
   test("UI: non-owner sees error when trying to delete another's expense", async ({ page }) => {
     const { owner, groupId, memberIds, dispose } = await createTestGroup(
       users.alice.email, users.alice.password,
@@ -107,7 +151,7 @@ test.describe("Expense Authorization", () => {
     );
 
     const aliceId = memberIds[users.alice.email];
-    await trpcMutation(owner, "expenses.create", {
+    const createRes = await trpcMutation(owner, "expenses.create", {
       groupId,
       title: "Protected Expense UI",
       amount: 4200,
@@ -118,6 +162,9 @@ test.describe("Expense Authorization", () => {
         { userId: memberIds[users.bob.email], amount: 2100 },
       ],
     });
+    expect(createRes.ok()).toBe(true);
+    const expense = (await createRes.json()).result?.data?.json;
+    expect(expense?.id).toBeDefined();
 
     // Login as Bob and navigate to the group
     await login(page, users.bob.email, users.bob.password);
