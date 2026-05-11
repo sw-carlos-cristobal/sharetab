@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, useEffect } from "react";
+import { use, useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
@@ -24,23 +24,31 @@ export default function SharedSplitPage({
   const locale = useLocale();
   const tv = useTranslations("split.venmo");
   const [venmoHandle, setVenmoHandle] = useState("");
-  const { data: authSession } = useSession();
+  const venmoInitRef = useRef(false);
+  const { data: authSession, status: authStatus } = useSession();
   const split = trpc.guest.getSplit.useQuery({ token });
   const venmoSetting = trpc.admin.getVenmoEnabled.useQuery();
   const profile = trpc.auth.getProfile.useQuery(undefined, {
     enabled: !!authSession?.user && !!venmoSetting.data?.enabled,
   });
+  const utils = trpc.useUtils();
+  const setPayerVenmoHandle = trpc.guest.setPayerVenmoHandle.useMutation({
+    onSuccess: () => { utils.guest.getSplit.invalidate({ token }); },
+  });
 
+  // Initialize venmo handle once from split record, then creator's profile as fallback
   useEffect(() => {
-    if (profile.data?.venmoUsername) {
+    if (venmoInitRef.current) return;
+    if (split.data?.payerVenmoHandle) {
+      setVenmoHandle(split.data.payerVenmoHandle);
+      venmoInitRef.current = true;
+    } else if (split.data?.isCreator && profile.data?.venmoUsername) {
       setVenmoHandle(profile.data.venmoUsername);
-    } else {
-      try {
-        const saved = localStorage.getItem("sharetab-venmo-handle");
-        if (saved) setVenmoHandle(saved);
-      } catch { /* storage unavailable */ }
+      venmoInitRef.current = true;
+    } else if (split.data && !split.isLoading && authStatus !== "loading" && (profile.isFetched || !authSession?.user)) {
+      venmoInitRef.current = true;
     }
-  }, [profile.data?.venmoUsername]);
+  }, [split.data, profile.data?.venmoUsername, profile.isFetched, split.isLoading, authSession?.user, authStatus]);
 
   if (split.isLoading) {
     return (
@@ -127,19 +135,28 @@ export default function SharedSplitPage({
           Paid by <span className="font-medium text-foreground">{paidBy}</span>
         </p>
         {venmoSetting.data?.enabled && currency === "USD" && (
-          <div className="flex items-center justify-center gap-2 mt-2">
-            <Input
-              placeholder={tv("handlePlaceholder")}
-              aria-label={tv("handle")}
-              value={venmoHandle}
-              onChange={(e) => {
-                setVenmoHandle(e.target.value);
-                try { localStorage.setItem("sharetab-venmo-handle", e.target.value); } catch { /* storage unavailable */ }
-              }}
-              className="h-8 text-sm max-w-48"
-              data-testid="venmo-handle-input"
-            />
-          </div>
+          split.data?.isCreator ? (
+            <div className="flex items-center justify-center gap-2 mt-2">
+              <Input
+                placeholder={tv("handlePlaceholder")}
+                aria-label={tv("handle")}
+                value={venmoHandle}
+                onChange={(e) => setVenmoHandle(e.target.value)}
+                onBlur={() => {
+                  const trimmed = venmoHandle.trim() || null;
+                  if (trimmed !== (split.data?.payerVenmoHandle ?? null)) {
+                    setPayerVenmoHandle.mutate({ token, handle: trimmed });
+                  }
+                }}
+                className="h-8 text-sm max-w-48"
+                data-testid="venmo-handle-input"
+              />
+            </div>
+          ) : venmoHandle ? (
+            <p className="text-sm text-muted-foreground mt-1" data-testid="venmo-handle-display">
+              Venmo: @{venmoHandle.replace(/^@/, '')}
+            </p>
+          ) : null
         )}
       </div>
 

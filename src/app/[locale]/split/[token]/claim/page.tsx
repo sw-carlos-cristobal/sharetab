@@ -87,16 +87,18 @@ export default function ClaimPage({
   const [editingGroupSize, setEditingGroupSize] = useState(1);
   const [splittingItemIdx, setSplittingItemIdx] = useState<number | null>(null);
   const [splitQty, setSplitQty] = useState("");
-  const [venmoHandle, setVenmoHandle] = useState(() => {
-    if (typeof window === "undefined") return "";
-    try { return localStorage.getItem("sharetab-venmo-handle") ?? ""; } catch { return ""; }
-  });
-  const { data: authSession } = useSession();
+  const [venmoHandle, setVenmoHandle] = useState("");
+  const venmoInitRef = useRef(false);
+  const { data: authSession, status: authStatus } = useSession();
 
   // --- tRPC ---
   const venmoSetting = trpc.admin.getVenmoEnabled.useQuery();
   const profile = trpc.auth.getProfile.useQuery(undefined, {
     enabled: !!authSession?.user && !!venmoSetting.data?.enabled,
+  });
+  const utils = trpc.useUtils();
+  const setPayerVenmoHandle = trpc.guest.setPayerVenmoHandle.useMutation({
+    onSuccess: () => { utils.guest.getSession.invalidate({ token }); },
   });
   const session = trpc.guest.getSession.useQuery(
     { token },
@@ -217,11 +219,19 @@ export default function ClaimPage({
     },
   });
 
+  // Initialize venmo handle from split record, then creator's profile as fallback
   useEffect(() => {
-    if (profile.data?.venmoUsername) {
+    if (venmoInitRef.current) return;
+    if (session.data?.payerVenmoHandle) {
+      setVenmoHandle(session.data.payerVenmoHandle);
+      venmoInitRef.current = true;
+    } else if (session.data?.isCreator && profile.data?.venmoUsername) {
       setVenmoHandle(profile.data.venmoUsername);
+      venmoInitRef.current = true;
+    } else if (session.data && !session.isLoading && authStatus !== "loading" && (profile.isFetched || !authSession?.user)) {
+      venmoInitRef.current = true;
     }
-  }, [profile.data?.venmoUsername]);
+  }, [session.data, profile.data?.venmoUsername, profile.isFetched, session.isLoading, authSession?.user, authStatus]);
 
   // Auto-rejoin from localStorage when session data loads
   useEffect(() => {
@@ -489,22 +499,29 @@ export default function ClaimPage({
           </CardContent>
         </Card>
 
-        {/* Venmo handle input */}
-        {venmoSetting.data?.enabled && currency === "USD" && (
+        {/* Venmo handle */}
+        {venmoSetting.data?.enabled && currency === "USD" && (data.isCreator ? (
           <div className="flex items-center justify-center gap-2">
             <Input
               placeholder={tv("handlePlaceholder")}
               aria-label={tv("handle")}
               value={venmoHandle}
-              onChange={(e) => {
-                setVenmoHandle(e.target.value);
-                try { localStorage.setItem("sharetab-venmo-handle", e.target.value); } catch { /* storage unavailable */ }
+              onChange={(e) => setVenmoHandle(e.target.value)}
+              onBlur={() => {
+                const trimmed = venmoHandle.trim() || null;
+                if (trimmed !== (session.data?.payerVenmoHandle ?? null)) {
+                  setPayerVenmoHandle.mutate({ token, handle: trimmed });
+                }
               }}
               className="h-8 text-sm max-w-48"
               data-testid="venmo-handle-input"
             />
           </div>
-        )}
+        ) : venmoHandle ? (
+          <p className="text-sm text-muted-foreground text-center" data-testid="venmo-handle-display">
+            Venmo: @{venmoHandle.replace(/^@/, '')}
+          </p>
+        ) : null)}
 
         {/* Per-person summary */}
         {data.summary && data.summary.length > 0 && (

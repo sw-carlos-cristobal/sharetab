@@ -374,9 +374,10 @@ model GuestSplit {
   people      Json     // [{name}]
   assignments Json     // [{itemIndex, personIndices}]
   summary     Json?    // [{name, itemTotal, tax, tip, total}]
-  paidByIndex Int      @default(0)
-  status      String   @default("finalized") // "claiming" | "finalized"
-  userId      String?
+  paidByIndex      Int      @default(0)
+  payerVenmoHandle String?
+  status           String   @default("finalized") // "claiming" | "finalized"
+  userId           String?
   createdBy   User?    @relation("GuestSplits", fields: [userId], references: [id])
   expiresAt   DateTime
   createdAt   DateTime @default(now())
