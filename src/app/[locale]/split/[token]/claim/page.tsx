@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Check, Loader2, Users, Receipt, ArrowRight, Image as ImageIcon, Pencil, X, Link2, Scissors } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "@/i18n/navigation";
-import { buildVenmoPayUrl } from "@/lib/venmo";
+import { buildVenmoPayUrl, isValidVenmoHandle } from "@/lib/venmo";
 
 // Shared avatar color palette (matches the existing split page)
 const colors = [
@@ -218,10 +218,10 @@ export default function ClaimPage({
   });
 
   useEffect(() => {
-    if (profile.data?.venmoUsername && !venmoHandle) {
+    if (profile.data?.venmoUsername) {
       setVenmoHandle(profile.data.venmoUsername);
     }
-  }, [profile.data?.venmoUsername, venmoHandle]);
+  }, [profile.data?.venmoUsername]);
 
   // Auto-rejoin from localStorage when session data loads
   useEffect(() => {
@@ -526,9 +526,9 @@ export default function ClaimPage({
                       {formatCents(person.total, currency, locale)}
                     </span>
                   </div>
-                  {venmoSetting.data?.enabled && currency === "USD" && venmoHandle.trim() && person.personIndex !== data.paidByIndex && (
+                  {venmoSetting.data?.enabled && currency === "USD" && isValidVenmoHandle(venmoHandle) && person.personIndex !== data.paidByIndex && (
                     <a
-                      href={buildVenmoPayUrl(venmoHandle, person.total, `ShareTab: ${data.receiptData.merchantName ?? 'Bill split'}`)}
+                      href={buildVenmoPayUrl(venmoHandle, person.total, `ShareTab: ${data.receiptData.merchantName ?? 'Bill split'}`)!}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="mt-3 flex items-center justify-center gap-2 rounded-lg bg-[#008CFF] px-4 py-2 text-sm font-medium text-white hover:bg-[#0070CC] transition-colors"
