@@ -496,7 +496,7 @@ export default function GuestSplitPage() {
       {step === "people" && (
         <div className="space-y-6">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={() => setStep("upload")}>
+            <Button variant="ghost" size="icon" aria-label="Back to upload" onClick={() => setStep("upload")}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <h2 className="text-xl font-bold" data-testid="guest-people-step">{t("people.title")}</h2>
@@ -526,6 +526,7 @@ export default function GuestSplitPage() {
                   <Button
                     variant="ghost"
                     size="icon"
+                    aria-label="Remove person"
                     onClick={() => removePerson(idx)}
                     className="shrink-0 text-muted-foreground hover:text-destructive"
                   >
@@ -548,8 +549,9 @@ export default function GuestSplitPage() {
 
           {/* Who paid? */}
           <div className="space-y-2">
-            <Label>{t("people.whoPaid")}</Label>
+            <Label htmlFor="who-paid">{t("people.whoPaid")}</Label>
             <select
+              id="who-paid"
               value={paidByIndex}
               onChange={(e) => setPaidByIndex(parseInt(e.target.value))}
               className="flex h-12 w-full rounded-md border border-input bg-background px-3 py-1 text-base shadow-sm"
@@ -651,7 +653,7 @@ export default function GuestSplitPage() {
       {step === "assign" && extracted && (
         <div className="space-y-4" data-testid="guest-assign-step">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={() => setStep("people")}>
+            <Button variant="ghost" size="icon" aria-label="Back to people" onClick={() => setStep("people")}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <h2 className="text-xl font-bold">{t("assign.title")}</h2>

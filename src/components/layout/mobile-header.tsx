@@ -48,7 +48,7 @@ export function MobileHeader({ isAdmin }: { isAdmin?: boolean }) {
       </div>
 
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetTrigger render={<Button variant="ghost" size="icon" />}>
+        <SheetTrigger render={<Button variant="ghost" size="icon" aria-label="Open menu" />}>
           <Menu className="h-5 w-5" />
         </SheetTrigger>
         <SheetContent side="right" className="w-64">

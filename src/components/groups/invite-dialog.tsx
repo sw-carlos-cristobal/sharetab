@@ -66,7 +66,7 @@ export function InviteDialog({
                 value={getInviteUrl(createInvite.data.token)}
                 className="font-mono text-xs"
               />
-              <Button variant="outline" size="icon" onClick={handleCopy}>
+              <Button variant="outline" size="icon" aria-label="Copy invite link" onClick={handleCopy}>
                 {copied ? (
                   <Check className="h-4 w-4 text-green-600" />
                 ) : (
