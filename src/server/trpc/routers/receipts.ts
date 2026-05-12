@@ -5,6 +5,7 @@ import type { PrismaClient } from "@/generated/prisma/client";
 import { createTRPCRouter, protectedProcedure, groupMemberProcedure } from "../init";
 import { processReceiptImage } from "../../lib/receipt-processor";
 import { logger } from "../../lib/logger";
+import { parseExtractedData } from "../../lib/json-schemas";
 import {
   getAIProvidersWithFallback,
   getConfiguredProviderPriority,
@@ -410,13 +411,7 @@ export const receiptsRouter = createTRPCRouter({
         }
       }
 
-      const extractedData = receipt.extractedData as {
-        subtotal: number;
-        tax: number;
-        tip: number;
-        total: number;
-        currency: string;
-      };
+      const extractedData = parseExtractedData(receipt.extractedData);
 
       const tax = extractedData.tax;
       const tip = input.tipOverride ?? extractedData.tip;

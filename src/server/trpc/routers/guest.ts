@@ -6,6 +6,7 @@ import { createTRPCRouter, publicProcedure, protectedProcedure } from "../init";
 import { processReceiptImage } from "../../lib/receipt-processor";
 import { logger } from "../../lib/logger";
 import { checkRateLimit } from "../../lib/rate-limit";
+import { parseExtractedData, parseGuestItems, parseGuestPeople, parseGuestAssignments } from "../../lib/json-schemas";
 import { calculateSplitTotals } from "@/lib/split-calculator";
 import { normalizeGuestName } from "@/lib/guest-session";
 import {
@@ -988,18 +989,10 @@ export const guestRouter = createTRPCRouter({
           if (session.expiresAt < new Date()) throw new TRPCError({ code: "NOT_FOUND", message: "Session expired" });
           if (session.status !== GuestSplitStatus.CLAIMING) throw new TRPCError({ code: "BAD_REQUEST", message: "Session already finalized" });
 
-          const items = session.items as { name: string; quantity: number; unitPrice: number; totalPrice: number }[];
-          const people = session.people as GuestSessionPerson[];
-          const assignments = session.assignments as { itemIndex: number; personIndices: number[] }[];
-          const receiptData = session.receiptData as {
-            merchantName?: string;
-            date?: string;
-            subtotal: number;
-            tax: number;
-            tip: number;
-            total: number;
-            currency: string;
-          };
+          const items = parseGuestItems(session.items);
+          const people = parseGuestPeople(session.people) as GuestSessionPerson[];
+          const assignments = parseGuestAssignments(session.assignments);
+          const receiptData = parseExtractedData(session.receiptData);
 
           if (input.personIndex >= people.length) {
             throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid person index" });
