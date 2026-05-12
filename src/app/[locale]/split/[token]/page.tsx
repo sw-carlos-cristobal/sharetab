@@ -13,6 +13,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Copy, Share2, Receipt, ArrowRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "@/i18n/navigation";
+import { getInitials, guestAvatarColor } from "@/lib/avatar";
 import { buildVenmoPayUrl, isValidVenmoHandle } from "@/lib/venmo";
 
 export default function SharedSplitPage({
@@ -106,20 +107,7 @@ export default function SharedSplitPage({
     toast.success("Link copied to clipboard");
   }
 
-  const initials = (name: string) =>
-    name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2) || "?";
-
-  // Color palette for avatars
-  const colors = [
-    "bg-red-100 text-red-700",
-    "bg-blue-100 text-blue-700",
-    "bg-green-100 text-green-700",
-    "bg-purple-100 text-purple-700",
-    "bg-amber-100 text-amber-700",
-    "bg-pink-100 text-pink-700",
-    "bg-teal-100 text-teal-700",
-    "bg-indigo-100 text-indigo-700",
-  ];
+  const initials = getInitials;
 
   return (
     <div className="space-y-6 pb-24" data-testid="split-result">
@@ -188,7 +176,7 @@ export default function SharedSplitPage({
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-3">
                     <Avatar className="h-10 w-10">
-                      <AvatarFallback className={`text-sm font-semibold ${colors[idx % colors.length]}`}>
+                      <AvatarFallback className={`text-sm font-semibold ${guestAvatarColor(idx)}`}>
                         {initials(person.name)}
                       </AvatarFallback>
                     </Avatar>

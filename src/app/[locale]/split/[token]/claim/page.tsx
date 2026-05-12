@@ -16,29 +16,7 @@ import { Check, Loader2, Users, Receipt, ArrowRight, Image as ImageIcon, Pencil,
 import { toast } from "sonner";
 import { Link } from "@/i18n/navigation";
 import { buildVenmoPayUrl, isValidVenmoHandle } from "@/lib/venmo";
-
-// Shared avatar color palette (matches the existing split page)
-const colors = [
-  "bg-red-100 text-red-700",
-  "bg-blue-100 text-blue-700",
-  "bg-green-100 text-green-700",
-  "bg-purple-100 text-purple-700",
-  "bg-amber-100 text-amber-700",
-  "bg-pink-100 text-pink-700",
-  "bg-teal-100 text-teal-700",
-  "bg-indigo-100 text-indigo-700",
-];
-
-function initials(name: string): string {
-  return (
-    name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2) || "?"
-  );
-}
+import { getInitials, guestAvatarColor } from "@/lib/avatar";
 
 function getStoredClaimIdentity(token: string): StoredClaimIdentity | null {
   if (typeof window === "undefined") return null;
@@ -533,8 +511,8 @@ export default function ClaimPage({
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <Avatar className="h-8 w-8">
-                        <AvatarFallback className={`text-xs font-semibold ${colors[person.personIndex % colors.length]}`}>
-                          {initials(person.name)}
+                        <AvatarFallback className={`text-xs font-semibold ${guestAvatarColor(person.personIndex)}`}>
+                          {getInitials(person.name)}
                         </AvatarFallback>
                       </Avatar>
                       <span className="font-medium">{person.name}</span>
@@ -670,9 +648,9 @@ export default function ClaimPage({
                   >
                     <Avatar className="h-6 w-6">
                       <AvatarFallback
-                        className={`text-[10px] font-semibold ${colors[idx % colors.length]}`}
+                        className={`text-[10px] font-semibold ${guestAvatarColor(idx)}`}
                       >
-                        {initials(person.name)}
+                        {getInitials(person.name)}
                       </AvatarFallback>
                     </Avatar>
                     <span className="text-sm font-medium">
@@ -744,9 +722,9 @@ export default function ClaimPage({
                     >
                       <Avatar className="h-6 w-6">
                         <AvatarFallback
-                          className={`text-[10px] font-semibold ${colors[idx % colors.length]}`}
+                          className={`text-[10px] font-semibold ${guestAvatarColor(idx)}`}
                         >
-                          {initials(person.name)}
+                          {getInitials(person.name)}
                         </AvatarFallback>
                       </Avatar>
                       <span className="text-sm font-medium">{person.name}</span>
@@ -867,9 +845,9 @@ export default function ClaimPage({
               >
                 <Avatar className="h-6 w-6 shrink-0">
                   <AvatarFallback
-                    className={`text-[10px] font-semibold ${colors[idx % colors.length]}`}
+                    className={`text-[10px] font-semibold ${guestAvatarColor(idx)}`}
                   >
-                    {initials(person.name)}
+                    {getInitials(person.name)}
                   </AvatarFallback>
                 </Avatar>
                 {editingPersonIdx === idx ? (
@@ -988,9 +966,9 @@ export default function ClaimPage({
             >
               <Avatar className="h-6 w-6">
                 <AvatarFallback
-                  className={`text-[10px] font-semibold ${idx === personIndex ? "bg-primary-foreground/20 text-primary-foreground" : colors[idx % colors.length]}`}
+                  className={`text-[10px] font-semibold ${idx === personIndex ? "bg-primary-foreground/20 text-primary-foreground" : guestAvatarColor(idx)}`}
                 >
-                  {initials(person.name)}
+                  {getInitials(person.name)}
                 </AvatarFallback>
               </Avatar>
               <span className="text-sm font-medium">
@@ -1168,9 +1146,9 @@ export default function ClaimPage({
                             {otherClaimants.map((pi) => (
                               <Avatar key={pi} className="h-5 w-5 border-2 border-background">
                                 <AvatarFallback
-                                  className={`text-[8px] font-semibold ${colors[pi % colors.length]}`}
+                                  className={`text-[8px] font-semibold ${guestAvatarColor(pi)}`}
                                 >
-                                  {initials(data.people[pi]?.name ?? "?")}
+                                  {getInitials(data.people[pi]?.name ?? "?")}
                                 </AvatarFallback>
                               </Avatar>
                             ))}
@@ -1212,9 +1190,9 @@ export default function ClaimPage({
                     <div className="flex items-center gap-3">
                       <Avatar className="h-8 w-8">
                         <AvatarFallback
-                          className={`text-xs font-semibold ${colors[person.personIndex % colors.length]}`}
+                          className={`text-xs font-semibold ${guestAvatarColor(person.personIndex)}`}
                         >
-                          {initials(personName)}
+                          {getInitials(personName)}
                         </AvatarFallback>
                       </Avatar>
                       <span className="font-medium">

@@ -17,37 +17,9 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { Link } from "@/i18n/navigation";
+import { getInitials, avatarColor } from "@/lib/avatar";
 
 const GROUPS_PER_PAGE = 6;
-
-function getInitials(name: string): string {
-  return name
-    .split(" ")
-    .map((part) => part[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-}
-
-const avatarColors = [
-  "bg-blue-500",
-  "bg-emerald-500",
-  "bg-violet-500",
-  "bg-amber-500",
-  "bg-rose-500",
-  "bg-cyan-500",
-  "bg-fuchsia-500",
-  "bg-lime-500",
-];
-
-function avatarColor(userId: string): string {
-  let hash = 0;
-  for (let i = 0; i < userId.length; i++) {
-    hash = (hash * 31 + userId.charCodeAt(i)) | 0;
-  }
-  return avatarColors[Math.abs(hash) % avatarColors.length];
-}
 
 /* ------------------------------------------------------------------ */
 /*  Skeleton / loading helpers                                        */
