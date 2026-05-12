@@ -418,19 +418,24 @@ export const adminRouter = createTRPCRouter({
       }
 
       await ctx.db.$transaction(async (tx) => {
-        await tx.expenseShare.deleteMany({ where: { userId: input.userId } });
-        await tx.expense.updateMany({
-          where: { paidById: input.userId },
-          data: { paidById: ctx.user.id },
+        // Convert to placeholder to preserve financial history, then strip auth data
+        await tx.user.update({
+          where: { id: input.userId },
+          data: {
+            isPlaceholder: true,
+            placeholderName: user.email,
+            email: `deleted-${input.userId}@placeholder.local`,
+            passwordHash: null,
+            image: null,
+            venmoUsername: null,
+            suspendedAt: new Date(),
+          },
         });
-        await tx.expense.updateMany({
-          where: { addedById: input.userId },
-          data: { addedById: ctx.user.id },
-        });
-        await tx.settlement.deleteMany({
-          where: { OR: [{ fromId: input.userId }, { toId: input.userId }] },
-        });
-        await tx.user.delete({ where: { id: input.userId } });
+        // Remove auth records (sessions, accounts)
+        await tx.account.deleteMany({ where: { userId: input.userId } });
+        await tx.session.deleteMany({ where: { userId: input.userId } });
+        // Remove group memberships (financial data stays via expense/settlement FKs)
+        await tx.groupMember.deleteMany({ where: { userId: input.userId } });
       });
 
       await logAdminAction(ctx.db, ctx.user.id, "USER_DELETED", input.userId, {
