@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Archive, ArchiveRestore, ArrowLeft, Pencil, Trash2, UserPlus, Check, X } from "lucide-react";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
 export default function GroupSettingsPage({
   params,
@@ -96,7 +97,7 @@ export default function GroupSettingsPage({
     addPlaceholder.mutate({ groupId, name: placeholderName.trim() });
   }
 
-  if (group.isLoading) return <p className="text-muted-foreground">Loading...</p>;
+  if (group.isLoading) return <LoadingSpinner />;
   if (!group.data) return <p className="text-destructive">Group not found.</p>;
 
   const placeholders = group.data.members.filter((m) => m.user.isPlaceholder);

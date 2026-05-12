@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import {
   Plus,
   Settings,
@@ -72,7 +73,7 @@ export default function GroupDetailPage({
   useEffect(() => () => { if (settleTimerRef.current) clearTimeout(settleTimerRef.current); }, []);
 
   if (group.isLoading && !group.isError) {
-    return <p className="text-muted-foreground">Loading...</p>;
+    return <LoadingSpinner />;
   }
 
   if (!group.data) {
@@ -343,7 +344,7 @@ export default function GroupDetailPage({
           )}
         </div>
 
-        {expenses.isLoading && <p className="text-muted-foreground">Loading...</p>}
+        {expenses.isLoading && <LoadingSpinner />}
 
         {expenses.data?.expenses.length === 0 && (
           <Card>

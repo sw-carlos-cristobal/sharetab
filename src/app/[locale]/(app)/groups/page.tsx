@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Archive, ArchiveRestore, Plus, Search } from "lucide-react";
 
 const GROUPS_PER_PAGE = 12;
@@ -81,7 +82,7 @@ function GroupsContent() {
         </div>
       )}
 
-      {isLoading && <p className="text-muted-foreground">Loading...</p>}
+      {isLoading && <LoadingSpinner />}
 
       {!isLoading && activeList?.length === 0 && !search && (
         <Card>
