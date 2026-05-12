@@ -382,7 +382,7 @@ export const adminRouter = createTRPCRouter({
       if (user.isPlaceholder) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "Cannot unsuspend a deleted user account",
+          message: "Cannot unsuspend a placeholder or deleted account",
         });
       }
 
@@ -430,7 +430,8 @@ export const adminRouter = createTRPCRouter({
           where: { id: input.userId },
           data: {
             isPlaceholder: true,
-            placeholderName: user.email,
+            name: "Deleted user",
+            placeholderName: "Deleted user",
             email: `deleted-${input.userId}@placeholder.local`,
             passwordHash: null,
             image: null,

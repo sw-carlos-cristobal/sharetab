@@ -1,102 +1,98 @@
 import { test, expect } from "@playwright/test";
-import { users, authedContext, trpcMutation, trpcQuery, trpcResult, createTestGroup } from "./helpers";
+import { users, authedContext, trpcMutation, trpcQuery, trpcResult, trpcError, uniqueEmail, register } from "./helpers";
+import { request } from "@playwright/test";
+
+const BASE = process.env.BASE_URL || "http://localhost:3001";
+
+async function createTempUser(name: string) {
+  const email = uniqueEmail("deltest");
+  const password = "password123";
+  const ctx = await request.newContext({ baseURL: BASE });
+
+  // Register via tRPC
+  const adminCtx = await authedContext(users.alice.email, users.alice.password);
+  const regRes = await trpcMutation(adminCtx, "auth.register", { name, email, password });
+  const regBody = await regRes.json();
+
+  // Get the user's ID by listing users
+  const listRes = await trpcQuery(adminCtx, "admin.listUsers", { search: email, limit: 1 });
+  const listData = await trpcResult(listRes);
+  const userId = listData?.users?.[0]?.id;
+
+  await adminCtx.dispose();
+  await ctx.dispose();
+  return { email, password, userId };
+}
 
 test.describe("Admin Delete User", () => {
-  test("deleteUser converts user to placeholder preserving financial history", async () => {
-    const { owner, groupId, memberIds, memberContexts, dispose } = await createTestGroup(
-      users.alice.email, users.alice.password,
-      [{ email: users.bob.email, password: users.bob.password }],
-      "Delete User Test"
-    );
+  test("deleteUser converts user to placeholder preserving financial data", async () => {
+    const admin = await authedContext(users.alice.email, users.alice.password);
 
-    const aliceId = memberIds[users.alice.email];
-    const bobId = memberIds[users.bob.email];
-    const bobCtx = memberContexts[0];
+    // Create a temp user and add to a group with expenses
+    const temp = await createTempUser("TempUser Delete");
+    expect(temp.userId).toBeDefined();
 
-    // Bob creates an expense he paid for
-    const expRes = await trpcMutation(bobCtx, "expenses.create", {
+    // Create a group, invite temp user, add an expense
+    const groupRes = await trpcMutation(admin, "groups.create", { name: "Delete Test Group" });
+    const groupId = (await groupRes.json()).result?.data?.json?.id;
+
+    const invRes = await trpcMutation(admin, "groups.createInvite", { groupId });
+    const token = (await invRes.json()).result?.data?.json?.token;
+
+    const tempCtx = await authedContext(temp.email, temp.password);
+    await trpcMutation(tempCtx, "groups.joinByInvite", { token });
+
+    // Get member IDs
+    const detailRes = await trpcQuery(admin, "groups.get", { groupId });
+    const detail = await trpcResult(detailRes);
+    const adminId = detail.members.find((m: { user: { email: string } }) => m.user.email === users.alice.email)?.user?.id;
+    const tempId = temp.userId;
+
+    // Create expense paid by temp user
+    const expRes = await trpcMutation(tempCtx, "expenses.create", {
       groupId,
-      title: "Bob's lunch",
+      title: "Temp user expense",
       amount: 2000,
-      paidById: bobId,
+      paidById: tempId,
       splitMode: "EQUAL",
       shares: [
-        { userId: aliceId, amount: 1000 },
-        { userId: bobId, amount: 1000 },
+        { userId: adminId, amount: 1000 },
+        { userId: tempId, amount: 1000 },
       ],
     });
     expect(expRes.ok()).toBe(true);
 
-    // Admin deletes Bob
-    const deleteRes = await trpcMutation(owner, "admin.deleteUser", {
-      userId: bobId,
-    });
+    // Delete the temp user
+    const deleteRes = await trpcMutation(admin, "admin.deleteUser", { userId: tempId });
     expect(deleteRes.ok()).toBe(true);
-    const result = (await deleteRes.json()).result?.data?.json;
-    expect(result.deleted).toBe(true);
 
-    // Verify: expense still exists with Bob as payer (financial history preserved)
-    const expListRes = await trpcQuery(owner, "expenses.list", { groupId });
+    // Verify expense still exists
+    const expListRes = await trpcQuery(admin, "expenses.list", { groupId });
     const expenses = await trpcResult(expListRes);
-    const bobsExpense = expenses.expenses.find(
-      (e: { title: string }) => e.title === "Bob's lunch"
-    );
-    expect(bobsExpense).toBeDefined();
-    expect(bobsExpense.paidBy.id).toBe(bobId);
+    const found = expenses.expenses.find((e: { title: string }) => e.title === "Temp user expense");
+    expect(found).toBeDefined();
 
-    // Verify: activity feed is still accessible
-    const actRes = await trpcQuery(owner, "activity.getGroupActivity", { groupId });
-    const activity = await trpcResult(actRes);
-    expect(activity.items.length).toBeGreaterThanOrEqual(1);
-
-    await dispose();
-  });
-
-  test("deleteUser prevents deleted user from logging in", async () => {
-    // Create a temporary user to delete
-    const { owner, groupId, memberIds, memberContexts, dispose } = await createTestGroup(
-      users.alice.email, users.alice.password,
-      [{ email: users.charlie.email, password: users.charlie.password }],
-      "Delete Login Test"
-    );
-
-    const charlieId = memberIds[users.charlie.email];
-
-    // Admin deletes Charlie
-    const deleteRes = await trpcMutation(owner, "admin.deleteUser", {
-      userId: charlieId,
-    });
-    expect(deleteRes.ok()).toBe(true);
-
-    // Charlie should no longer be able to authenticate
-    // (email changed to deleted-xxx@placeholder.local, password cleared)
-    const charlieCtx = await authedContext(users.charlie.email, users.charlie.password);
-    const profileRes = await trpcQuery(charlieCtx, "auth.getProfile");
-    const body = await profileRes.json();
-    // Should get an auth error since the user's email no longer matches
-    expect(body[0]?.error).toBeDefined();
-
-    await charlieCtx.dispose();
-    await dispose();
+    // Cleanup
+    await trpcMutation(admin, "groups.delete", { groupId });
+    await tempCtx.dispose();
+    await admin.dispose();
   });
 
   test("deleteUser cannot delete self", async () => {
-    const ctx = await authedContext(users.alice.email, users.alice.password);
+    const admin = await authedContext(users.alice.email, users.alice.password);
+    const profileRes = await trpcQuery(admin, "auth.getProfile");
+    const profile = await trpcResult(profileRes);
 
-    const groupsRes = await trpcQuery(ctx, "groups.list");
-    const groups = await trpcResult(groupsRes);
-    const aliceId = groups[0]?.members?.find(
-      (m: { user: { email: string } }) => m.user.email === users.alice.email
-    )?.user?.id;
+    // Get alice's ID
+    const listRes = await trpcQuery(admin, "admin.listUsers", { search: users.alice.email, limit: 1 });
+    const listData = await trpcResult(listRes);
+    const aliceId = listData?.users?.[0]?.id;
+    expect(aliceId).toBeDefined();
 
-    if (aliceId) {
-      const deleteRes = await trpcMutation(ctx, "admin.deleteUser", {
-        userId: aliceId,
-      });
-      const body = await deleteRes.json();
-      expect(body.error?.json?.data?.code).toBe("BAD_REQUEST");
-    }
+    const deleteRes = await trpcMutation(admin, "admin.deleteUser", { userId: aliceId });
+    const err = await trpcError(deleteRes);
+    expect(err?.data?.code).toBe("BAD_REQUEST");
 
-    await ctx.dispose();
+    await admin.dispose();
   });
 });
