@@ -14,7 +14,7 @@ import {
 } from "@/generated/prisma/client";
 import nodemailer from "nodemailer";
 import fs from "fs";
-import fsp from "fs/promises";
+import * as fsp from "fs/promises";
 import path from "path";
 import { getRecentLogs } from "@/server/lib/logger";
 import {
@@ -1009,7 +1009,7 @@ export const adminRouter = createTRPCRouter({
             try {
               const remaining = await fsp.readdir(fullPath);
               if (remaining.length === 0) {
-                await fsp.rmdir(fullPath);
+                await fsp.rm(fullPath);
               }
             } catch {
               // ignore
