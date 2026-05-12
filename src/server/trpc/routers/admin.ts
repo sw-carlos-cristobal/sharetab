@@ -14,6 +14,7 @@ import {
 } from "@/generated/prisma/client";
 import nodemailer from "nodemailer";
 import fs from "fs";
+import * as fsp from "fs/promises";
 import path from "path";
 import { getRecentLogs } from "@/server/lib/logger";
 import {
@@ -945,20 +946,18 @@ export const adminRouter = createTRPCRouter({
     let diskFiles = 0;
 
     if (fs.existsSync(uploadDir)) {
-      const scanDir = (dir: string) => {
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
+      const scanDir = async (dir: string) => {
+        const entries = await fsp.readdir(dir, { withFileTypes: true });
         for (const entry of entries) {
           const fullPath = path.join(dir, entry.name);
           if (entry.isDirectory()) {
-            scanDir(fullPath);
+            await scanDir(fullPath);
           } else {
             diskFiles++;
-            const stat = fs.statSync(fullPath);
+            const stat = await fsp.stat(fullPath);
             totalDiskUsage += stat.size;
 
-            // Check if this file is referenced in DB
             const relativePath = path.relative(uploadDir, fullPath).replace(/\\/g, "/");
-            // Receipt imagePath may be stored as relative or with uploads/ prefix
             const isReferenced =
               dbPaths.has(relativePath) ||
               dbPaths.has(`uploads/${relativePath}`) ||
@@ -972,7 +971,7 @@ export const adminRouter = createTRPCRouter({
           }
         }
       };
-      scanDir(uploadDir);
+      await scanDir(uploadDir);
     }
 
     return {
@@ -1001,17 +1000,16 @@ export const adminRouter = createTRPCRouter({
     let freedBytes = 0;
 
     if (fs.existsSync(uploadDir)) {
-      const scanAndDelete = (dir: string) => {
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
+      const scanAndDelete = async (dir: string) => {
+        const entries = await fsp.readdir(dir, { withFileTypes: true });
         for (const entry of entries) {
           const fullPath = path.join(dir, entry.name);
           if (entry.isDirectory()) {
-            scanAndDelete(fullPath);
-            // Remove empty directories
+            await scanAndDelete(fullPath);
             try {
-              const remaining = fs.readdirSync(fullPath);
+              const remaining = await fsp.readdir(fullPath);
               if (remaining.length === 0) {
-                fs.rmdirSync(fullPath);
+                await fsp.rm(fullPath);
               }
             } catch {
               // ignore
@@ -1025,15 +1023,15 @@ export const adminRouter = createTRPCRouter({
               dbPaths.has(fullPath);
 
             if (!isReferenced) {
-              const stat = fs.statSync(fullPath);
+              const stat = await fsp.stat(fullPath);
               freedBytes += stat.size;
-              fs.unlinkSync(fullPath);
+              await fsp.unlink(fullPath);
               deletedCount++;
             }
           }
         }
       };
-      scanAndDelete(uploadDir);
+      await scanAndDelete(uploadDir);
     }
 
     if (deletedCount > 0) {
