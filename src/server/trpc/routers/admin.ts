@@ -442,11 +442,12 @@ export const adminRouter = createTRPCRouter({
         // Remove auth records (sessions, accounts)
         await tx.account.deleteMany({ where: { userId: input.userId } });
         await tx.session.deleteMany({ where: { userId: input.userId } });
-        // Transfer ownership before removing memberships to avoid orphaned groups
+        // Transfer ownership before removing memberships
         const ownedGroups = await tx.groupMember.findMany({
           where: { userId: input.userId, role: "OWNER" },
           select: { groupId: true },
         });
+        const keepMembershipGroupIds: string[] = [];
         for (const { groupId } of ownedGroups) {
           const nextOwner = await tx.groupMember.findFirst({
             where: {
@@ -461,9 +462,19 @@ export const adminRouter = createTRPCRouter({
               where: { id: nextOwner.id },
               data: { role: "OWNER" },
             });
+          } else {
+            keepMembershipGroupIds.push(groupId);
           }
         }
-        await tx.groupMember.deleteMany({ where: { userId: input.userId } });
+        // Remove memberships except where user is the sole active owner
+        await tx.groupMember.deleteMany({
+          where: {
+            userId: input.userId,
+            ...(keepMembershipGroupIds.length > 0
+              ? { groupId: { notIn: keepMembershipGroupIds } }
+              : {}),
+          },
+        });
       });
 
       await logAdminAction(ctx.db, ctx.user.id, "USER_DELETED", input.userId, {
