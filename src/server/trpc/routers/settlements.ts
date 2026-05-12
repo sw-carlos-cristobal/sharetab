@@ -18,7 +18,7 @@ export const settlementsRouter = createTRPCRouter({
           from: { select: { id: true, name: true, image: true } },
           to: { select: { id: true, name: true, image: true } },
         },
-        orderBy: { settledAt: "desc" },
+        orderBy: [{ settledAt: "desc" }, { id: "desc" }],
       });
 
       let nextCursor: string | undefined;
