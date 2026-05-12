@@ -405,7 +405,7 @@ export default function GuestSplitPage() {
     }
   }
 
-  const initials = (name: string) => getInitials(name);
+  const initials = getInitials;
 
   return (
     <div className="space-y-6 pb-24">

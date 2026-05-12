@@ -13,7 +13,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Copy, Share2, Receipt, ArrowRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "@/i18n/navigation";
-import { getInitials } from "@/lib/avatar";
+import { getInitials, guestAvatarColor } from "@/lib/avatar";
 import { buildVenmoPayUrl, isValidVenmoHandle } from "@/lib/venmo";
 
 export default function SharedSplitPage({
@@ -107,7 +107,7 @@ export default function SharedSplitPage({
     toast.success("Link copied to clipboard");
   }
 
-  const initials = (name: string) => getInitials(name);
+  const initials = getInitials;
 
   return (
     <div className="space-y-6 pb-24" data-testid="split-result">
@@ -176,7 +176,7 @@ export default function SharedSplitPage({
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-3">
                     <Avatar className="h-10 w-10">
-                      <AvatarFallback className={`text-sm font-semibold ${colors[idx % colors.length]}`}>
+                      <AvatarFallback className={`text-sm font-semibold ${guestAvatarColor(idx)}`}>
                         {initials(person.name)}
                       </AvatarFallback>
                     </Avatar>

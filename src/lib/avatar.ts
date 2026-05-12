@@ -29,7 +29,7 @@ const guestColors = [
 ];
 
 export function guestAvatarColor(index: number): string {
-  return guestColors[index % guestColors.length];
+  return guestColors[Math.abs(Math.floor(index)) % guestColors.length];
 }
 
 export function getInitials(name?: string | null, email?: string | null): string {
