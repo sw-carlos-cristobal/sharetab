@@ -365,7 +365,7 @@ export const adminRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const user = await ctx.db.user.findUnique({
         where: { id: input.userId },
-        select: { id: true, email: true, suspendedAt: true },
+        select: { id: true, email: true, suspendedAt: true, isPlaceholder: true },
       });
 
       if (!user) {
@@ -376,6 +376,13 @@ export const adminRouter = createTRPCRouter({
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "User is not suspended",
+        });
+      }
+
+      if (user.isPlaceholder) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Cannot unsuspend a deleted user account",
         });
       }
 
@@ -434,7 +441,23 @@ export const adminRouter = createTRPCRouter({
         // Remove auth records (sessions, accounts)
         await tx.account.deleteMany({ where: { userId: input.userId } });
         await tx.session.deleteMany({ where: { userId: input.userId } });
-        // Remove group memberships (financial data stays via expense/settlement FKs)
+        // Transfer ownership before removing memberships to avoid orphaned groups
+        const ownedGroups = await tx.groupMember.findMany({
+          where: { userId: input.userId, role: "OWNER" },
+          select: { groupId: true },
+        });
+        for (const { groupId } of ownedGroups) {
+          const nextOwner = await tx.groupMember.findFirst({
+            where: { groupId, userId: { not: input.userId } },
+            orderBy: { joinedAt: "asc" },
+          });
+          if (nextOwner) {
+            await tx.groupMember.update({
+              where: { id: nextOwner.id },
+              data: { role: "OWNER" },
+            });
+          }
+        }
         await tx.groupMember.deleteMany({ where: { userId: input.userId } });
       });
 
