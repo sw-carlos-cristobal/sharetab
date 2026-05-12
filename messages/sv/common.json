@@ -20,7 +20,8 @@
     "confirm": "Bekräfta",
     "loading": "Laddar...",
     "saving": "Sparar...",
-    "submit": "Skicka"
+    "submit": "Skicka",
+    "openMenu": "Öppna meny"
   },
   "brand": {
     "name": "ShareTab",

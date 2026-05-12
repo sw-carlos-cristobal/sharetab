@@ -123,7 +123,7 @@ export default function EditExpensePage({
   return (
     <div className="mx-auto max-w-lg space-y-6">
       <div className="flex items-center gap-2">
-        <Button variant="ghost" size="icon" nativeButton={false} render={<Link href={`/groups/${groupId}/expenses/${expenseId}`} />}>
+        <Button variant="ghost" size="icon" aria-label="Back to expense" nativeButton={false} render={<Link href={`/groups/${groupId}/expenses/${expenseId}`} />}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <h1 className="text-2xl font-bold">Edit Expense</h1>
