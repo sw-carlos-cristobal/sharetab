@@ -417,7 +417,21 @@ export const adminRouter = createTRPCRouter({
         });
       }
 
-      await ctx.db.user.delete({ where: { id: input.userId } });
+      await ctx.db.$transaction(async (tx) => {
+        await tx.expenseShare.deleteMany({ where: { userId: input.userId } });
+        await tx.expense.updateMany({
+          where: { paidById: input.userId },
+          data: { paidById: ctx.user.id },
+        });
+        await tx.expense.updateMany({
+          where: { addedById: input.userId },
+          data: { addedById: ctx.user.id },
+        });
+        await tx.settlement.deleteMany({
+          where: { OR: [{ fromId: input.userId }, { toId: input.userId }] },
+        });
+        await tx.user.delete({ where: { id: input.userId } });
+      });
 
       await logAdminAction(ctx.db, ctx.user.id, "USER_DELETED", input.userId, {
         email: user.email,
@@ -786,8 +800,8 @@ export const adminRouter = createTRPCRouter({
           type: item.type,
           entityId: item.entityId,
           metadata: item.metadata as Record<string, unknown> | null,
-          userName: item.user.name ?? item.user.email,
-          userEmail: item.user.email,
+          userName: item.user?.name ?? item.user?.email ?? "Deleted user",
+          userEmail: item.user?.email ?? null,
           groupName: item.group.name,
           groupId: item.group.id,
           createdAt: item.createdAt,

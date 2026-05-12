@@ -284,7 +284,7 @@ model Settlement {
 model ActivityLog {
   id       String       @id @default(cuid())
   groupId  String
-  userId   String
+  userId   String?
   type     ActivityType
   // Polymorphic reference: entityId may point to an Expense, Settlement, or other entity
   // depending on the ActivityType. No Prisma relation is defined because a single FK
@@ -293,7 +293,7 @@ model ActivityLog {
   metadata Json?
 
   group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  user  User  @relation(fields: [userId], references: [id])
+  user  User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
 
@@ -372,7 +372,7 @@ model SystemInvite {
   expiresAt DateTime?
   revokedAt DateTime?
 
-  usedBy User? @relation("SystemInviteUsedBy", fields: [usedById], references: [id])
+  usedBy User? @relation("SystemInviteUsedBy", fields: [usedById], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
 }
@@ -397,7 +397,7 @@ model GuestSplit {
   payerVenmoHandle String?
   status           GuestSplitStatus @default(FINALIZED)
   userId           String?
-  createdBy   User?    @relation("GuestSplits", fields: [userId], references: [id])
+  createdBy   User?    @relation("GuestSplits", fields: [userId], references: [id], onDelete: SetNull)
   expiresAt   DateTime
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
