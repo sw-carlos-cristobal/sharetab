@@ -673,6 +673,7 @@ export const receiptsRouter = createTRPCRouter({
           status: "COMPLETED",
           expense: null,
         },
+        take: 50,
         orderBy: { createdAt: "desc" },
       });
 

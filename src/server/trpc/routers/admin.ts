@@ -751,6 +751,7 @@ export const adminRouter = createTRPCRouter({
 
   listSystemInvites: adminProcedure.query(async ({ ctx }) => {
     const invites = await ctx.db.systemInvite.findMany({
+      take: 200,
       include: {
         usedBy: { select: { id: true, name: true, email: true } },
       },

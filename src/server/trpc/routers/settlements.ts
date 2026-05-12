@@ -4,16 +4,30 @@ import { createTRPCRouter, groupMemberProcedure } from "../init";
 
 export const settlementsRouter = createTRPCRouter({
   list: groupMemberProcedure
-    .input(z.object({ groupId: z.string() }))
+    .input(z.object({
+      groupId: z.string(),
+      cursor: z.string().optional(),
+      limit: z.number().int().min(1).max(200).default(100),
+    }))
     .query(async ({ ctx, input }) => {
-      return ctx.db.settlement.findMany({
+      const items = await ctx.db.settlement.findMany({
         where: { groupId: input.groupId },
+        take: input.limit + 1,
+        ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {}),
         include: {
           from: { select: { id: true, name: true, image: true } },
           to: { select: { id: true, name: true, image: true } },
         },
         orderBy: { settledAt: "desc" },
       });
+
+      let nextCursor: string | undefined;
+      if (items.length > input.limit) {
+        const next = items.pop();
+        nextCursor = next?.id;
+      }
+
+      return { items, nextCursor };
     }),
 
   create: groupMemberProcedure
