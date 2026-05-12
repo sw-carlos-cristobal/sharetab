@@ -27,7 +27,13 @@ export const activityRouter = createTRPCRouter({
         nextCursor = next?.id;
       }
 
-      return { items, nextCursor };
+      return {
+        items: items.map((item) => ({
+          ...item,
+          user: item.user ?? { id: item.userId ?? "deleted", name: "Deleted user", image: null },
+        })),
+        nextCursor,
+      };
     }),
 
   getRecentActivity: protectedProcedure
@@ -39,7 +45,7 @@ export const activityRouter = createTRPCRouter({
       });
       const groupIds = userGroups.map((g) => g.groupId);
 
-      return ctx.db.activityLog.findMany({
+      const items = await ctx.db.activityLog.findMany({
         where: { groupId: { in: groupIds } },
         take: input.limit,
         orderBy: { createdAt: "desc" },
@@ -48,5 +54,10 @@ export const activityRouter = createTRPCRouter({
           group: { select: { id: true, name: true } },
         },
       });
+
+      return items.map((item) => ({
+        ...item,
+        user: item.user ?? { id: item.userId ?? "deleted", name: "Deleted user", image: null },
+      }));
     }),
 });

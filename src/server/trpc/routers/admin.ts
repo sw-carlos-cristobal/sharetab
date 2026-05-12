@@ -365,7 +365,7 @@ export const adminRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const user = await ctx.db.user.findUnique({
         where: { id: input.userId },
-        select: { id: true, email: true, suspendedAt: true },
+        select: { id: true, email: true, suspendedAt: true, isPlaceholder: true },
       });
 
       if (!user) {
@@ -376,6 +376,13 @@ export const adminRouter = createTRPCRouter({
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "User is not suspended",
+        });
+      }
+
+      if (user.isPlaceholder) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Cannot unsuspend a placeholder or deleted account",
         });
       }
 
@@ -417,7 +424,58 @@ export const adminRouter = createTRPCRouter({
         });
       }
 
-      await ctx.db.user.delete({ where: { id: input.userId } });
+      await ctx.db.$transaction(async (tx) => {
+        // Convert to placeholder to preserve financial history, then strip auth data
+        await tx.user.update({
+          where: { id: input.userId },
+          data: {
+            isPlaceholder: true,
+            name: "Deleted user",
+            placeholderName: "Deleted user",
+            email: `deleted-${input.userId}@placeholder.local`,
+            passwordHash: null,
+            image: null,
+            venmoUsername: null,
+            suspendedAt: new Date(),
+          },
+        });
+        // Remove auth records (sessions, accounts)
+        await tx.account.deleteMany({ where: { userId: input.userId } });
+        await tx.session.deleteMany({ where: { userId: input.userId } });
+        // Transfer ownership before removing memberships
+        const ownedGroups = await tx.groupMember.findMany({
+          where: { userId: input.userId, role: "OWNER" },
+          select: { groupId: true },
+        });
+        const keepMembershipGroupIds: string[] = [];
+        for (const { groupId } of ownedGroups) {
+          const nextOwner = await tx.groupMember.findFirst({
+            where: {
+              groupId,
+              userId: { not: input.userId },
+              user: { isPlaceholder: false, suspendedAt: null },
+            },
+            orderBy: { joinedAt: "asc" },
+          });
+          if (nextOwner) {
+            await tx.groupMember.update({
+              where: { id: nextOwner.id },
+              data: { role: "OWNER" },
+            });
+          } else {
+            keepMembershipGroupIds.push(groupId);
+          }
+        }
+        // Remove memberships except where user is the sole active owner
+        await tx.groupMember.deleteMany({
+          where: {
+            userId: input.userId,
+            ...(keepMembershipGroupIds.length > 0
+              ? { groupId: { notIn: keepMembershipGroupIds } }
+              : {}),
+          },
+        });
+      });
 
       await logAdminAction(ctx.db, ctx.user.id, "USER_DELETED", input.userId, {
         email: user.email,
@@ -786,8 +844,8 @@ export const adminRouter = createTRPCRouter({
           type: item.type,
           entityId: item.entityId,
           metadata: item.metadata as Record<string, unknown> | null,
-          userName: item.user.name ?? item.user.email,
-          userEmail: item.user.email,
+          userName: item.user?.name ?? item.user?.email ?? "Deleted user",
+          userEmail: item.user?.email ?? null,
           groupName: item.group.name,
           groupId: item.group.id,
           createdAt: item.createdAt,
