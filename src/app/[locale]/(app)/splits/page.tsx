@@ -76,7 +76,7 @@ export default function SplitsPage() {
           <Card key={split.id} className="relative border-l-[3px] border-l-primary/60 transition-all duration-200 hover:-translate-y-px hover:border-l-primary hover:shadow-md" data-testid={`split-card-${split.id}`}>
             <Link
               href={
-                split.status === "finalized"
+                split.status === "FINALIZED"
                   ? `/split/${split.shareToken}`
                   : `/split/${split.shareToken}/claim`
               }
@@ -90,11 +90,11 @@ export default function SplitsPage() {
                   </span>
                   <Badge
                     variant={
-                      split.status === "finalized" ? "default" : "outline"
+                      split.status === "FINALIZED" ? "default" : "outline"
                     }
                     className="shrink-0 text-[10px]"
                   >
-                    {split.status === "finalized"
+                    {split.status === "FINALIZED"
                       ? t("finalized")
                       : t("claiming")}
                   </Badge>

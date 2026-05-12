@@ -36,7 +36,7 @@ test.describe("Guest claiming sessions", () => {
     // Get session -- verify status and initial state
     const getRes = await trpcQuery(ctx, "guest.getSession", { token: shareToken });
     const session = await trpcResult(getRes);
-    expect(session.status).toBe("claiming");
+    expect(session.status).toBe("CLAIMING");
     expect(session.items).toHaveLength(2);
     expect(session.people).toHaveLength(1);
     expect(session.people[0].name).toBe("Alice");
@@ -163,7 +163,7 @@ test.describe("Guest claiming sessions", () => {
     // Get session -- verify finalized status and summary
     const getRes = await trpcQuery(ctx, "guest.getSession", { token: shareToken });
     const session = await trpcResult(getRes);
-    expect(session.status).toBe("finalized");
+    expect(session.status).toBe("FINALIZED");
     expect(session.summary).toBeTruthy();
     expect(session.summary.length).toBeGreaterThanOrEqual(1);
 
@@ -263,7 +263,7 @@ test.describe("Guest claiming sessions", () => {
     const body = await getRes.json();
     const error = body[0]?.error;
     expect(error).toBeTruthy();
-    // getSplit checks status !== "finalized" and returns CONFLICT
+    // getSplit checks status !== "FINALIZED" and returns CONFLICT
     expect(error?.json?.data?.code).toBe("CONFLICT");
 
     await ctx.dispose();
@@ -394,7 +394,7 @@ test.describe("Guest claiming sessions", () => {
     const finalSession = await trpcResult(
       await trpcQuery(ctx, "guest.getSession", { token: shareToken })
     );
-    expect(finalSession.status).toBe("finalized");
+    expect(finalSession.status).toBe("FINALIZED");
     expect(finalSession.summary).toHaveLength(3);
 
     // Alice: $10 (2 beers) + $2.67 (1/3 nachos) + proportional tax/tip

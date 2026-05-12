@@ -182,7 +182,7 @@ test.describe("Claim session — API: mySplits tracks claim sessions", () => {
     expect(data.splits.length).toBeGreaterThanOrEqual(1);
     const bobsPizza = data.splits.find((s: { merchantName: string }) => s.merchantName === "Bob's Pizza");
     expect(bobsPizza).toBeDefined();
-    expect(bobsPizza.status).toBe("claiming");
+    expect(bobsPizza.status).toBe("CLAIMING");
     expect(bobsPizza.total).toBe(3050);
     expect(bobsPizza.peopleCount).toBe(1);
 

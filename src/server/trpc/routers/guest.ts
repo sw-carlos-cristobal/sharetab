@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { Prisma } from "@/generated/prisma/client";
+import { Prisma, GuestSplitStatus } from "@/generated/prisma/client";
 import { createTRPCRouter, publicProcedure, protectedProcedure } from "../init";
 import { processReceiptImage } from "../../lib/receipt-processor";
 import { logger } from "../../lib/logger";
@@ -449,7 +449,7 @@ export const guestRouter = createTRPCRouter({
       if (split.expiresAt < new Date()) {
         throw new TRPCError({ code: "NOT_FOUND", message: "This split has expired" });
       }
-      if (split.status !== "finalized") {
+      if (split.status !== GuestSplitStatus.FINALIZED) {
         throw new TRPCError({
           code: "CONFLICT",
           message: "This split is not yet finalized. Please wait for the split creator to finalize it.",
@@ -557,7 +557,7 @@ export const guestRouter = createTRPCRouter({
           assignments: [] as unknown as Prisma.InputJsonValue,
           paidByIndex,
           payerVenmoHandle: claimPayerVenmoHandle,
-          status: "claiming",
+          status: GuestSplitStatus.CLAIMING,
           userId: ctx.session?.user?.id ?? null,
           expiresAt: createExpiryDate(),
         },
@@ -588,7 +588,7 @@ export const guestRouter = createTRPCRouter({
           });
           if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
           if (session.expiresAt < new Date()) throw new TRPCError({ code: "NOT_FOUND", message: "Session expired" });
-          if (session.status !== "claiming") throw new TRPCError({ code: "BAD_REQUEST", message: "Session is no longer accepting claims" });
+          if (session.status !== GuestSplitStatus.CLAIMING) throw new TRPCError({ code: "BAD_REQUEST", message: "Session is no longer accepting claims" });
 
           const people = [...(session.people as GuestSessionPerson[])];
           const normalizedName = normalizeGuestName(input.name);
@@ -657,7 +657,7 @@ export const guestRouter = createTRPCRouter({
           });
           if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
           if (session.expiresAt < new Date()) throw new TRPCError({ code: "NOT_FOUND", message: "Session expired" });
-          if (session.status !== "claiming") throw new TRPCError({ code: "BAD_REQUEST", message: "Session is finalized" });
+          if (session.status !== GuestSplitStatus.CLAIMING) throw new TRPCError({ code: "BAD_REQUEST", message: "Session is finalized" });
 
           const people = [...(session.people as GuestSessionPerson[])];
           const isParticipant = people.some(p => p.personToken === input.personToken);
@@ -700,7 +700,7 @@ export const guestRouter = createTRPCRouter({
           });
           if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
           if (session.expiresAt < new Date()) throw new TRPCError({ code: "NOT_FOUND", message: "Session expired" });
-          if (session.status !== "claiming") throw new TRPCError({ code: "BAD_REQUEST", message: "Session is finalized" });
+          if (session.status !== GuestSplitStatus.CLAIMING) throw new TRPCError({ code: "BAD_REQUEST", message: "Session is finalized" });
 
           const people = [...(session.people as GuestSessionPerson[])];
           const isParticipant = people.some(p => p.personToken === input.personToken);
@@ -764,7 +764,7 @@ export const guestRouter = createTRPCRouter({
           });
           if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
           if (session.expiresAt < new Date()) throw new TRPCError({ code: "NOT_FOUND", message: "Session expired" });
-          if (session.status !== "claiming") throw new TRPCError({ code: "BAD_REQUEST", message: "Session is finalized" });
+          if (session.status !== GuestSplitStatus.CLAIMING) throw new TRPCError({ code: "BAD_REQUEST", message: "Session is finalized" });
 
           const people = session.people as GuestSessionPerson[];
           const isParticipant = people.some(p => p.personToken === input.personToken);
@@ -840,7 +840,7 @@ export const guestRouter = createTRPCRouter({
           });
           if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
           if (session.expiresAt < new Date()) throw new TRPCError({ code: "NOT_FOUND", message: "Session expired" });
-          if (session.status !== "claiming") throw new TRPCError({ code: "BAD_REQUEST", message: "Session is no longer accepting claims" });
+          if (session.status !== GuestSplitStatus.CLAIMING) throw new TRPCError({ code: "BAD_REQUEST", message: "Session is no longer accepting claims" });
 
           const people = session.people as GuestSessionPerson[];
           const items = session.items as { name: string; quantity: number; unitPrice: number; totalPrice: number }[];
@@ -986,7 +986,7 @@ export const guestRouter = createTRPCRouter({
           });
           if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
           if (session.expiresAt < new Date()) throw new TRPCError({ code: "NOT_FOUND", message: "Session expired" });
-          if (session.status !== "claiming") throw new TRPCError({ code: "BAD_REQUEST", message: "Session already finalized" });
+          if (session.status !== GuestSplitStatus.CLAIMING) throw new TRPCError({ code: "BAD_REQUEST", message: "Session already finalized" });
 
           const items = session.items as { name: string; quantity: number; unitPrice: number; totalPrice: number }[];
           const people = session.people as GuestSessionPerson[];
@@ -1033,7 +1033,7 @@ export const guestRouter = createTRPCRouter({
           await tx.guestSplit.update({
             where: { id: session.id },
             data: {
-              status: "finalized",
+              status: GuestSplitStatus.FINALIZED,
               summary: summaryWithNames as unknown as Prisma.InputJsonValue,
               assignments: assignments as unknown as Prisma.InputJsonValue,
               ...(input.tipOverride !== undefined && {
