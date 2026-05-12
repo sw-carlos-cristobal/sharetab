@@ -452,7 +452,7 @@ export const adminRouter = createTRPCRouter({
             where: {
               groupId,
               userId: { not: input.userId },
-              user: { isPlaceholder: false },
+              user: { isPlaceholder: false, suspendedAt: null },
             },
             orderBy: { joinedAt: "asc" },
           });
