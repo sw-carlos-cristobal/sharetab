@@ -10,6 +10,7 @@ export const groupsRouter = createTRPCRouter({
         members: { some: { userId: ctx.user.id } },
         archivedAt: null,
       },
+      take: 200,
       include: {
         members: {
           include: { user: { select: { id: true, name: true, email: true, image: true, isPlaceholder: true, placeholderName: true } } },
@@ -27,6 +28,7 @@ export const groupsRouter = createTRPCRouter({
         members: { some: { userId: ctx.user.id } },
         archivedAt: { not: null },
       },
+      take: 200,
       include: {
         members: {
           include: { user: { select: { id: true, name: true, email: true, image: true, isPlaceholder: true, placeholderName: true } } },
