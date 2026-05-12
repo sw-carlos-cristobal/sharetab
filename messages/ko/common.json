@@ -20,7 +20,8 @@
     "confirm": "확인",
     "loading": "로딩 중...",
     "saving": "저장 중...",
-    "submit": "제출"
+    "submit": "제출",
+    "openMenu": "Open menu"
   },
   "brand": {
     "name": "ShareTab",

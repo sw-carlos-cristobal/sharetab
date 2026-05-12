@@ -20,7 +20,8 @@
     "confirm": "Confirmer",
     "loading": "Chargement...",
     "saving": "Enregistrement...",
-    "submit": "Envoyer"
+    "submit": "Envoyer",
+    "openMenu": "Open menu"
   },
   "brand": {
     "name": "ShareTab",
