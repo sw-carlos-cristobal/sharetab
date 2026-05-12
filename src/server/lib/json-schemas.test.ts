@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { TRPCError } from "@trpc/server";
 import {
   parseExtractedData,
   parseGuestItems,
@@ -39,6 +40,14 @@ describe("parseExtractedData", () => {
     const result = parseExtractedData({ subtotal: 100, customField: "hello" });
     expect((result as Record<string, unknown>).customField).toBe("hello");
   });
+
+  it("rejects negative amounts", () => {
+    expect(() => parseExtractedData({ subtotal: -100 })).toThrow(TRPCError);
+  });
+
+  it("rejects float amounts", () => {
+    expect(() => parseExtractedData({ subtotal: 10.5 })).toThrow(TRPCError);
+  });
 });
 
 describe("parseGuestItems", () => {
@@ -52,11 +61,15 @@ describe("parseGuestItems", () => {
   });
 
   it("rejects item with missing name", () => {
-    expect(() => parseGuestItems([{ quantity: 1, unitPrice: 100, totalPrice: 100 }])).toThrow();
+    expect(() => parseGuestItems([{ quantity: 1, unitPrice: 100, totalPrice: 100 }])).toThrow(TRPCError);
   });
 
   it("rejects item with zero quantity", () => {
-    expect(() => parseGuestItems([{ name: "X", quantity: 0, unitPrice: 100, totalPrice: 100 }])).toThrow();
+    expect(() => parseGuestItems([{ name: "X", quantity: 0, unitPrice: 100, totalPrice: 100 }])).toThrow(TRPCError);
+  });
+
+  it("rejects negative prices", () => {
+    expect(() => parseGuestItems([{ name: "X", quantity: 1, unitPrice: -100, totalPrice: 100 }])).toThrow(TRPCError);
   });
 });
 
@@ -71,7 +84,7 @@ describe("parseGuestPeople", () => {
   });
 
   it("rejects person without name", () => {
-    expect(() => parseGuestPeople([{}])).toThrow();
+    expect(() => parseGuestPeople([{}])).toThrow(TRPCError);
   });
 });
 
@@ -86,6 +99,10 @@ describe("parseGuestAssignments", () => {
   });
 
   it("rejects assignment with missing fields", () => {
-    expect(() => parseGuestAssignments([{ itemIndex: 0 }])).toThrow();
+    expect(() => parseGuestAssignments([{ itemIndex: 0 }])).toThrow(TRPCError);
+  });
+
+  it("rejects negative indices", () => {
+    expect(() => parseGuestAssignments([{ itemIndex: -1, personIndices: [0] }])).toThrow(TRPCError);
   });
 });

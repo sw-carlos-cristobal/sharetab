@@ -990,7 +990,7 @@ export const guestRouter = createTRPCRouter({
           if (session.status !== GuestSplitStatus.CLAIMING) throw new TRPCError({ code: "BAD_REQUEST", message: "Session already finalized" });
 
           const items = parseGuestItems(session.items);
-          const people = parseGuestPeople(session.people) as GuestSessionPerson[];
+          const people = parseGuestPeople(session.people);
           const assignments = parseGuestAssignments(session.assignments);
           const receiptData = parseExtractedData(session.receiptData);
 
