@@ -18,6 +18,7 @@ import {
   Share2, Pencil, Image as ImageIcon, RefreshCw, Scissors,
 } from "lucide-react";
 import { toast } from "sonner";
+import { getInitials } from "@/lib/avatar";
 
 type Step = "upload" | "processing" | "people" | "assign";
 
@@ -404,8 +405,7 @@ export default function GuestSplitPage() {
     }
   }
 
-  const initials = (name: string) =>
-    name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2) || "?";
+  const initials = (name: string) => getInitials(name);
 
   return (
     <div className="space-y-6 pb-24">
