@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Trash2, Pencil } from "lucide-react";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
 export default function ExpenseDetailPage({
   params,
@@ -25,7 +26,7 @@ export default function ExpenseDetailPage({
     onSuccess: () => router.push(`/groups/${groupId}`),
   });
 
-  if (expense.isLoading) return <p className="text-muted-foreground">Loading...</p>;
+  if (expense.isLoading) return <LoadingSpinner />;
   if (!expense.data) {
     return (
       <div className="mx-auto max-w-md py-16 text-center">

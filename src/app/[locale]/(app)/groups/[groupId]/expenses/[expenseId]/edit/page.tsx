@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ArrowLeft } from "lucide-react";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { EqualSplit } from "@/components/expenses/equal-split";
 import { ExactSplit } from "@/components/expenses/exact-split";
 import { PercentageSplit } from "@/components/expenses/percentage-split";
@@ -101,7 +102,7 @@ export default function EditExpensePage({
   }
 
   if (expense.isLoading || group.isLoading) {
-    return <p className="text-muted-foreground">Loading...</p>;
+    return <LoadingSpinner />;
   }
   if (!expense.data) {
     return (
