@@ -9,10 +9,15 @@ export const balancesRouter = createTRPCRouter({
       const [expenses, settlements] = await Promise.all([
         ctx.db.expense.findMany({
           where: { groupId: input.groupId },
-          include: { shares: true },
+          select: {
+            paidById: true,
+            amount: true,
+            shares: { select: { userId: true, amount: true } },
+          },
         }),
         ctx.db.settlement.findMany({
           where: { groupId: input.groupId },
+          select: { fromId: true, toId: true, amount: true },
         }),
       ]);
 
@@ -26,10 +31,15 @@ export const balancesRouter = createTRPCRouter({
       const [expenses, settlements] = await Promise.all([
         ctx.db.expense.findMany({
           where: { groupId: input.groupId },
-          include: { shares: true },
+          select: {
+            paidById: true,
+            amount: true,
+            shares: { select: { userId: true, amount: true } },
+          },
         }),
         ctx.db.settlement.findMany({
           where: { groupId: input.groupId },
+          select: { fromId: true, toId: true, amount: true },
         }),
       ]);
 
@@ -41,11 +51,19 @@ export const balancesRouter = createTRPCRouter({
   getOverallDebts: protectedProcedure.query(async ({ ctx }) => {
     const groups = await ctx.db.group.findMany({
       where: { members: { some: { userId: ctx.user.id } }, archivedAt: null },
-      include: {
-        expenses: { include: { shares: true } },
-        settlements: true,
+      select: {
+        expenses: {
+          select: {
+            paidById: true,
+            amount: true,
+            shares: { select: { userId: true, amount: true } },
+          },
+        },
+        settlements: {
+          select: { fromId: true, toId: true, amount: true },
+        },
         members: {
-          include: { user: { select: { id: true, name: true, venmoUsername: true } } },
+          select: { user: { select: { id: true, name: true, venmoUsername: true } } },
         },
       },
     });
@@ -122,11 +140,18 @@ export const balancesRouter = createTRPCRouter({
   getDashboard: protectedProcedure.query(async ({ ctx }) => {
     const groups = await ctx.db.group.findMany({
       where: { members: { some: { userId: ctx.user.id } }, archivedAt: null },
-      include: {
-        expenses: { include: { shares: true } },
-        settlements: true,
-        members: {
-          include: { user: { select: { id: true, name: true, image: true } } },
+      select: {
+        id: true,
+        name: true,
+        expenses: {
+          select: {
+            paidById: true,
+            amount: true,
+            shares: { select: { userId: true, amount: true } },
+          },
+        },
+        settlements: {
+          select: { fromId: true, toId: true, amount: true },
         },
       },
     });
