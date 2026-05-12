@@ -448,7 +448,11 @@ export const adminRouter = createTRPCRouter({
         });
         for (const { groupId } of ownedGroups) {
           const nextOwner = await tx.groupMember.findFirst({
-            where: { groupId, userId: { not: input.userId } },
+            where: {
+              groupId,
+              userId: { not: input.userId },
+              user: { isPlaceholder: false },
+            },
             orderBy: { joinedAt: "asc" },
           });
           if (nextOwner) {
