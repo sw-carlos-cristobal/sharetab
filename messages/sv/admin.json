@@ -21,9 +21,7 @@
   "users": {
     "title": "Användarhantering",
     "count": "{count} användare",
-    "searchLabel": "Sök användare",
     "searchPlaceholder": "Sök på namn eller e-post...",
-    "loadFailed": "Kunde inte ladda användare.",
     "retry": "Försök igen",
     "noUsers": "Inga användare hittades.",
     "filterAll": "Alla",
@@ -47,19 +45,19 @@
     "deleteDescription": "Är du säker på att du vill ta bort {name}? Denna åtgärd kan inte ångras. All deras data kommer att tas bort permanent.",
     "cancel": "Avbryt",
     "delete": "Ta bort",
-    "loadMore": "Ladda fler"
+    "loadMore": "Ladda fler",
+    "errorLoading": "Kunde inte ladda användare.",
+    "searchAriaLabel": "Sök användare"
   },
   "groups": {
     "title": "Gruppöversikt",
     "count": "{count} grupper",
     "expenses": "{count} utgifter",
     "settlements": "{count} avräkningar",
-    "searchLabel": "Sök grupper",
     "searchPlaceholder": "Sök på gruppnamn...",
     "filterAll": "Alla",
     "filterActive": "Aktiva",
     "filterArchived": "Arkiverade",
-    "loadFailed": "Kunde inte ladda grupper.",
     "retry": "Försök igen",
     "noGroups": "Inga grupper hittades.",
     "colName": "Namn",
@@ -75,7 +73,9 @@
     "deleteDescription": "Är du säker på att du vill ta bort {name}? Detta tar permanent bort alla utgifter, avräkningar och aktiviteter i denna grupp.",
     "cancel": "Avbryt",
     "delete": "Ta bort",
-    "loadMore": "Ladda fler"
+    "loadMore": "Ladda fler",
+    "errorLoading": "Kunde inte ladda grupper.",
+    "searchAriaLabel": "Sök grupper"
   },
   "registration": {
     "title": "Registreringskontroll",
@@ -147,14 +147,14 @@
     "typeExpenseCreated": "Utgift skapad",
     "typeExpenseUpdated": "Utgift uppdaterad",
     "typeExpenseDeleted": "Utgift borttagen",
-    "typeSettlement": "Avräkning",
     "typeMemberJoined": "Medlem gick med",
     "typeMemberLeft": "Medlem lämnade",
     "typeGroupUpdated": "Grupp uppdaterad",
-    "typePlaceholderAdded": "Platshållare tillagd",
     "typePlaceholderMerged": "Platshållare sammanfogad",
     "typeGroupArchived": "Grupp arkiverad",
-    "typeGroupUnarchived": "Grupp avarkiverad"
+    "typeGroupUnarchived": "Grupp avarkiverad",
+    "typePlaceholderCreated": "Platshållare tillagd",
+    "typeSettlementCreated": "Avräkning"
   },
   "tools": {
     "title": "Adminverktyg",
@@ -191,11 +191,11 @@
     "title": "Serverloggar",
     "entries": "{count} poster",
     "filterPlaceholder": "Filtrera loggar...",
-    "pauseRefresh": "Pausa automatisk uppdatering",
-    "resumeRefresh": "Återuppta automatisk uppdatering",
     "scrollToBottom": "Scrolla till botten",
     "noEntries": "Inga loggposter hittades",
-    "autoRefreshPaused": "Automatisk uppdatering pausad"
+    "autoRefreshPaused": "Automatisk uppdatering pausad",
+    "pauseAutoRefresh": "Pausa automatisk uppdatering",
+    "resumeAutoRefresh": "Återuppta automatisk uppdatering"
   },
   "audit": {
     "title": "Granskningslogg",
@@ -215,7 +215,6 @@
     "actionInviteRevoked": "Inbjudan återkallad",
     "actionAnnouncement": "Meddelande",
     "actionRegModeChanged": "Registreringsläge ändrat",
-    "actionDataExport": "Dataexport",
     "actionTestEmail": "Testmeddelande",
     "actionSplitsCleaned": "Delningar rensade",
     "actionMeridianLogin": "Meridian-inloggning",
@@ -223,8 +222,9 @@
     "actionMeridianLoginFailed": "Meridian-inloggning misslyckades",
     "actionMeridianLogout": "Meridian-utloggning",
     "actionNotifyPrefChanged": "Notifieringsinställning ändrad",
-    "actionAiProviderTest": "AI-leverantörstest",
-    "filesDeleted": "{count} filer"
+    "filesDeleted": "{count} filer",
+    "actionAIProviderTest": "AI-leverantörstest",
+    "actionExportCreated": "Dataexport"
   },
   "meridianAuth": {
     "title": "Meridian-autentisering",

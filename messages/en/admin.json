@@ -21,9 +21,7 @@
   "users": {
     "title": "User Management",
     "count": "{count} users",
-    "searchLabel": "Search users",
     "searchPlaceholder": "Search by name or email...",
-    "loadFailed": "Failed to load users.",
     "retry": "Retry",
     "noUsers": "No users found.",
     "filterAll": "All",
@@ -47,19 +45,19 @@
     "deleteDescription": "Are you sure you want to delete {name}? This action cannot be undone. All their data will be permanently removed.",
     "cancel": "Cancel",
     "delete": "Delete",
-    "loadMore": "Load more"
+    "loadMore": "Load more",
+    "errorLoading": "Failed to load users.",
+    "searchAriaLabel": "Search users"
   },
   "groups": {
     "title": "Group Overview",
     "count": "{count} groups",
     "expenses": "{count} expenses",
     "settlements": "{count} settlements",
-    "searchLabel": "Search groups",
     "searchPlaceholder": "Search by group name...",
     "filterAll": "All",
     "filterActive": "Active",
     "filterArchived": "Archived",
-    "loadFailed": "Failed to load groups.",
     "retry": "Retry",
     "noGroups": "No groups found.",
     "colName": "Name",
@@ -75,7 +73,9 @@
     "deleteDescription": "Are you sure you want to delete {name}? This will permanently remove all expenses, settlements, and activity in this group.",
     "cancel": "Cancel",
     "delete": "Delete",
-    "loadMore": "Load more"
+    "loadMore": "Load more",
+    "errorLoading": "Failed to load groups.",
+    "searchAriaLabel": "Search groups"
   },
   "registration": {
     "title": "Registration Control",
@@ -147,14 +147,14 @@
     "typeExpenseCreated": "Expense Created",
     "typeExpenseUpdated": "Expense Updated",
     "typeExpenseDeleted": "Expense Deleted",
-    "typeSettlement": "Settlement",
     "typeMemberJoined": "Member Joined",
     "typeMemberLeft": "Member Left",
     "typeGroupUpdated": "Group Updated",
-    "typePlaceholderAdded": "Placeholder Added",
     "typePlaceholderMerged": "Placeholder Merged",
     "typeGroupArchived": "Group Archived",
-    "typeGroupUnarchived": "Group Unarchived"
+    "typeGroupUnarchived": "Group Unarchived",
+    "typePlaceholderCreated": "Placeholder Added",
+    "typeSettlementCreated": "Settlement"
   },
   "tools": {
     "title": "Admin Tools",
@@ -191,11 +191,11 @@
     "title": "Server Logs",
     "entries": "{count} entries",
     "filterPlaceholder": "Filter logs...",
-    "pauseRefresh": "Pause auto-refresh",
-    "resumeRefresh": "Resume auto-refresh",
     "scrollToBottom": "Scroll to bottom",
     "noEntries": "No log entries found",
-    "autoRefreshPaused": "Auto-refresh paused"
+    "autoRefreshPaused": "Auto-refresh paused",
+    "pauseAutoRefresh": "Pause auto-refresh",
+    "resumeAutoRefresh": "Resume auto-refresh"
   },
   "audit": {
     "title": "Audit Log",
@@ -215,7 +215,6 @@
     "actionInviteRevoked": "Invite Revoked",
     "actionAnnouncement": "Announcement",
     "actionRegModeChanged": "Reg. Mode Changed",
-    "actionDataExport": "Data Export",
     "actionTestEmail": "Test Email",
     "actionSplitsCleaned": "Splits Cleaned",
     "actionMeridianLogin": "Meridian Login",
@@ -223,8 +222,9 @@
     "actionMeridianLoginFailed": "Meridian Login Failed",
     "actionMeridianLogout": "Meridian Logout",
     "actionNotifyPrefChanged": "Notify Pref Changed",
-    "actionAiProviderTest": "AI Provider Test",
-    "filesDeleted": "{count} files"
+    "filesDeleted": "{count} files",
+    "actionAIProviderTest": "AI Provider Test",
+    "actionExportCreated": "Data Export"
   },
   "meridianAuth": {
     "title": "Meridian Authentication",

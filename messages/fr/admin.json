@@ -21,9 +21,7 @@
   "users": {
     "title": "Gestion des utilisateurs",
     "count": "{count} utilisateurs",
-    "searchLabel": "Rechercher des utilisateurs",
     "searchPlaceholder": "Rechercher par nom ou e-mail...",
-    "loadFailed": "Échec du chargement des utilisateurs.",
     "retry": "Réessayer",
     "noUsers": "Aucun utilisateur trouvé.",
     "filterAll": "Tous",
@@ -47,19 +45,19 @@
     "deleteDescription": "Êtes-vous sûr de vouloir supprimer {name} ? Cette action est irréversible. Toutes leurs données seront définitivement supprimées.",
     "cancel": "Annuler",
     "delete": "Supprimer",
-    "loadMore": "Charger plus"
+    "loadMore": "Charger plus",
+    "errorLoading": "Échec du chargement des utilisateurs.",
+    "searchAriaLabel": "Rechercher des utilisateurs"
   },
   "groups": {
     "title": "Aperçu des groupes",
     "count": "{count} groupes",
     "expenses": "{count} dépenses",
     "settlements": "{count} règlements",
-    "searchLabel": "Rechercher des groupes",
     "searchPlaceholder": "Rechercher par nom de groupe...",
     "filterAll": "Tous",
     "filterActive": "Actifs",
     "filterArchived": "Archivés",
-    "loadFailed": "Échec du chargement des groupes.",
     "retry": "Réessayer",
     "noGroups": "Aucun groupe trouvé.",
     "colName": "Nom",
@@ -75,7 +73,9 @@
     "deleteDescription": "Êtes-vous sûr de vouloir supprimer {name} ? Toutes les dépenses, règlements et activités de ce groupe seront définitivement supprimés.",
     "cancel": "Annuler",
     "delete": "Supprimer",
-    "loadMore": "Charger plus"
+    "loadMore": "Charger plus",
+    "errorLoading": "Échec du chargement des groupes.",
+    "searchAriaLabel": "Rechercher des groupes"
   },
   "registration": {
     "title": "Contrôle des inscriptions",
@@ -147,14 +147,14 @@
     "typeExpenseCreated": "Dépense créée",
     "typeExpenseUpdated": "Dépense mise à jour",
     "typeExpenseDeleted": "Dépense supprimée",
-    "typeSettlement": "Règlement",
     "typeMemberJoined": "Membre rejoint",
     "typeMemberLeft": "Membre parti",
     "typeGroupUpdated": "Groupe mis à jour",
-    "typePlaceholderAdded": "Espace réservé ajouté",
     "typePlaceholderMerged": "Espace réservé fusionné",
     "typeGroupArchived": "Groupe archivé",
-    "typeGroupUnarchived": "Groupe désarchivé"
+    "typeGroupUnarchived": "Groupe désarchivé",
+    "typePlaceholderCreated": "Espace réservé ajouté",
+    "typeSettlementCreated": "Règlement"
   },
   "tools": {
     "title": "Outils d'administration",
@@ -191,11 +191,11 @@
     "title": "Journaux du serveur",
     "entries": "{count} entrées",
     "filterPlaceholder": "Filtrer les journaux...",
-    "pauseRefresh": "Suspendre l'actualisation automatique",
-    "resumeRefresh": "Reprendre l'actualisation automatique",
     "scrollToBottom": "Aller en bas",
     "noEntries": "Aucune entrée de journal trouvée",
-    "autoRefreshPaused": "Actualisation automatique suspendue"
+    "autoRefreshPaused": "Actualisation automatique suspendue",
+    "pauseAutoRefresh": "Suspendre l'actualisation automatique",
+    "resumeAutoRefresh": "Reprendre l'actualisation automatique"
   },
   "audit": {
     "title": "Journal d'audit",
@@ -215,7 +215,6 @@
     "actionInviteRevoked": "Invitation révoquée",
     "actionAnnouncement": "Annonce",
     "actionRegModeChanged": "Mode d'inscription modifié",
-    "actionDataExport": "Exportation de données",
     "actionTestEmail": "E-mail de test",
     "actionSplitsCleaned": "Partages nettoyés",
     "actionMeridianLogin": "Connexion Meridian",
@@ -223,8 +222,9 @@
     "actionMeridianLoginFailed": "Échec connexion Meridian",
     "actionMeridianLogout": "Déconnexion Meridian",
     "actionNotifyPrefChanged": "Préférence de notification modifiée",
-    "actionAiProviderTest": "Test fournisseur IA",
-    "filesDeleted": "{count} fichiers"
+    "filesDeleted": "{count} fichiers",
+    "actionAIProviderTest": "Test fournisseur IA",
+    "actionExportCreated": "Exportation de données"
   },
   "meridianAuth": {
     "title": "Authentification Meridian",

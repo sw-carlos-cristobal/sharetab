@@ -21,9 +21,7 @@
   "users": {
     "title": "用户管理",
     "count": "{count} 个用户",
-    "searchLabel": "搜索用户",
     "searchPlaceholder": "按姓名或邮箱搜索...",
-    "loadFailed": "加载用户失败。",
     "retry": "重试",
     "noUsers": "未找到用户。",
     "filterAll": "全部",
@@ -47,19 +45,19 @@
     "deleteDescription": "确定要删除 {name} 吗？此操作不可撤销。该用户的所有数据将被永久删除。",
     "cancel": "取消",
     "delete": "删除",
-    "loadMore": "加载更多"
+    "loadMore": "加载更多",
+    "errorLoading": "加载用户失败。",
+    "searchAriaLabel": "搜索用户"
   },
   "groups": {
     "title": "群组概览",
     "count": "{count} 个群组",
     "expenses": "{count} 笔支出",
     "settlements": "{count} 笔结算",
-    "searchLabel": "搜索群组",
     "searchPlaceholder": "按群组名称搜索...",
     "filterAll": "全部",
     "filterActive": "活跃",
     "filterArchived": "已归档",
-    "loadFailed": "加载群组失败。",
     "retry": "重试",
     "noGroups": "未找到群组。",
     "colName": "名称",
@@ -75,7 +73,9 @@
     "deleteDescription": "确定要删除 {name} 吗？该群组中的所有支出、结算和活动记录将被永久删除。",
     "cancel": "取消",
     "delete": "删除",
-    "loadMore": "加载更多"
+    "loadMore": "加载更多",
+    "errorLoading": "加载群组失败。",
+    "searchAriaLabel": "搜索群组"
   },
   "registration": {
     "title": "注册管理",
@@ -147,14 +147,14 @@
     "typeExpenseCreated": "创建支出",
     "typeExpenseUpdated": "更新支出",
     "typeExpenseDeleted": "删除支出",
-    "typeSettlement": "结算",
     "typeMemberJoined": "成员加入",
     "typeMemberLeft": "成员退出",
     "typeGroupUpdated": "群组更新",
-    "typePlaceholderAdded": "添加占位成员",
     "typePlaceholderMerged": "合并占位成员",
     "typeGroupArchived": "群组归档",
-    "typeGroupUnarchived": "取消群组归档"
+    "typeGroupUnarchived": "取消群组归档",
+    "typePlaceholderCreated": "添加占位成员",
+    "typeSettlementCreated": "结算"
   },
   "tools": {
     "title": "管理工具",
@@ -191,11 +191,11 @@
     "title": "服务器日志",
     "entries": "{count} 条记录",
     "filterPlaceholder": "筛选日志...",
-    "pauseRefresh": "暂停自动刷新",
-    "resumeRefresh": "恢复自动刷新",
     "scrollToBottom": "滚动到底部",
     "noEntries": "未找到日志记录",
-    "autoRefreshPaused": "自动刷新已暂停"
+    "autoRefreshPaused": "自动刷新已暂停",
+    "pauseAutoRefresh": "暂停自动刷新",
+    "resumeAutoRefresh": "恢复自动刷新"
   },
   "audit": {
     "title": "审计日志",
@@ -215,7 +215,6 @@
     "actionInviteRevoked": "邀请撤销",
     "actionAnnouncement": "公告",
     "actionRegModeChanged": "注册模式变更",
-    "actionDataExport": "数据导出",
     "actionTestEmail": "测试邮件",
     "actionSplitsCleaned": "分账清理",
     "actionMeridianLogin": "Meridian 登录",
@@ -223,8 +222,9 @@
     "actionMeridianLoginFailed": "Meridian 登录失败",
     "actionMeridianLogout": "Meridian 登出",
     "actionNotifyPrefChanged": "通知偏好变更",
-    "actionAiProviderTest": "AI 提供商测试",
-    "filesDeleted": "{count} 个文件"
+    "filesDeleted": "{count} 个文件",
+    "actionAIProviderTest": "AI 提供商测试",
+    "actionExportCreated": "数据导出"
   },
   "meridianAuth": {
     "title": "Meridian 认证",

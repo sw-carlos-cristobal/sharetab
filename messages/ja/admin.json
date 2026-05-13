@@ -21,9 +21,7 @@
   "users": {
     "title": "ユーザー管理",
     "count": "{count}人のユーザー",
-    "searchLabel": "ユーザーを検索",
     "searchPlaceholder": "名前またはメールアドレスで検索...",
-    "loadFailed": "ユーザーの読み込みに失敗しました。",
     "retry": "再試行",
     "noUsers": "ユーザーが見つかりません。",
     "filterAll": "すべて",
@@ -47,19 +45,19 @@
     "deleteDescription": "{name}を削除してもよろしいですか？この操作は元に戻せません。すべてのデータが完全に削除されます。",
     "cancel": "キャンセル",
     "delete": "削除",
-    "loadMore": "さらに読み込む"
+    "loadMore": "さらに読み込む",
+    "errorLoading": "ユーザーの読み込みに失敗しました。",
+    "searchAriaLabel": "ユーザーを検索"
   },
   "groups": {
     "title": "グループ概要",
     "count": "{count}グループ",
     "expenses": "{count}件の支出",
     "settlements": "{count}件の精算",
-    "searchLabel": "グループを検索",
     "searchPlaceholder": "グループ名で検索...",
     "filterAll": "すべて",
     "filterActive": "アクティブ",
     "filterArchived": "アーカイブ済み",
-    "loadFailed": "グループの読み込みに失敗しました。",
     "retry": "再試行",
     "noGroups": "グループが見つかりません。",
     "colName": "名前",
@@ -75,7 +73,9 @@
     "deleteDescription": "{name}を削除してもよろしいですか？このグループのすべての支出、精算、活動が完全に削除されます。",
     "cancel": "キャンセル",
     "delete": "削除",
-    "loadMore": "さらに読み込む"
+    "loadMore": "さらに読み込む",
+    "errorLoading": "グループの読み込みに失敗しました。",
+    "searchAriaLabel": "グループを検索"
   },
   "registration": {
     "title": "登録管理",
@@ -147,14 +147,14 @@
     "typeExpenseCreated": "支出を作成",
     "typeExpenseUpdated": "支出を更新",
     "typeExpenseDeleted": "支出を削除",
-    "typeSettlement": "精算",
     "typeMemberJoined": "メンバー参加",
     "typeMemberLeft": "メンバー脱退",
     "typeGroupUpdated": "グループ更新",
-    "typePlaceholderAdded": "プレースホルダー追加",
     "typePlaceholderMerged": "プレースホルダー統合",
     "typeGroupArchived": "グループをアーカイブ",
-    "typeGroupUnarchived": "グループのアーカイブを解除"
+    "typeGroupUnarchived": "グループのアーカイブを解除",
+    "typePlaceholderCreated": "プレースホルダー追加",
+    "typeSettlementCreated": "精算"
   },
   "tools": {
     "title": "管理ツール",
@@ -191,11 +191,11 @@
     "title": "サーバーログ",
     "entries": "{count}件のエントリ",
     "filterPlaceholder": "ログをフィルター...",
-    "pauseRefresh": "自動更新を一時停止",
-    "resumeRefresh": "自動更新を再開",
     "scrollToBottom": "最下部にスクロール",
     "noEntries": "ログエントリが見つかりません",
-    "autoRefreshPaused": "自動更新が一時停止中"
+    "autoRefreshPaused": "自動更新が一時停止中",
+    "pauseAutoRefresh": "自動更新を一時停止",
+    "resumeAutoRefresh": "自動更新を再開"
   },
   "audit": {
     "title": "監査ログ",
@@ -215,7 +215,6 @@
     "actionInviteRevoked": "招待取り消し",
     "actionAnnouncement": "お知らせ",
     "actionRegModeChanged": "登録モード変更",
-    "actionDataExport": "データエクスポート",
     "actionTestEmail": "テストメール",
     "actionSplitsCleaned": "割り勘クリーンアップ",
     "actionMeridianLogin": "Meridianログイン",
@@ -223,8 +222,9 @@
     "actionMeridianLoginFailed": "Meridianログイン失敗",
     "actionMeridianLogout": "Meridianログアウト",
     "actionNotifyPrefChanged": "通知設定変更",
-    "actionAiProviderTest": "AIプロバイダーテスト",
-    "filesDeleted": "{count}ファイル"
+    "filesDeleted": "{count}ファイル",
+    "actionAIProviderTest": "AIプロバイダーテスト",
+    "actionExportCreated": "データエクスポート"
   },
   "meridianAuth": {
     "title": "Meridian認証",

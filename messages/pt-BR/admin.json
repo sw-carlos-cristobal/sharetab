@@ -21,9 +21,7 @@
   "users": {
     "title": "Gerenciamento de usuários",
     "count": "{count} usuários",
-    "searchLabel": "Pesquisar usuários",
     "searchPlaceholder": "Pesquisar por nome ou e-mail...",
-    "loadFailed": "Falha ao carregar usuários.",
     "retry": "Tentar novamente",
     "noUsers": "Nenhum usuário encontrado.",
     "filterAll": "Todos",
@@ -47,19 +45,19 @@
     "deleteDescription": "Tem certeza de que deseja excluir {name}? Esta ação não pode ser desfeita. Todos os dados serão removidos permanentemente.",
     "cancel": "Cancelar",
     "delete": "Excluir",
-    "loadMore": "Carregar mais"
+    "loadMore": "Carregar mais",
+    "errorLoading": "Falha ao carregar usuários.",
+    "searchAriaLabel": "Pesquisar usuários"
   },
   "groups": {
     "title": "Visão geral dos grupos",
     "count": "{count} grupos",
     "expenses": "{count} despesas",
     "settlements": "{count} acertos",
-    "searchLabel": "Pesquisar grupos",
     "searchPlaceholder": "Pesquisar por nome do grupo...",
     "filterAll": "Todos",
     "filterActive": "Ativos",
     "filterArchived": "Arquivados",
-    "loadFailed": "Falha ao carregar grupos.",
     "retry": "Tentar novamente",
     "noGroups": "Nenhum grupo encontrado.",
     "colName": "Nome",
@@ -75,7 +73,9 @@
     "deleteDescription": "Tem certeza de que deseja excluir {name}? Todas as despesas, acertos e atividades deste grupo serão removidos permanentemente.",
     "cancel": "Cancelar",
     "delete": "Excluir",
-    "loadMore": "Carregar mais"
+    "loadMore": "Carregar mais",
+    "errorLoading": "Falha ao carregar grupos.",
+    "searchAriaLabel": "Pesquisar grupos"
   },
   "registration": {
     "title": "Controle de registro",
@@ -147,14 +147,14 @@
     "typeExpenseCreated": "Despesa criada",
     "typeExpenseUpdated": "Despesa atualizada",
     "typeExpenseDeleted": "Despesa excluída",
-    "typeSettlement": "Acerto",
     "typeMemberJoined": "Membro entrou",
     "typeMemberLeft": "Membro saiu",
     "typeGroupUpdated": "Grupo atualizado",
-    "typePlaceholderAdded": "Marcador adicionado",
     "typePlaceholderMerged": "Marcador mesclado",
     "typeGroupArchived": "Grupo arquivado",
-    "typeGroupUnarchived": "Grupo desarquivado"
+    "typeGroupUnarchived": "Grupo desarquivado",
+    "typePlaceholderCreated": "Marcador adicionado",
+    "typeSettlementCreated": "Acerto"
   },
   "tools": {
     "title": "Ferramentas administrativas",
@@ -191,11 +191,11 @@
     "title": "Logs do servidor",
     "entries": "{count} entradas",
     "filterPlaceholder": "Filtrar logs...",
-    "pauseRefresh": "Pausar atualização automática",
-    "resumeRefresh": "Retomar atualização automática",
     "scrollToBottom": "Ir para o final",
     "noEntries": "Nenhuma entrada de log encontrada",
-    "autoRefreshPaused": "Atualização automática pausada"
+    "autoRefreshPaused": "Atualização automática pausada",
+    "pauseAutoRefresh": "Pausar atualização automática",
+    "resumeAutoRefresh": "Retomar atualização automática"
   },
   "audit": {
     "title": "Log de auditoria",
@@ -215,7 +215,6 @@
     "actionInviteRevoked": "Convite revogado",
     "actionAnnouncement": "Anúncio",
     "actionRegModeChanged": "Modo de registro alterado",
-    "actionDataExport": "Exportação de dados",
     "actionTestEmail": "E-mail de teste",
     "actionSplitsCleaned": "Divisões limpas",
     "actionMeridianLogin": "Login Meridian",
@@ -223,8 +222,9 @@
     "actionMeridianLoginFailed": "Falha no login Meridian",
     "actionMeridianLogout": "Logout Meridian",
     "actionNotifyPrefChanged": "Preferência de notificação alterada",
-    "actionAiProviderTest": "Teste de provedor IA",
-    "filesDeleted": "{count} arquivos"
+    "filesDeleted": "{count} arquivos",
+    "actionAIProviderTest": "Teste de provedor IA",
+    "actionExportCreated": "Exportação de dados"
   },
   "meridianAuth": {
     "title": "Autenticação Meridian",

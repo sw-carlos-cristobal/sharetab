@@ -21,9 +21,7 @@
   "users": {
     "title": "사용자 관리",
     "count": "{count}명의 사용자",
-    "searchLabel": "사용자 검색",
     "searchPlaceholder": "이름 또는 이메일로 검색...",
-    "loadFailed": "사용자를 불러오지 못했습니다.",
     "retry": "다시 시도",
     "noUsers": "사용자를 찾을 수 없습니다.",
     "filterAll": "전체",
@@ -47,19 +45,19 @@
     "deleteDescription": "{name}을(를) 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다. 모든 데이터가 영구적으로 삭제됩니다.",
     "cancel": "취소",
     "delete": "삭제",
-    "loadMore": "더 보기"
+    "loadMore": "더 보기",
+    "errorLoading": "사용자를 불러오지 못했습니다.",
+    "searchAriaLabel": "사용자 검색"
   },
   "groups": {
     "title": "그룹 개요",
     "count": "{count}개 그룹",
     "expenses": "{count}건의 지출",
     "settlements": "{count}건의 정산",
-    "searchLabel": "그룹 검색",
     "searchPlaceholder": "그룹 이름으로 검색...",
     "filterAll": "전체",
     "filterActive": "활성",
     "filterArchived": "보관됨",
-    "loadFailed": "그룹을 불러오지 못했습니다.",
     "retry": "다시 시도",
     "noGroups": "그룹을 찾을 수 없습니다.",
     "colName": "이름",
@@ -75,7 +73,9 @@
     "deleteDescription": "{name}을(를) 삭제하시겠습니까? 이 그룹의 모든 지출, 정산 및 활동 기록이 영구적으로 삭제됩니다.",
     "cancel": "취소",
     "delete": "삭제",
-    "loadMore": "더 보기"
+    "loadMore": "더 보기",
+    "errorLoading": "그룹을 불러오지 못했습니다.",
+    "searchAriaLabel": "그룹 검색"
   },
   "registration": {
     "title": "가입 관리",
@@ -147,14 +147,14 @@
     "typeExpenseCreated": "지출 생성",
     "typeExpenseUpdated": "지출 수정",
     "typeExpenseDeleted": "지출 삭제",
-    "typeSettlement": "정산",
     "typeMemberJoined": "멤버 참여",
     "typeMemberLeft": "멤버 탈퇴",
     "typeGroupUpdated": "그룹 수정",
-    "typePlaceholderAdded": "임시 멤버 추가",
     "typePlaceholderMerged": "임시 멤버 병합",
     "typeGroupArchived": "그룹 보관",
-    "typeGroupUnarchived": "그룹 보관 해제"
+    "typeGroupUnarchived": "그룹 보관 해제",
+    "typePlaceholderCreated": "임시 멤버 추가",
+    "typeSettlementCreated": "정산"
   },
   "tools": {
     "title": "관리 도구",
@@ -191,11 +191,11 @@
     "title": "서버 로그",
     "entries": "{count}개 항목",
     "filterPlaceholder": "로그 필터링...",
-    "pauseRefresh": "자동 새로고침 일시정지",
-    "resumeRefresh": "자동 새로고침 재개",
     "scrollToBottom": "맨 아래로 스크롤",
     "noEntries": "로그 항목이 없습니다",
-    "autoRefreshPaused": "자동 새로고침 일시정지됨"
+    "autoRefreshPaused": "자동 새로고침 일시정지됨",
+    "pauseAutoRefresh": "자동 새로고침 일시정지",
+    "resumeAutoRefresh": "자동 새로고침 재개"
   },
   "audit": {
     "title": "감사 로그",
@@ -215,7 +215,6 @@
     "actionInviteRevoked": "초대 취소",
     "actionAnnouncement": "공지",
     "actionRegModeChanged": "가입 방식 변경",
-    "actionDataExport": "데이터 내보내기",
     "actionTestEmail": "테스트 이메일",
     "actionSplitsCleaned": "정산 정리",
     "actionMeridianLogin": "Meridian 로그인",
@@ -223,8 +222,9 @@
     "actionMeridianLoginFailed": "Meridian 로그인 실패",
     "actionMeridianLogout": "Meridian 로그아웃",
     "actionNotifyPrefChanged": "알림 설정 변경",
-    "actionAiProviderTest": "AI 제공업체 테스트",
-    "filesDeleted": "{count}개 파일"
+    "filesDeleted": "{count}개 파일",
+    "actionAIProviderTest": "AI 제공업체 테스트",
+    "actionExportCreated": "데이터 내보내기"
   },
   "meridianAuth": {
     "title": "Meridian 인증",

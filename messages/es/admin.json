@@ -21,9 +21,7 @@
   "users": {
     "title": "Gestión de usuarios",
     "count": "{count} usuarios",
-    "searchLabel": "Buscar usuarios",
     "searchPlaceholder": "Buscar por nombre o correo...",
-    "loadFailed": "Error al cargar usuarios.",
     "retry": "Reintentar",
     "noUsers": "No se encontraron usuarios.",
     "filterAll": "Todos",
@@ -47,19 +45,19 @@
     "deleteDescription": "¿Está seguro de que desea eliminar a {name}? Esta acción no se puede deshacer. Todos sus datos se eliminarán permanentemente.",
     "cancel": "Cancelar",
     "delete": "Eliminar",
-    "loadMore": "Cargar más"
+    "loadMore": "Cargar más",
+    "errorLoading": "Error al cargar usuarios.",
+    "searchAriaLabel": "Buscar usuarios"
   },
   "groups": {
     "title": "Vista general de grupos",
     "count": "{count} grupos",
     "expenses": "{count} gastos",
     "settlements": "{count} liquidaciones",
-    "searchLabel": "Buscar grupos",
     "searchPlaceholder": "Buscar por nombre de grupo...",
     "filterAll": "Todos",
     "filterActive": "Activos",
     "filterArchived": "Archivados",
-    "loadFailed": "Error al cargar grupos.",
     "retry": "Reintentar",
     "noGroups": "No se encontraron grupos.",
     "colName": "Nombre",
@@ -75,7 +73,9 @@
     "deleteDescription": "¿Está seguro de que desea eliminar {name}? Se eliminarán permanentemente todos los gastos, liquidaciones y actividad de este grupo.",
     "cancel": "Cancelar",
     "delete": "Eliminar",
-    "loadMore": "Cargar más"
+    "loadMore": "Cargar más",
+    "errorLoading": "Error al cargar grupos.",
+    "searchAriaLabel": "Buscar grupos"
   },
   "registration": {
     "title": "Control de registro",
@@ -147,14 +147,14 @@
     "typeExpenseCreated": "Gasto creado",
     "typeExpenseUpdated": "Gasto actualizado",
     "typeExpenseDeleted": "Gasto eliminado",
-    "typeSettlement": "Liquidación",
     "typeMemberJoined": "Miembro unido",
     "typeMemberLeft": "Miembro salió",
     "typeGroupUpdated": "Grupo actualizado",
-    "typePlaceholderAdded": "Marcador añadido",
     "typePlaceholderMerged": "Marcador fusionado",
     "typeGroupArchived": "Grupo archivado",
-    "typeGroupUnarchived": "Grupo desarchivado"
+    "typeGroupUnarchived": "Grupo desarchivado",
+    "typePlaceholderCreated": "Marcador añadido",
+    "typeSettlementCreated": "Liquidación"
   },
   "tools": {
     "title": "Herramientas de administración",
@@ -191,11 +191,11 @@
     "title": "Registros del servidor",
     "entries": "{count} entradas",
     "filterPlaceholder": "Filtrar registros...",
-    "pauseRefresh": "Pausar actualización automática",
-    "resumeRefresh": "Reanudar actualización automática",
     "scrollToBottom": "Ir al final",
     "noEntries": "No se encontraron entradas de registro",
-    "autoRefreshPaused": "Actualización automática pausada"
+    "autoRefreshPaused": "Actualización automática pausada",
+    "pauseAutoRefresh": "Pausar actualización automática",
+    "resumeAutoRefresh": "Reanudar actualización automática"
   },
   "audit": {
     "title": "Registro de auditoría",
@@ -215,7 +215,6 @@
     "actionInviteRevoked": "Invitación revocada",
     "actionAnnouncement": "Anuncio",
     "actionRegModeChanged": "Modo de registro cambiado",
-    "actionDataExport": "Exportación de datos",
     "actionTestEmail": "Correo de prueba",
     "actionSplitsCleaned": "Divisiones limpiadas",
     "actionMeridianLogin": "Inicio de sesión Meridian",
@@ -223,8 +222,9 @@
     "actionMeridianLoginFailed": "Inicio de sesión Meridian fallido",
     "actionMeridianLogout": "Cierre de sesión Meridian",
     "actionNotifyPrefChanged": "Preferencia de notificación cambiada",
-    "actionAiProviderTest": "Prueba de proveedor IA",
-    "filesDeleted": "{count} archivos"
+    "filesDeleted": "{count} archivos",
+    "actionAIProviderTest": "Prueba de proveedor IA",
+    "actionExportCreated": "Exportación de datos"
   },
   "meridianAuth": {
     "title": "Autenticación Meridian",

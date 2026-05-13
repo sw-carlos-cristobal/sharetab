@@ -21,9 +21,7 @@
   "users": {
     "title": "Benutzerverwaltung",
     "count": "{count} Benutzer",
-    "searchLabel": "Benutzer suchen",
     "searchPlaceholder": "Nach Name oder E-Mail suchen...",
-    "loadFailed": "Benutzer konnten nicht geladen werden.",
     "retry": "Erneut versuchen",
     "noUsers": "Keine Benutzer gefunden.",
     "filterAll": "Alle",
@@ -47,19 +45,19 @@
     "deleteDescription": "Sind Sie sicher, dass Sie {name} löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden. Alle Daten werden dauerhaft entfernt.",
     "cancel": "Abbrechen",
     "delete": "Löschen",
-    "loadMore": "Mehr laden"
+    "loadMore": "Mehr laden",
+    "errorLoading": "Benutzer konnten nicht geladen werden.",
+    "searchAriaLabel": "Benutzer suchen"
   },
   "groups": {
     "title": "Gruppenübersicht",
     "count": "{count} Gruppen",
     "expenses": "{count} Ausgaben",
     "settlements": "{count} Abrechnungen",
-    "searchLabel": "Gruppen suchen",
     "searchPlaceholder": "Nach Gruppenname suchen...",
     "filterAll": "Alle",
     "filterActive": "Aktiv",
     "filterArchived": "Archiviert",
-    "loadFailed": "Gruppen konnten nicht geladen werden.",
     "retry": "Erneut versuchen",
     "noGroups": "Keine Gruppen gefunden.",
     "colName": "Name",
@@ -75,7 +73,9 @@
     "deleteDescription": "Sind Sie sicher, dass Sie {name} löschen möchten? Alle Ausgaben, Abrechnungen und Aktivitäten in dieser Gruppe werden dauerhaft entfernt.",
     "cancel": "Abbrechen",
     "delete": "Löschen",
-    "loadMore": "Mehr laden"
+    "loadMore": "Mehr laden",
+    "errorLoading": "Gruppen konnten nicht geladen werden.",
+    "searchAriaLabel": "Gruppen suchen"
   },
   "registration": {
     "title": "Registrierungskontrolle",
@@ -147,14 +147,14 @@
     "typeExpenseCreated": "Ausgabe erstellt",
     "typeExpenseUpdated": "Ausgabe aktualisiert",
     "typeExpenseDeleted": "Ausgabe gelöscht",
-    "typeSettlement": "Abrechnung",
     "typeMemberJoined": "Mitglied beigetreten",
     "typeMemberLeft": "Mitglied ausgetreten",
     "typeGroupUpdated": "Gruppe aktualisiert",
-    "typePlaceholderAdded": "Platzhalter hinzugefügt",
     "typePlaceholderMerged": "Platzhalter zusammengeführt",
     "typeGroupArchived": "Gruppe archiviert",
-    "typeGroupUnarchived": "Gruppe dearchiviert"
+    "typeGroupUnarchived": "Gruppe dearchiviert",
+    "typePlaceholderCreated": "Platzhalter hinzugefügt",
+    "typeSettlementCreated": "Abrechnung"
   },
   "tools": {
     "title": "Admin-Werkzeuge",
@@ -191,11 +191,11 @@
     "title": "Server-Protokolle",
     "entries": "{count} Einträge",
     "filterPlaceholder": "Protokolle filtern...",
-    "pauseRefresh": "Automatische Aktualisierung pausieren",
-    "resumeRefresh": "Automatische Aktualisierung fortsetzen",
     "scrollToBottom": "Nach unten scrollen",
     "noEntries": "Keine Protokolleinträge gefunden",
-    "autoRefreshPaused": "Automatische Aktualisierung pausiert"
+    "autoRefreshPaused": "Automatische Aktualisierung pausiert",
+    "pauseAutoRefresh": "Automatische Aktualisierung pausieren",
+    "resumeAutoRefresh": "Automatische Aktualisierung fortsetzen"
   },
   "audit": {
     "title": "Prüfprotokoll",
@@ -215,7 +215,6 @@
     "actionInviteRevoked": "Einladung widerrufen",
     "actionAnnouncement": "Ankündigung",
     "actionRegModeChanged": "Registrierungsmodus geändert",
-    "actionDataExport": "Datenexport",
     "actionTestEmail": "Test-E-Mail",
     "actionSplitsCleaned": "Aufteilungen bereinigt",
     "actionMeridianLogin": "Meridian-Anmeldung",
@@ -223,8 +222,9 @@
     "actionMeridianLoginFailed": "Meridian-Anmeldung fehlgeschlagen",
     "actionMeridianLogout": "Meridian-Abmeldung",
     "actionNotifyPrefChanged": "Benachrichtigungspräferenz geändert",
-    "actionAiProviderTest": "KI-Anbietertest",
-    "filesDeleted": "{count} Dateien"
+    "filesDeleted": "{count} Dateien",
+    "actionAIProviderTest": "KI-Anbietertest",
+    "actionExportCreated": "Datenexport"
   },
   "meridianAuth": {
     "title": "Meridian-Authentifizierung",
