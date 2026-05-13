@@ -253,7 +253,7 @@
     "step1Label": "Steg 1:",
     "step2Label": "Steg 2:",
     "step2Hint": "Kopiera inte koden som visas på sidan — klistra in hela URL:en som börjar med https://platform.claude.com/...",
-    "step2Instruction": "Kopiera inte koden som visas på sidan — klistra in hela URL:en som börjar med https://platform.claude.com/..."
+    "step2Instruction": "Efter auktorisering, kopiera <emphasis>URL:en från webbläsarens adressfält</emphasis> och klistra in den nedan."
   },
   "codexAuth": {
     "title": "ChatGPT OAuth",

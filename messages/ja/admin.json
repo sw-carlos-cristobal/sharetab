@@ -253,7 +253,7 @@
     "step1Label": "ステップ1:",
     "step2Label": "ステップ2:",
     "step2Hint": "ページに表示されているコードをコピーしないでください — https://platform.claude.com/... で始まる完全なURLを貼り付けてください。",
-    "step2Instruction": "ページに表示されているコードをコピーしないでください — https://platform.claude.com/... で始まる完全なURLを貼り付けてください。"
+    "step2Instruction": "認証後、<emphasis>ブラウザのアドレスバーのURL</emphasis>をコピーして以下に貼り付けてください。"
   },
   "codexAuth": {
     "title": "ChatGPT OAuth",

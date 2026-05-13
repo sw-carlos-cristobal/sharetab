@@ -253,7 +253,7 @@
     "step1Label": "Schritt 1:",
     "step2Label": "Schritt 2:",
     "step2Hint": "Kopieren Sie nicht den auf der Seite angezeigten Code — fügen Sie die vollständige URL ein, die mit https://platform.claude.com/... beginnt.",
-    "step2Instruction": "Kopieren Sie nicht den auf der Seite angezeigten Code — fügen Sie die vollständige URL ein, die mit https://platform.claude.com/... beginnt."
+    "step2Instruction": "Kopieren Sie nach der Autorisierung die <emphasis>URL aus der Adressleiste Ihres Browsers</emphasis> und fügen Sie sie unten ein."
   },
   "codexAuth": {
     "title": "ChatGPT OAuth",

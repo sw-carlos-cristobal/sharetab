@@ -253,7 +253,7 @@
     "step1Label": "第 1 步：",
     "step2Label": "第 2 步：",
     "step2Hint": "请勿复制页面上显示的代码 — 请粘贴以 https://platform.claude.com/... 开头的完整 URL。",
-    "step2Instruction": "请勿复制页面上显示的代码 — 请粘贴以 https://platform.claude.com/... 开头的完整 URL。"
+    "step2Instruction": "授权后，复制<emphasis>浏览器地址栏中的URL</emphasis>并粘贴到下方。"
   },
   "codexAuth": {
     "title": "ChatGPT OAuth",
