@@ -40,14 +40,14 @@
     "unsuspend": "Réactiver {name}",
     "suspend": "Suspendre {name}",
     "impersonate": "Se faire passer pour {name}",
-    "deleteAction": "Supprimer {name}",
     "deleteTitle": "Supprimer l'utilisateur",
     "deleteDescription": "Êtes-vous sûr de vouloir supprimer {name} ? Cette action est irréversible. Toutes leurs données seront définitivement supprimées.",
     "cancel": "Annuler",
     "delete": "Supprimer",
     "loadMore": "Charger plus",
     "errorLoading": "Échec du chargement des utilisateurs.",
-    "searchAriaLabel": "Rechercher des utilisateurs"
+    "searchAriaLabel": "Rechercher des utilisateurs",
+    "deleteUser": "Supprimer {name}"
   },
   "groups": {
     "title": "Aperçu des groupes",
@@ -68,14 +68,14 @@
     "colStatus": "Statut",
     "statusArchived": "Archivé",
     "statusActive": "Actif",
-    "deleteAction": "Supprimer le groupe {name}",
     "deleteTitle": "Supprimer le groupe",
     "deleteDescription": "Êtes-vous sûr de vouloir supprimer {name} ? Toutes les dépenses, règlements et activités de ce groupe seront définitivement supprimés.",
     "cancel": "Annuler",
     "delete": "Supprimer",
     "loadMore": "Charger plus",
     "errorLoading": "Échec du chargement des groupes.",
-    "searchAriaLabel": "Rechercher des groupes"
+    "searchAriaLabel": "Rechercher des groupes",
+    "deleteGroup": "Supprimer le groupe {name}"
   },
   "registration": {
     "title": "Contrôle des inscriptions",
@@ -252,7 +252,8 @@
     "authExpired": "Authentification expirée",
     "step1Label": "Étape 1 :",
     "step2Label": "Étape 2 :",
-    "step2Hint": "Ne copiez pas le code affiché sur la page — collez l'URL complète commençant par https://platform.claude.com/..."
+    "step2Hint": "Ne copiez pas le code affiché sur la page — collez l'URL complète commençant par https://platform.claude.com/...",
+    "step2Instruction": "Ne copiez pas le code affiché sur la page — collez l'URL complète commençant par https://platform.claude.com/..."
   },
   "codexAuth": {
     "title": "ChatGPT OAuth",

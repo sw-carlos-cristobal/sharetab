@@ -40,14 +40,14 @@
     "unsuspend": "Unsuspend {name}",
     "suspend": "Suspend {name}",
     "impersonate": "Impersonate {name}",
-    "deleteAction": "Delete {name}",
     "deleteTitle": "Delete User",
     "deleteDescription": "Are you sure you want to delete {name}? This action cannot be undone. All their data will be permanently removed.",
     "cancel": "Cancel",
     "delete": "Delete",
     "loadMore": "Load more",
     "errorLoading": "Failed to load users.",
-    "searchAriaLabel": "Search users"
+    "searchAriaLabel": "Search users",
+    "deleteUser": "Delete {name}"
   },
   "groups": {
     "title": "Group Overview",
@@ -68,14 +68,14 @@
     "colStatus": "Status",
     "statusArchived": "Archived",
     "statusActive": "Active",
-    "deleteAction": "Delete group {name}",
     "deleteTitle": "Delete Group",
     "deleteDescription": "Are you sure you want to delete {name}? This will permanently remove all expenses, settlements, and activity in this group.",
     "cancel": "Cancel",
     "delete": "Delete",
     "loadMore": "Load more",
     "errorLoading": "Failed to load groups.",
-    "searchAriaLabel": "Search groups"
+    "searchAriaLabel": "Search groups",
+    "deleteGroup": "Delete group {name}"
   },
   "registration": {
     "title": "Registration Control",
@@ -252,7 +252,8 @@
     "authExpired": "Authentication expired",
     "step1Label": "Step 1:",
     "step2Label": "Step 2:",
-    "step2Hint": "Do not copy the code shown on the page — paste the full URL starting with https://platform.claude.com/..."
+    "step2Hint": "Do not copy the code shown on the page — paste the full URL starting with https://platform.claude.com/...",
+    "step2Instruction": "Do not copy the code shown on the page — paste the full URL starting with https://platform.claude.com/..."
   },
   "codexAuth": {
     "title": "ChatGPT OAuth",

@@ -40,14 +40,14 @@
     "unsuspend": "{name} 정지 해제",
     "suspend": "{name} 정지",
     "impersonate": "{name}으로 가장",
-    "deleteAction": "{name} 삭제",
     "deleteTitle": "사용자 삭제",
     "deleteDescription": "{name}을(를) 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다. 모든 데이터가 영구적으로 삭제됩니다.",
     "cancel": "취소",
     "delete": "삭제",
     "loadMore": "더 보기",
     "errorLoading": "사용자를 불러오지 못했습니다.",
-    "searchAriaLabel": "사용자 검색"
+    "searchAriaLabel": "사용자 검색",
+    "deleteUser": "{name} 삭제"
   },
   "groups": {
     "title": "그룹 개요",
@@ -68,14 +68,14 @@
     "colStatus": "상태",
     "statusArchived": "보관됨",
     "statusActive": "활성",
-    "deleteAction": "그룹 {name} 삭제",
     "deleteTitle": "그룹 삭제",
     "deleteDescription": "{name}을(를) 삭제하시겠습니까? 이 그룹의 모든 지출, 정산 및 활동 기록이 영구적으로 삭제됩니다.",
     "cancel": "취소",
     "delete": "삭제",
     "loadMore": "더 보기",
     "errorLoading": "그룹을 불러오지 못했습니다.",
-    "searchAriaLabel": "그룹 검색"
+    "searchAriaLabel": "그룹 검색",
+    "deleteGroup": "그룹 {name} 삭제"
   },
   "registration": {
     "title": "가입 관리",
@@ -252,7 +252,8 @@
     "authExpired": "인증 만료됨",
     "step1Label": "1단계:",
     "step2Label": "2단계:",
-    "step2Hint": "페이지에 표시된 코드를 복사하지 마세요 — https://platform.claude.com/...으로 시작하는 전체 URL을 붙여넣으세요."
+    "step2Hint": "페이지에 표시된 코드를 복사하지 마세요 — https://platform.claude.com/...으로 시작하는 전체 URL을 붙여넣으세요.",
+    "step2Instruction": "페이지에 표시된 코드를 복사하지 마세요 — https://platform.claude.com/...으로 시작하는 전체 URL을 붙여넣으세요."
   },
   "codexAuth": {
     "title": "ChatGPT OAuth",
