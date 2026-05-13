@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import {
   Dialog,
@@ -23,6 +24,7 @@ export function InviteDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const t = useTranslations("groups");
 
   const createInvite = trpc.groups.createInvite.useMutation();
 
@@ -47,16 +49,16 @@ export function InviteDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Invite to group</DialogTitle>
+          <DialogTitle>{t("invite.title")}</DialogTitle>
           <DialogDescription>
-            Generate an invite link to share with friends. Links expire after 7 days.
+            {t("invite.description")}
           </DialogDescription>
         </DialogHeader>
 
         {!createInvite.data ? (
           <Button onClick={handleGenerate} disabled={createInvite.isPending}>
             <Link className="mr-2 h-4 w-4" />
-            {createInvite.isPending ? "Generating..." : "Generate invite link"}
+            {createInvite.isPending ? t("invite.generating") : t("invite.generateLink")}
           </Button>
         ) : (
           <div className="space-y-3">
@@ -66,7 +68,7 @@ export function InviteDialog({
                 value={getInviteUrl(createInvite.data.token)}
                 className="font-mono text-xs"
               />
-              <Button variant="outline" size="icon" aria-label="Copy invite link" onClick={handleCopy}>
+              <Button variant="outline" size="icon" aria-label={t("invite.copyLink")} onClick={handleCopy}>
                 {copied ? (
                   <Check className="h-4 w-4 text-green-600" />
                 ) : (
@@ -75,7 +77,7 @@ export function InviteDialog({
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Anyone with this link can join the group.
+              {t("invite.linkInfo")}
             </p>
           </div>
         )}
