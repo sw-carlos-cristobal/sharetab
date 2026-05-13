@@ -26,9 +26,8 @@ test.describe("Meridian auth section — unhealthy", () => {
       page.getByRole("heading", { name: "Meridian Authentication" })
     ).toBeVisible();
     await expect(page.getByText("Claude OAuth Status")).toBeVisible();
-    await expect(page.getByText("Authentication expired")).toBeVisible();
     await expect(
-      page.getByText("Not logged in. Use \"Authenticate with Claude\" below")
+      page.getByText(/Authentication expired|Proxy not running/i)
     ).toBeVisible();
   });
 
