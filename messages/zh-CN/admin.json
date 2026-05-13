@@ -171,7 +171,8 @@
     "cleanupLoading": "加载中...",
     "cleanupStats": "共 {total} 个访客分账中有 {expired} 个已过期。",
     "cleanupButton": "清除已过期",
-    "cleanupSuccess": "已删除 {count} 个过期分账"
+    "cleanupSuccess": "已删除 {count} 个过期分账",
+    "unknownError": "未知错误"
   },
   "authExpiry": {
     "title": "认证警报",
@@ -183,7 +184,8 @@
     "every24Hours": "每 24 小时",
     "saving": "保存中...",
     "claudeOAuth": "Claude OAuth",
-    "chatgptOAuth": "ChatGPT OAuth"
+    "chatgptOAuth": "ChatGPT OAuth",
+    "or": "或"
   },
   "serverLogs": {
     "title": "服务器日志",
@@ -251,7 +253,8 @@
     "changeFile": "更换",
     "uploadFile": "上传",
     "test": "测试",
-    "testSuccess": "在 {duration}ms 内响应"
+    "testSuccess": "在 {duration}ms 内响应",
+    "dismiss": "关闭"
   },
   "codexAuth": {
     "title": "ChatGPT OAuth",

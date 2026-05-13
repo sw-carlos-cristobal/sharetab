@@ -190,7 +190,7 @@ export function RegistrationControlSection() {
                           <Badge variant="destructive">{t("registration.statusRevoked")}</Badge>
                         ) : inv.usedAt ? (
                           <Badge variant="secondary">
-                            {t("registration.statusUsedBy", { name: inv.usedBy?.name ?? inv.usedBy?.email })}
+                            {t("registration.statusUsedBy", { name: inv.usedBy?.name ?? inv.usedBy?.email ?? "" })}
                           </Badge>
                         ) : inv.isActive ? (
                           <Badge variant="default">{t("registration.statusActive")}</Badge>

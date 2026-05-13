@@ -171,7 +171,8 @@
     "cleanupLoading": "Cargando...",
     "cleanupStats": "{expired} expirados de {total} divisiones de invitados en total.",
     "cleanupButton": "Purgar expirados",
-    "cleanupSuccess": "{count} divisiones expiradas eliminadas"
+    "cleanupSuccess": "{count} divisiones expiradas eliminadas",
+    "unknownError": "Error desconocido"
   },
   "authExpiry": {
     "title": "Alertas de autenticación",
@@ -183,7 +184,8 @@
     "every24Hours": "Cada 24 horas",
     "saving": "Guardando...",
     "claudeOAuth": "Claude OAuth",
-    "chatgptOAuth": "ChatGPT OAuth"
+    "chatgptOAuth": "ChatGPT OAuth",
+    "or": "o"
   },
   "serverLogs": {
     "title": "Registros del servidor",
@@ -251,7 +253,8 @@
     "changeFile": "Cambiar",
     "uploadFile": "Subir",
     "test": "Probar",
-    "testSuccess": "Respondió en {duration}ms"
+    "testSuccess": "Respondió en {duration}ms",
+    "dismiss": "Cerrar"
   },
   "codexAuth": {
     "title": "ChatGPT OAuth",

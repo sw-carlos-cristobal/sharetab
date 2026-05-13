@@ -386,7 +386,7 @@ export function UserManagementSection({
             <DialogTitle>{t("users.deleteTitle")}</DialogTitle>
             <DialogDescription>
               {t.rich("users.deleteDescription", {
-                name: deleteTarget?.name ?? deleteTarget?.email,
+                name: deleteTarget?.name ?? deleteTarget?.email ?? "",
                 strong: (chunks) => <strong>{chunks}</strong>,
               })}
             </DialogDescription>

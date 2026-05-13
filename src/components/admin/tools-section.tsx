@@ -48,7 +48,7 @@ export function ToolsSection() {
       setExportResult({ message: t("tools.exportSuccess"), isError: false });
     } catch (err) {
       setExportResult({
-        message: t("tools.exportFailed", { error: err instanceof Error ? err.message : 'Unknown error' }),
+        message: t("tools.exportFailed", { error: err instanceof Error ? err.message : t("tools.unknownError") }),
         isError: true,
       });
     } finally {

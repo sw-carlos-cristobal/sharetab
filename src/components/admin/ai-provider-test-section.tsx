@@ -163,7 +163,7 @@ export function AIProviderTestSection() {
             <div className="space-y-2" data-testid="ai-test-success">
               <p className="flex items-center gap-1 text-sm text-green-600" data-testid="ai-test-success-msg">
                 <CheckCircle2 className="h-4 w-4" />
-                {t("aiProviderTest.success", { provider: activeProvider, duration: testProvider.data.durationMs })}
+                {t("aiProviderTest.success", { provider: activeProvider ?? "", duration: testProvider.data.durationMs })}
               </p>
               <pre className="max-h-96 overflow-auto rounded-md bg-muted p-3 text-xs" data-testid="ai-test-result-json">
                 {JSON.stringify(testProvider.data.result, null, 2)}
@@ -175,7 +175,7 @@ export function AIProviderTestSection() {
             <div className="space-y-2" data-testid="ai-test-error">
               <p className="flex items-center gap-1 text-sm text-destructive" data-testid="ai-test-error-msg">
                 <AlertCircle className="h-4 w-4" />
-                {t("aiProviderTest.failed", { provider: activeProvider, error: testProvider.error.message })}
+                {t("aiProviderTest.failed", { provider: activeProvider ?? "", error: testProvider.error.message })}
               </p>
             </div>
           )}

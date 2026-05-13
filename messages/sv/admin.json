@@ -171,7 +171,8 @@
     "cleanupLoading": "Laddar...",
     "cleanupStats": "{expired} utgångna av {total} totala gästdelningar.",
     "cleanupButton": "Rensa utgångna",
-    "cleanupSuccess": "{count} utgångna delningar borttagna"
+    "cleanupSuccess": "{count} utgångna delningar borttagna",
+    "unknownError": "Okänt fel"
   },
   "authExpiry": {
     "title": "Autentiseringsvarningar",
@@ -183,7 +184,8 @@
     "every24Hours": "Var 24:e timme",
     "saving": "Sparar...",
     "claudeOAuth": "Claude OAuth",
-    "chatgptOAuth": "ChatGPT OAuth"
+    "chatgptOAuth": "ChatGPT OAuth",
+    "or": "eller"
   },
   "serverLogs": {
     "title": "Serverloggar",
@@ -251,7 +253,8 @@
     "changeFile": "Byt",
     "uploadFile": "Ladda upp",
     "test": "Testa",
-    "testSuccess": "Svarade på {duration}ms"
+    "testSuccess": "Svarade på {duration}ms",
+    "dismiss": "Stäng"
   },
   "codexAuth": {
     "title": "ChatGPT OAuth",

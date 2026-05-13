@@ -171,7 +171,8 @@
     "cleanupLoading": "読み込み中...",
     "cleanupStats": "ゲスト割り勘{total}件中{expired}件が期限切れです。",
     "cleanupButton": "期限切れを削除",
-    "cleanupSuccess": "期限切れの割り勘を{count}件削除しました"
+    "cleanupSuccess": "期限切れの割り勘を{count}件削除しました",
+    "unknownError": "不明なエラー"
   },
   "authExpiry": {
     "title": "認証アラート",
@@ -183,7 +184,8 @@
     "every24Hours": "24時間ごと",
     "saving": "保存中...",
     "claudeOAuth": "Claude OAuth",
-    "chatgptOAuth": "ChatGPT OAuth"
+    "chatgptOAuth": "ChatGPT OAuth",
+    "or": "または"
   },
   "serverLogs": {
     "title": "サーバーログ",
@@ -251,7 +253,8 @@
     "changeFile": "変更",
     "uploadFile": "アップロード",
     "test": "テスト",
-    "testSuccess": "{duration}msで応答"
+    "testSuccess": "{duration}msで応答",
+    "dismiss": "閉じる"
   },
   "codexAuth": {
     "title": "ChatGPT OAuth",

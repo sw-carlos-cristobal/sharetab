@@ -306,7 +306,7 @@ export function GroupOverviewSection() {
             <DialogTitle>{t("groups.deleteTitle")}</DialogTitle>
             <DialogDescription>
               {t.rich("groups.deleteDescription", {
-                name: deleteTarget?.name,
+                name: deleteTarget?.name ?? "",
                 strong: (chunks) => <strong>{chunks}</strong>,
               })}
             </DialogDescription>

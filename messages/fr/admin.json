@@ -171,7 +171,8 @@
     "cleanupLoading": "Chargement...",
     "cleanupStats": "{expired} expirés sur {total} partages invités au total.",
     "cleanupButton": "Purger les expirés",
-    "cleanupSuccess": "{count} partages expirés supprimés"
+    "cleanupSuccess": "{count} partages expirés supprimés",
+    "unknownError": "Erreur inconnue"
   },
   "authExpiry": {
     "title": "Alertes d'authentification",
@@ -183,7 +184,8 @@
     "every24Hours": "Toutes les 24 heures",
     "saving": "Enregistrement...",
     "claudeOAuth": "Claude OAuth",
-    "chatgptOAuth": "ChatGPT OAuth"
+    "chatgptOAuth": "ChatGPT OAuth",
+    "or": "ou"
   },
   "serverLogs": {
     "title": "Journaux du serveur",
@@ -251,7 +253,8 @@
     "changeFile": "Changer",
     "uploadFile": "Télécharger",
     "test": "Tester",
-    "testSuccess": "Répondu en {duration}ms"
+    "testSuccess": "Répondu en {duration}ms",
+    "dismiss": "Fermer"
   },
   "codexAuth": {
     "title": "ChatGPT OAuth",

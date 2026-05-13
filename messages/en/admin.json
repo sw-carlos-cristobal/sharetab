@@ -171,7 +171,8 @@
     "cleanupLoading": "Loading...",
     "cleanupStats": "{expired} expired of {total} total guest splits.",
     "cleanupButton": "Purge Expired",
-    "cleanupSuccess": "Deleted {count} expired splits"
+    "cleanupSuccess": "Deleted {count} expired splits",
+    "unknownError": "Unknown error"
   },
   "authExpiry": {
     "title": "Authentication Alerts",
@@ -183,7 +184,8 @@
     "every24Hours": "Every 24 hours",
     "saving": "Saving...",
     "claudeOAuth": "Claude OAuth",
-    "chatgptOAuth": "ChatGPT OAuth"
+    "chatgptOAuth": "ChatGPT OAuth",
+    "or": "or"
   },
   "serverLogs": {
     "title": "Server Logs",
@@ -251,7 +253,8 @@
     "changeFile": "Change",
     "uploadFile": "Upload",
     "test": "Test",
-    "testSuccess": "Responded in {duration}ms"
+    "testSuccess": "Responded in {duration}ms",
+    "dismiss": "Dismiss"
   },
   "codexAuth": {
     "title": "ChatGPT OAuth",

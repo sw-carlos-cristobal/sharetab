@@ -171,7 +171,8 @@
     "cleanupLoading": "Laden...",
     "cleanupStats": "{expired} abgelaufen von {total} Gast-Aufteilungen insgesamt.",
     "cleanupButton": "Abgelaufene löschen",
-    "cleanupSuccess": "{count} abgelaufene Aufteilungen gelöscht"
+    "cleanupSuccess": "{count} abgelaufene Aufteilungen gelöscht",
+    "unknownError": "Unbekannter Fehler"
   },
   "authExpiry": {
     "title": "Authentifizierungswarnungen",
@@ -183,7 +184,8 @@
     "every24Hours": "Alle 24 Stunden",
     "saving": "Wird gespeichert...",
     "claudeOAuth": "Claude OAuth",
-    "chatgptOAuth": "ChatGPT OAuth"
+    "chatgptOAuth": "ChatGPT OAuth",
+    "or": "oder"
   },
   "serverLogs": {
     "title": "Server-Protokolle",
@@ -251,7 +253,8 @@
     "changeFile": "Ändern",
     "uploadFile": "Hochladen",
     "test": "Testen",
-    "testSuccess": "Antwort in {duration}ms"
+    "testSuccess": "Antwort in {duration}ms",
+    "dismiss": "Schließen"
   },
   "codexAuth": {
     "title": "ChatGPT OAuth",

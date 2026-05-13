@@ -56,7 +56,7 @@ export function AuthExpiryNotificationsSection() {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            {t("authExpiry.description", { providers: providerLabels.join(" or ") })}
+            {t("authExpiry.description", { providers: providerLabels.join(` ${t("authExpiry.or")} `) })}
           </p>
           <Select
             value={notifyPref.data?.interval ?? "once"}
