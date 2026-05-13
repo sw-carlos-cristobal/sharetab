@@ -249,7 +249,7 @@ export default function GroupSettingsPage({
                         <button
                           type="button"
                           onClick={() => {
-                            if (confirm(t("settings.removeConfirm", { name: m.user.placeholderName ?? m.user.name }))) {
+                            if (confirm(t("settings.removeConfirm", { name: m.user.placeholderName ?? m.user.name ?? "" }))) {
                               removeMember.mutate({ groupId, userId: m.user.id });
                             }
                           }}
