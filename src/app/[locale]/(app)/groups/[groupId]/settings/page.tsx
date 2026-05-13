@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ export default function GroupSettingsPage({
 }) {
   const { groupId } = use(params);
   const router = useRouter();
+  const t = useTranslations("groups");
   const group = trpc.groups.get.useQuery({ groupId });
   const utils = trpc.useUtils();
 
@@ -98,7 +100,7 @@ export default function GroupSettingsPage({
   }
 
   if (group.isLoading) return <LoadingSpinner />;
-  if (!group.data) return <p className="text-destructive">Group not found.</p>;
+  if (!group.data) return <p className="text-destructive">{t("settings.notFound")}</p>;
 
   const placeholders = group.data.members.filter((m) => m.user.isPlaceholder);
   const realMembers = group.data.members.filter((m) => !m.user.isPlaceholder);
@@ -106,19 +108,19 @@ export default function GroupSettingsPage({
   return (
     <div className="mx-auto max-w-lg space-y-6">
       <div className="flex items-center gap-2">
-        <Button variant="ghost" size="icon" aria-label="Back to group" nativeButton={false} render={<Link href={`/groups/${groupId}`} />}>
+        <Button variant="ghost" size="icon" aria-label={t("settings.backToGroup")} nativeButton={false} render={<Link href={`/groups/${groupId}`} />}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h1 className="text-2xl font-bold">Group Settings</h1>
+        <h1 className="text-2xl font-bold">{t("settings.title")}</h1>
       </div>
 
       {group.data.archivedAt && (
         <div className="flex items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-200">
           <Archive className="h-5 w-5 shrink-0" />
           <div className="flex-1">
-            <p className="font-medium">This group is archived</p>
+            <p className="font-medium">{t("settings.archived")}</p>
             <p className="text-amber-700 dark:text-amber-300">
-              Archived on {new Date(group.data.archivedAt).toLocaleDateString()}. Expenses cannot be added.
+              {t("settings.archivedOn", { date: new Date(group.data.archivedAt).toLocaleDateString() })}
             </p>
           </div>
           <Button
@@ -128,19 +130,19 @@ export default function GroupSettingsPage({
             disabled={unarchiveGroup.isPending}
           >
             <ArchiveRestore className="mr-2 h-4 w-4" />
-            Unarchive
+            {t("settings.unarchive")}
           </Button>
         </div>
       )}
 
       <Card>
         <CardHeader>
-          <CardTitle>Details</CardTitle>
+          <CardTitle>{t("settings.details")}</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSave} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Name</Label>
+              <Label htmlFor="name">{t("settings.name")}</Label>
               <Input
                 id="name"
                 value={name}
@@ -149,7 +151,7 @@ export default function GroupSettingsPage({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
+              <Label htmlFor="description">{t("settings.description")}</Label>
               <Input
                 id="description"
                 value={description}
@@ -157,10 +159,10 @@ export default function GroupSettingsPage({
               />
             </div>
             <Button type="submit" disabled={updateGroup.isPending}>
-              {updateGroup.isPending ? "Saving..." : "Save changes"}
+              {updateGroup.isPending ? t("settings.saving") : t("settings.saveChanges")}
             </Button>
             {updateGroup.isSuccess && (
-              <p className="text-sm text-green-600">Saved!</p>
+              <p className="text-sm text-green-600">{t("settings.saved")}</p>
             )}
           </form>
         </CardContent>
@@ -170,24 +172,22 @@ export default function GroupSettingsPage({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <UserPlus className="h-4 w-4" />
-            Add Member
+            {t("settings.addMemberTitle")}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Add someone to the group who doesn&apos;t have an account yet.
-            They can be assigned expenses and will show up in splits.
-            If they sign up later, their data can be merged into their real account.
+            {t("settings.addMemberDescription")}
           </p>
           <form onSubmit={handleAddPlaceholder} className="flex gap-2">
             <Input
-              placeholder="Name (e.g., Dave)"
+              placeholder={t("settings.namePlaceholder")}
               value={placeholderName}
               onChange={(e) => setPlaceholderName(e.target.value)}
               required
             />
             <Button type="submit" disabled={addPlaceholder.isPending}>
-              {addPlaceholder.isPending ? "Adding..." : "Add"}
+              {addPlaceholder.isPending ? t("settings.adding") : t("settings.add")}
             </Button>
           </form>
           {addPlaceholder.error && (
@@ -197,7 +197,7 @@ export default function GroupSettingsPage({
           {placeholders.length > 0 && (
             <div className="space-y-2 pt-2">
               <p className="text-sm font-medium text-muted-foreground">
-                Placeholder members ({placeholders.length})
+                {t("settings.placeholderMembers", { count: placeholders.length })}
               </p>
               {placeholders.map((m) => (
                 <div
@@ -236,7 +236,7 @@ export default function GroupSettingsPage({
                     <>
                       <div className="flex items-center gap-2">
                         <span className="text-sm">{m.user.placeholderName ?? m.user.name}</span>
-                        <Badge variant="outline" className="text-[10px]">Pending</Badge>
+                        <Badge variant="outline" className="text-[10px]">{t("settings.pending")}</Badge>
                       </div>
                       <div className="flex items-center gap-1">
                         <button
@@ -249,7 +249,7 @@ export default function GroupSettingsPage({
                         <button
                           type="button"
                           onClick={() => {
-                            if (confirm(`Remove "${m.user.placeholderName ?? m.user.name}"?`)) {
+                            if (confirm(t("settings.removeConfirm", { name: m.user.placeholderName ?? m.user.name ?? "" }))) {
                               removeMember.mutate({ groupId, userId: m.user.id });
                             }
                           }}
@@ -271,43 +271,43 @@ export default function GroupSettingsPage({
 
       <Card className="border-destructive/50">
         <CardHeader>
-          <CardTitle className="text-destructive">Danger Zone</CardTitle>
+          <CardTitle className="text-destructive">{t("settings.dangerZone")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           {!group.data.archivedAt && (
             <div>
               <p className="mb-2 text-sm text-muted-foreground">
-                Archive this group to hide it from your dashboard. You can unarchive it at any time.
+                {t("settings.archiveDescription")}
               </p>
               <Button
                 variant="outline"
                 onClick={() => {
-                  if (confirm("Archive this group? It will be hidden from your dashboard.")) {
+                  if (confirm(t("settings.archiveConfirm"))) {
                     archiveGroup.mutate({ groupId });
                   }
                 }}
                 disabled={archiveGroup.isPending}
               >
                 <Archive className="mr-2 h-4 w-4" />
-                {archiveGroup.isPending ? "Archiving..." : "Archive group"}
+                {archiveGroup.isPending ? t("settings.archiving") : t("settings.archiveGroup")}
               </Button>
             </div>
           )}
           <div>
             <p className="mb-2 text-sm text-muted-foreground">
-              Deleting a group removes all expenses, settlements, and member data permanently.
+              {t("settings.deleteDescription")}
             </p>
           <Button
             variant="destructive"
             onClick={() => {
-              if (confirm("Are you sure? This cannot be undone.")) {
+              if (confirm(t("settings.deleteConfirm"))) {
                 deleteGroup.mutate({ groupId });
               }
             }}
             disabled={deleteGroup.isPending}
           >
             <Trash2 className="mr-2 h-4 w-4" />
-            {deleteGroup.isPending ? "Deleting..." : "Delete group"}
+            {deleteGroup.isPending ? t("settings.deleting") : t("settings.deleteGroup")}
           </Button>
           </div>
         </CardContent>

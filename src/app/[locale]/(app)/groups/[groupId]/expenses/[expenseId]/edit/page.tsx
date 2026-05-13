@@ -1,7 +1,7 @@
 "use client";
 
-import { use, useState, useEffect } from "react";
-import { useLocale } from "next-intl";
+import { use, useMemo, useState, useEffect } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { trpc } from "@/lib/trpc";
 import { parseToCents, centsToDecimal } from "@/lib/money";
@@ -30,13 +30,6 @@ type ShareEntry = {
   percentage?: number;
 };
 
-const SPLIT_MODES: { value: SplitMode; label: string; description: string }[] = [
-  { value: "EQUAL", label: "Equal", description: "Split evenly among selected members" },
-  { value: "EXACT", label: "Exact", description: "Enter each person's share" },
-  { value: "PERCENTAGE", label: "Percentage", description: "Split by percentage" },
-  { value: "SHARES", label: "Shares", description: "Split by share units" },
-];
-
 export default function EditExpensePage({
   params,
 }: {
@@ -45,8 +38,16 @@ export default function EditExpensePage({
   const { groupId, expenseId } = use(params);
   const router = useRouter();
   const locale = useLocale();
+  const t = useTranslations("expenses");
   const group = trpc.groups.get.useQuery({ groupId });
   const expense = trpc.expenses.get.useQuery({ groupId, expenseId });
+
+  const splitModes = useMemo(() => [
+    { value: "EQUAL" as SplitMode, label: t("new.splitEqual"), description: t("new.splitEqualDescription") },
+    { value: "EXACT" as SplitMode, label: t("new.splitExact"), description: t("new.splitExactDescription") },
+    { value: "PERCENTAGE" as SplitMode, label: t("new.splitPercentage"), description: t("new.splitPercentageDescription") },
+    { value: "SHARES" as SplitMode, label: t("new.splitShares"), description: t("new.splitSharesDescription") },
+  ], [t]);
 
   const [title, setTitle] = useState("");
   const [amountStr, setAmountStr] = useState("");
@@ -56,7 +57,6 @@ export default function EditExpensePage({
   const [shares, setShares] = useState<ShareEntry[]>([]);
   const [loaded, setLoaded] = useState(false);
 
-  // Pre-fill form with existing expense data
   useEffect(() => {
     if (expense.data && !loaded) {
       const e = expense.data;
@@ -108,12 +108,12 @@ export default function EditExpensePage({
     return (
       <div className="mx-auto max-w-md py-16 text-center">
         <ArrowLeft className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-        <h2 className="mb-2 text-lg font-semibold">Expense not found</h2>
+        <h2 className="mb-2 text-lg font-semibold">{t("detail.notFound")}</h2>
         <p className="mb-4 text-sm text-muted-foreground">
-          This expense doesn&apos;t exist or has been deleted.
+          {t("detail.notFoundDescription")}
         </p>
         <Button nativeButton={false} render={<Link href={`/groups/${groupId}`} />}>
-          Back to Group
+          {t("detail.backToGroup")}
         </Button>
       </div>
     );
@@ -124,32 +124,31 @@ export default function EditExpensePage({
   return (
     <div className="mx-auto max-w-lg space-y-6">
       <div className="flex items-center gap-2">
-        <Button variant="ghost" size="icon" aria-label="Back to expense" nativeButton={false} render={<Link href={`/groups/${groupId}/expenses/${expenseId}`} />}>
+        <Button variant="ghost" size="icon" aria-label={t("edit.backToExpense")} nativeButton={false} render={<Link href={`/groups/${groupId}/expenses/${expenseId}`} />}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h1 className="text-2xl font-bold">Edit Expense</h1>
+        <h1 className="text-2xl font-bold">{t("edit.title")}</h1>
       </div>
 
       {isItemSplit && (
         <Card className="border-amber-300">
           <CardContent className="py-4 text-sm text-amber-700">
-            This expense was created from a receipt scan (ITEM split). Editing will
-            convert it to a standard split mode.
+            {t("edit.itemSplitWarning")}
           </CardContent>
         </Card>
       )}
 
       <Card>
         <CardHeader>
-          <CardTitle>Expense details</CardTitle>
+          <CardTitle>{t("new.expenseDetails")}</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="title">Description</Label>
+              <Label htmlFor="title">{t("new.description")}</Label>
               <Input
                 id="title"
-                placeholder="e.g., Dinner, Groceries, Uber"
+                placeholder={t("new.descriptionPlaceholder")}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 required
@@ -157,13 +156,13 @@ export default function EditExpensePage({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="amount">Amount</Label>
+              <Label htmlFor="amount">{t("new.amount")}</Label>
               <Input
                 id="amount"
                 type="number"
                 step="0.01"
                 min="0.01"
-                placeholder="0.00"
+                placeholder={t("new.amountPlaceholder")}
                 value={amountStr}
                 onChange={(e) => setAmountStr(e.target.value)}
                 required
@@ -171,17 +170,17 @@ export default function EditExpensePage({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="category">Category (optional)</Label>
+              <Label htmlFor="category">{t("new.category")}</Label>
               <Input
                 id="category"
-                placeholder="e.g., Food, Transport"
+                placeholder={t("new.categoryPlaceholder")}
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="paidBy">Paid by</Label>
+              <Label htmlFor="paidBy">{t("new.paidBy")}</Label>
               <select
                 id="paidBy"
                 value={paidById}
@@ -189,19 +188,19 @@ export default function EditExpensePage({
                 required
                 className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
-                <option value="">Select member</option>
+                <option value="">{t("new.selectMember")}</option>
                 {members.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.name ?? "Unnamed"}
+                    {m.name ?? t("new.unnamed")}
                   </option>
                 ))}
               </select>
             </div>
 
             <div className="space-y-2">
-              <Label>Split mode</Label>
+              <Label>{t("new.splitType")}</Label>
               <div className="grid grid-cols-2 gap-2">
-                {SPLIT_MODES.map((mode) => (
+                {splitModes.map((mode) => (
                   <button
                     key={mode.value}
                     type="button"
@@ -222,7 +221,7 @@ export default function EditExpensePage({
             </div>
 
             <div className="space-y-2">
-              <Label>Split between</Label>
+              <Label>{t("new.splitBetween")}</Label>
               {splitMode === "EQUAL" && (
                 <EqualSplit
                   members={members}
@@ -272,7 +271,7 @@ export default function EditExpensePage({
               className="w-full"
               disabled={updateExpense.isPending || amountCents <= 0 || shares.length === 0}
             >
-              {updateExpense.isPending ? "Saving..." : "Save Changes"}
+              {updateExpense.isPending ? t("edit.submitting") : t("edit.submit")}
             </Button>
           </form>
         </CardContent>

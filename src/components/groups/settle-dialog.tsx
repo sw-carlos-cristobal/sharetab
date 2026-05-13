@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { parseToCents, formatCents } from "@/lib/money";
 import {
@@ -37,6 +37,7 @@ export function SettleDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const locale = useLocale();
+  const t = useTranslations("groups");
   const [fromId, setFromId] = useState(suggestedFrom ?? "");
   const [toId, setToId] = useState(suggestedTo ?? "");
   const [amountStr, setAmountStr] = useState(
@@ -75,15 +76,15 @@ export function SettleDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Record a payment</DialogTitle>
+          <DialogTitle>{t("settle.title")}</DialogTitle>
           <DialogDescription>
-            Record a payment between two group members.
+            {t("settle.description")}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="from">From</Label>
+            <Label htmlFor="from">{t("settle.from")}</Label>
             <select
               id="from"
               value={fromId}
@@ -91,17 +92,17 @@ export function SettleDialog({
               required
               className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
-              <option value="">Select member</option>
+              <option value="">{t("settle.selectMember")}</option>
               {members.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.name ?? "Unnamed"}
+                  {m.name ?? t("settle.unnamed")}
                 </option>
               ))}
             </select>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="to">To</Label>
+            <Label htmlFor="to">{t("settle.to")}</Label>
             <select
               id="to"
               value={toId}
@@ -109,17 +110,17 @@ export function SettleDialog({
               required
               className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
-              <option value="">Select member</option>
+              <option value="">{t("settle.selectMember")}</option>
               {members.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.name ?? "Unnamed"}
+                  {m.name ?? t("settle.unnamed")}
                 </option>
               ))}
             </select>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="settle-amount">Amount</Label>
+            <Label htmlFor="settle-amount">{t("settle.amount")}</Label>
             <Input
               id="settle-amount"
               type="number"
@@ -136,16 +137,16 @@ export function SettleDialog({
                 onClick={() => setAmountStr((suggestedAmount / 100).toFixed(2))}
                 className="text-xs text-primary hover:underline"
               >
-                Use suggested: {formatCents(suggestedAmount, currency, locale)}
+                {t("settle.useSuggested", { amount: formatCents(suggestedAmount, currency, locale) })}
               </button>
             )}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="note">Note (optional)</Label>
+            <Label htmlFor="note">{t("settle.note")}</Label>
             <Input
               id="note"
-              placeholder="e.g., Venmo, cash"
+              placeholder={t("settle.notePlaceholder")}
               value={note}
               onChange={(e) => setNote(e.target.value)}
             />
@@ -158,7 +159,7 @@ export function SettleDialog({
           )}
 
           <Button type="submit" className="w-full" disabled={settle.isPending}>
-            {settle.isPending ? "Recording..." : "Record Payment"}
+            {settle.isPending ? t("settle.submitting") : t("settle.submit")}
           </Button>
         </form>
       </DialogContent>
