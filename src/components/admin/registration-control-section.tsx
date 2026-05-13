@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { trpc } from '@/lib/trpc';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,25 +16,8 @@ import {
   Check,
 } from 'lucide-react';
 
-const MODE_INFO = {
-  open: {
-    label: 'Open',
-    description: 'Anyone can register',
-    variant: 'default' as const,
-  },
-  'invite-only': {
-    label: 'Invite Only',
-    description: 'Requires a valid invite code',
-    variant: 'secondary' as const,
-  },
-  closed: {
-    label: 'Closed',
-    description: 'No new registrations',
-    variant: 'destructive' as const,
-  },
-};
-
 export function RegistrationControlSection() {
+  const t = useTranslations("admin");
   const utils = trpc.useUtils();
   const regMode = trpc.admin.getRegistrationMode.useQuery();
   const setMode = trpc.admin.setRegistrationMode.useMutation({
@@ -58,18 +42,36 @@ export function RegistrationControlSection() {
 
   const currentMode = regMode.data?.mode ?? 'open';
 
+  const MODE_INFO = {
+    open: {
+      label: t("registration.open"),
+      description: t("registration.openDescription"),
+      variant: 'default' as const,
+    },
+    'invite-only': {
+      label: t("registration.inviteOnly"),
+      description: t("registration.inviteOnlyDescription"),
+      variant: 'secondary' as const,
+    },
+    closed: {
+      label: t("registration.closed"),
+      description: t("registration.closedDescription"),
+      variant: 'destructive' as const,
+    },
+  };
+
   return (
     <section>
       <div className="mb-4 flex items-center gap-2">
         <ShieldCheck className="h-5 w-5 text-muted-foreground" />
-        <h2 className="text-lg font-semibold">Registration Control</h2>
+        <h2 className="text-lg font-semibold">{t("registration.title")}</h2>
       </div>
 
       <div className="grid gap-4 @2xl:grid-cols-2">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Registration Mode
+              {t("registration.modeTitle")}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -106,13 +108,13 @@ export function RegistrationControlSection() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Create Invite
+              {t("registration.createInvite")}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex gap-2">
               <Input
-                placeholder="Optional label (e.g., 'For John')"
+                placeholder={t("registration.labelPlaceholder")}
                 value={inviteLabel}
                 onChange={(e) => setInviteLabel(e.target.value)}
                 className="flex-1"
@@ -133,11 +135,11 @@ export function RegistrationControlSection() {
                 ) : (
                   <Plus className="mr-1 h-3 w-3" />
                 )}
-                Create
+                {t("registration.create")}
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Invite codes expire after 7 days
+              {t("registration.inviteExpiry")}
             </p>
           </CardContent>
         </Card>
@@ -150,10 +152,10 @@ export function RegistrationControlSection() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left text-muted-foreground">
-                    <th className="px-4 py-3 font-medium">Code</th>
-                    <th className="px-4 py-3 font-medium">Label</th>
-                    <th className="px-4 py-3 font-medium">Status</th>
-                    <th className="px-4 py-3 font-medium">Created</th>
+                    <th className="px-4 py-3 font-medium">{t("registration.colCode")}</th>
+                    <th className="px-4 py-3 font-medium">{t("registration.colLabel")}</th>
+                    <th className="px-4 py-3 font-medium">{t("registration.colStatus")}</th>
+                    <th className="px-4 py-3 font-medium">{t("registration.colCreated")}</th>
                     <th className="px-4 py-3 font-medium" />
                   </tr>
                 </thead>
@@ -185,15 +187,15 @@ export function RegistrationControlSection() {
                       </td>
                       <td className="px-4 py-3">
                         {inv.revokedAt ? (
-                          <Badge variant="destructive">Revoked</Badge>
+                          <Badge variant="destructive">{t("registration.statusRevoked")}</Badge>
                         ) : inv.usedAt ? (
                           <Badge variant="secondary">
-                            Used by {inv.usedBy?.name ?? inv.usedBy?.email}
+                            {t("registration.statusUsedBy", { name: inv.usedBy?.name ?? inv.usedBy?.email ?? "" })}
                           </Badge>
                         ) : inv.isActive ? (
-                          <Badge variant="default">Active</Badge>
+                          <Badge variant="default">{t("registration.statusActive")}</Badge>
                         ) : (
-                          <Badge variant="outline">Expired</Badge>
+                          <Badge variant="outline">{t("registration.statusExpired")}</Badge>
                         )}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">

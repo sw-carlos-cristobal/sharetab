@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { formatCents } from "@/lib/money";
 import { Button } from "@/components/ui/button";
@@ -49,6 +49,7 @@ function SortIcon({
 }
 
 export function GroupOverviewSection() {
+  const t = useTranslations("admin");
   const utils = trpc.useUtils();
   const locale = useLocale();
 
@@ -108,22 +109,22 @@ export function GroupOverviewSection() {
   };
 
   const statuses: { value: GroupStatus; label: string }[] = [
-    { value: "all", label: "All" },
-    { value: "active", label: "Active" },
-    { value: "archived", label: "Archived" },
+    { value: "all", label: t("groups.filterAll") },
+    { value: "active", label: t("groups.filterActive") },
+    { value: "archived", label: t("groups.filterArchived") },
   ];
 
   return (
     <section>
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Group Overview</h2>
+        <h2 className="text-lg font-semibold">{t("groups.title")}</h2>
         <div className="flex items-center gap-2">
-          <Badge variant="secondary">{totalCount} groups</Badge>
+          <Badge variant="secondary">{t("groups.count", { count: totalCount })}</Badge>
           {totalExpenses != null && (
-            <Badge variant="secondary">{totalExpenses} expenses</Badge>
+            <Badge variant="secondary">{t("groups.expenses", { count: totalExpenses })}</Badge>
           )}
           {totalSettlements != null && (
-            <Badge variant="secondary">{totalSettlements} settlements</Badge>
+            <Badge variant="secondary">{t("groups.settlements", { count: totalSettlements })}</Badge>
           )}
         </div>
       </div>
@@ -149,8 +150,8 @@ export function GroupOverviewSection() {
         <div className="relative min-w-[180px] flex-1">
           <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
-            aria-label="Search groups"
-            placeholder="Search by group name..."
+            aria-label={t("groups.searchAriaLabel")}
+            placeholder={t("groups.searchPlaceholder")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="h-7 pl-8 text-xs"
@@ -166,14 +167,14 @@ export function GroupOverviewSection() {
             </div>
           ) : groups.isError ? (
             <div className="flex flex-col items-center gap-2 py-12 text-sm text-destructive">
-              <p>Failed to load groups.</p>
+              <p>{t("groups.errorLoading")}</p>
               <Button variant="outline" size="sm" onClick={() => groups.refetch()}>
-                Retry
+                {t("groups.retry")}
               </Button>
             </div>
           ) : allGroups.length === 0 ? (
             <div className="py-12 text-center text-sm text-muted-foreground">
-              No groups found.
+              {t("groups.noGroups")}
             </div>
           ) : (
             <>
@@ -187,7 +188,7 @@ export function GroupOverviewSection() {
                           className="inline-flex items-center hover:text-foreground"
                           onClick={() => handleSort("name")}
                         >
-                          Name
+                          {t("groups.colName")}
                           <SortIcon
                             column="name"
                             currentSort={sortBy}
@@ -201,7 +202,7 @@ export function GroupOverviewSection() {
                           className="inline-flex items-center hover:text-foreground"
                           onClick={() => handleSort("memberCount")}
                         >
-                          Members
+                          {t("groups.colMembers")}
                           <SortIcon
                             column="memberCount"
                             currentSort={sortBy}
@@ -215,7 +216,7 @@ export function GroupOverviewSection() {
                           className="inline-flex items-center hover:text-foreground"
                           onClick={() => handleSort("expenseCount")}
                         >
-                          Expenses
+                          {t("groups.colExpenses")}
                           <SortIcon
                             column="expenseCount"
                             currentSort={sortBy}
@@ -224,12 +225,12 @@ export function GroupOverviewSection() {
                         </button>
                       </th>
                       <th className="px-4 py-3 font-medium text-right">
-                        Total
+                        {t("groups.colTotal")}
                       </th>
                       <th className="px-4 py-3 font-medium">
-                        Last Activity
+                        {t("groups.colLastActivity")}
                       </th>
-                      <th className="px-4 py-3 font-medium">Status</th>
+                      <th className="px-4 py-3 font-medium">{t("groups.colStatus")}</th>
                       <th className="px-4 py-3 font-medium" />
                     </tr>
                   </thead>
@@ -251,16 +252,16 @@ export function GroupOverviewSection() {
                         </td>
                         <td className="px-4 py-3">
                           {group.isArchived ? (
-                            <Badge variant="outline">Archived</Badge>
+                            <Badge variant="outline">{t("groups.statusArchived")}</Badge>
                           ) : (
-                            <Badge variant="secondary">Active</Badge>
+                            <Badge variant="secondary">{t("groups.statusActive")}</Badge>
                           )}
                         </td>
                         <td className="px-4 py-3 text-right">
                           <Button
                             variant="ghost"
                             size="icon-sm"
-                            aria-label={`Delete group ${group.name}`}
+                            aria-label={t("groups.deleteGroup", { name: group.name })}
                             onClick={() =>
                               setDeleteTarget({
                                 id: group.id,
@@ -287,7 +288,7 @@ export function GroupOverviewSection() {
                     {groups.isFetchingNextPage && (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     )}
-                    Load more
+                    {t("groups.loadMore")}
                   </Button>
                 </div>
               )}
@@ -302,11 +303,12 @@ export function GroupOverviewSection() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete Group</DialogTitle>
+            <DialogTitle>{t("groups.deleteTitle")}</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete{" "}
-              <strong>{deleteTarget?.name}</strong>? This will permanently remove
-              all expenses, settlements, and activity in this group.
+              {t.rich("groups.deleteDescription", {
+                name: deleteTarget?.name ?? "",
+                strong: (chunks) => <strong>{chunks}</strong>,
+              })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -315,7 +317,7 @@ export function GroupOverviewSection() {
               onClick={() => setDeleteTarget(null)}
               disabled={deleteGroup.isPending}
             >
-              Cancel
+              {t("groups.cancel")}
             </Button>
             <Button
               variant="destructive"
@@ -328,7 +330,7 @@ export function GroupOverviewSection() {
               {deleteGroup.isPending && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
-              Delete
+              {t("groups.delete")}
             </Button>
           </DialogFooter>
         </DialogContent>

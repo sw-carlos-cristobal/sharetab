@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -54,6 +55,7 @@ export function UserManagementSection({
 }: {
   currentUserEmail?: string | null;
 }) {
+  const t = useTranslations("admin");
   const utils = trpc.useUtils();
 
   // Filter / search / sort state
@@ -141,17 +143,17 @@ export function UserManagementSection({
   };
 
   const statuses: { value: UserStatus; label: string }[] = [
-    { value: "all", label: "All" },
-    { value: "active", label: "Active" },
-    { value: "suspended", label: "Suspended" },
-    { value: "placeholder", label: "Placeholder" },
+    { value: "all", label: t("users.filterAll") },
+    { value: "active", label: t("users.filterActive") },
+    { value: "suspended", label: t("users.filterSuspended") },
+    { value: "placeholder", label: t("users.filterPlaceholder") },
   ];
 
   return (
     <section>
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-semibold">User Management</h2>
-        <Badge variant="secondary">{totalCount} users</Badge>
+        <h2 className="text-lg font-semibold">{t("users.title")}</h2>
+        <Badge variant="secondary">{t("users.count", { count: totalCount })}</Badge>
       </div>
 
       {/* Filters toolbar */}
@@ -175,8 +177,8 @@ export function UserManagementSection({
         <div className="relative min-w-[180px] flex-1">
           <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
-            aria-label="Search users"
-            placeholder="Search by name or email..."
+            aria-label={t("users.searchAriaLabel")}
+            placeholder={t("users.searchPlaceholder")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="h-7 pl-8 text-xs"
@@ -192,14 +194,14 @@ export function UserManagementSection({
             </div>
           ) : users.isError ? (
             <div className="flex flex-col items-center gap-2 py-12 text-sm text-destructive">
-              <p>Failed to load users.</p>
+              <p>{t("users.errorLoading")}</p>
               <Button variant="outline" size="sm" onClick={() => users.refetch()}>
-                Retry
+                {t("users.retry")}
               </Button>
             </div>
           ) : allUsers.length === 0 ? (
             <div className="py-12 text-center text-sm text-muted-foreground">
-              No users found.
+              {t("users.noUsers")}
             </div>
           ) : (
             <>
@@ -213,7 +215,7 @@ export function UserManagementSection({
                           className="inline-flex items-center hover:text-foreground"
                           onClick={() => handleSort("name")}
                         >
-                          Name
+                          {t("users.colName")}
                           <SortIcon
                             column="name"
                             currentSort={sortBy}
@@ -227,7 +229,7 @@ export function UserManagementSection({
                           className="inline-flex items-center hover:text-foreground"
                           onClick={() => handleSort("email")}
                         >
-                          Email
+                          {t("users.colEmail")}
                           <SortIcon
                             column="email"
                             currentSort={sortBy}
@@ -235,14 +237,14 @@ export function UserManagementSection({
                           />
                         </button>
                       </th>
-                      <th className="px-4 py-3 font-medium">Status</th>
+                      <th className="px-4 py-3 font-medium">{t("users.colStatus")}</th>
                       <th className="px-4 py-3 font-medium text-right">
                         <button
                           type="button"
                           className="inline-flex items-center hover:text-foreground"
                           onClick={() => handleSort("groupCount")}
                         >
-                          Groups
+                          {t("users.colGroups")}
                           <SortIcon
                             column="groupCount"
                             currentSort={sortBy}
@@ -256,7 +258,7 @@ export function UserManagementSection({
                           className="inline-flex items-center hover:text-foreground"
                           onClick={() => handleSort("createdAt")}
                         >
-                          Created
+                          {t("users.colCreated")}
                           <SortIcon
                             column="createdAt"
                             currentSort={sortBy}
@@ -264,7 +266,7 @@ export function UserManagementSection({
                           />
                         </button>
                       </th>
-                      <th className="px-4 py-3 font-medium">Actions</th>
+                      <th className="px-4 py-3 font-medium">{t("users.colActions")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -279,12 +281,12 @@ export function UserManagementSection({
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap gap-1">
                             {user.isPlaceholder ? (
-                              <Badge variant="outline">Placeholder</Badge>
+                              <Badge variant="outline">{t("users.statusPlaceholder")}</Badge>
                             ) : (
-                              <Badge variant="secondary">User</Badge>
+                              <Badge variant="secondary">{t("users.statusUser")}</Badge>
                             )}
                             {user.isSuspended && (
-                              <Badge variant="destructive">Suspended</Badge>
+                              <Badge variant="destructive">{t("users.statusSuspended")}</Badge>
                             )}
                           </div>
                         </td>
@@ -301,7 +303,7 @@ export function UserManagementSection({
                                 <Button
                                   variant="ghost"
                                   size="icon-sm"
-                                  aria-label={`Unsuspend ${user.name ?? user.email}`}
+                                  aria-label={t("users.unsuspend", { name: user.name ?? user.email })}
                                   onClick={() =>
                                     unsuspendUser.mutate({ userId: user.id })
                                   }
@@ -313,7 +315,7 @@ export function UserManagementSection({
                                 <Button
                                   variant="ghost"
                                   size="icon-sm"
-                                  aria-label={`Suspend ${user.name ?? user.email}`}
+                                  aria-label={t("users.suspend", { name: user.name ?? user.email })}
                                   onClick={() =>
                                     suspendUser.mutate({ userId: user.id })
                                   }
@@ -326,7 +328,7 @@ export function UserManagementSection({
                                 <Button
                                   variant="ghost"
                                   size="icon-sm"
-                                  aria-label={`Impersonate ${user.name ?? user.email}`}
+                                  aria-label={t("users.impersonate", { name: user.name ?? user.email })}
                                   onClick={() => handleImpersonate(user.id)}
                                   disabled={impersonating}
                                 >
@@ -336,7 +338,7 @@ export function UserManagementSection({
                               <Button
                                 variant="ghost"
                                 size="icon-sm"
-                                aria-label={`Delete ${user.name ?? user.email}`}
+                                aria-label={t("users.deleteUser", { name: user.name ?? user.email })}
                                 onClick={() =>
                                   setDeleteTarget({
                                     id: user.id,
@@ -366,7 +368,7 @@ export function UserManagementSection({
                     {users.isFetchingNextPage && (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     )}
-                    Load more
+                    {t("users.loadMore")}
                   </Button>
                 </div>
               )}
@@ -381,12 +383,12 @@ export function UserManagementSection({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete User</DialogTitle>
+            <DialogTitle>{t("users.deleteTitle")}</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete{" "}
-              <strong>{deleteTarget?.name ?? deleteTarget?.email}</strong>? This
-              action cannot be undone. All their data will be permanently
-              removed.
+              {t.rich("users.deleteDescription", {
+                name: deleteTarget?.name ?? deleteTarget?.email ?? "",
+                strong: (chunks) => <strong>{chunks}</strong>,
+              })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -395,7 +397,7 @@ export function UserManagementSection({
               onClick={() => setDeleteTarget(null)}
               disabled={deleteUser.isPending}
             >
-              Cancel
+              {t("users.cancel")}
             </Button>
             <Button
               variant="destructive"
@@ -407,7 +409,7 @@ export function UserManagementSection({
               {deleteUser.isPending && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
-              Delete
+              {t("users.delete")}
             </Button>
           </DialogFooter>
         </DialogContent>

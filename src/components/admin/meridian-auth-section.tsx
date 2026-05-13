@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +23,7 @@ import {
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 
 export function MeridianAuthSection() {
+  const t = useTranslations("admin");
   const utils = trpc.useUtils();
 
   const authStatus = trpc.admin.getMeridianAuthStatus.useQuery(undefined, {
@@ -147,16 +149,16 @@ export function MeridianAuthSection() {
       : "bg-red-500";
 
   const statusLabel = isHealthy
-    ? "Authenticated"
+    ? t("meridianAuth.authenticated")
     : status.status === "not_running"
-      ? "Proxy not running"
-      : "Authentication expired";
+      ? t("meridianAuth.proxyNotRunning")
+      : t("meridianAuth.authExpired");
 
   return (
     <section>
       <div className="mb-4 flex items-center gap-2">
         <KeyRound className="h-5 w-5 text-muted-foreground" />
-        <h2 className="text-lg font-semibold">Meridian Authentication</h2>
+        <h2 className="text-lg font-semibold">{t("meridianAuth.title")}</h2>
       </div>
 
       <div className="grid gap-4">
@@ -164,7 +166,7 @@ export function MeridianAuthSection() {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
               <Bot className="h-4 w-4" />
-              Claude OAuth Status
+              {t("meridianAuth.cardTitle")}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -197,10 +199,10 @@ export function MeridianAuthSection() {
                 {status.loginInProgress ? (
                   <>
                     <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                    Login in progress...
+                    {t("meridianAuth.loginInProgress")}
                   </>
                 ) : (
-                  "Authenticate with Claude"
+                  t("meridianAuth.authenticate")
                 )}
               </Button>
             )}
@@ -215,10 +217,10 @@ export function MeridianAuthSection() {
                 {logoutMutation.isPending ? (
                   <>
                     <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                    Logging out...
+                    {t("meridianAuth.loggingOut")}
                   </>
                 ) : (
-                  "Log out"
+                  t("meridianAuth.logOut")
                 )}
               </Button>
             )}
@@ -226,15 +228,15 @@ export function MeridianAuthSection() {
             {loginState === "starting" && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-3 w-3 animate-spin" />
-                Starting login flow...
+                {t("meridianAuth.startingLogin")}
               </div>
             )}
 
             {loginState === "waiting_for_code" && loginUrl && (
               <div className="space-y-3 rounded-md border p-3">
                 <p className="text-sm">
-                  <span className="font-semibold">Step 1:</span> Click the link
-                  below to sign in with Claude.
+                  <span className="font-semibold">{t("meridianAuth.step1Label")}</span>{" "}
+                  {t("meridianAuth.step1Instruction")}
                 </p>
                 <div className="flex items-center gap-2">
                   <a
@@ -244,7 +246,7 @@ export function MeridianAuthSection() {
                     className="flex items-center gap-1 text-sm text-primary underline break-all"
                   >
                     <ExternalLink className="h-3 w-3 shrink-0" />
-                    Open authentication page
+                    {t("meridianAuth.openAuthPage")}
                   </a>
                   <Button
                     variant="ghost"
@@ -265,16 +267,15 @@ export function MeridianAuthSection() {
                 </div>
                 <div className="space-y-1">
                   <p className="text-sm">
-                    <span className="font-semibold">Step 2:</span> After
-                    authorizing, copy the{" "}
-                    <span className="font-semibold text-primary">
-                      URL from your browser&apos;s address bar
-                    </span>{" "}
-                    and paste it below.
+                    <span className="font-semibold">{t("meridianAuth.step2Label")}</span>{" "}
+                    {t.rich("meridianAuth.step2Instruction", {
+                      emphasis: (chunks) => (
+                        <span className="font-semibold text-primary">{chunks}</span>
+                      ),
+                    })}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Do not copy the code shown on the page — paste the full URL
-                    starting with https://platform.claude.com/...
+                    {t("meridianAuth.step2Hint")}
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -296,7 +297,7 @@ export function MeridianAuthSection() {
                     {completeLogin.isPending ? (
                       <Loader2 className="h-3 w-3 animate-spin" />
                     ) : (
-                      "Submit"
+                      t("meridianAuth.submit")
                     )}
                   </Button>
                 </div>
@@ -308,7 +309,7 @@ export function MeridianAuthSection() {
                     cancelMutation.mutate();
                   }}
                 >
-                  Cancel
+                  {t("meridianAuth.cancel")}
                 </Button>
               </div>
             )}
@@ -316,16 +317,16 @@ export function MeridianAuthSection() {
             {loginState === "submitting" && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-3 w-3 animate-spin" />
-                Completing login...
+                {t("meridianAuth.completingLogin")}
               </div>
             )}
 
             {loginState === "success" && (
               <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
                 <CheckCircle2 className="h-4 w-4" />
-                Login successful! Authentication restored.
+                {t("meridianAuth.loginSuccess")}
                 <Button variant="ghost" size="sm" onClick={resetLoginState}>
-                  Dismiss
+                  {t("meridianAuth.dismiss")}
                 </Button>
               </div>
             )}
@@ -337,7 +338,7 @@ export function MeridianAuthSection() {
                   {loginError}
                 </div>
                 <Button variant="outline" size="sm" onClick={resetLoginState}>
-                  Try again
+                  {t("meridianAuth.tryAgain")}
                 </Button>
               </div>
             )}
@@ -347,7 +348,7 @@ export function MeridianAuthSection() {
               <>
                 <div className="border-t pt-3">
                   <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    Test Receipt Extraction
+                    {t("meridianAuth.testExtraction")}
                   </p>
                   <div className="flex items-center gap-2">
                     <input
@@ -364,7 +365,7 @@ export function MeridianAuthSection() {
                       disabled={testProvider.isPending}
                     >
                       <Upload className="mr-1 h-3 w-3" />
-                      {testFile ? "Change" : "Upload"}
+                      {testFile ? t("meridianAuth.changeFile") : t("meridianAuth.uploadFile")}
                     </Button>
                     {testFile && (
                       <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -387,7 +388,7 @@ export function MeridianAuthSection() {
                       ) : (
                         <FlaskConical className="mr-1 h-3 w-3" />
                       )}
-                      Test
+                      {t("meridianAuth.test")}
                     </Button>
                   </div>
                 </div>
@@ -396,7 +397,7 @@ export function MeridianAuthSection() {
                   <div className="space-y-1">
                     <p className="flex items-center gap-1 text-xs text-green-600">
                       <CheckCircle2 className="h-3 w-3" />
-                      Responded in {testProvider.data.durationMs}ms
+                      {t("meridianAuth.testSuccess", { duration: testProvider.data.durationMs })}
                     </p>
                     <pre className="max-h-64 overflow-auto rounded-md bg-muted p-2 text-xs">
                       {JSON.stringify(testProvider.data.result, null, 2)}

@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import { useTranslations } from 'next-intl';
 import { trpc } from '@/lib/trpc';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Megaphone } from 'lucide-react';
 
 export function AnnouncementSection() {
+  const t = useTranslations("admin");
   const utils = trpc.useUtils();
   const announcement = trpc.admin.getAnnouncement.useQuery();
   const setAnnouncement = trpc.admin.setAnnouncement.useMutation({
@@ -32,29 +34,29 @@ export function AnnouncementSection() {
     <section>
       <div className="mb-4 flex items-center gap-2">
         <Megaphone className="h-5 w-5 text-muted-foreground" />
-        <h2 className="text-lg font-semibold">Announcement Banner</h2>
+        <h2 className="text-lg font-semibold">{t("announcement.title")}</h2>
       </div>
 
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
             {announcement.data?.message
-              ? 'Currently showing'
-              : 'No active announcement'}
+              ? t("announcement.showing")
+              : t("announcement.noActive")}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <textarea
             className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             rows={3}
-            placeholder="Enter an announcement message to show to all users..."
+            placeholder={t("announcement.placeholder")}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             maxLength={500}
           />
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted-foreground">
-              {draft.length}/500 characters
+              {t("announcement.charCount", { count: draft.length })}
             </span>
             <div className="flex gap-2">
               {announcement.data?.message && (
@@ -67,7 +69,7 @@ export function AnnouncementSection() {
                     setDraft('');
                   }}
                 >
-                  Clear
+                  {t("announcement.clear")}
                 </Button>
               )}
               <Button
@@ -83,7 +85,7 @@ export function AnnouncementSection() {
                 {setAnnouncement.isPending && (
                   <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                 )}
-                Save
+                {t("announcement.save")}
               </Button>
             </div>
           </div>
