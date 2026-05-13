@@ -1,38 +1,40 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { trpc } from '@/lib/trpc';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Activity } from 'lucide-react';
 
-const TYPE_LABELS: Record<string, string> = {
-  EXPENSE_CREATED: 'Expense Created',
-  EXPENSE_UPDATED: 'Expense Updated',
-  EXPENSE_DELETED: 'Expense Deleted',
-  SETTLEMENT_CREATED: 'Settlement',
-  MEMBER_JOINED: 'Member Joined',
-  MEMBER_LEFT: 'Member Left',
-  GROUP_UPDATED: 'Group Updated',
-  PLACEHOLDER_CREATED: 'Placeholder Added',
-  PLACEHOLDER_MERGED: 'Placeholder Merged',
-  GROUP_ARCHIVED: 'Group Archived',
-  GROUP_UNARCHIVED: 'Group Unarchived',
-};
-
 export function ActivityFeedSection() {
+  const t = useTranslations("admin");
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const activity = trpc.admin.getGlobalActivity.useQuery({
     limit: 20,
     cursor,
   });
 
+  const TYPE_LABELS: Record<string, string> = {
+    EXPENSE_CREATED: t("activity.typeExpenseCreated"),
+    EXPENSE_UPDATED: t("activity.typeExpenseUpdated"),
+    EXPENSE_DELETED: t("activity.typeExpenseDeleted"),
+    SETTLEMENT_CREATED: t("activity.typeSettlementCreated"),
+    MEMBER_JOINED: t("activity.typeMemberJoined"),
+    MEMBER_LEFT: t("activity.typeMemberLeft"),
+    GROUP_UPDATED: t("activity.typeGroupUpdated"),
+    PLACEHOLDER_CREATED: t("activity.typePlaceholderCreated"),
+    PLACEHOLDER_MERGED: t("activity.typePlaceholderMerged"),
+    GROUP_ARCHIVED: t("activity.typeGroupArchived"),
+    GROUP_UNARCHIVED: t("activity.typeGroupUnarchived"),
+  };
+
   return (
     <section>
       <div className="mb-4 flex items-center gap-2">
         <Activity className="h-5 w-5 text-muted-foreground" />
-        <h2 className="text-lg font-semibold">Global Activity Feed</h2>
+        <h2 className="text-lg font-semibold">{t("activity.title")}</h2>
       </div>
 
       <Card>
@@ -43,7 +45,7 @@ export function ActivityFeedSection() {
             </div>
           ) : activity.data?.items.length === 0 ? (
             <div className="py-12 text-center text-sm text-muted-foreground">
-              No activity yet.
+              {t("activity.noActivity")}
             </div>
           ) : (
             <>
@@ -51,10 +53,10 @@ export function ActivityFeedSection() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b text-left text-muted-foreground">
-                      <th className="px-4 py-3 font-medium">Type</th>
-                      <th className="px-4 py-3 font-medium">User</th>
-                      <th className="px-4 py-3 font-medium">Group</th>
-                      <th className="px-4 py-3 font-medium">Time</th>
+                      <th className="px-4 py-3 font-medium">{t("activity.colType")}</th>
+                      <th className="px-4 py-3 font-medium">{t("activity.colUser")}</th>
+                      <th className="px-4 py-3 font-medium">{t("activity.colGroup")}</th>
+                      <th className="px-4 py-3 font-medium">{t("activity.colTime")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -86,7 +88,7 @@ export function ActivityFeedSection() {
                     size="sm"
                     onClick={() => setCursor(activity.data?.nextCursor)}
                   >
-                    Load more
+                    {t("activity.loadMore")}
                   </Button>
                 </div>
               )}

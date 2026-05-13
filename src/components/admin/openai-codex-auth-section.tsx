@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,6 +22,7 @@ import {
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 
 export function OpenAICodexAuthSection() {
+  const t = useTranslations("admin");
   const utils = trpc.useUtils();
   const authStatus = trpc.admin.getOpenAICodexAuthStatus.useQuery(undefined, {
     refetchInterval: 15_000,
@@ -133,23 +135,23 @@ export function OpenAICodexAuthSection() {
     loginState === "waiting_for_code" || (loginState === "idle" && status.loginInProgress);
   const statusColor = isHealthy ? "bg-green-500" : isDegraded ? "bg-yellow-500" : "bg-red-500";
   const statusLabel = isHealthy
-    ? "Authenticated"
+    ? t("codexAuth.authenticated")
     : isDegraded
-      ? "Service degraded"
-      : "Authentication required";
+      ? t("codexAuth.serviceDegraded")
+      : t("codexAuth.authRequired");
 
   return (
     <section>
       <div className="mb-4 flex items-center gap-2">
         <KeyRound className="h-5 w-5 text-muted-foreground" />
-        <h2 className="text-lg font-semibold">ChatGPT OAuth</h2>
+        <h2 className="text-lg font-semibold">{t("codexAuth.title")}</h2>
       </div>
 
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
             <Bot className="h-4 w-4" />
-            OpenAI Codex Status
+            {t("codexAuth.cardTitle")}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -182,7 +184,7 @@ export function OpenAICodexAuthSection() {
                 startLogin.mutate();
               }}
             >
-              Authenticate with ChatGPT
+              {t("codexAuth.authenticate")}
             </Button>
           )}
 
@@ -196,10 +198,10 @@ export function OpenAICodexAuthSection() {
               {logoutMutation.isPending ? (
                 <>
                   <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                  Logging out...
+                  {t("codexAuth.loggingOut")}
                 </>
               ) : (
-                "Log out"
+                t("codexAuth.logOut")
               )}
             </Button>
           )}
@@ -207,17 +209,17 @@ export function OpenAICodexAuthSection() {
           {loginState === "starting" && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-3 w-3 animate-spin" />
-              Starting login flow...
+              {t("codexAuth.startingLogin")}
             </div>
           )}
 
           {isWaitingForCode && (
             <div className="space-y-3 rounded-md border p-3">
               <p className="text-sm">
-                <span className="font-semibold">Step 1:</span>{" "}
+                <span className="font-semibold">{t("codexAuth.step1Label")}</span>{" "}
                 {loginUrl
-                  ? "Open the login link and finish the ChatGPT authorization flow."
-                  : "Finish the ChatGPT authorization flow you already started."}
+                  ? t("codexAuth.step1InstructionNew")
+                  : t("codexAuth.step1InstructionResume")}
               </p>
               {loginUrl ? (
                 <div className="flex items-center gap-2">
@@ -228,7 +230,7 @@ export function OpenAICodexAuthSection() {
                     className="flex items-center gap-1 text-sm text-primary underline break-all"
                   >
                     <ExternalLink className="h-3 w-3 shrink-0" />
-                    Open authentication page
+                    {t("codexAuth.openAuthPage")}
                   </a>
                   <Button
                     variant="ghost"
@@ -249,19 +251,16 @@ export function OpenAICodexAuthSection() {
                 </div>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  A login is already in progress. If you opened the ChatGPT auth page before
-                  refreshing, paste the callback URL below. Otherwise cancel and start again.
+                  {t("codexAuth.inProgressWarning")}
                 </p>
               )}
               <div className="space-y-1">
                 <p className="text-sm">
-                  <span className="font-semibold">Step 2:</span> After login, copy
-                  the final browser URL and paste it below.
+                  <span className="font-semibold">{t("codexAuth.step2Label")}</span>{" "}
+                  {t("codexAuth.step2Instruction")}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  The OpenAI flow redirects to localhost:1455. That callback is
-                  expected to fail in the browser here, so copy the full redirected
-                  URL from the address bar.
+                  {t("codexAuth.step2Hint")}
                 </p>
               </div>
               <div className="flex gap-2">
@@ -283,7 +282,7 @@ export function OpenAICodexAuthSection() {
                   {completeLogin.isPending ? (
                     <Loader2 className="h-3 w-3 animate-spin" />
                   ) : (
-                    "Submit"
+                    t("codexAuth.submit")
                   )}
                 </Button>
               </div>
@@ -294,7 +293,7 @@ export function OpenAICodexAuthSection() {
                 onClick={() => cancelMutation.mutate()}
                 disabled={cancelMutation.isPending}
               >
-                Cancel
+                {t("codexAuth.cancel")}
               </Button>
             </div>
           )}
@@ -302,13 +301,13 @@ export function OpenAICodexAuthSection() {
           {loginState === "submitting" && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-3 w-3 animate-spin" />
-              Completing login...
+              {t("codexAuth.completingLogin")}
             </div>
           )}
 
           {loginState === "success" && (
             <div className="text-sm text-green-600 dark:text-green-400">
-              ChatGPT OAuth authentication completed.
+              {t("codexAuth.loginSuccess")}
             </div>
           )}
 
@@ -323,7 +322,7 @@ export function OpenAICodexAuthSection() {
             <>
               <div className="border-t pt-3">
                 <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Test Receipt Extraction
+                  {t("codexAuth.testExtraction")}
                 </p>
                 <div className="flex items-center gap-2">
                   <input
@@ -340,7 +339,7 @@ export function OpenAICodexAuthSection() {
                     disabled={testProvider.isPending}
                   >
                     <Upload className="mr-1 h-3 w-3" />
-                    {testFile ? "Change" : "Upload"}
+                    {testFile ? t("codexAuth.changeFile") : t("codexAuth.uploadFile")}
                   </Button>
                   {testFile && (
                     <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -363,7 +362,7 @@ export function OpenAICodexAuthSection() {
                     ) : (
                       <FlaskConical className="mr-1 h-3 w-3" />
                     )}
-                    Test
+                    {t("codexAuth.test")}
                   </Button>
                 </div>
               </div>
@@ -372,7 +371,7 @@ export function OpenAICodexAuthSection() {
                 <div className="space-y-1">
                   <p className="flex items-center gap-1 text-xs text-green-600">
                     <CheckCircle2 className="h-3 w-3" />
-                    Responded in {testProvider.data.durationMs}ms
+                    {t("codexAuth.testSuccess", { duration: testProvider.data.durationMs })}
                   </p>
                   <pre className="max-h-64 overflow-auto rounded-md bg-muted p-2 text-xs">
                     {JSON.stringify(testProvider.data.result, null, 2)}

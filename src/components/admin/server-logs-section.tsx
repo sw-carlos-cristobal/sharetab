@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,6 +33,7 @@ const LEVEL_BG: Record<string, string> = {
 type LogLevel = "debug" | "info" | "warn" | "error";
 
 export function ServerLogsSection() {
+  const t = useTranslations("admin");
   const [minLevel, setMinLevel] = useState<LogLevel>("debug");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -84,10 +86,10 @@ export function ServerLogsSection() {
     <section>
       <div className="mb-4 flex items-center gap-2">
         <ScrollText className="h-5 w-5 text-muted-foreground" />
-        <h2 className="text-lg font-semibold">Server Logs</h2>
+        <h2 className="text-lg font-semibold">{t("serverLogs.title")}</h2>
         {logs.data && (
           <Badge variant="secondary">
-            {logs.data.entries.length} entries
+            {t("serverLogs.entries", { count: logs.data.entries.length })}
           </Badge>
         )}
       </div>
@@ -114,7 +116,7 @@ export function ServerLogsSection() {
             <div className="relative flex-1 min-w-[180px]">
               <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Filter logs..."
+                placeholder={t("serverLogs.filterPlaceholder")}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="h-7 pl-8 text-xs"
@@ -128,7 +130,7 @@ export function ServerLogsSection() {
                 variant="outline"
                 onClick={() => setPaused(!paused)}
                 className="h-7 px-2.5"
-                title={paused ? "Resume auto-refresh" : "Pause auto-refresh"}
+                title={paused ? t("serverLogs.resumeAutoRefresh") : t("serverLogs.pauseAutoRefresh")}
               >
                 {paused ? (
                   <Play className="h-3.5 w-3.5" />
@@ -142,7 +144,7 @@ export function ServerLogsSection() {
                   variant="outline"
                   onClick={scrollToBottom}
                   className="h-7 px-2.5"
-                  title="Scroll to bottom"
+                  title={t("serverLogs.scrollToBottom")}
                 >
                   <ArrowDown className="h-3.5 w-3.5" />
                 </Button>
@@ -163,7 +165,7 @@ export function ServerLogsSection() {
             >
               {logs.data?.entries.length === 0 ? (
                 <div className="flex items-center justify-center py-12 text-muted-foreground">
-                  No log entries found
+                  {t("serverLogs.noEntries")}
                 </div>
               ) : (
                 <table className="w-full table-fixed">
@@ -202,7 +204,7 @@ export function ServerLogsSection() {
           )}
           {paused && (
             <div className="border-t bg-yellow-50 px-3 py-1.5 text-center text-xs text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300">
-              Auto-refresh paused
+              {t("serverLogs.autoRefreshPaused")}
             </div>
           )}
         </CardContent>

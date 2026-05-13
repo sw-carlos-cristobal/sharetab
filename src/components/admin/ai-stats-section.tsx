@@ -1,11 +1,13 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { trpc } from '@/lib/trpc';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, BrainCircuit } from 'lucide-react';
 
 export function AIStatsSection() {
+  const t = useTranslations("admin");
   const stats = trpc.admin.getAIStats.useQuery();
 
   if (stats.isLoading) {
@@ -13,7 +15,7 @@ export function AIStatsSection() {
       <section>
         <div className="mb-4 flex items-center gap-2">
           <BrainCircuit className="h-5 w-5 text-muted-foreground" />
-          <h2 className="text-lg font-semibold">AI Usage</h2>
+          <h2 className="text-lg font-semibold">{t("aiStats.title")}</h2>
         </div>
         <Card>
           <CardContent className="flex items-center justify-center py-12">
@@ -30,14 +32,14 @@ export function AIStatsSection() {
     <section>
       <div className="mb-4 flex items-center gap-2">
         <BrainCircuit className="h-5 w-5 text-muted-foreground" />
-        <h2 className="text-lg font-semibold">AI Usage</h2>
+        <h2 className="text-lg font-semibold">{t("aiStats.title")}</h2>
       </div>
 
       <div className="grid gap-4 @2xl:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total Receipts Processed
+              {t("aiStats.totalProcessed")}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -56,7 +58,7 @@ export function AIStatsSection() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              By Provider
+              {t("aiStats.byProvider")}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -76,7 +78,7 @@ export function AIStatsSection() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No data</p>
+              <p className="text-sm text-muted-foreground">{t("aiStats.noData")}</p>
             )}
           </CardContent>
         </Card>
@@ -84,19 +86,19 @@ export function AIStatsSection() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Recent Trends
+              {t("aiStats.recentTrends")}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-sm">Last 7 days</span>
+                <span className="text-sm">{t("aiStats.last7Days")}</span>
                 <span className="text-sm font-medium">
                   {data?.last7Days ?? 0}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm">Last 30 days</span>
+                <span className="text-sm">{t("aiStats.last30Days")}</span>
                 <span className="text-sm font-medium">
                   {data?.last30Days ?? 0}
                 </span>
