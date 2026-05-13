@@ -104,7 +104,7 @@
     "splitOff": "分出",
     "splitOfTotal": "共 {total}",
     "split": "拆分",
-    "removeConfirm": "删除\"{name}\"？",
+    "removeConfirm": "删除「{name}」？",
     "splitAriaLabel": "将{name}拆分为单独一行",
     "perPersonTotals": "每人合计",
     "creatingExpense": "正在创建费用...",
