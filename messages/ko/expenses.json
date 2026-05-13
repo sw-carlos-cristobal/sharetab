@@ -23,7 +23,8 @@
     "categoryPlaceholder": "예: 식비, 교통비",
     "selectMember": "멤버 선택",
     "backToGroup": "그룹으로 돌아가기",
-    "expenseDetails": "비용 세부 정보"
+    "expenseDetails": "비용 세부 정보",
+    "unnamed": "이름 없음"
   },
   "edit": {
     "title": "비용 편집",

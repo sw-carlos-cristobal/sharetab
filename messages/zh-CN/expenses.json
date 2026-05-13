@@ -23,7 +23,8 @@
     "categoryPlaceholder": "例如：餐饮、交通",
     "selectMember": "选择成员",
     "backToGroup": "返回群组",
-    "expenseDetails": "支出详情"
+    "expenseDetails": "支出详情",
+    "unnamed": "未命名"
   },
   "edit": {
     "title": "编辑费用",

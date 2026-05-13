@@ -23,7 +23,8 @@
     "backToGroup": "Back to group",
     "expenseDetails": "Expense details",
     "submit": "Add Expense",
-    "submitting": "Adding..."
+    "submitting": "Adding...",
+    "unnamed": "Unnamed"
   },
   "edit": {
     "title": "Edit Expense",

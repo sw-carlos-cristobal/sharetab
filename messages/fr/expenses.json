@@ -23,7 +23,8 @@
     "categoryPlaceholder": "ex. Nourriture, Transport",
     "selectMember": "Sélectionner un membre",
     "backToGroup": "Retour au groupe",
-    "expenseDetails": "Détails de la dépense"
+    "expenseDetails": "Détails de la dépense",
+    "unnamed": "Sans nom"
   },
   "edit": {
     "title": "Modifier la dépense",

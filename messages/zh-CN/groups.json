@@ -38,7 +38,8 @@
     "savedForLater": "稍后处理",
     "deleteReceiptConfirm": "删除此待处理收据？",
     "addFirstExpense": "添加第一笔支出",
-    "paidBy": "{name}支付"
+    "paidBy": "{name}支付",
+    "unknown": "未知"
   },
   "settings": {
     "title": "群组设置",
@@ -69,7 +70,7 @@
     "add": "添加",
     "placeholderMembers": "占位成员（{count}人）",
     "pending": "待处理",
-    "removeConfirm": "移除\"{name}\"？",
+    "removeConfirm": "移除「{name}」？",
     "dangerZone": "危险区域",
     "archiveDescription": "归档此群组以从仪表板隐藏。您可以随时取消归档。",
     "archiveConfirm": "归档此群组？将从仪表板中隐藏。",
@@ -89,7 +90,8 @@
     "selectMember": "选择成员",
     "useSuggested": "使用建议金额：{amount}",
     "note": "备注（可选）",
-    "notePlaceholder": "例如：Venmo、现金"
+    "notePlaceholder": "例如：Venmo、现金",
+    "unnamed": "未命名"
   },
   "invite": {
     "title": "邀请加入群组",

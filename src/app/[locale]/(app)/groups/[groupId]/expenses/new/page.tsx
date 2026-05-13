@@ -48,12 +48,12 @@ export default function NewExpensePage({
   const [splitMode, setSplitMode] = useState<SplitMode>("EQUAL");
   const [shares, setShares] = useState<ShareEntry[]>([]);
 
-  const splitModes: { value: SplitMode; label: string; description: string }[] = [
-    { value: "EQUAL", label: t("new.splitEqual"), description: t("new.splitEqualDescription") },
-    { value: "EXACT", label: t("new.splitExact"), description: t("new.splitExactDescription") },
-    { value: "PERCENTAGE", label: t("new.splitPercentage"), description: t("new.splitPercentageDescription") },
-    { value: "SHARES", label: t("new.splitShares"), description: t("new.splitSharesDescription") },
-  ];
+  const splitModes = useMemo(() => [
+    { value: "EQUAL" as SplitMode, label: t("new.splitEqual"), description: t("new.splitEqualDescription") },
+    { value: "EXACT" as SplitMode, label: t("new.splitExact"), description: t("new.splitExactDescription") },
+    { value: "PERCENTAGE" as SplitMode, label: t("new.splitPercentage"), description: t("new.splitPercentageDescription") },
+    { value: "SHARES" as SplitMode, label: t("new.splitShares"), description: t("new.splitSharesDescription") },
+  ], [t]);
 
   const createExpense = trpc.expenses.create.useMutation({
     onSuccess: () => {
@@ -151,7 +151,7 @@ export default function NewExpensePage({
                 <option value="">{t("new.selectMember")}</option>
                 {members.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.name ?? "Unnamed"}
+                    {m.name ?? t("new.unnamed")}
                   </option>
                 ))}
               </select>

@@ -23,7 +23,8 @@
     "backToGroup": "Volver al grupo",
     "expenseDetails": "Detalles del gasto",
     "submit": "Agregar gasto",
-    "submitting": "Agregando..."
+    "submitting": "Agregando...",
+    "unnamed": "Sin nombre"
   },
   "edit": {
     "title": "Editar gasto",

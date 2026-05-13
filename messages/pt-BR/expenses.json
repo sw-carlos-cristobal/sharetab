@@ -23,7 +23,8 @@
     "categoryPlaceholder": "ex. Alimentação, Transporte",
     "selectMember": "Selecionar membro",
     "backToGroup": "Voltar ao grupo",
-    "expenseDetails": "Detalhes da despesa"
+    "expenseDetails": "Detalhes da despesa",
+    "unnamed": "Sem nome"
   },
   "edit": {
     "title": "Editar despesa",

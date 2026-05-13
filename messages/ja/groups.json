@@ -38,7 +38,8 @@
     "savedForLater": "後で使用",
     "deleteReceiptConfirm": "この保留中のレシートを削除しますか？",
     "addFirstExpense": "最初の経費を追加",
-    "paidBy": "{name}が支払い"
+    "paidBy": "{name}が支払い",
+    "unknown": "不明"
   },
   "settings": {
     "title": "グループ設定",
@@ -89,7 +90,8 @@
     "selectMember": "メンバーを選択",
     "useSuggested": "提案額を使用: {amount}",
     "note": "メモ（任意）",
-    "notePlaceholder": "例：Venmo、現金"
+    "notePlaceholder": "例：Venmo、現金",
+    "unnamed": "名前なし"
   },
   "invite": {
     "title": "グループに招待",

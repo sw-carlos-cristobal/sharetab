@@ -23,7 +23,8 @@
     "categoryPlaceholder": "t.ex. Mat, Transport",
     "selectMember": "Välj medlem",
     "backToGroup": "Tillbaka till gruppen",
-    "expenseDetails": "Utgiftsdetaljer"
+    "expenseDetails": "Utgiftsdetaljer",
+    "unnamed": "Namnlös"
   },
   "edit": {
     "title": "Redigera kostnad",

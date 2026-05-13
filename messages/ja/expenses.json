@@ -23,7 +23,8 @@
     "categoryPlaceholder": "例：食費、交通費",
     "selectMember": "メンバーを選択",
     "backToGroup": "グループに戻る",
-    "expenseDetails": "経費の詳細"
+    "expenseDetails": "経費の詳細",
+    "unnamed": "名前なし"
   },
   "edit": {
     "title": "支出を編集",

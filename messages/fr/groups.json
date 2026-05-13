@@ -15,7 +15,7 @@
     "addExpense": "Ajouter une dépense",
     "scanReceipt": "Scanner un reçu",
     "settle": "Régler les comptes",
-    "noExpenses": "Aucune dépense",
+    "noExpenses": "Aucune dépense.",
     "noExpensesDescription": "Ajoutez une dépense pour commencer.",
     "totalSpent": "Total dépensé",
     "youOwe": "Vous devez à {name}",
@@ -38,7 +38,8 @@
     "savedForLater": "Enregistré pour plus tard",
     "deleteReceiptConfirm": "Supprimer ce reçu en attente ?",
     "addFirstExpense": "Ajoutez votre première dépense",
-    "paidBy": "Payé par {name}"
+    "paidBy": "Payé par {name}",
+    "unknown": "Inconnu"
   },
   "settings": {
     "title": "Paramètres du groupe",
@@ -89,7 +90,8 @@
     "selectMember": "Sélectionner un membre",
     "useSuggested": "Utiliser le montant suggéré : {amount}",
     "note": "Note (facultatif)",
-    "notePlaceholder": "ex. Venmo, espèces"
+    "notePlaceholder": "ex. Venmo, espèces",
+    "unnamed": "Sans nom"
   },
   "invite": {
     "title": "Inviter dans le groupe",

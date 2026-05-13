@@ -15,7 +15,7 @@
     "addExpense": "Lägg till kostnad",
     "scanReceipt": "Skanna kvitto",
     "settle": "Ordna upp",
-    "noExpenses": "Inga utgifter än",
+    "noExpenses": "Inga utgifter än.",
     "noExpensesDescription": "Lägg till en kostnad för att komma igång.",
     "totalSpent": "Totalt spenderat",
     "youOwe": "Du är skyldig {name}",
@@ -38,7 +38,8 @@
     "savedForLater": "Sparad för senare",
     "deleteReceiptConfirm": "Ta bort detta väntande kvitto?",
     "addFirstExpense": "Lägg till din första utgift",
-    "paidBy": "Betalad av {name}"
+    "paidBy": "Betalad av {name}",
+    "unknown": "Okänd"
   },
   "settings": {
     "title": "Gruppinställningar",
@@ -89,7 +90,8 @@
     "selectMember": "Välj medlem",
     "useSuggested": "Använd föreslaget: {amount}",
     "note": "Anteckning (valfritt)",
-    "notePlaceholder": "t.ex. Venmo, kontant"
+    "notePlaceholder": "t.ex. Venmo, kontant",
+    "unnamed": "Namnlös"
   },
   "invite": {
     "title": "Bjud in till grupp",

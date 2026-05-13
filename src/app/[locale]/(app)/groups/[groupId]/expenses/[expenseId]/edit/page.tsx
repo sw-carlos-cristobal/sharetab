@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, useEffect } from "react";
+import { use, useMemo, useState, useEffect } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { trpc } from "@/lib/trpc";
@@ -42,12 +42,12 @@ export default function EditExpensePage({
   const group = trpc.groups.get.useQuery({ groupId });
   const expense = trpc.expenses.get.useQuery({ groupId, expenseId });
 
-  const splitModes: { value: SplitMode; label: string; description: string }[] = [
-    { value: "EQUAL", label: t("new.splitEqual"), description: t("new.splitEqualDescription") },
-    { value: "EXACT", label: t("new.splitExact"), description: t("new.splitExactDescription") },
-    { value: "PERCENTAGE", label: t("new.splitPercentage"), description: t("new.splitPercentageDescription") },
-    { value: "SHARES", label: t("new.splitShares"), description: t("new.splitSharesDescription") },
-  ];
+  const splitModes = useMemo(() => [
+    { value: "EQUAL" as SplitMode, label: t("new.splitEqual"), description: t("new.splitEqualDescription") },
+    { value: "EXACT" as SplitMode, label: t("new.splitExact"), description: t("new.splitExactDescription") },
+    { value: "PERCENTAGE" as SplitMode, label: t("new.splitPercentage"), description: t("new.splitPercentageDescription") },
+    { value: "SHARES" as SplitMode, label: t("new.splitShares"), description: t("new.splitSharesDescription") },
+  ], [t]);
 
   const [title, setTitle] = useState("");
   const [amountStr, setAmountStr] = useState("");
@@ -191,7 +191,7 @@ export default function EditExpensePage({
                 <option value="">{t("new.selectMember")}</option>
                 {members.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.name ?? "Unnamed"}
+                    {m.name ?? t("new.unnamed")}
                   </option>
                 ))}
               </select>

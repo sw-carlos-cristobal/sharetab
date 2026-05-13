@@ -23,7 +23,8 @@
     "categoryPlaceholder": "z.B. Essen, Transport",
     "selectMember": "Mitglied auswählen",
     "backToGroup": "Zurück zur Gruppe",
-    "expenseDetails": "Ausgabendetails"
+    "expenseDetails": "Ausgabendetails",
+    "unnamed": "Unbenannt"
   },
   "edit": {
     "title": "Ausgabe bearbeiten",

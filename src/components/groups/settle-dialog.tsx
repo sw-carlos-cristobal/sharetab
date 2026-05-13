@@ -95,7 +95,7 @@ export function SettleDialog({
               <option value="">{t("settle.selectMember")}</option>
               {members.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.name ?? "Unnamed"}
+                  {m.name ?? t("settle.unnamed")}
                 </option>
               ))}
             </select>
@@ -113,7 +113,7 @@ export function SettleDialog({
               <option value="">{t("settle.selectMember")}</option>
               {members.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.name ?? "Unnamed"}
+                  {m.name ?? t("settle.unnamed")}
                 </option>
               ))}
             </select>

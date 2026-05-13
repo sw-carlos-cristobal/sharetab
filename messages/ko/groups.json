@@ -38,7 +38,8 @@
     "savedForLater": "나중에 처리",
     "deleteReceiptConfirm": "이 대기 중인 영수증을 삭제하시겠습니까?",
     "addFirstExpense": "첫 번째 비용 추가",
-    "paidBy": "{name} 결제"
+    "paidBy": "{name} 결제",
+    "unknown": "알 수 없음"
   },
   "settings": {
     "title": "그룹 설정",
@@ -89,7 +90,8 @@
     "selectMember": "멤버 선택",
     "useSuggested": "제안 금액 사용: {amount}",
     "note": "메모 (선택사항)",
-    "notePlaceholder": "예: Venmo, 현금"
+    "notePlaceholder": "예: Venmo, 현금",
+    "unnamed": "이름 없음"
   },
   "invite": {
     "title": "그룹에 초대",

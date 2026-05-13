@@ -15,7 +15,7 @@
     "addExpense": "Ausgabe hinzufügen",
     "scanReceipt": "Beleg scannen",
     "settle": "Ausgleichen",
-    "noExpenses": "Noch keine Ausgaben",
+    "noExpenses": "Noch keine Ausgaben.",
     "noExpensesDescription": "Fügen Sie eine Ausgabe hinzu, um loszulegen.",
     "totalSpent": "Gesamtausgaben",
     "youOwe": "Sie schulden {name}",
@@ -38,7 +38,8 @@
     "savedForLater": "Für später gespeichert",
     "deleteReceiptConfirm": "Diesen ausstehenden Beleg löschen?",
     "addFirstExpense": "Erste Ausgabe hinzufügen",
-    "paidBy": "Bezahlt von {name}"
+    "paidBy": "Bezahlt von {name}",
+    "unknown": "Unbekannt"
   },
   "settings": {
     "title": "Gruppeneinstellungen",
@@ -89,7 +90,8 @@
     "selectMember": "Mitglied auswählen",
     "useSuggested": "Vorgeschlagen verwenden: {amount}",
     "note": "Notiz (optional)",
-    "notePlaceholder": "z.B. Venmo, bar"
+    "notePlaceholder": "z.B. Venmo, bar",
+    "unnamed": "Unbenannt"
   },
   "invite": {
     "title": "In Gruppe einladen",

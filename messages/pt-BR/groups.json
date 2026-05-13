@@ -15,7 +15,7 @@
     "addExpense": "Adicionar despesa",
     "scanReceipt": "Escanear recibo",
     "settle": "Acertar contas",
-    "noExpenses": "Nenhuma despesa ainda",
+    "noExpenses": "Nenhuma despesa ainda.",
     "noExpensesDescription": "Adicione uma despesa para começar.",
     "totalSpent": "Total gasto",
     "youOwe": "Você deve a {name}",
@@ -38,7 +38,8 @@
     "savedForLater": "Salvo para depois",
     "deleteReceiptConfirm": "Excluir este recibo pendente?",
     "addFirstExpense": "Adicione sua primeira despesa",
-    "paidBy": "Pago por {name}"
+    "paidBy": "Pago por {name}",
+    "unknown": "Desconhecido"
   },
   "settings": {
     "title": "Configurações do grupo",
@@ -89,7 +90,8 @@
     "selectMember": "Selecionar membro",
     "useSuggested": "Usar sugerido: {amount}",
     "note": "Nota (opcional)",
-    "notePlaceholder": "ex. Venmo, dinheiro"
+    "notePlaceholder": "ex. Venmo, dinheiro",
+    "unnamed": "Sem nome"
   },
   "invite": {
     "title": "Convidar para o grupo",

@@ -38,7 +38,8 @@
     "savedForLater": "Guardado para después",
     "deleteReceiptConfirm": "¿Eliminar este recibo pendiente?",
     "addFirstExpense": "Agrega tu primer gasto",
-    "paidBy": "Pagado por {name}"
+    "paidBy": "Pagado por {name}",
+    "unknown": "Desconocido"
   },
   "settings": {
     "title": "Configuración del grupo",
@@ -89,7 +90,8 @@
     "note": "Nota (opcional)",
     "notePlaceholder": "p. ej., Venmo, efectivo",
     "submit": "Registrar pago",
-    "submitting": "Registrando..."
+    "submitting": "Registrando...",
+    "unnamed": "Sin nombre"
   },
   "invite": {
     "title": "Invitar al grupo",

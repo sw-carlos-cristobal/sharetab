@@ -38,7 +38,8 @@
     "savedForLater": "Saved for later",
     "deleteReceiptConfirm": "Delete this pending receipt?",
     "addFirstExpense": "Add your first expense",
-    "paidBy": "Paid by {name}"
+    "paidBy": "Paid by {name}",
+    "unknown": "Unknown"
   },
   "settings": {
     "title": "Group Settings",
@@ -89,7 +90,8 @@
     "note": "Note (optional)",
     "notePlaceholder": "e.g., Venmo, cash",
     "submit": "Record Payment",
-    "submitting": "Recording..."
+    "submitting": "Recording...",
+    "unnamed": "Unnamed"
   },
   "invite": {
     "title": "Invite to group",

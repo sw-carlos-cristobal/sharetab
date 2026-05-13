@@ -204,7 +204,7 @@ export default function GroupDetailPage({
             {debts.data.debts.map((debt, i) => {
               const from = memberMap.get(debt.from);
               const to = memberMap.get(debt.to);
-              const toName = to?.name ?? to?.email ?? "Unknown";
+              const toName = to?.name ?? to?.email ?? t("detail.unknown");
               const isMyDebt = debt.from === authSession?.user?.id;
               const showVenmo = venmoSetting.data?.enabled && g.currency === "USD" && isMyDebt && to?.venmoUsername && isValidVenmoHandle(to.venmoUsername);
               const venmoUrl = showVenmo
@@ -225,7 +225,7 @@ export default function GroupDetailPage({
                     }
                   >
                     <span className="truncate text-xs font-medium text-red-600 sm:text-sm dark:text-red-400">
-                      {from?.name ?? from?.email ?? "Unknown"}
+                      {from?.name ?? from?.email ?? t("detail.unknown")}
                     </span>
                     <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                     <span className="truncate text-xs font-medium text-emerald-600 sm:text-sm dark:text-emerald-400">
@@ -384,7 +384,7 @@ export default function GroupDetailPage({
                   <div className="min-w-0">
                     <p className="font-medium truncate">{expense.title}</p>
                     <p className="text-sm text-muted-foreground">
-                      {t("detail.paidBy", { name: expense.paidBy.name ?? expense.paidBy.email ?? "Unknown" })}
+                      {t("detail.paidBy", { name: expense.paidBy.name ?? expense.paidBy.email ?? t("detail.unknown") })}
                       {" · "}
                       {new Date(expense.expenseDate).toLocaleDateString()}
                       {expense.category && (
