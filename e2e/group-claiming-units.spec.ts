@@ -76,8 +76,8 @@ test.describe("Group claiming units", () => {
 
     await expect(page.locator('[data-testid^="claim-item-"]').first()).toBeVisible({ timeout: 15000 });
 
-    // Should show group badge (×2)
-    await expect(page.getByText("×2").first()).toBeVisible();
+    // Should show group badge (×2) — Alice & Bob is person index 1 (creator Alice is 0)
+    await expect(page.getByTestId("group-badge-1")).toBeVisible();
 
     await page.close();
     await browserCtx.close();
@@ -115,9 +115,8 @@ test.describe("Group claiming units", () => {
 
     await expect(page.locator('[data-testid^="claim-item-"]').first()).toBeVisible({ timeout: 15000 });
 
-    // Should NOT show any group badge
-    await expect(page.getByText("×2")).not.toBeVisible();
-    await expect(page.getByText("×3")).not.toBeVisible();
+    // Should NOT show any group badge for any person
+    await expect(page.locator('[data-testid^="group-badge-"]')).toHaveCount(0);
 
     await page.close();
     await browserCtx.close();
@@ -342,7 +341,7 @@ test.describe("Group claiming units", () => {
     await expect(saveBtn).toContainText(/saved/i, { timeout: 10000 });
 
     // Group badge should be visible
-    await expect(page.getByText("×2").first()).toBeVisible();
+    await expect(page.getByTestId("group-badge-0")).toBeVisible();
 
     // Per-person totals should show the couple paying more
     await expect(page.getByText("Alice & Bob").first()).toBeVisible();
@@ -386,7 +385,7 @@ test.describe("Group claiming units", () => {
     await expect(page.locator('[data-sonner-toast]')).toBeHidden({ timeout: 10000 });
 
     // No group badge initially (solo)
-    await expect(page.getByText("×2")).not.toBeVisible();
+    await expect(page.locator('[data-testid^="group-badge-"]')).toHaveCount(0);
 
     // Click edit pencil on Alice
     await page.getByTestId("edit-person-0").click();
@@ -410,7 +409,7 @@ test.describe("Group claiming units", () => {
     await page.waitForTimeout(1500);
 
     // Should now show ×2 badge
-    await expect(page.getByText("×2").first()).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId("group-badge-0")).toBeVisible({ timeout: 5000 });
 
     // Name should be updated
     await expect(page.getByText("Alice & Bob").first()).toBeVisible();
@@ -461,7 +460,7 @@ test.describe("Group claiming units", () => {
     await page.waitForTimeout(5000);
 
     // Should show ×2 badge
-    await expect(page.getByText("×2").first()).toBeVisible();
+    await expect(page.getByTestId("group-badge-0")).toBeVisible();
 
     // Click edit to change group size back to 1
     await page.getByTestId("edit-person-0").click();
@@ -474,7 +473,7 @@ test.describe("Group claiming units", () => {
     await page.waitForTimeout(1500);
 
     // ×2 badge should be gone
-    await expect(page.getByText("×2")).not.toBeVisible();
+    await expect(page.getByTestId("group-badge-0")).not.toBeVisible();
 
     await page.close();
     await browserCtx.close();
