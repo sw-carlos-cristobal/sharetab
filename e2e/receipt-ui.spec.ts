@@ -41,7 +41,7 @@ test.describe("Receipt Scanning UI", () => {
 test.describe("Additional UI Tests", () => {
   test("7.1.4 — register and auto-login", async ({ page }) => {
     const email = `autoreg-${Date.now()}@test.com`;
-    await page.goto("/register");
+    await page.goto("/en/register");
     await page.getByLabel("Name").fill("Auto Login User");
     await page.getByLabel("Email").fill(email);
     await page.getByLabel("Password").fill("testpass123");
@@ -53,7 +53,7 @@ test.describe("Additional UI Tests", () => {
 
   test("7.2.3 — empty state for new user", async ({ page }) => {
     const email = `empty-${Date.now()}@test.com`;
-    await page.goto("/register");
+    await page.goto("/en/register");
     await page.getByLabel("Name").fill("Empty State User");
     await page.getByLabel("Email").fill(email);
     await page.getByLabel("Password").fill("testpass123");
@@ -64,7 +64,7 @@ test.describe("Additional UI Tests", () => {
 
   test("7.1.5 — updating name in settings reflects after reload", async ({ page }) => {
     await login(page, users.alice.email, users.alice.password);
-    await page.goto("/settings");
+    await page.goto("/en/settings");
 
     const nameInput = page.getByLabel("Name");
     // Wait for React to fully hydrate the field with the current name
@@ -81,7 +81,7 @@ test.describe("Additional UI Tests", () => {
       await expect(page.getByLabel("Name")).toHaveValue("Alice Updated", { timeout: 15000 });
     } finally {
       // Always restore original name even if assertions fail
-      await page.goto("/settings");
+      await page.goto("/en/settings");
       await expect(page.getByLabel("Name")).not.toHaveValue("", { timeout: 10000 });
       await page.getByLabel("Name").fill("Alice Johnson");
       await page.getByRole("button", { name: "Save" }).click();

@@ -37,7 +37,7 @@ test.describe("Admin page UI", () => {
     // Set up: alice should be the admin user (ADMIN_EMAIL=alice@example.com)
     await login(page, users.alice.email, users.alice.password);
 
-    await page.goto("/admin");
+    await page.goto("/en/admin");
 
     // Should see the admin dashboard heading
     await expect(
@@ -62,7 +62,7 @@ test.describe("Admin page UI", () => {
 
   test("admin page shows user management section", async ({ page }) => {
     await login(page, users.alice.email, users.alice.password);
-    await page.goto("/admin");
+    await page.goto("/en/admin");
 
     await expect(
       page.getByRole("heading", { name: "User Management" })
@@ -74,7 +74,7 @@ test.describe("Admin page UI", () => {
 
   test("admin page shows group overview section", async ({ page }) => {
     await login(page, users.alice.email, users.alice.password);
-    await page.goto("/admin");
+    await page.goto("/en/admin");
 
     await expect(
       page.getByRole("heading", { name: "Group Overview" })
@@ -83,7 +83,7 @@ test.describe("Admin page UI", () => {
 
   test("admin page shows storage stats section", async ({ page }) => {
     await login(page, users.alice.email, users.alice.password);
-    await page.goto("/admin");
+    await page.goto("/en/admin");
 
     const storageSection = page.locator("section", {
       has: page.getByRole("heading", { name: "Storage Stats" }),
@@ -99,7 +99,7 @@ test.describe("Admin page UI", () => {
 
   test("admin link visible in sidebar for admin user", async ({ page }) => {
     await login(page, users.alice.email, users.alice.password);
-    await page.goto("/dashboard");
+    await page.goto("/en/dashboard");
 
     // Check sidebar has admin link (only visible on desktop)
     await page.setViewportSize({ width: 1280, height: 800 });

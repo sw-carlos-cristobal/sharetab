@@ -67,6 +67,7 @@ next-env.d.ts
 /tmp-screenshots/
 .claude/settings.local.json
 /.playwright-mcp
+.mcp.json
 
 # IDE
 *.code-workspace

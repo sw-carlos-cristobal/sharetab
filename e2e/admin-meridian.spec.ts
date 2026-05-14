@@ -16,7 +16,7 @@ test.describe("Meridian auth section — unhealthy", () => {
     const mock = new MockProvider(page).usePreset("meridianUnhealthy");
     await mock.install();
     await login(page, users.alice.email, users.alice.password);
-    await page.goto("/admin");
+    await page.goto("/en/admin");
   });
 
   test("shows Meridian Authentication section with unhealthy status", async ({
@@ -71,7 +71,7 @@ test.describe("Meridian login flow", () => {
       .setMeridianLoginResult({ url: "https://claude.ai/oauth/authorize?code=test123" });
     await mock.install();
     await login(page, users.alice.email, users.alice.password);
-    await page.goto("/admin");
+    await page.goto("/en/admin");
 
     await page.getByRole("button", { name: "Authenticate with Claude" }).click();
 
@@ -101,7 +101,7 @@ test.describe("Meridian login flow", () => {
       .setMeridianLoginResult({ url: "https://claude.ai/oauth/authorize?code=test" });
     await mock.install();
     await login(page, users.alice.email, users.alice.password);
-    await page.goto("/admin");
+    await page.goto("/en/admin");
 
     await page.getByRole("button", { name: "Authenticate with Claude" }).click();
     await page
@@ -120,7 +120,7 @@ test.describe("Meridian login flow", () => {
       .setMeridianCompleteResult({ success: true });
     await mock.install();
     await login(page, users.alice.email, users.alice.password);
-    await page.goto("/admin");
+    await page.goto("/en/admin");
 
     await page.getByRole("button", { name: "Authenticate with Claude" }).click();
     await page
@@ -143,7 +143,7 @@ test.describe("Meridian login flow", () => {
       .setMeridianCompleteResult({ success: false, error: "Invalid authorization code" });
     await mock.install();
     await login(page, users.alice.email, users.alice.password);
-    await page.goto("/admin");
+    await page.goto("/en/admin");
 
     await page.getByRole("button", { name: "Authenticate with Claude" }).click();
     await page
@@ -166,7 +166,7 @@ test.describe("Meridian login flow", () => {
       .setMeridianCancelResult();
     await mock.install();
     await login(page, users.alice.email, users.alice.password);
-    await page.goto("/admin");
+    await page.goto("/en/admin");
 
     await page.getByRole("button", { name: "Authenticate with Claude" }).click();
     await expect(
@@ -188,7 +188,7 @@ test.describe("Meridian auth section — healthy", () => {
     const mock = new MockProvider(page).usePreset("meridianHealthy");
     await mock.install();
     await login(page, users.alice.email, users.alice.password);
-    await page.goto("/admin");
+    await page.goto("/en/admin");
 
     await expect(
       page.getByRole("heading", { name: "Meridian Authentication" })
@@ -209,7 +209,7 @@ test.describe("Meridian auth section — not running", () => {
     const mock = new MockProvider(page).usePreset("meridianNotRunning");
     await mock.install();
     await login(page, users.alice.email, users.alice.password);
-    await page.goto("/admin");
+    await page.goto("/en/admin");
 
     await expect(
       page.getByRole("heading", { name: "Meridian Authentication" })
@@ -223,7 +223,7 @@ test.describe("Meridian auth section — login in progress", () => {
     const mock = new MockProvider(page).usePreset("meridianLoginInProgress");
     await mock.install();
     await login(page, users.alice.email, users.alice.password);
-    await page.goto("/admin");
+    await page.goto("/en/admin");
 
     await expect(page.getByText("Login in progress...")).toBeVisible();
   });
@@ -234,7 +234,7 @@ test.describe("Meridian auth section — not applicable", () => {
     page,
   }) => {
     await login(page, users.alice.email, users.alice.password);
-    await page.goto("/admin");
+    await page.goto("/en/admin");
     await expect(page.getByText("Meridian Authentication")).not.toBeVisible();
   });
 });
@@ -246,7 +246,7 @@ test.describe("provider-specific auth sections", () => {
     const mock = new MockProvider(page).usePreset("dbDown");
     await mock.install();
     await login(page, users.alice.email, users.alice.password);
-    await page.goto("/admin");
+    await page.goto("/en/admin");
 
     const healthSection = page.locator("section", {
       has: page.getByRole("heading", { name: "System Health" }),

@@ -10,7 +10,7 @@ test.describe("Groups", () => {
 
   test.describe("Create Group", () => {
     test("2.1.1 — create group with defaults", async ({ page }) => {
-      await page.goto("/groups/new");
+      await page.goto("/en/groups/new");
       await page.getByLabel("Group name").fill("Test Group");
       await page.getByRole("button", { name: "Create Group" }).click();
       // Should redirect to new group detail page
@@ -19,7 +19,7 @@ test.describe("Groups", () => {
     });
 
     test("2.1.2 — create group with all fields", async ({ page }) => {
-      await page.goto("/groups/new");
+      await page.goto("/en/groups/new");
       await page.getByLabel("Group name").fill("Vacation Fund");
       await page.getByLabel("Description").fill("For our summer trip");
       // Select airplane emoji
@@ -77,7 +77,7 @@ test.describe("Groups", () => {
   test.describe("Group Settings", () => {
     test("2.3.1 — owner can update group name", async ({ page }) => {
       // Create a group first
-      await page.goto("/groups/new");
+      await page.goto("/en/groups/new");
       await page.getByLabel("Group name").fill("Rename Me");
       await page.getByRole("button", { name: "Create Group" }).click();
       await page.waitForURL(/\/groups\/\w+$/, { timeout: 10000 });
@@ -115,7 +115,7 @@ test.describe("Groups", () => {
 
   test.describe("Seed Data", () => {
     test("seed demo groups exist and are accessible", async ({ page }) => {
-      await page.goto("/groups");
+      await page.goto("/en/groups");
       await page.getByPlaceholder("Search groups...").fill("Apartment");
       await expect(page.getByText("Apartment").first()).toBeVisible();
       await page.getByPlaceholder("Search groups...").fill("Japan Trip");

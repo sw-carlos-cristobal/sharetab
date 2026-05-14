@@ -8,7 +8,7 @@ test.describe("Password Change — Settings Page", () => {
   test("settings page shows change password form", async ({ page }) => {
     const email = uniqueEmail("pwform");
     await register(page, "PW Form User", email, password);
-    await page.goto("/settings");
+    await page.goto("/en/settings");
     await expect(page.getByText("Change Password", { exact: true })).toBeVisible();
     await expect(page.locator("#currentPassword")).toBeVisible();
     await expect(page.locator("#newPassword")).toBeVisible();
@@ -19,7 +19,7 @@ test.describe("Password Change — Settings Page", () => {
   test("wrong current password shows error", async ({ page }) => {
     const email = uniqueEmail("pwwrong");
     await register(page, "PW Wrong User", email, password);
-    await page.goto("/settings");
+    await page.goto("/en/settings");
 
     await page.locator("#currentPassword").fill("wrongpassword");
     await page.locator("#newPassword").fill("newpass123");
@@ -32,7 +32,7 @@ test.describe("Password Change — Settings Page", () => {
   test("mismatched passwords shows inline warning", async ({ page }) => {
     const email = uniqueEmail("pwmismatch");
     await register(page, "PW Mismatch User", email, password);
-    await page.goto("/settings");
+    await page.goto("/en/settings");
 
     await page.locator("#newPassword").fill("newpass123");
     await page.locator("#confirmPassword").fill("different456");
@@ -45,7 +45,7 @@ test.describe("Password Change — Settings Page", () => {
     const email = uniqueEmail("pwchange");
     await register(page, "PW Test User", email, "oldpass123");
 
-    await page.goto("/settings");
+    await page.goto("/en/settings");
     await page.locator("#currentPassword").fill("oldpass123");
     await page.locator("#newPassword").fill("newpass456");
     await page.locator("#confirmPassword").fill("newpass456");
@@ -54,7 +54,7 @@ test.describe("Password Change — Settings Page", () => {
     await expect(page.getByText("Password changed!")).toBeVisible({ timeout: 10000 });
 
     // Sign out and login with new password
-    await page.goto("/login");
+    await page.goto("/en/login");
     await page.getByLabel("Email").fill(email);
     await page.getByLabel("Password").fill("newpass456");
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -65,12 +65,12 @@ test.describe("Password Change — Settings Page", () => {
 
 test.describe("Forgot Password — Login Page", () => {
   test("login page shows forgot password link", async ({ page }) => {
-    await page.goto("/login");
+    await page.goto("/en/login");
     await expect(page.getByText("Forgot password?")).toBeVisible();
   });
 
   test("clicking forgot password switches to magic link mode", async ({ page }) => {
-    await page.goto("/login");
+    await page.goto("/en/login");
     await page.getByText("Forgot password?").click();
 
     await expect(page.getByText("We'll send you a magic link")).toBeVisible();

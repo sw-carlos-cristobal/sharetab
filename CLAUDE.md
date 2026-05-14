@@ -97,7 +97,7 @@ npx prisma db push   # Push schema without migration (dev only)
 - `BASE_URL=http://localhost:3000 npx playwright test --headed` — visual testing
 - `RUN_AI_TESTS=1` — enable AI-dependent tests (requires configured AI provider)
 - Run `npm run dev:full` to start embedded PostgreSQL + dev server for testing
-- Set `AUTH_RATE_LIMIT_MAX=9999` in `.env` to avoid rate limiting during test runs
+- Set `AUTH_RATE_LIMIT_MAX=9999` and `GUEST_RATE_LIMIT_MAX=9999` in `.env` to avoid rate limiting during test runs
 - E2e tests use `navigateToGroup(page, name)` helper for pagination-safe group navigation
 - `createTestGroup()` auto-deletes the group on `dispose()` to avoid test pollution
 - Do NOT rely on Chrome DevTools MCP viewport emulation for visual accuracy — it doesn't account for browser chrome

@@ -6,7 +6,7 @@ const RECEIPT_PATH = resolve("e2e/receipts/coffee-shop.png");
 
 async function goToAdminAndWaitForProviderSection(page: Page) {
   await login(page, users.alice.email, users.alice.password);
-  await page.goto("/admin");
+  await page.goto("/en/admin");
   const section = page.getByTestId("ai-provider-test-section");
   await expect(section).toBeVisible({ timeout: 15000 });
   return section;

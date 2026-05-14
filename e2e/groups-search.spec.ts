@@ -4,7 +4,7 @@ import { users, login } from "./helpers";
 test.describe("Groups Search & Filter", () => {
   test.beforeEach(async ({ page }) => {
     await login(page, users.alice.email, users.alice.password);
-    await page.goto("/groups");
+    await page.goto("/en/groups");
   });
 
   test("search input is visible when groups exist", async ({ page }) => {
@@ -59,7 +59,7 @@ test.describe("Groups Search & Filter", () => {
 
   test("search input hidden when user has no groups", async ({ page }) => {
     // Register a fresh user with no groups
-    await page.goto("/register");
+    await page.goto("/en/register");
     const email = `search-test-${Date.now()}@test.com`;
     await page.getByLabel("Name").fill("Search Tester");
     await page.getByLabel("Email").fill(email);
@@ -67,7 +67,7 @@ test.describe("Groups Search & Filter", () => {
     await page.getByRole("button", { name: "Create account" }).click();
     await page.waitForURL("**/dashboard", { timeout: 15000 });
 
-    await page.goto("/groups");
+    await page.goto("/en/groups");
     await expect(page.getByText("No groups yet")).toBeVisible();
     await expect(page.getByPlaceholder("Search groups...")).not.toBeVisible();
   });

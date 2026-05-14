@@ -82,7 +82,7 @@ test.describe("Admin — Guest Split Cleanup", () => {
 
   test("admin tools section shows Guest Split Cleanup card", async ({ page }) => {
     await login(page, users.alice.email, users.alice.password);
-    await page.goto("/admin");
+    await page.goto("/en/admin");
 
     // Should see the cleanup card within the tools section
     const toolsSection = page.locator("section", {
@@ -98,7 +98,7 @@ test.describe("Admin — Guest Split Cleanup", () => {
 
   test("purge button works and shows result", async ({ page }) => {
     await login(page, users.alice.email, users.alice.password);
-    await page.goto("/admin");
+    await page.goto("/en/admin");
 
     const toolsSection = page.locator("section", {
       has: page.getByRole("heading", { name: "Admin Tools" }),

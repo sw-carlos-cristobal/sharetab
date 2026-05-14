@@ -4,12 +4,12 @@ const hasEmailConfig = !!process.env.EMAIL_SERVER_HOST;
 
 test.describe("Magic Link Auth", () => {
   test("login page shows magic link option", async ({ page }) => {
-    await page.goto("/login");
+    await page.goto("/en/login");
     await expect(page.getByRole("button", { name: "Sign in with email link" })).toBeVisible();
   });
 
   test("clicking magic link button switches to email-only mode", async ({ page }) => {
-    await page.goto("/login");
+    await page.goto("/en/login");
     await page.getByRole("button", { name: "Sign in with email link" }).click();
 
     // Should show magic link form
@@ -24,7 +24,7 @@ test.describe("Magic Link Auth", () => {
   });
 
   test("switching back to password mode restores password field", async ({ page }) => {
-    await page.goto("/login");
+    await page.goto("/en/login");
 
     // Switch to magic link mode
     await page.getByRole("button", { name: "Sign in with email link" }).click();
@@ -37,7 +37,7 @@ test.describe("Magic Link Auth", () => {
   });
 
   test("magic link requires email field", async ({ page }) => {
-    await page.goto("/login");
+    await page.goto("/en/login");
     await page.getByRole("button", { name: "Sign in with email link" }).click();
 
     // Try to submit without email
@@ -51,7 +51,7 @@ test.describe("Magic Link Auth", () => {
   test("sending magic link redirects to verify-request page", async ({ page }) => {
     test.skip(!hasEmailConfig, "Email server not configured — set EMAIL_SERVER_HOST to enable");
 
-    await page.goto("/login");
+    await page.goto("/en/login");
     await page.getByRole("button", { name: "Sign in with email link" }).click();
     await page.getByLabel("Email").fill("auth.cristobal@gmail.com");
     await page.getByRole("button", { name: "Send magic link" }).click();
@@ -65,7 +65,7 @@ test.describe("Magic Link Auth", () => {
   test("verify-request page has back to sign in link", async ({ page }) => {
     test.skip(!hasEmailConfig, "Email server not configured — set EMAIL_SERVER_HOST to enable");
 
-    await page.goto("/login");
+    await page.goto("/en/login");
     await page.getByRole("button", { name: "Sign in with email link" }).click();
     await page.getByLabel("Email").fill("auth.cristobal@gmail.com");
     await page.getByRole("button", { name: "Send magic link" }).click();

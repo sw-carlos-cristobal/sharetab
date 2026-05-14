@@ -169,7 +169,7 @@ test.describe("OCR Receipt Scanning", () => {
     });
 
     test("guest split page uploads and processes receipt", async ({ page }) => {
-      await page.goto("/split");
+      await page.goto("/en/split");
       await expect(page.getByText("Split a bill")).toBeVisible();
 
       // Upload using the "Choose from Gallery" input (no capture attr)

@@ -14,7 +14,7 @@ test.describe.configure({ mode: "serial" });
 test.describe("Admin audit log", () => {
   test("admin can view audit log section", async ({ page }) => {
     await login(page, users.alice.email, users.alice.password);
-    await page.goto("/admin");
+    await page.goto("/en/admin");
 
     await expect(
       page.getByRole("heading", { name: "Audit Log" })
@@ -36,7 +36,7 @@ test.describe("User suspend/unsuspend", () => {
     page,
   }) => {
     await login(page, users.alice.email, users.alice.password);
-    await page.goto("/admin");
+    await page.goto("/en/admin");
 
     // Look in the User Management section specifically
     const userSection = page.locator("section", {
@@ -103,7 +103,7 @@ test.describe("User suspend/unsuspend", () => {
 test.describe("Registration control", () => {
   test("admin page shows registration control section", async ({ page }) => {
     await login(page, users.alice.email, users.alice.password);
-    await page.goto("/admin");
+    await page.goto("/en/admin");
 
     await expect(
       page.getByRole("heading", { name: "Registration Control" })
@@ -173,7 +173,7 @@ test.describe("Registration control", () => {
 
     try {
       // Try to register without an invite code
-      await page.goto("/register");
+      await page.goto("/en/register");
 
       // Invite code field should be visible
       await expect(page.getByLabel("Invite Code")).toBeVisible();
@@ -217,7 +217,7 @@ test.describe("Registration control", () => {
     try {
       const testEmail = `invite-test-${Date.now()}@test.com`;
 
-      await page.goto("/register");
+      await page.goto("/en/register");
       await page.getByLabel("Name").fill("Invited User");
       await page.getByLabel("Email").fill(testEmail);
       await page.getByLabel("Password").fill("password123");
@@ -244,7 +244,7 @@ test.describe("Registration control", () => {
     });
 
     try {
-      await page.goto("/register");
+      await page.goto("/en/register");
 
       // Should show closed message
       await expect(
@@ -268,7 +268,7 @@ test.describe("Registration control", () => {
 test.describe("Announcement banner", () => {
   test("admin page shows announcement section", async ({ page }) => {
     await login(page, users.alice.email, users.alice.password);
-    await page.goto("/admin");
+    await page.goto("/en/admin");
 
     await expect(
       page.getByRole("heading", { name: "Announcement Banner" })
@@ -301,7 +301,7 @@ test.describe("Announcement banner", () => {
 test.describe("Global activity feed", () => {
   test("admin page shows activity feed section", async ({ page }) => {
     await login(page, users.alice.email, users.alice.password);
-    await page.goto("/admin");
+    await page.goto("/en/admin");
 
     await expect(
       page.getByRole("heading", { name: "Global Activity Feed" })
@@ -321,7 +321,7 @@ test.describe("Global activity feed", () => {
 test.describe("AI usage statistics", () => {
   test("admin page shows AI usage section", async ({ page }) => {
     await login(page, users.alice.email, users.alice.password);
-    await page.goto("/admin");
+    await page.goto("/en/admin");
 
     await expect(
       page.getByRole("heading", { name: "AI Usage" })
@@ -347,7 +347,7 @@ test.describe("Admin tools", () => {
     page,
   }) => {
     await login(page, users.alice.email, users.alice.password);
-    await page.goto("/admin");
+    await page.goto("/en/admin");
 
     await expect(
       page.getByRole("heading", { name: "Admin Tools" })
@@ -387,7 +387,7 @@ test.describe("Admin tools", () => {
 test.describe("Server logs", () => {
   test("admin page shows server logs section", async ({ page }) => {
     await login(page, users.alice.email, users.alice.password);
-    await page.goto("/admin");
+    await page.goto("/en/admin");
 
     await expect(
       page.getByRole("heading", { name: "Server Logs" })
@@ -429,7 +429,7 @@ test.describe("User impersonation", () => {
     page,
   }) => {
     await login(page, users.alice.email, users.alice.password);
-    await page.goto("/admin");
+    await page.goto("/en/admin");
 
     // Use User Management section to avoid strict mode violations with other tables
     const userSection = page.locator("section", {
@@ -480,7 +480,7 @@ test.describe("User impersonation", () => {
     page,
   }) => {
     await login(page, users.alice.email, users.alice.password);
-    await page.goto("/admin");
+    await page.goto("/en/admin");
 
     // Click impersonate on Bob
     const userSection = page.locator("section", {

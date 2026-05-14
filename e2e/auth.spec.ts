@@ -74,12 +74,12 @@ test.describe("Authentication", () => {
 
   test.describe("Session & Middleware", () => {
     test("1.3.1 — dashboard redirects to login without auth", async ({ page }) => {
-      await page.goto("/dashboard");
+      await page.goto("/en/dashboard");
       await expect(page).toHaveURL(/\/(en|es)\/login/);
     });
 
     test("1.3.2 — groups redirects to login without auth", async ({ page }) => {
-      await page.goto("/groups");
+      await page.goto("/en/groups");
       await expect(page).toHaveURL(/\/(en|es)\/login/);
     });
 

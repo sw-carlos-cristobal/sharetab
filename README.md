@@ -278,6 +278,7 @@ OCR is always appended as the final fallback if omitted, so even if your OAuth s
 | `MAX_UPLOAD_SIZE_MB` | `10` | Maximum upload file size. |
 | `AUTH_RATE_LIMIT_MAX` | `5` | Max login attempts per IP per hour. |
 | `REGISTER_RATE_LIMIT_MAX` | `10` | Max registration attempts per IP per hour. |
+| `GUEST_RATE_LIMIT_MAX` | `10` | Max guest split creations per IP per hour. |
 | `LOG_LEVEL` | `info` | Logging verbosity: `debug`, `info`, `warn`, or `error`. |
 
 ## Tech Stack
@@ -369,7 +370,7 @@ BASE_URL=http://localhost:3000 npx playwright test --headed
 BASE_URL=http://localhost:3000 RUN_AI_TESTS=1 npx playwright test
 ```
 
-Set `AUTH_RATE_LIMIT_MAX=9999` in `.env` to avoid rate limiting during repeated test runs.
+Set `AUTH_RATE_LIMIT_MAX=9999` and `GUEST_RATE_LIMIT_MAX=9999` in `.env` to avoid rate limiting during repeated test runs.
 
 ## Contributing
 

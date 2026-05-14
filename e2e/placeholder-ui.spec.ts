@@ -8,7 +8,7 @@ test.describe("Placeholder Members UI", () => {
 
   test("add placeholder member from group settings", async ({ page }) => {
     // Create a fresh group
-    await page.goto("/groups/new");
+    await page.goto("/en/groups/new");
     await page.getByLabel("Group name").fill("Placeholder UI Test");
     await page.getByRole("button", { name: "Create Group" }).click();
     await expect(page.getByRole("heading", { name: "Placeholder UI Test" })).toBeVisible({ timeout: 15000 });
@@ -30,7 +30,7 @@ test.describe("Placeholder Members UI", () => {
 
   test("placeholder member shows with badge on group detail", async ({ page }) => {
     // Create group and add placeholder via API first
-    await page.goto("/groups/new");
+    await page.goto("/en/groups/new");
     await page.getByLabel("Group name").fill("Badge Test Group");
     await page.getByRole("button", { name: "Create Group" }).click();
     await expect(page.getByRole("heading", { name: "Badge Test Group" })).toBeVisible({ timeout: 15000 });

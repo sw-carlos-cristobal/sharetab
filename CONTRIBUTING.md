@@ -64,7 +64,7 @@ npm run dev:full   # in one terminal
 BASE_URL=http://localhost:3000 npx playwright test   # in another
 ```
 
-Tip: set `AUTH_RATE_LIMIT_MAX=9999` in `.env` to avoid rate limiting during test runs.
+Tip: set `AUTH_RATE_LIMIT_MAX=9999` and `GUEST_RATE_LIMIT_MAX=9999` in `.env` to avoid rate limiting during test runs.
 
 ### Linting
 

@@ -24,7 +24,7 @@ test.describe("Sidebar", () => {
 
   test("sidebar bottom visible at short viewport height", async ({ page }) => {
     await page.setViewportSize({ width: 1024, height: 600 });
-    await page.goto("/dashboard");
+    await page.goto("/en/dashboard");
     const signOut = page.locator("aside").getByText("Sign out");
     await expect(signOut).toBeVisible();
     await expect(signOut).toBeInViewport();
@@ -32,7 +32,7 @@ test.describe("Sidebar", () => {
 
   test("sidebar bottom visible at narrow viewport width", async ({ page }) => {
     await page.setViewportSize({ width: 1024, height: 700 });
-    await page.goto("/dashboard");
+    await page.goto("/en/dashboard");
     const signOut = page.locator("aside").getByText("Sign out");
     await expect(signOut).toBeVisible();
     await expect(signOut).toBeInViewport();
@@ -58,7 +58,7 @@ test.describe("Responsive layout", () => {
 
   test("dashboard cards do not overflow at narrow width", async ({ page }) => {
     await page.setViewportSize({ width: 900, height: 800 });
-    await page.goto("/dashboard");
+    await page.goto("/en/dashboard");
 
     // Main content should not have horizontal scroll
     const hasOverflow = await page.evaluate(() => {
@@ -70,7 +70,7 @@ test.describe("Responsive layout", () => {
 
   test("dashboard cards stack to single column at narrow width", async ({ page }) => {
     await page.setViewportSize({ width: 900, height: 800 });
-    await page.goto("/dashboard");
+    await page.goto("/en/dashboard");
 
     // Both balance cards should be visible (stacked, not side-by-side overflowing)
     await expect(page.getByText("You are owed").first()).toBeVisible();
@@ -79,7 +79,7 @@ test.describe("Responsive layout", () => {
 
   test("dashboard shows two-column layout at wide viewport", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto("/dashboard");
+    await page.goto("/en/dashboard");
 
     // Both balance cards should be side by side (check they're at similar Y position)
     const owedBox = await page.getByText("You are owed").first().boundingBox();
@@ -99,7 +99,7 @@ test.describe("Live viewport resize", () => {
   test("layout adapts when resizing from desktop to tablet to mobile", async ({ page }) => {
     // Start at desktop
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto("/dashboard");
+    await page.goto("/en/dashboard");
 
     // Desktop: sidebar visible, cards side by side
     await expect(page.locator("aside")).toBeVisible();
@@ -130,7 +130,7 @@ test.describe("Live viewport resize", () => {
 
   test("no horizontal overflow at any size during resize", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto("/dashboard");
+    await page.goto("/en/dashboard");
 
     const sizes = [
       { width: 1280, height: 800 },

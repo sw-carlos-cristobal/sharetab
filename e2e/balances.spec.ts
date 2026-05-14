@@ -26,7 +26,7 @@ test.describe("Balances & Settlements", () => {
     test("4.3.3 — new user sees empty dashboard", async ({ page }) => {
       // Register fresh user
       const email = `empty-${Date.now()}@test.com`;
-      await page.goto("/register");
+      await page.goto("/en/register");
       await page.getByLabel("Name").fill("Empty User");
       await page.getByLabel("Email").fill(email);
       await page.getByLabel("Password").fill("testpass123");
@@ -53,7 +53,7 @@ test.describe("Balances & Settlements", () => {
     test("7.3.3 — settled group shows all settled", async ({ page }) => {
       await login(page, users.alice.email, users.alice.password);
       // Create a new group with no expenses
-      await page.goto("/groups/new");
+      await page.goto("/en/groups/new");
       await page.getByLabel("Group name").fill("Empty Balance Group");
       await page.getByRole("button", { name: "Create Group" }).click();
       await page.waitForURL(/\/groups\/\w+$/, { timeout: 10000 });

@@ -16,7 +16,7 @@ test.describe("Receipt rescan — smoke tests", () => {
   });
 
   test("guest split page renders upload step", async ({ page }) => {
-    await page.goto("/split");
+    await page.goto("/en/split");
     await expect(page.getByText("Split a bill")).toBeVisible();
     await expect(page.getByText("Snap a Bill")).toBeVisible();
   });

@@ -8,7 +8,7 @@ test.describe("Security & Edge Cases", () => {
   test.describe("API Security", () => {
     test("9.5 — XSS in registration name is escaped", async ({ page }) => {
       const email = `xss-${Date.now()}@test.com`;
-      await page.goto("/register");
+      await page.goto("/en/register");
       await page.getByLabel("Name").fill("<script>alert(1)</script>");
       await page.getByLabel("Email").fill(email);
       await page.getByLabel("Password").fill("testpass123");
@@ -24,7 +24,7 @@ test.describe("Security & Edge Cases", () => {
 
     test("9.6 — SQL injection in name doesn't break DB", async ({ page }) => {
       const email = `sqli-${Date.now()}@test.com`;
-      await page.goto("/register");
+      await page.goto("/en/register");
       await page.getByLabel("Name").fill("'; DROP TABLE \"User\";--");
       await page.getByLabel("Email").fill(email);
       await page.getByLabel("Password").fill("testpass123");

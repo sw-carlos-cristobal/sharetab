@@ -212,7 +212,7 @@ test.describe("Group Archiving", () => {
 
       await trpcMutation(owner, "groups.archive", { groupId });
 
-      await page.goto("/groups");
+      await page.goto("/en/groups");
       await page.getByPlaceholder("Search groups...").fill("Archive Hidden Test");
       // Should not appear in active list
       await expect(page.getByText("Archive Hidden Test")).not.toBeVisible();
@@ -229,7 +229,7 @@ test.describe("Group Archiving", () => {
 
       await trpcMutation(owner, "groups.archive", { groupId });
 
-      await page.goto("/groups");
+      await page.goto("/en/groups");
       await page.getByRole("button", { name: /Archived/ }).click();
       await page.getByPlaceholder("Search groups...").fill("Archive Toggle Test");
       await expect(page.getByText("Archive Toggle Test").first()).toBeVisible();
@@ -272,7 +272,7 @@ test.describe("Group Archiving", () => {
       await expect(page.getByText("This group is archived")).not.toBeVisible({ timeout: 5000 });
 
       // Should appear back in active groups list
-      await page.goto("/groups");
+      await page.goto("/en/groups");
       await page.getByPlaceholder("Search groups...").fill("Unarchive UI Test");
       await expect(page.getByText("Unarchive UI Test").first()).toBeVisible();
 
