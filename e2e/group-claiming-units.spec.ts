@@ -474,7 +474,7 @@ test.describe("Group claiming units", () => {
     await page.waitForTimeout(1500);
 
     // ×2 badge should be gone
-    await expect(page.getByText("×2")).not.toBeVisible();
+    await expect(page.getByText("×2")).toHaveCount(0);
 
     await page.close();
     await browserCtx.close();
