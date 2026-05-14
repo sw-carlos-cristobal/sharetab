@@ -180,20 +180,14 @@ The entrypoint automatically runs any SQL migration files in `prisma/migrations/
 
 ### Manual migration (v0.7.x → v0.8.0)
 
-Version 0.8.0 added an `updatedAt` column and converted the `status` column from text to an enum on the `GuestSplit` table. If you upgraded the container image but see errors like:
-
-```
-column GuestSplit.updatedAt does not exist
-```
-
-Run the migration manually:
+Version 0.8.0 added an `updatedAt` column and converted the `status` column from text to an enum on the `GuestSplit` table. This migration now runs automatically on container startup. If you need to run it manually:
 
 ```bash
-docker exec sharetab su-exec postgres psql -U sharetab -d sharetab \
+docker compose exec sharetab su-exec postgres psql -U sharetab -d sharetab \
   -f /app/prisma/migrations/guest_split_status_enum.sql
 ```
 
-This is idempotent — safe to run more than once. Future versions include this migration in the entrypoint automatically.
+This is idempotent — safe to run more than once.
 
 ## Configuration
 

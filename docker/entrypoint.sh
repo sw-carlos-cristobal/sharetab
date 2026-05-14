@@ -74,7 +74,7 @@ if [ -d "/app/prisma/migrations" ]; then
   for sqlfile in /app/prisma/migrations/*.sql; do
     [ -f "$sqlfile" ] || continue
     echo "Running migration: $(basename "$sqlfile")..."
-    su-exec postgres psql -U "$DB_USER" -d "$DB_NAME" -f "$sqlfile" 2>&1 || \
+    su-exec postgres psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$sqlfile" 2>&1 || \
       echo "Warning: Migration $(basename "$sqlfile") had errors (may be safe to ignore if already applied)"
   done
 fi
