@@ -115,8 +115,8 @@ test.describe("Group claiming units", () => {
 
     await expect(page.locator('[data-testid^="claim-item-"]').first()).toBeVisible({ timeout: 15000 });
 
-    // Should NOT show any group badge
-    await expect(page.getByTestId("group-badge-0")).not.toBeVisible();
+    // Should NOT show any group badge for any person
+    await expect(page.locator('[data-testid^="group-badge-"]')).toHaveCount(0);
 
     await page.close();
     await browserCtx.close();
@@ -385,7 +385,7 @@ test.describe("Group claiming units", () => {
     await expect(page.locator('[data-sonner-toast]')).toBeHidden({ timeout: 10000 });
 
     // No group badge initially (solo)
-    await expect(page.getByTestId("group-badge-0")).not.toBeVisible();
+    await expect(page.locator('[data-testid^="group-badge-"]')).toHaveCount(0);
 
     // Click edit pencil on Alice
     await page.getByTestId("edit-person-0").click();
