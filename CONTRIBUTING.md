@@ -83,6 +83,8 @@ npx prisma db push      # apply to dev DB
 npx prisma generate     # regenerate the client
 ```
 
+**Breaking schema changes** (enum conversions, column type changes, data migrations) can't be handled by `prisma db push` alone. For these, add an idempotent `.sql` file in `prisma/migrations/`. The Docker entrypoint runs all `*.sql` files in that directory before `prisma db push`, so they execute automatically on container startup. Name the file descriptively (e.g., `guest_split_status_enum.sql`) and make it safe to re-run.
+
 ### Adding a tRPC route
 
 Routers live in `src/server/trpc/routers/`. Add your procedure there and wire it into `src/server/trpc/router.ts`.

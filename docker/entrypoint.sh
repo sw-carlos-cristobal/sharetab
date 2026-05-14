@@ -69,6 +69,16 @@ export DATABASE_URL="${DATABASE_URL:-postgresql://$DB_USER:$DB_PASSWORD@localhos
 
 # ── Run Migrations ──────────────────────────────────────────
 
+# Run manual SQL migrations (for changes prisma db push can't handle, e.g. enum conversions)
+if [ -d "/app/prisma/migrations" ]; then
+  for sqlfile in /app/prisma/migrations/*.sql; do
+    [ -f "$sqlfile" ] || continue
+    echo "Running migration: $(basename "$sqlfile")..."
+    su-exec postgres psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$sqlfile" 2>&1 || \
+      echo "Warning: Migration $(basename "$sqlfile") had errors (may be safe to ignore if already applied)"
+  done
+fi
+
 echo "Running database migrations..."
 NODE_PATH=/prisma-cli/node_modules node /prisma-cli/node_modules/prisma/build/index.js db push || \
 echo "Warning: Could not apply schema"
