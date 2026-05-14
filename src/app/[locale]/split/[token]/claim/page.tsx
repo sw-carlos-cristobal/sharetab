@@ -894,7 +894,7 @@ export default function ClaimPage({
                   <>
                     <span className="flex-1 text-sm font-medium">
                       {person.name}
-                      {person.groupSize > 1 && ` (×${person.groupSize})`}
+                      {person.groupSize > 1 && <span data-testid={`group-badge-${idx}`}>{` (×${person.groupSize})`}</span>}
                       {idx === myPersonIndex && ` ${t("you")}`}
                     </span>
                     <button
