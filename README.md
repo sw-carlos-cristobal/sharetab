@@ -166,6 +166,35 @@ You can also skip the manual copy and paste the raw template URL into Unraid's t
 docker compose exec sharetab su-exec postgres pg_dump -U sharetab sharetab > backup.sql
 ```
 
+## Upgrading
+
+When upgrading to a new ShareTab version, pull the latest image and recreate the container:
+
+```bash
+cd docker
+docker compose pull
+docker compose up -d
+```
+
+The entrypoint automatically runs any SQL migration files in `prisma/migrations/` before applying the Prisma schema. Most upgrades are fully automatic.
+
+### Manual migration (v0.7.x → v0.8.0)
+
+Version 0.8.0 added an `updatedAt` column and converted the `status` column from text to an enum on the `GuestSplit` table. If you upgraded the container image but see errors like:
+
+```
+column GuestSplit.updatedAt does not exist
+```
+
+Run the migration manually:
+
+```bash
+docker exec sharetab su-exec postgres psql -U sharetab -d sharetab \
+  -f /app/prisma/migrations/guest_split_status_enum.sql
+```
+
+This is idempotent — safe to run more than once. Future versions include this migration in the entrypoint automatically.
+
 ## Configuration
 
 All configuration is done through environment variables. Copy `.env.example` to `.env` and adjust as needed.
