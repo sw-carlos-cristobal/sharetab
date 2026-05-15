@@ -8,7 +8,7 @@ async function goToAdminAndWaitForProviderSection(page: Page) {
   await login(page, users.alice.email, users.alice.password);
   await page.goto("/en/admin");
   const section = page.getByTestId("ai-provider-test-section");
-  await expect(section).toBeVisible({ timeout: 15000 });
+  await expect(section).toBeVisible({ timeout: 30000 });
   return section;
 }
 

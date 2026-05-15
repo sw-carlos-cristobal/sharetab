@@ -4,7 +4,7 @@ import { readFileSync } from "fs";
 import { users, authedContext, trpcMutation, trpcQuery, trpcResult, trpcError, createTestGroup , FAKE_JPEG } from "./helpers";
 
 const BASE = process.env.BASE_URL || "http://localhost:3001";
-const AI_TIMEOUT = 90000; // 90s for AI processing calls
+const AI_TIMEOUT = 120000; // 120s for AI processing calls
 
 test.describe("Receipt Scanning Pipeline (5.2-5.3)", () => {
   // Set RUN_AI_TESTS=1 to enable AI-dependent tests

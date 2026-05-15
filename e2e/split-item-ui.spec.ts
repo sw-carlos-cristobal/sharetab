@@ -5,6 +5,13 @@ import { users, login, navigateToGroup, authedContext, trpcMutation, trpcQuery, 
 const RECEIPT_PATH = resolve("e2e/receipts/coffee-shop.png");
 const BASE = process.env.BASE_URL || "http://localhost:3001";
 
+async function getApartmentGroupId(ctx: Awaited<ReturnType<typeof authedContext>>) {
+  const res = await trpcQuery(ctx, "groups.list");
+  const groups = await trpcResult(res);
+  const apartment = groups.find((g: { name: string }) => g.name === "Apartment");
+  return apartment?.id ?? groups[0]?.id;
+}
+
 test.describe("Split Item UI", () => {
   test.beforeEach(async ({ page }, testInfo) => {
     if (!process.env.RUN_AI_TESTS)
@@ -16,13 +23,14 @@ test.describe("Split Item UI", () => {
   test("split button appears on multi-quantity items and splits correctly", async ({ page }) => {
     // Step 1: Upload and process receipt via API (faster + more reliable)
     const ctx = await authedContext(users.alice.email, users.alice.password);
+    const groupId = await getApartmentGroupId(ctx);
     const uploadRes = await ctx.post(`${BASE}/api/upload`, {
       multipart: { file: { name: "split-ui.png", mimeType: "image/png", buffer: require("fs").readFileSync(RECEIPT_PATH) } },
     });
     const { receiptId } = await uploadRes.json();
 
     // Process the receipt
-    await trpcMutation(ctx, "receipts.processReceipt", { receiptId, groupId: "cmow2v0up0003kwxdb2z6r5rr" }, 90000);
+    await trpcMutation(ctx, "receipts.processReceipt", { receiptId, groupId }, 120000);
 
     // Update one item to have quantity > 1 so the scissors button appears
     const itemsRes = await trpcQuery(ctx, "receipts.getReceiptItems", { receiptId });
@@ -74,11 +82,12 @@ test.describe("Split Item UI", () => {
   test("save for later preserves paid-by and assignments when resuming", async ({ page }) => {
     // Step 1: Set up receipt with items via API
     const ctx = await authedContext(users.alice.email, users.alice.password);
+    const groupId = await getApartmentGroupId(ctx);
     const uploadRes = await ctx.post(`${BASE}/api/upload`, {
       multipart: { file: { name: "sfl-ui.png", mimeType: "image/png", buffer: require("fs").readFileSync(RECEIPT_PATH) } },
     });
     const { receiptId } = await uploadRes.json();
-    await trpcMutation(ctx, "receipts.processReceipt", { receiptId, groupId: "cmow2v0up0003kwxdb2z6r5rr" }, 90000);
+    await trpcMutation(ctx, "receipts.processReceipt", { receiptId, groupId }, 120000);
 
     // Get the items and member IDs
     const itemsRes = await trpcQuery(ctx, "receipts.getReceiptItems", { receiptId });
@@ -120,7 +129,7 @@ test.describe("Split Item UI", () => {
     const firstItemId = itemsData.items[0]?.id;
 
     await trpcMutation(saveCtx, "receipts.saveForLater", {
-      groupId: "cmow2v0up0003kwxdb2z6r5rr",
+      groupId,
       receiptId,
       paidById: selectedValue,
       assignments: firstItemId && memberId ? [{ receiptItemId: firstItemId, userIds: [memberId] }] : [],
@@ -150,24 +159,25 @@ test.describe("Split Item UI", () => {
   test("save for later rehydrates selections without page refresh", async ({ page }) => {
     // API: upload, process, save with paidById + assignments
     const ctx = await authedContext(users.alice.email, users.alice.password);
+    const groupId = await getApartmentGroupId(ctx);
 
     const uploadRes = await ctx.post(`${BASE}/api/upload`, {
       multipart: { file: { name: "rehydrate-test.png", mimeType: "image/png", buffer: require("fs").readFileSync(RECEIPT_PATH) } },
     });
     const { receiptId } = await uploadRes.json();
-    await trpcMutation(ctx, "receipts.processReceipt", { receiptId, groupId: "cmow2v0up0003kwxdb2z6r5rr" }, 90000);
+    await trpcMutation(ctx, "receipts.processReceipt", { receiptId, groupId }, 120000);
 
     // Get items + alice's ID
     const itemsRes = await trpcQuery(ctx, "receipts.getReceiptItems", { receiptId });
     const data = await trpcResult(itemsRes);
-    const groupRes = await trpcQuery(ctx, "groups.get", { groupId: "cmow2v0up0003kwxdb2z6r5rr" });
+    const groupRes = await trpcQuery(ctx, "groups.get", { groupId });
     const groupData = await trpcResult(groupRes);
     const aliceId = groupData.members.find((m: { user: { email: string } }) => m.user.email === "alice@example.com").user.id;
     const firstItemId = data.items[0]?.id;
 
     // Save via API with paidById + assignment
     await trpcMutation(ctx, "receipts.saveForLater", {
-      groupId: "cmow2v0up0003kwxdb2z6r5rr",
+      groupId,
       receiptId,
       paidById: aliceId,
       assignments: firstItemId ? [{ receiptItemId: firstItemId, userIds: [aliceId] }] : [],

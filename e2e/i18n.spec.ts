@@ -8,6 +8,7 @@ test.describe("i18n Language Switching", () => {
 
     // Open language switcher and pick Spanish
     await page.getByTestId("language-switcher").first().click();
+    await expect(page.getByRole("menuitem", { name: "🇪🇸 Español" })).toBeVisible();
     await page.getByRole("menuitem", { name: "🇪🇸 Español" }).click();
     await page.waitForURL("**/es/login");
 
@@ -20,6 +21,7 @@ test.describe("i18n Language Switching", () => {
 
     // Switch back to English
     await page.getByTestId("language-switcher").first().click();
+    await expect(page.getByRole("menuitem", { name: "🇺🇸 English" })).toBeVisible();
     await page.getByRole("menuitem", { name: "🇺🇸 English" }).click();
     await page.waitForURL("**/en/login");
 
@@ -36,6 +38,7 @@ test.describe("i18n Language Switching", () => {
 
     // Switch to Spanish
     await page.getByTestId("language-switcher").first().click();
+    await expect(page.getByRole("menuitem", { name: "🇪🇸 Español" })).toBeVisible();
     await page.getByRole("menuitem", { name: "🇪🇸 Español" }).click();
     await page.waitForURL("**/es/register");
 
@@ -46,6 +49,7 @@ test.describe("i18n Language Switching", () => {
 
     // Switch back to English
     await page.getByTestId("language-switcher").first().click();
+    await expect(page.getByRole("menuitem", { name: "🇺🇸 English" })).toBeVisible();
     await page.getByRole("menuitem", { name: "🇺🇸 English" }).click();
     await page.waitForURL("**/en/register");
 
@@ -61,6 +65,7 @@ test.describe("i18n Language Switching", () => {
 
     // Click sidebar language switcher
     await page.getByTestId("language-switcher").first().click();
+    await expect(page.getByRole("menuitem", { name: "🇪🇸 Español" })).toBeVisible();
     await page.getByRole("menuitem", { name: "🇪🇸 Español" }).click();
     await page.waitForURL("**/es/dashboard");
 
@@ -72,6 +77,7 @@ test.describe("i18n Language Switching", () => {
 
     // Switch back to English
     await page.getByTestId("language-switcher").first().click();
+    await expect(page.getByRole("menuitem", { name: "🇺🇸 English" })).toBeVisible();
     await page.getByRole("menuitem", { name: "🇺🇸 English" }).click();
     await page.waitForURL("**/en/dashboard");
 

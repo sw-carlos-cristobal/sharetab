@@ -23,7 +23,7 @@ test.describe("Guest split — item split UI", () => {
     await fileChooser.setFiles(RECEIPT_PATH);
 
     // Wait for processing → people step
-    await expect(page.getByTestId("guest-people-step")).toBeVisible({ timeout: 90000 });
+    await expect(page.getByTestId("guest-people-step")).toBeVisible({ timeout: 120000 });
 
     // === Step 2: Add people ===
     await page.getByTestId("person-input-0").fill("Alice");
@@ -87,7 +87,7 @@ test.describe("Guest split — item split UI", () => {
     ]);
     await fileChooser.setFiles(RECEIPT_PATH);
 
-    await expect(page.getByTestId("guest-people-step")).toBeVisible({ timeout: 90000 });
+    await expect(page.getByTestId("guest-people-step")).toBeVisible({ timeout: 120000 });
     await page.getByTestId("person-input-0").fill("Alice");
     await page.getByTestId("next-assign-btn").click();
     await expect(page.getByTestId("guest-assign-step")).toBeVisible({ timeout: 10000 });

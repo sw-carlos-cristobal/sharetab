@@ -25,7 +25,7 @@ test.describe("Guest Claiming Session UI", () => {
     await fileChooser.setFiles(RECEIPT_PATH);
 
     // Wait for processing → people step
-    await expect(page.getByTestId("guest-people-step")).toBeVisible({ timeout: 90000 });
+    await expect(page.getByTestId("guest-people-step")).toBeVisible({ timeout: 120000 });
 
     // Add creator name
     await page.getByTestId("person-input-0").fill("Alice");
@@ -77,8 +77,9 @@ test.describe("Guest Claiming Session UI", () => {
     // Should see the join form
     await expect(page2.getByTestId("claim-join-form")).toBeVisible({ timeout: 10000 });
 
-    // Bob joins
+    // Bob joins — wait for button to be enabled after form renders
     await page2.getByTestId("claim-name-input").fill("Bob");
+    await expect(page2.getByTestId("claim-join-btn")).toBeEnabled();
     await page2.getByTestId("claim-join-btn").click();
 
     // Should see items
