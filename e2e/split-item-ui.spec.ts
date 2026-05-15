@@ -5,10 +5,11 @@ import { users, login, navigateToGroup, authedContext, trpcMutation, trpcQuery, 
 const RECEIPT_PATH = resolve("e2e/receipts/coffee-shop.png");
 const BASE = process.env.BASE_URL || "http://localhost:3001";
 
-async function getFirstGroupId(ctx: Awaited<ReturnType<typeof authedContext>>) {
+async function getApartmentGroupId(ctx: Awaited<ReturnType<typeof authedContext>>) {
   const res = await trpcQuery(ctx, "groups.list");
   const groups = await trpcResult(res);
-  return groups[0]?.id;
+  const apartment = groups.find((g: { name: string }) => g.name === "Apartment");
+  return apartment?.id ?? groups[0]?.id;
 }
 
 test.describe("Split Item UI", () => {
@@ -22,7 +23,7 @@ test.describe("Split Item UI", () => {
   test("split button appears on multi-quantity items and splits correctly", async ({ page }) => {
     // Step 1: Upload and process receipt via API (faster + more reliable)
     const ctx = await authedContext(users.alice.email, users.alice.password);
-    const groupId = await getFirstGroupId(ctx);
+    const groupId = await getApartmentGroupId(ctx);
     const uploadRes = await ctx.post(`${BASE}/api/upload`, {
       multipart: { file: { name: "split-ui.png", mimeType: "image/png", buffer: require("fs").readFileSync(RECEIPT_PATH) } },
     });
@@ -81,7 +82,7 @@ test.describe("Split Item UI", () => {
   test("save for later preserves paid-by and assignments when resuming", async ({ page }) => {
     // Step 1: Set up receipt with items via API
     const ctx = await authedContext(users.alice.email, users.alice.password);
-    const groupId = await getFirstGroupId(ctx);
+    const groupId = await getApartmentGroupId(ctx);
     const uploadRes = await ctx.post(`${BASE}/api/upload`, {
       multipart: { file: { name: "sfl-ui.png", mimeType: "image/png", buffer: require("fs").readFileSync(RECEIPT_PATH) } },
     });
@@ -158,7 +159,7 @@ test.describe("Split Item UI", () => {
   test("save for later rehydrates selections without page refresh", async ({ page }) => {
     // API: upload, process, save with paidById + assignments
     const ctx = await authedContext(users.alice.email, users.alice.password);
-    const groupId = await getFirstGroupId(ctx);
+    const groupId = await getApartmentGroupId(ctx);
 
     const uploadRes = await ctx.post(`${BASE}/api/upload`, {
       multipart: { file: { name: "rehydrate-test.png", mimeType: "image/png", buffer: require("fs").readFileSync(RECEIPT_PATH) } },

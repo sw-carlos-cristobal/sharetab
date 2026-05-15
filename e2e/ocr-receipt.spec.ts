@@ -165,7 +165,7 @@ test.describe("OCR Receipt Scanning", () => {
       await fileInput.setInputFiles(resolve("e2e/test-receipt.png"));
 
       // Wait for processing to complete — should show dollar amounts
-      await expect(page.getByText(/\$\d+\.\d{2}/).first()).toBeVisible({ timeout: 120000 });
+      await expect(page.getByText(/\$\d+\.\d{2}/).first()).toBeVisible({ timeout: OCR_TIMEOUT });
     });
 
     test("guest split page uploads and processes receipt", async ({ page }) => {
@@ -177,7 +177,7 @@ test.describe("OCR Receipt Scanning", () => {
       await fileInput.setInputFiles(resolve("e2e/test-receipt.png"));
 
       // After OCR processing, the guest flow advances to "Who's splitting?"
-      await expect(page.getByText("Who's splitting?")).toBeVisible({ timeout: 120000 });
+      await expect(page.getByText("Who's splitting?")).toBeVisible({ timeout: OCR_TIMEOUT });
       await expect(page.getByText("Assign Items")).toBeVisible();
     });
   });
