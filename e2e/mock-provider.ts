@@ -24,7 +24,6 @@ export interface SystemHealthOverride {
   dbStatus?: "connected" | "disconnected";
   aiProvider?: string;
   aiAvailable?: boolean;
-  ocrFallback?: boolean;
   version?: string;
   /** Seconds — defaults to 120 */
   uptime?: number;
@@ -58,27 +57,27 @@ export interface MeridianCompleteResult {
 export const providerPresets = {
   // ── OpenAI ─────────────────────────────
   openaiAvailable: {
-    systemHealth: { aiProvider: "openai", aiAvailable: true, ocrFallback: false },
+    systemHealth: { aiProvider: "openai", aiAvailable: true },
     meridianAuth: { status: "not_applicable" as const },
   },
   openaiUnavailable: {
-    systemHealth: { aiProvider: "openai", aiAvailable: false, ocrFallback: true },
+    systemHealth: { aiProvider: "openai", aiAvailable: false },
     meridianAuth: { status: "not_applicable" as const },
   },
 
   // ── Claude (API key) ───────────────────
   claudeAvailable: {
-    systemHealth: { aiProvider: "claude", aiAvailable: true, ocrFallback: false },
+    systemHealth: { aiProvider: "claude", aiAvailable: true },
     meridianAuth: { status: "not_applicable" as const },
   },
   claudeUnavailable: {
-    systemHealth: { aiProvider: "claude", aiAvailable: false, ocrFallback: true },
+    systemHealth: { aiProvider: "claude", aiAvailable: false },
     meridianAuth: { status: "not_applicable" as const },
   },
 
   // ── Meridian (Claude OAuth proxy) ──────
   meridianHealthy: {
-    systemHealth: { aiProvider: "meridian", aiAvailable: true, ocrFallback: false },
+    systemHealth: { aiProvider: "meridian", aiAvailable: true },
     meridianAuth: {
       status: "healthy" as const,
       email: "user@claude.ai",
@@ -86,7 +85,7 @@ export const providerPresets = {
     },
   },
   meridianUnhealthy: {
-    systemHealth: { aiProvider: "meridian", aiAvailable: false, ocrFallback: true },
+    systemHealth: { aiProvider: "meridian", aiAvailable: false },
     meridianAuth: {
       status: "unhealthy" as const,
       error: "Not logged in. Run: claude login",
@@ -94,7 +93,7 @@ export const providerPresets = {
     },
   },
   meridianDegraded: {
-    systemHealth: { aiProvider: "meridian", aiAvailable: true, ocrFallback: false },
+    systemHealth: { aiProvider: "meridian", aiAvailable: true },
     meridianAuth: {
       status: "degraded" as const,
       error: "Could not verify auth status",
@@ -102,14 +101,14 @@ export const providerPresets = {
     },
   },
   meridianNotRunning: {
-    systemHealth: { aiProvider: "meridian", aiAvailable: false, ocrFallback: true },
+    systemHealth: { aiProvider: "meridian", aiAvailable: false },
     meridianAuth: {
       status: "not_running" as const,
       loginInProgress: false,
     },
   },
   meridianLoginInProgress: {
-    systemHealth: { aiProvider: "meridian", aiAvailable: false, ocrFallback: true },
+    systemHealth: { aiProvider: "meridian", aiAvailable: false },
     meridianAuth: {
       status: "unhealthy" as const,
       error: "Not logged in. Run: claude login",
@@ -119,23 +118,17 @@ export const providerPresets = {
 
   // ── Ollama ─────────────────────────────
   ollamaAvailable: {
-    systemHealth: { aiProvider: "ollama (llava)", aiAvailable: true, ocrFallback: false },
+    systemHealth: { aiProvider: "ollama (llava)", aiAvailable: true },
     meridianAuth: { status: "not_applicable" as const },
   },
   ollamaUnavailable: {
-    systemHealth: { aiProvider: "ollama (llava)", aiAvailable: false, ocrFallback: true },
-    meridianAuth: { status: "not_applicable" as const },
-  },
-
-  // ── OCR (no AI) ────────────────────────
-  ocrOnly: {
-    systemHealth: { aiProvider: "ocr", aiAvailable: true, ocrFallback: false },
+    systemHealth: { aiProvider: "ollama (llava)", aiAvailable: false },
     meridianAuth: { status: "not_applicable" as const },
   },
 
   // ── Not configured ─────────────────────
   notConfigured: {
-    systemHealth: { aiProvider: "not configured", aiAvailable: false, ocrFallback: true },
+    systemHealth: { aiProvider: "not configured", aiAvailable: false },
     meridianAuth: { status: "not_applicable" as const },
   },
 
@@ -165,7 +158,6 @@ export class MockProvider {
       dbStatus: "connected",
       aiProvider: "mock",
       aiAvailable: true,
-      ocrFallback: false,
       version: "0.0.0-test",
       serverStartTime: new Date().toISOString(),
       uptime: 120,

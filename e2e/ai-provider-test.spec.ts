@@ -61,16 +61,6 @@ test.describe("AI Provider Test — admin endpoint", () => {
     }
   }
 
-  test("ocr provider extracts receipt data", async () => {
-    const body = await testProvider("ocr");
-    const result = body.result?.data?.json;
-    expect(result).toBeDefined();
-    expect(result.durationMs).toBeGreaterThan(0);
-    expect(result.result).toBeDefined();
-    expect(result.result.items.length).toBeGreaterThanOrEqual(1);
-    expect(result.result.total).toBeGreaterThan(0);
-  });
-
   test("meridian provider extracts receipt data", async ({}, testInfo) => {
     if (!configuredProviders.includes("meridian"))
       testInfo.skip(true, "meridian not in AI_PROVIDER_PRIORITY");

@@ -19,7 +19,7 @@
     Features:
     - Group expense tracking with multiple split modes
     - AI receipt scanning: photograph a receipt, extract items, assign to friends
-    - Pluggable AI providers: OpenAI, OpenAI-Codex (ChatGPT OAuth), Claude, Meridian (Claude Max), Ollama, or OCR fallback
+    - Pluggable AI providers: OpenAI, OpenAI-Codex (ChatGPT OAuth), Claude, Meridian (Claude Max), Ollama
     - Cross-group dashboard with debt simplification
     - PWA installable on mobile
     - Magic link email authentication (optional)
@@ -30,7 +30,7 @@
   <Icon>https://raw.githubusercontent.com/sw-carlos-cristobal/sharetab/main/public/icons/icon-512.png</Icon>
   <ExtraParams>--restart=unless-stopped</ExtraParams>
   <Description>
-    Self-hosted Splitwise alternative with AI receipt scanning. All-in-one container with bundled PostgreSQL — no external database needed. Split expenses with friends using multiple modes (equal, percentage, shares, exact, item-level from receipts). Supports OpenAI, OpenAI-Codex (ChatGPT OAuth), Claude, Meridian (Claude Max), Ollama, and OCR fallback for receipt extraction.
+    Self-hosted Splitwise alternative with AI receipt scanning. All-in-one container with bundled PostgreSQL — no external database needed. Split expenses with friends using multiple modes (equal, percentage, shares, exact, item-level from receipts). Supports OpenAI, OpenAI-Codex (ChatGPT OAuth), Claude, Meridian (Claude Max), Ollama for receipt extraction.
   </Description>
 
   <!-- Ports -->
@@ -154,12 +154,12 @@
   <Config
     Name="AI Provider Priority"
     Target="AI_PROVIDER_PRIORITY"
-    Default="openai,ocr"
-    Description="Comma-separated provider priority chain, for example: openai-codex,meridian,openai,ocr. ShareTab uses the first available provider and falls back to the next provider if extraction fails. If ocr is omitted, it is appended automatically as final fallback."
+    Default="openai"
+    Description="Comma-separated provider priority chain, for example: openai-codex,meridian,openai. ShareTab uses the first available provider and falls back to the next provider if extraction fails. If ocr is omitted, it is appended automatically as final fallback."
     Type="Variable"
     Display="always"
     Required="false"
-    Mask="false">openai,ocr</Config>
+    Mask="false">openai</Config>
   <Config
     Name="OpenAI API Key"
     Target="OPENAI_API_KEY"

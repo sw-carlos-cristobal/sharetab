@@ -16,7 +16,7 @@ import {
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const OAUTH_PROVIDERS = new Set(['meridian', 'openai-codex']);
-const KNOWN_PROVIDERS = new Set(['openai', 'openai-codex', 'claude', 'meridian', 'ollama', 'ocr']);
+const KNOWN_PROVIDERS = new Set(['openai', 'openai-codex', 'claude', 'meridian', 'ollama', ]);
 
 export function AIProviderTestSection() {
   const t = useTranslations("admin");

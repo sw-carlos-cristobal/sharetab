@@ -161,15 +161,13 @@ export const adminRouter = createTRPCRouter({
     // AI provider info
     let aiProvider = "unknown";
     let aiAvailable = false;
-    let ocrFallback = false;
     let aiStatus: "available" | "requires_auth" | "unavailable" = "unavailable";
     const authProvidersNeedingLogin: string[] = [];
     try {
       const configured = getConfiguredProviderPriority();
-      const [active] = await getAIProvidersWithFallback();
+      const providers = await getAIProvidersWithFallback();
       aiProvider = configured.join(" -> ");
-      aiAvailable = true;
-      ocrFallback = active.name === "ocr" && configured[0] !== "ocr";
+      aiAvailable = providers.length > 0;
 
       // Mark OAuth-backed providers that are configured but not currently usable.
       if (configured.includes("meridian")) {
@@ -201,7 +199,6 @@ export const adminRouter = createTRPCRouter({
       dbStatus,
       aiProvider,
       aiAvailable,
-      ocrFallback,
       aiStatus,
       authProvidersNeedingLogin,
       version: cachedVersion,

@@ -77,7 +77,7 @@ test.describe("Receipt Scanning Pipeline (5.2-5.3)", () => {
     });
     const { receiptId } = await uploadRes.json();
 
-    // retryProcessing now actually reprocesses — may succeed (mock) or fail (OCR on fake)
+    // retryProcessing now actually reprocesses — may succeed or fail depending on provider
     await trpcMutation(ctx, "receipts.retryProcessing", { receiptId }, 60000);
 
     const itemsRes = await trpcQuery(ctx, "receipts.getReceiptItems", { receiptId });

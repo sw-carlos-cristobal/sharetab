@@ -109,7 +109,7 @@ echo "  DB User:        ${DB_USER:-sharetab}"
 echo "  DB Name:        ${DB_NAME:-sharetab}"
 echo "  Auth URL:       ${NEXTAUTH_URL:-not set}"
 echo "  Auth Trust:     ${AUTH_TRUST_HOST:-false}"
-AI_PROVIDER_PRIORITY="${AI_PROVIDER_PRIORITY:-openai,ocr}"
+AI_PROVIDER_PRIORITY="${AI_PROVIDER_PRIORITY:-openai}"
 echo "  AI Providers:   ${AI_PROVIDER_PRIORITY}"
 case ",${AI_PROVIDER_PRIORITY}," in
   *,openai,*)

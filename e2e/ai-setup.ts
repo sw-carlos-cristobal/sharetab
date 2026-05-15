@@ -206,7 +206,7 @@ async function main() {
     console.log(`  RUN_AI_TESTS=1 BASE_URL=${BASE} npx playwright test ai-provider-test.spec.ts\n`);
   } else {
     console.log("No OAuth providers authenticated. AI tests will use whatever");
-    console.log("providers are available (API-key based or OCR fallback).\n");
+    console.log("providers are available (API-key based).\n");
   }
 }
 

@@ -256,7 +256,7 @@ async function main() {
   const browser = await chromium.launch();
   const context = await browser.newContext({
     viewport: { width: 400, height: 800 },
-    deviceScaleFactor: 2, // High DPI for better OCR
+    deviceScaleFactor: 2, // High DPI for better AI extraction
   });
 
   for (const [name, html] of Object.entries(receipts)) {
