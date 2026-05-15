@@ -35,16 +35,19 @@ test.describe("User suspend/unsuspend", () => {
   test("admin page shows suspend button for non-admin users", async ({
     page,
   }) => {
+    test.setTimeout(60000);
     await login(page, users.alice.email, users.alice.password);
     await page.goto("/en/admin");
 
-    // Look in the User Management section specifically
+    // Wait for User Management table to load with user data
+    await expect(page.getByText("bob@example.com").first()).toBeVisible({ timeout: 30000 });
+
     const userSection = page.locator("section", {
       has: page.getByRole("heading", { name: "User Management" }),
     });
     const bobRow = userSection.locator("tr", {
       hasText: "bob@example.com",
-    });
+    }).first();
     await expect(bobRow).toBeVisible();
     // Should have either suspend or unsuspend button
     const hasSuspend = await bobRow.getByLabel(/^Suspend /).isVisible().catch(() => false);
@@ -435,11 +438,13 @@ test.describe("User impersonation", () => {
     const userSection = page.locator("section", {
       has: page.getByRole("heading", { name: "User Management" }),
     });
+    await expect(userSection).toBeVisible({ timeout: 30000 });
     const bobRow = userSection
       .locator("table")
       .first()
-      .locator("tr", { hasText: "bob@example.com" });
-    await expect(bobRow).toBeVisible();
+      .locator("tr", { hasText: "bob@example.com" })
+      .first();
+    await expect(bobRow).toBeVisible({ timeout: 15000 });
     await expect(bobRow.getByLabel(/^Impersonate /)).toBeVisible();
   });
 

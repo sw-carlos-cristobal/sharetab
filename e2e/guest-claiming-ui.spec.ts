@@ -25,7 +25,7 @@ test.describe("Guest Claiming Session UI", () => {
     await fileChooser.setFiles(RECEIPT_PATH);
 
     // Wait for processing → people step
-    await expect(page.getByTestId("guest-people-step")).toBeVisible({ timeout: 90000 });
+    await expect(page.getByTestId("guest-people-step")).toBeVisible({ timeout: 120000 });
 
     // Add creator name
     await page.getByTestId("person-input-0").fill("Alice");

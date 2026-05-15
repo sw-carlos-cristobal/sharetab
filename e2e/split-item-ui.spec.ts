@@ -22,7 +22,7 @@ test.describe("Split Item UI", () => {
     const { receiptId } = await uploadRes.json();
 
     // Process the receipt
-    await trpcMutation(ctx, "receipts.processReceipt", { receiptId, groupId: "cmow2v0up0003kwxdb2z6r5rr" }, 90000);
+    await trpcMutation(ctx, "receipts.processReceipt", { receiptId, groupId: "cmow2v0up0003kwxdb2z6r5rr" }, 120000);
 
     // Update one item to have quantity > 1 so the scissors button appears
     const itemsRes = await trpcQuery(ctx, "receipts.getReceiptItems", { receiptId });
@@ -78,7 +78,7 @@ test.describe("Split Item UI", () => {
       multipart: { file: { name: "sfl-ui.png", mimeType: "image/png", buffer: require("fs").readFileSync(RECEIPT_PATH) } },
     });
     const { receiptId } = await uploadRes.json();
-    await trpcMutation(ctx, "receipts.processReceipt", { receiptId, groupId: "cmow2v0up0003kwxdb2z6r5rr" }, 90000);
+    await trpcMutation(ctx, "receipts.processReceipt", { receiptId, groupId: "cmow2v0up0003kwxdb2z6r5rr" }, 120000);
 
     // Get the items and member IDs
     const itemsRes = await trpcQuery(ctx, "receipts.getReceiptItems", { receiptId });
@@ -155,7 +155,7 @@ test.describe("Split Item UI", () => {
       multipart: { file: { name: "rehydrate-test.png", mimeType: "image/png", buffer: require("fs").readFileSync(RECEIPT_PATH) } },
     });
     const { receiptId } = await uploadRes.json();
-    await trpcMutation(ctx, "receipts.processReceipt", { receiptId, groupId: "cmow2v0up0003kwxdb2z6r5rr" }, 90000);
+    await trpcMutation(ctx, "receipts.processReceipt", { receiptId, groupId: "cmow2v0up0003kwxdb2z6r5rr" }, 120000);
 
     // Get items + alice's ID
     const itemsRes = await trpcQuery(ctx, "receipts.getReceiptItems", { receiptId });

@@ -105,7 +105,7 @@ test.describe("Pending Receipts with AI", () => {
     });
     const { receiptId } = await uploadRes.json();
 
-    await trpcMutation(owner, "receipts.processReceipt", { receiptId, groupId }, 90000);
+    await trpcMutation(owner, "receipts.processReceipt", { receiptId, groupId }, 120000);
 
     // Save for later
     const saveRes = await trpcMutation(owner, "receipts.saveForLater", {

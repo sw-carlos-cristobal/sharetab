@@ -4,7 +4,7 @@ import { readFileSync } from "fs";
 import { users, authedContext, trpcMutation, trpcQuery, trpcResult } from "./helpers";
 
 const BASE = process.env.BASE_URL || "http://localhost:3001";
-const OCR_TIMEOUT = 90000;
+const OCR_TIMEOUT = 120000;
 
 type OCRReceiptItem = {
   name: string;

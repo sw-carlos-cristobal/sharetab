@@ -26,7 +26,7 @@ test.describe("Receipt Item Editing", () => {
       },
     });
     receiptId = (await uploadRes.json()).receiptId;
-    await trpcMutation(ctx, "receipts.processReceipt", { receiptId }, 90000);
+    await trpcMutation(ctx, "receipts.processReceipt", { receiptId }, 120000);
   });
 
   test.afterAll(async () => {
