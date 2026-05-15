@@ -77,8 +77,9 @@ test.describe("Guest Claiming Session UI", () => {
     // Should see the join form
     await expect(page2.getByTestId("claim-join-form")).toBeVisible({ timeout: 10000 });
 
-    // Bob joins
+    // Bob joins — wait for button to be enabled after form renders
     await page2.getByTestId("claim-name-input").fill("Bob");
+    await expect(page2.getByTestId("claim-join-btn")).toBeEnabled();
     await page2.getByTestId("claim-join-btn").click();
 
     // Should see items

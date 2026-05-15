@@ -12,7 +12,7 @@ const LOCALES = ["en", "es", "fr", "de", "ja", "ko", "zh-CN"] as const;
 async function loginAndGoToAdmin(page: Page, locale: string) {
   await login(page, users.alice.email, users.alice.password);
   await page.goto(`/${locale}/admin`);
-  await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
+  await expect(page.getByRole("heading").first()).toBeVisible({ timeout: 15000 });
 }
 
 // ─── English baseline: verify all sections render translated text ─────
@@ -118,8 +118,6 @@ test.describe("Admin i18n — multi-locale rendering", () => {
     test(`[${locale}] no horizontal overflow on admin page`, async ({ page }) => {
       await loginAndGoToAdmin(page, locale);
       await page.setViewportSize({ width: 1280, height: 800 });
-      await page.waitForTimeout(500);
-
       const hasOverflow = await page.evaluate(() => {
         return document.documentElement.scrollWidth > document.documentElement.clientWidth;
       });
