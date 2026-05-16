@@ -61,11 +61,11 @@ describe("getAIProvider", () => {
     expect(provider.constructor.name).toBe("OllamaProvider");
   });
 
-  test("selects ocr provider", async () => {
-    process.env.AI_PROVIDER_PRIORITY = "ocr";
+  test("silently ignores ocr in priority list", async () => {
+    process.env.AI_PROVIDER_PRIORITY = "openai-codex,ocr";
     const { getAIProvider } = await import("./registry");
     const provider = await getAIProvider();
-    expect(provider.constructor.name).toBe("OcrProvider");
+    expect(provider.constructor.name).toBe("OpenAICodexProvider");
   });
 
   test("throws for unknown provider", async () => {
@@ -77,7 +77,7 @@ describe("getAIProvider", () => {
   test("error message lists available providers", async () => {
     process.env.AI_PROVIDER_PRIORITY = "invalid";
     const { getAIProvider } = await import("./registry");
-    await expect(getAIProvider()).rejects.toThrow("openai, openai-codex, claude, meridian, ollama, ocr, mock");
+    await expect(getAIProvider()).rejects.toThrow("openai, openai-codex, claude, meridian, ollama, mock");
   });
 
   test("uses first provider from AI_PROVIDER_PRIORITY", async () => {
@@ -104,118 +104,56 @@ describe("getAIProviderWithFallback", () => {
     process.env = { ...originalEnv };
   });
 
-  test("fallback returns OCR when primary provider init throws", async () => {
-    process.env.AI_PROVIDER_PRIORITY = "claude";
-    delete process.env.ANTHROPIC_API_KEY;
-    const { getAIProviderWithFallback } = await import("./registry");
-    const provider = await getAIProviderWithFallback();
-    expect(provider.constructor.name).toBe("OcrProvider");
-  });
-
-  test("fallback returns OCR when primary provider isAvailable() returns false", async () => {
-    // Mock the Ollama provider's isAvailable to return false deterministically
+  test("returns empty when all providers unavailable", async () => {
     process.env.AI_PROVIDER_PRIORITY = "ollama";
     const { OllamaProvider } = await import("./providers/ollama");
     vi.spyOn(OllamaProvider.prototype, "isAvailable").mockResolvedValue(false);
 
-    const { getAIProviderWithFallback } = await import("./registry");
-    const provider = await getAIProviderWithFallback();
-    expect(provider.constructor.name).toBe("OcrProvider");
+    const { getAIProvidersWithFallback } = await import("./registry");
+    const providers = await getAIProvidersWithFallback();
+    expect(providers).toHaveLength(0);
   });
 
   test("clearCache forces re-evaluation on next call", async () => {
-    process.env.AI_PROVIDER_PRIORITY = "ocr";
+    process.env.AI_PROVIDER_PRIORITY = "openai-codex";
     const { getAIProviderWithFallback, clearProviderCache } = await import("./registry");
 
-    // Prime the cache
     const first = await getAIProviderWithFallback();
-    expect(first.constructor.name).toBe("OcrProvider");
+    expect(first.constructor.name).toBe("OpenAICodexProvider");
 
-    // Clear and get again — should still work (re-evaluates)
     clearProviderCache();
     const second = await getAIProviderWithFallback();
-    expect(second.constructor.name).toBe("OcrProvider");
+    expect(second.constructor.name).toBe("OpenAICodexProvider");
 
-    // They should be different instances (cache was cleared)
     expect(first).not.toBe(second);
   });
 
-  // ── Cache state transition tests (#57) ──
-
   test("cached provider is returned within TTL without re-checking", async () => {
-    process.env.AI_PROVIDER_PRIORITY = "ocr";
+    process.env.AI_PROVIDER_PRIORITY = "openai-codex";
     const { getAIProviderWithFallback } = await import("./registry");
-    const { OcrProvider } = await import("./providers/ocr");
-    const spy = vi.spyOn(OcrProvider.prototype, "isAvailable");
+    const { OpenAICodexProvider } = await import("./providers/openai-codex");
+    const spy = vi.spyOn(OpenAICodexProvider.prototype, "isAvailable");
 
     const first = await getAIProviderWithFallback();
     const second = await getAIProviderWithFallback();
 
-    // Same instance returned from cache
     expect(first).toBe(second);
-    // isAvailable only called once (on first call, not on cached return)
     expect(spy).toHaveBeenCalledTimes(1);
   });
 
   test("cache expires after TTL and provider is re-evaluated", async () => {
-    process.env.AI_PROVIDER_PRIORITY = "ocr";
+    process.env.AI_PROVIDER_PRIORITY = "openai-codex";
     const { getAIProviderWithFallback } = await import("./registry");
 
     const first = await getAIProviderWithFallback();
 
-    // Advance time past TTL (60s)
     vi.useFakeTimers();
     vi.advanceTimersByTime(61_000);
 
     const second = await getAIProviderWithFallback();
 
-    // Different instance — cache expired, re-evaluated
     expect(first).not.toBe(second);
-    expect(second.constructor.name).toBe("OcrProvider");
-
-    vi.useRealTimers();
-  });
-
-  test("OCR cached after primary failure; primary available before TTL stays pinned to OCR", async () => {
-    // Simulate: primary unavailable → OCR cached → primary recovers → still OCR until TTL
-    process.env.AI_PROVIDER_PRIORITY = "ollama";
-    const { OllamaProvider } = await import("./providers/ollama");
-    const spy = vi.spyOn(OllamaProvider.prototype, "isAvailable").mockResolvedValue(false);
-
-    const { getAIProviderWithFallback } = await import("./registry");
-
-    // First call: Ollama unavailable → OCR cached
-    const first = await getAIProviderWithFallback();
-    expect(first.constructor.name).toBe("OcrProvider");
-
-    // Primary "recovers" — but cache is still valid
-    spy.mockResolvedValue(true);
-    const second = await getAIProviderWithFallback();
-
-    // Still OCR — cache hasn't expired
-    expect(second).toBe(first);
-    expect(second.constructor.name).toBe("OcrProvider");
-  });
-
-  test("after TTL expires, recovered primary is selected over OCR", async () => {
-    process.env.AI_PROVIDER_PRIORITY = "ollama";
-    const { OllamaProvider } = await import("./providers/ollama");
-    const spy = vi.spyOn(OllamaProvider.prototype, "isAvailable").mockResolvedValue(false);
-
-    const { getAIProviderWithFallback } = await import("./registry");
-
-    // First call: Ollama unavailable → OCR cached
-    const first = await getAIProviderWithFallback();
-    expect(first.constructor.name).toBe("OcrProvider");
-
-    // Primary recovers + TTL expires
-    spy.mockResolvedValue(true);
-    vi.useFakeTimers();
-    vi.advanceTimersByTime(61_000);
-
-    const second = await getAIProviderWithFallback();
-    // Now Ollama is selected since it's available and cache expired
-    expect(second.constructor.name).toBe("OllamaProvider");
+    expect(second.constructor.name).toBe("OpenAICodexProvider");
 
     vi.useRealTimers();
   });

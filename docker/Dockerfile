@@ -48,19 +48,6 @@ COPY --from=builder /app/.commit-sha ./.commit-sha
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./
 COPY --from=builder /app/src/generated ./src/generated
-# Copy OCR worker script (runs in child process, not bundled by Next.js)
-COPY --from=builder /app/src/server/ai/providers/ocr-worker.mjs ./src/server/ai/providers/ocr-worker.mjs
-# Copy tesseract.js with full dependency tree for OCR fallback
-# (standalone output doesn't trace child-process deps)
-COPY --from=deps /app/node_modules/tesseract.js ./node_modules/tesseract.js
-COPY --from=deps /app/node_modules/tesseract.js-core ./node_modules/tesseract.js-core
-COPY --from=deps /app/node_modules/regenerator-runtime ./node_modules/regenerator-runtime
-COPY --from=deps /app/node_modules/bmp-js ./node_modules/bmp-js
-COPY --from=deps /app/node_modules/idb-keyval ./node_modules/idb-keyval
-COPY --from=deps /app/node_modules/is-url ./node_modules/is-url
-COPY --from=deps /app/node_modules/wasm-feature-detect ./node_modules/wasm-feature-detect
-COPY --from=deps /app/node_modules/zlibjs ./node_modules/zlibjs
-COPY --from=deps /app/node_modules/opencollective-postinstall ./node_modules/opencollective-postinstall
 # Copy meridian proxy (embedded, dynamically imported — not traced by Next.js bundler)
 COPY --from=builder /app/node_modules/@rynfar/meridian ./node_modules/@rynfar/meridian
 COPY --from=builder /app/node_modules/@anthropic-ai/claude-agent-sdk ./node_modules/@anthropic-ai/claude-agent-sdk

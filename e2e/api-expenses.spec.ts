@@ -1,36 +1,21 @@
-import { test, expect, request } from "@playwright/test";
+import { test, expect } from "@playwright/test";
+import { users, authedContext, trpcMutation, trpcQuery, trpcResult, deleteTestGroup } from "./helpers";
 
-const BASE = process.env.BASE_URL || "http://localhost:3001";
+const createdGroupIds: string[] = [];
 
-async function authedContext(email: string, password: string) {
-  const ctx = await request.newContext({ baseURL: BASE });
-  const csrfRes = await ctx.get("/api/auth/csrf");
-  const { csrfToken } = await csrfRes.json();
-  await ctx.post("/api/auth/callback/credentials", {
-    form: { email, password, csrfToken },
-    maxRedirects: 0,
-  });
-  return ctx;
-}
-
-async function trpcMutation(ctx: Awaited<ReturnType<typeof request.newContext>>, proc: string, input: unknown) {
-  return ctx.post(`/api/trpc/${proc}`, { data: { json: input } });
-}
-
-async function trpcQuery(ctx: Awaited<ReturnType<typeof request.newContext>>, proc: string, input?: unknown) {
-  const inputStr = input
-    ? encodeURIComponent(JSON.stringify({ "0": { json: input } }))
-    : encodeURIComponent(JSON.stringify({ "0": { json: null, meta: { values: ["undefined"], v: 1 } } }));
-  return ctx.get(`/api/trpc/${proc}?batch=1&input=${inputStr}`);
-}
+test.afterAll(async () => {
+  const ctx = await authedContext(users.alice.email, users.alice.password);
+  for (const id of createdGroupIds) await deleteTestGroup(ctx, id);
+  await ctx.dispose();
+});
 
 test.describe("Expenses API", () => {
-  let ctx: Awaited<ReturnType<typeof request.newContext>>;
+  let ctx: Awaited<ReturnType<typeof authedContext>>;
   let groupId: string;
   let aliceId: string;
 
   test.beforeAll(async () => {
-    ctx = await authedContext("alice@example.com", "password123");
+    ctx = await authedContext(users.alice.email, users.alice.password);
     // Get group and user IDs
     const listRes = await trpcQuery(ctx, "groups.list");
     const listBody = await listRes.json();
@@ -61,6 +46,7 @@ test.describe("Expenses API", () => {
     // Create a group that Charlie is NOT in
     const createRes = await trpcMutation(ctx, "groups.create", { name: "Alice Only" });
     const privateGroupId = (await createRes.json()).result?.data?.json?.id;
+    createdGroupIds.push(privateGroupId);
 
     const charlie = await authedContext("charlie@example.com", "password123");
     const res = await trpcMutation(charlie, "expenses.create", {

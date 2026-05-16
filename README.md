@@ -99,7 +99,7 @@ ShareTab is a free, self-hosted alternative to Splitwise for tracking shared exp
 - **Group expense tracking** with multiple split modes (equal, percentage, shares, exact, item-level)
 - **AI receipt scanning** -- photograph a receipt, AI extracts line items, assign items to group members with proportional tax/tip; zoomable/pannable receipt viewer; rescan with correction prompts
 - **Guest bill splitting** -- no account needed, shareable summary links
-- **Pluggable AI providers** -- OpenAI (GPT-4o), OpenAI-Codex (ChatGPT OAuth), Claude (API key), Meridian (Claude Max subscription), local Ollama, or OCR fallback (no API key needed)
+- **Pluggable AI providers** -- OpenAI (GPT-4o), OpenAI-Codex (ChatGPT OAuth), Claude (API key), Meridian (Claude Max subscription), local Ollama
 - **Group archiving** -- archive inactive groups to declutter your dashboard; toggle archived view on groups page
 - **Cross-group dashboard** -- see all your balances at a glance, with per-person debt breakdown
 - **Debt simplification** -- minimize the number of payments needed
@@ -204,7 +204,7 @@ All configuration is done through environment variables. Copy `.env.example` to 
 
 | Variable | Description |
 |---|---|
-| `AI_PROVIDER_PRIORITY` | Comma-separated provider priority list (for example `openai-codex,meridian,openai,ocr`). ShareTab checks providers in order, uses the first available one, and falls through to the next provider if extraction fails. If `ocr` is omitted, ShareTab appends OCR as the final fallback. |
+| `AI_PROVIDER_PRIORITY` | Comma-separated provider priority list (for example `openai-codex,meridian,openai`). ShareTab checks providers in order, uses the first available one, and falls through to the next provider if extraction fails. |
 | `OPENAI_API_KEY` | Required when `openai` is included in `AI_PROVIDER_PRIORITY`. |
 | `OPENAI_MODEL` | OpenAI model for receipt scanning. Defaults to `gpt-4o`. |
 | `OPENAI_CODEX_MODEL` | Model for ChatGPT OAuth / Codex backend receipt scanning. Defaults to `gpt-5.4`. |
@@ -237,7 +237,7 @@ After the container is running, open the ShareTab admin dashboard and complete t
 
 The bundled Docker Compose setup persists `/app/claude` automatically. If you use your own Docker or Unraid template, mount a persistent path to `/app/claude`.
 
-The `ocr` provider uses Tesseract.js for local text extraction -- no API key or external service needed. It's less accurate than AI providers but works as a free fallback. In priority mode, OCR can be listed explicitly, and is also appended automatically as a final fallback if omitted.
+**⚠️ OCR provider (deprecated):** The `ocr` provider uses Tesseract.js for local text extraction -- no API key or external service needed. We originally included OCR as a free fallback for users without AI API access, but after extensive testing across hundreds of real-world receipts, the accuracy is too unreliable for production use. Common failures include extracting modifiers as line items (e.g., "medium rare" as a dish), failing to exclude delivery fees and service charges, and poor handling of non-standard receipt layouts. **We are ending active support for the OCR provider.** It will remain in the codebase as a last-resort fallback but will not receive bug fixes. If you need reliable receipt scanning, configure one of the AI providers above (openai-codex or meridian are recommended). Community contributions to improve OCR accuracy are welcome -- if you have a method to solve these extraction quality issues, PRs are encouraged.
 
 ### AI Provider Performance
 
@@ -248,22 +248,19 @@ Benchmarked on a set of receipt photos (grocery, coffee shop, restaurant). Resul
 | **OpenAI Codex** (ChatGPT OAuth) | ~6 s | 5/5 items | Free (uses ChatGPT subscription) | **Recommended.** Best balance of speed and accuracy. |
 | **Meridian** (Claude OAuth) | ~16 s | 5/5 items | Free (uses Claude Max subscription) | Same accuracy, but 2–3x slower. |
 | **OpenAI** (API key) | ~4 s | 5/5 items | Pay-per-token | Fastest, but requires an API key and costs money. |
-| **OCR** (Tesseract.js) | ~1.4 s | 5/5 items | Free, fully local | No network calls. Good for simple receipts; struggles with handwritten or low-contrast text. |
 | **Ollama** (local LLM) | Varies | Varies | Free, fully local | Depends on model and hardware. Requires a running Ollama server. |
 
 **Recommendation:** Use `openai-codex` as your primary provider. It delivers the same accuracy as API-key providers at no additional cost (it piggybacks on your existing ChatGPT Plus/Pro subscription). Set your priority to:
 
 ```
-AI_PROVIDER_PRIORITY="openai-codex,ocr"
+AI_PROVIDER_PRIORITY="openai-codex"
 ```
 
-If you also have a Claude Max subscription, you can add `meridian` as a second fallback:
+If you also have a Claude Max subscription, you can add `meridian` as a fallback:
 
 ```
-AI_PROVIDER_PRIORITY="openai-codex,meridian,ocr"
+AI_PROVIDER_PRIORITY="openai-codex,meridian"
 ```
-
-OCR is always appended as the final fallback if omitted, so even if your OAuth session expires, receipt scanning will still work.
 
 ### OAuth (optional)
 
@@ -313,7 +310,7 @@ OCR is always appended as the final fallback if omitted, so even if your OAuth s
 | Database | [Prisma 7](https://www.prisma.io) + PostgreSQL 16 |
 | Auth | [NextAuth v5](https://authjs.dev) (credentials + OAuth + magic link) |
 | UI | [TailwindCSS 4](https://tailwindcss.com) + [shadcn/ui](https://ui.shadcn.com) + [next-themes](https://github.com/pacocoursey/next-themes) |
-| AI | Pluggable providers: OpenAI, OpenAI-Codex, Claude, Meridian, Ollama, OCR fallback |
+| AI | Pluggable providers: OpenAI, OpenAI-Codex, Claude, Meridian, Ollama |
 | Testing | [Vitest](https://vitest.dev) (unit) + [Playwright](https://playwright.dev) (e2e) |
 
 ## Development

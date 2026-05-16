@@ -1,40 +1,26 @@
-import { test, expect, request } from "@playwright/test";
+import { test, expect } from "@playwright/test";
+import { users, authedContext, trpcMutation, trpcQuery, trpcResult, deleteTestGroup } from "./helpers";
 
-const BASE = process.env.BASE_URL || "http://localhost:3001";
+const createdGroupIds: string[] = [];
 
-async function authedContext(email: string, password: string) {
-  const ctx = await request.newContext({ baseURL: BASE });
-  const csrfRes = await ctx.get("/api/auth/csrf");
-  const { csrfToken } = await csrfRes.json();
-  await ctx.post("/api/auth/callback/credentials", {
-    form: { email, password, csrfToken },
-    maxRedirects: 0,
-  });
-  return ctx;
-}
-
-async function trpcMutation(ctx: Awaited<ReturnType<typeof request.newContext>>, proc: string, input: unknown) {
-  return ctx.post(`/api/trpc/${proc}`, { data: { json: input } });
-}
-
-async function trpcQuery(ctx: Awaited<ReturnType<typeof request.newContext>>, proc: string, input?: unknown) {
-  const inputStr = input
-    ? encodeURIComponent(JSON.stringify({ "0": { json: input } }))
-    : encodeURIComponent(JSON.stringify({ "0": { json: null, meta: { values: ["undefined"], v: 1 } } }));
-  return ctx.get(`/api/trpc/${proc}?batch=1&input=${inputStr}`);
-}
+test.afterAll(async () => {
+  const ctx = await authedContext(users.alice.email, users.alice.password);
+  for (const id of createdGroupIds) await deleteTestGroup(ctx, id);
+  await ctx.dispose();
+});
 
 test.describe("Balances & Settlements API", () => {
   test.describe("Balance Calculation", () => {
     test("4.1.1 — single expense balance", async () => {
-      const ctx = await authedContext("alice@example.com", "password123");
+      const ctx = await authedContext(users.alice.email, users.alice.password);
 
       // Create isolated group
       const groupRes = await trpcMutation(ctx, "groups.create", { name: "Balance Test 4.1.1" });
       const groupId = (await groupRes.json()).result?.data?.json?.id;
+      createdGroupIds.push(groupId);
 
       // Invite Bob
-      const bob = await authedContext("bob@example.com", "password123");
+      const bob = await authedContext(users.bob.email, users.bob.password);
       const invRes = await trpcMutation(ctx, "groups.createInvite", { groupId });
       const token = (await invRes.json()).result?.data?.json?.token;
       await trpcMutation(bob, "groups.joinByInvite", { token });
@@ -73,9 +59,10 @@ test.describe("Balances & Settlements API", () => {
     });
 
     test("4.1.5 — empty group has zero balances", async () => {
-      const ctx = await authedContext("alice@example.com", "password123");
+      const ctx = await authedContext(users.alice.email, users.alice.password);
       const groupRes = await trpcMutation(ctx, "groups.create", { name: "Empty Group 4.1.5" });
       const groupId = (await groupRes.json()).result?.data?.json?.id;
+      createdGroupIds.push(groupId);
 
       const balRes = await trpcQuery(ctx, "balances.getGroupBalances", { groupId });
       const balances = (await balRes.json())[0]?.result?.data?.json?.balances;
@@ -87,12 +74,13 @@ test.describe("Balances & Settlements API", () => {
 
   test.describe("Debt Simplification", () => {
     test("4.2.1 — simple two-person debt", async () => {
-      const ctx = await authedContext("alice@example.com", "password123");
+      const ctx = await authedContext(users.alice.email, users.alice.password);
 
       const groupRes = await trpcMutation(ctx, "groups.create", { name: "Debt Test 4.2.1" });
       const groupId = (await groupRes.json()).result?.data?.json?.id;
+      createdGroupIds.push(groupId);
 
-      const bob = await authedContext("bob@example.com", "password123");
+      const bob = await authedContext(users.bob.email, users.bob.password);
       const invRes = await trpcMutation(ctx, "groups.createInvite", { groupId });
       const token = (await invRes.json()).result?.data?.json?.token;
       await trpcMutation(bob, "groups.joinByInvite", { token });
@@ -128,9 +116,10 @@ test.describe("Balances & Settlements API", () => {
     });
 
     test("4.2.4 — already settled returns empty debts", async () => {
-      const ctx = await authedContext("alice@example.com", "password123");
+      const ctx = await authedContext(users.alice.email, users.alice.password);
       const groupRes = await trpcMutation(ctx, "groups.create", { name: "Settled 4.2.4" });
       const groupId = (await groupRes.json()).result?.data?.json?.id;
+      createdGroupIds.push(groupId);
 
       const debtsRes = await trpcQuery(ctx, "balances.getSimplifiedDebts", { groupId });
       const debts = (await debtsRes.json())[0]?.result?.data?.json?.debts;
@@ -142,7 +131,7 @@ test.describe("Balances & Settlements API", () => {
 
   test.describe("Dashboard", () => {
     test("4.3.1 — cross-group totals", async () => {
-      const ctx = await authedContext("alice@example.com", "password123");
+      const ctx = await authedContext(users.alice.email, users.alice.password);
       const res = await trpcQuery(ctx, "balances.getDashboard");
       const data = (await res.json())[0]?.result?.data?.json;
 
@@ -155,13 +144,14 @@ test.describe("Balances & Settlements API", () => {
 
   test.describe("Settlements", () => {
     test("4.4.1 — record settlement", async () => {
-      const ctx = await authedContext("alice@example.com", "password123");
+      const ctx = await authedContext(users.alice.email, users.alice.password);
 
       // Create group with Bob
       const groupRes = await trpcMutation(ctx, "groups.create", { name: "Settle Test 4.4.1" });
       const groupId = (await groupRes.json()).result?.data?.json?.id;
+      createdGroupIds.push(groupId);
 
-      const bob = await authedContext("bob@example.com", "password123");
+      const bob = await authedContext(users.bob.email, users.bob.password);
       const invRes = await trpcMutation(ctx, "groups.createInvite", { groupId });
       const token = (await invRes.json()).result?.data?.json?.token;
       await trpcMutation(bob, "groups.joinByInvite", { token });

@@ -48,7 +48,7 @@ describe("MeridianHealthPoller", () => {
     vi.useFakeTimers();
     process.env = {
       ...originalEnv,
-      AI_PROVIDER_PRIORITY: "meridian,ocr",
+      AI_PROVIDER_PRIORITY: "meridian",
       MERIDIAN_PORT: "3457",
       ADMIN_EMAIL: "admin@test.com",
       EMAIL_SERVER_HOST: "smtp.test.com",
@@ -376,7 +376,7 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
     vi.useFakeTimers();
     process.env = {
       ...originalEnv,
-      AI_PROVIDER_PRIORITY: "meridian,ocr",
+      AI_PROVIDER_PRIORITY: "meridian",
       MERIDIAN_PORT: "3457",
       ADMIN_EMAIL: "admin@test.com",
       EMAIL_SERVER_HOST: "smtp.test.com",
@@ -576,7 +576,7 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
   });
 
   test("startPoller does nothing when meridian is not configured", async () => {
-    process.env.AI_PROVIDER_PRIORITY = "openai,ocr";
+    process.env.AI_PROVIDER_PRIORITY = "openai";
     const { startPoller, stopPoller } = await import("./auth-health-poller");
 
     startPoller();
@@ -588,7 +588,7 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
   });
 
   test("startPoller runs when meridian is configured in AI_PROVIDER_PRIORITY", async () => {
-    process.env.AI_PROVIDER_PRIORITY = "openai-codex,meridian,ocr";
+    process.env.AI_PROVIDER_PRIORITY = "openai-codex,meridian";
     const { startPoller, stopPoller } = await import("./auth-health-poller");
 
     // first delayed tick after 30s, then poll interval continues
@@ -634,7 +634,7 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
   });
 
   test("sends auth expiry email when openai-codex token expires", async () => {
-    process.env.AI_PROVIDER_PRIORITY = "openai-codex,ocr";
+    process.env.AI_PROVIDER_PRIORITY = "openai-codex";
     mockCheckOpenAICodexHealth.mockResolvedValueOnce({
       status: "auth_expired",
       email: "user@test.com",
@@ -653,7 +653,7 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
   });
 
   test("does not send openai-codex email before first healthy state", async () => {
-    process.env.AI_PROVIDER_PRIORITY = "openai-codex,ocr";
+    process.env.AI_PROVIDER_PRIORITY = "openai-codex";
     mockCheckOpenAICodexHealth.mockResolvedValueOnce({
       status: "not_authenticated",
     });
@@ -666,7 +666,7 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
   });
 
   test("does not send openai-codex email for degraded backend status", async () => {
-    process.env.AI_PROVIDER_PRIORITY = "openai-codex,ocr";
+    process.env.AI_PROVIDER_PRIORITY = "openai-codex";
     mockCheckOpenAICodexHealth.mockResolvedValueOnce({
       status: "degraded",
       error: "Codex backend returned HTTP 503.",

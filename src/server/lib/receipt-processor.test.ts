@@ -62,7 +62,7 @@ describe("processReceiptImage fallback behavior", () => {
       extractReceipt: vi.fn().mockRejectedValue(new Error("expired")),
     };
     const provider2 = {
-      name: "ocr",
+      name: "openai",
       extractReceipt: vi.fn().mockResolvedValue(successResult),
     };
     mockGetAIProvidersWithFallback.mockResolvedValue([provider1, provider2]);
@@ -80,7 +80,7 @@ describe("processReceiptImage fallback behavior", () => {
     expect(provider2.extractReceipt).toHaveBeenCalledTimes(1);
     expect(db.receipt.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ aiProvider: "ocr" }),
+        data: expect.objectContaining({ aiProvider: "openai" }),
       })
     );
     expect(mockClearProviderCache).not.toHaveBeenCalled();
