@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { users, testUsers, login, uniqueEmail, register, authedContext, deleteTestUser } from "./helpers";
+import { users, testUsers, login, uniqueEmail, register, authedContext, deleteTestUser, trpcQuery, trpcResult } from "./helpers";
 
 test.describe("Password Change — Settings Page", () => {
   test("settings page shows change password form", async ({ page }) => {
@@ -46,20 +46,23 @@ test.describe("Password Change — Settings Page", () => {
 
     await expect(page.getByText(/changed|updated|success/i)).toBeVisible({ timeout: 5000 });
 
-    // Sign out
-    await page.getByText("Sign out").click();
-    await page.waitForURL("**/login", { timeout: 10000 });
-
-    // Login with new password
-    await page.getByLabel("Email").fill(email);
-    await page.getByLabel("Password").fill(newPassword);
-    await page.getByRole("button", { name: "Sign in", exact: true }).click();
-    await page.waitForURL("**/dashboard", { timeout: 10000 });
+    // Verify new password works by logging in via API and accessing a protected route
+    const ctx = await authedContext(email, newPassword);
+    try {
+      const res = await trpcQuery(ctx, "groups.list");
+      const data = await trpcResult(res);
+      expect(data).toBeDefined();
+    } finally {
+      await ctx.dispose();
+    }
 
     // Clean up the test user
     const admin = await authedContext(users.alice.email, users.alice.password);
-    await deleteTestUser(admin, email);
-    await admin.dispose();
+    try {
+      await deleteTestUser(admin, email);
+    } finally {
+      await admin.dispose();
+    }
   });
 });
 

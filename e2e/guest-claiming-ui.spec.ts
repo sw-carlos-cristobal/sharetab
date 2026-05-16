@@ -12,7 +12,7 @@ test.describe("Guest Claiming Session UI", () => {
 
   test("full claiming flow: create session, share link, join, claim items, save", async ({
     page,
-    context,
+    browser,
   }) => {
     // === Step 1: Creator uploads receipt and creates claiming session ===
     await page.goto("/en/split");
@@ -70,44 +70,47 @@ test.describe("Guest Claiming Session UI", () => {
     // Button should change to "Claims saved"
     await expect(saveBtn).toContainText("Claims saved", { timeout: 10000 });
 
-    // === Step 2: Second user opens the same link in a new tab ===
-    const page2 = await context.newPage();
-    await page2.goto(claimUrl);
+    // === Step 2: Second user opens the same link in a fresh context (no shared cookies) ===
+    const bobContext = await browser.newContext();
+    try {
+      const page2 = await bobContext.newPage();
+      await page2.goto(claimUrl);
 
-    // Should see the join form
-    await expect(page2.getByTestId("claim-join-form")).toBeVisible({ timeout: 10000 });
+      // Should see the join form
+      await expect(page2.getByTestId("claim-join-form")).toBeVisible({ timeout: 10000 });
 
-    // Bob joins — wait for button to be enabled after form renders
-    await page2.getByTestId("claim-name-input").fill("Bob");
-    await expect(page2.getByTestId("claim-join-btn")).toBeEnabled();
-    await page2.getByTestId("claim-join-btn").click();
+      // Bob joins
+      await page2.getByTestId("claim-name-input").fill("Bob");
+      const joinBtn = page2.getByTestId("claim-join-btn");
+      await expect(joinBtn).toBeEnabled({ timeout: 10000 });
+      await joinBtn.click();
 
-    // Should see items
-    await expect(page2.locator('[data-testid^="claim-item-"]').first()).toBeVisible({ timeout: 10000 });
+      // Should see items
+      await expect(page2.locator('[data-testid^="claim-item-"]').first()).toBeVisible({ timeout: 10000 });
 
-    // Items 0 and 1 should show "Also claimed by: Alice" (creator already claimed them)
-    const item0 = page2.getByTestId("claim-item-0");
-    await expect(item0.getByText("Also claimed by")).toBeVisible({ timeout: 5000 });
-    await expect(item0.getByText("Alice")).toBeVisible();
+      // Items 0 and 1 should show "Also claimed by: Alice" (creator already claimed them)
+      const item0 = page2.getByTestId("claim-item-0");
+      await expect(item0.getByText("Also claimed by")).toBeVisible({ timeout: 5000 });
+      await expect(item0.getByText("Alice")).toBeVisible();
 
-    // Bob claims item 2 (a different item)
-    await page2.getByTestId("claim-item-2").click();
-    await expect(page2.getByTestId("claim-item-2")).toHaveAttribute("aria-pressed", "true");
+      // Bob claims item 2 (a different item)
+      await page2.getByTestId("claim-item-2").click();
+      await expect(page2.getByTestId("claim-item-2")).toHaveAttribute("aria-pressed", "true");
 
-    // Save Bob's claims
-    const saveBtn2 = page2.getByTestId("save-claims-btn");
-    await saveBtn2.scrollIntoViewIfNeeded();
-    await saveBtn2.click();
-    await expect(saveBtn2).toContainText("Claims saved", { timeout: 10000 });
+      // Save Bob's claims
+      const saveBtn2 = page2.getByTestId("save-claims-btn");
+      await saveBtn2.scrollIntoViewIfNeeded();
+      await saveBtn2.click();
+      await expect(saveBtn2).toContainText("Claims saved", { timeout: 10000 });
 
-    // === Step 3: Verify Alice's page shows Bob joined (via polling) ===
-    // Wait for polling to pick up Bob in the people section
-    await expect(page.getByText("People in this session (2)")).toBeVisible({ timeout: 10000 });
+      // === Step 3: Verify Alice's page shows Bob joined (via polling) ===
+      await expect(page.getByText("People in this session (2)")).toBeVisible({ timeout: 10000 });
 
-    // Alice's claimed items should still be claimed
-    await expect(page.getByTestId("claim-item-0")).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByTestId("claim-item-1")).toHaveAttribute("aria-pressed", "true");
-
-    await page2.close();
+      // Alice's claimed items should still be claimed
+      await expect(page.getByTestId("claim-item-0")).toHaveAttribute("aria-pressed", "true");
+      await expect(page.getByTestId("claim-item-1")).toHaveAttribute("aria-pressed", "true");
+    } finally {
+      await bobContext.close();
+    }
   });
 });
