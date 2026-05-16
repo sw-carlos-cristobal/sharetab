@@ -47,7 +47,8 @@ function detectMimeType(buffer: Buffer): string | null {
 
 // Simple in-memory rate limiter for guest uploads
 const guestUploads = new Map<string, { count: number; resetAt: number }>();
-const GUEST_RATE_LIMIT = 10; // max uploads per hour per IP
+const parsedGuestLimit = Math.floor(Number(process.env.GUEST_RATE_LIMIT_MAX));
+const GUEST_RATE_LIMIT = parsedGuestLimit > 0 ? parsedGuestLimit : 10;
 const GUEST_RATE_WINDOW = 60 * 60 * 1000; // 1 hour
 
 function checkGuestRateLimit(ip: string): boolean {
