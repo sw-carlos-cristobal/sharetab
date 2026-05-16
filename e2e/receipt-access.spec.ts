@@ -6,7 +6,10 @@ import {
   trpcQuery,
   trpcError,
   FAKE_JPEG,
+  trpcResult,
 } from "./helpers";
+
+const createdReceiptIds: string[] = [];
 
 const BASE = process.env.BASE_URL || "http://localhost:3001";
 
@@ -18,7 +21,9 @@ async function uploadReceipt(ctx: Awaited<ReturnType<typeof authedContext>>) {
     },
   });
   expect(res.status()).toBe(200);
-  return (await res.json()) as { receiptId: string; imagePath: string };
+  const body = (await res.json()) as { receiptId: string; imagePath: string };
+  createdReceiptIds.push(body.receiptId);
+  return body;
 }
 
 /** Upload a tiny JPEG as a guest and return the receiptId + imagePath. */
@@ -34,6 +39,14 @@ async function uploadGuestReceipt() {
   await ctx.dispose();
   return body;
 }
+
+test.afterAll(async () => {
+  const ctx = await authedContext(users.alice.email, users.alice.password);
+  for (const id of createdReceiptIds) {
+    try { await trpcMutation(ctx, "receipts.deletePending", { receiptId: id }); } catch {}
+  }
+  await ctx.dispose();
+});
 
 test.describe("Receipt access control", () => {
   test("User B cannot getReceiptItems for User A's receipt", async () => {

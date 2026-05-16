@@ -1,12 +1,20 @@
 import { test, expect } from "@playwright/test";
-import { users, authedContext, trpcMutation, trpcQuery, trpcResult, trpcError, uniqueEmail } from "./helpers";
+import { users, authedContext, trpcMutation, trpcQuery, trpcResult, trpcError, uniqueEmail, deleteTestUser } from "./helpers";
 
 test.describe("Admin Delete User", () => {
+  const createdEmails: string[] = [];
+
+  test.afterAll(async () => {
+    const admin = await authedContext(users.alice.email, users.alice.password);
+    for (const email of createdEmails) await deleteTestUser(admin, email);
+    await admin.dispose();
+  });
   test("deleteUser converts user to placeholder preserving financial data", async () => {
     const admin = await authedContext(users.alice.email, users.alice.password);
 
     // Register a temp user via the API
     const tempEmail = uniqueEmail("deltest");
+    createdEmails.push(tempEmail);
     const regRes = await trpcMutation(admin, "auth.register", {
       name: "TempUser Delete",
       email: tempEmail,

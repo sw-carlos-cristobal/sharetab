@@ -1,5 +1,13 @@
 import { test, expect } from "@playwright/test";
-import { users, login, uniqueEmail, register, navigateToGroup } from "./helpers";
+import { users, login, uniqueEmail, register, navigateToGroup, authedContext, deleteTestGroup } from "./helpers";
+
+const createdGroupIds: string[] = [];
+
+test.afterAll(async () => {
+  const ctx = await authedContext(users.alice.email, users.alice.password);
+  for (const id of createdGroupIds) await deleteTestGroup(ctx, id);
+  await ctx.dispose();
+});
 
 test.describe("Groups", () => {
   test.beforeEach(async ({ page }) => {
@@ -15,6 +23,8 @@ test.describe("Groups", () => {
       await page.getByRole("button", { name: "Create Group" }).click();
       // Should redirect to new group detail page
       await page.waitForURL(/\/groups\/\w+/, { timeout: 10000 });
+      const gid = page.url().match(/groups\/(\w+)/)?.[1];
+      if (gid) createdGroupIds.push(gid);
       await expect(page.getByRole("heading", { name: "Test Group" })).toBeVisible();
     });
 
@@ -28,6 +38,8 @@ test.describe("Groups", () => {
       await page.getByLabel("Currency").selectOption("EUR");
       await page.getByRole("button", { name: "Create Group" }).click();
       await page.waitForURL(/\/groups\/\w+/, { timeout: 10000 });
+      const gid = page.url().match(/groups\/(\w+)/)?.[1];
+      if (gid) createdGroupIds.push(gid);
       await expect(page.getByRole("heading", { name: "Vacation Fund" })).toBeVisible();
       await expect(page.getByText("For our summer trip")).toBeVisible();
     });
@@ -81,6 +93,8 @@ test.describe("Groups", () => {
       await page.getByLabel("Group name").fill("Rename Me");
       await page.getByRole("button", { name: "Create Group" }).click();
       await page.waitForURL(/\/groups\/\w+$/, { timeout: 10000 });
+      const gid = page.url().match(/groups\/(\w+)/)?.[1];
+      if (gid) createdGroupIds.push(gid);
 
       // Go to settings via the settings link on the group detail page
       await page.locator('a[href*="/groups/"][href$="/settings"]').click();

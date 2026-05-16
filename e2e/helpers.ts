@@ -9,6 +9,13 @@ export const users = {
   charlie: { email: "charlie@example.com", password: "password123", name: "Charlie Brown" },
 };
 
+// Dedicated test users from seed.ts — use these instead of creating throwaway accounts
+export const testUsers = {
+  suspend: { email: "suspend-test@example.com", password: "password123", name: "Suspend Test User" },
+  delete: { email: "delete-test@example.com", password: "password123", name: "Delete Test User" },
+  password: { email: "pwtest@example.com", password: "password123", name: "Password Test User" },
+};
+
 /**
  * Login as a user via the UI.
  */
@@ -160,6 +167,33 @@ export async function createTestGroup(
     await owner.dispose();
     for (const c of memberContexts) await c.dispose();
   }};
+}
+
+/**
+ * Delete a test-created user via the admin API. Silently ignores errors.
+ */
+export async function deleteTestUser(adminCtx: Awaited<ReturnType<typeof authedContext>>, email: string) {
+  try {
+    const listRes = await trpcQuery(adminCtx, "admin.listUsers", { search: email, limit: 1 });
+    const listData = await trpcResult(listRes);
+    const user = listData?.users?.[0];
+    if (user && user.email === email) {
+      await trpcMutation(adminCtx, "admin.deleteUser", { userId: user.id });
+    }
+  } catch {
+    // Ignore — user may not exist or already deleted
+  }
+}
+
+/**
+ * Delete a test-created group via the API. Silently ignores errors.
+ */
+export async function deleteTestGroup(ctx: Awaited<ReturnType<typeof authedContext>>, groupId: string) {
+  try {
+    await trpcMutation(ctx, "groups.delete", { groupId });
+  } catch {
+    // Ignore — group may not exist or already deleted
+  }
 }
 
 /**
