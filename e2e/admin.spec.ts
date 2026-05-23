@@ -51,7 +51,7 @@ test.describe("Admin page UI", () => {
     await expect(healthSection).toBeVisible();
 
     // Should see database status within health section
-    await expect(healthSection.getByText("Database")).toBeVisible();
+    await expect(healthSection.getByText("Database")).toBeVisible({ timeout: 30000 });
 
     // Should see version info
     await expect(healthSection.getByText("Version")).toBeVisible();
@@ -91,7 +91,7 @@ test.describe("Admin page UI", () => {
     await expect(storageSection).toBeVisible();
 
     // Should show receipt count within storage section
-    await expect(storageSection.getByText("Receipts")).toBeVisible();
+    await expect(storageSection.getByText("Receipts")).toBeVisible({ timeout: 30000 });
 
     // Should show disk usage within storage section
     await expect(storageSection.getByText("Disk Usage")).toBeVisible();

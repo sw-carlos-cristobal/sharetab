@@ -449,11 +449,12 @@ test.describe("User impersonation", () => {
 
     // Get Bob's user ID
     const listData = await trpcResult(
-      await trpcQuery(ctx, "admin.listUsers", {})
+      await trpcQuery(ctx, "admin.listUsers", { search: "bob@example.com" })
     );
     const bob = listData.users.find(
       (u: { email: string }) => u.email === "bob@example.com"
     );
+    expect(bob).toBeDefined();
 
     // Start impersonation
     const startRes = await ctx.post("/api/admin/impersonate", {
@@ -483,14 +484,18 @@ test.describe("User impersonation", () => {
     await login(page, users.alice.email, users.alice.password);
     await page.goto("/en/admin");
 
-    // Click impersonate on Bob
+    // Search for Bob in User Management section
     const userSection = page.locator("section", {
       has: page.getByRole("heading", { name: "User Management" }),
     });
+    await expect(userSection).toBeVisible({ timeout: 30000 });
+    await userSection.getByPlaceholder("Search by name or email...").fill("bob@example.com");
     const bobRow = userSection
       .locator("table")
       .first()
-      .locator("tr", { hasText: "bob@example.com" });
+      .locator("tr", { hasText: "bob@example.com" })
+      .first();
+    await expect(bobRow).toBeVisible({ timeout: 15000 });
     await bobRow.getByLabel(/^Impersonate /).click();
 
     // Should redirect to dashboard

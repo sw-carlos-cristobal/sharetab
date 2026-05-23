@@ -231,7 +231,7 @@ test.describe("Edge Cases & Security", () => {
     );
 
     await login(page, users.alice.email, users.alice.password);
-    await page.goto(`/groups/${groupId}`);
+    await page.goto(`/en/groups/${groupId}`);
 
     await expect(page.getByText("Group not found")).toBeVisible({ timeout: 15000 });
     await expect(page.getByText("doesn't exist or you don't have access")).toBeVisible();
@@ -259,7 +259,7 @@ test.describe("Edge Cases & Security", () => {
       users.alice.email, users.alice.password, [], "Expense Not Found Test"
     );
 
-    await page.goto(`/groups/${groupId}/expenses/nonexistent-expense-id`);
+    await page.goto(`/en/groups/${groupId}/expenses/nonexistent-expense-id`);
 
     await expect(page.getByRole("heading", { name: "Expense not found" })).toBeVisible({ timeout: 15000 });
     await expect(page.getByText("doesn't exist or has been deleted")).toBeVisible();
@@ -277,7 +277,7 @@ test.describe("Edge Cases & Security", () => {
       users.alice.email, users.alice.password, [], "Edit Not Found Test"
     );
 
-    await page.goto(`/groups/${groupId}/expenses/nonexistent-expense-id/edit`);
+    await page.goto(`/en/groups/${groupId}/expenses/nonexistent-expense-id/edit`);
 
     await expect(page.getByRole("heading", { name: "Expense not found" })).toBeVisible({ timeout: 15000 });
     await expect(page.getByRole("button", { name: "Back to Group" })).toBeVisible();

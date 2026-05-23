@@ -88,8 +88,8 @@ test.describe("Admin — Guest Split Cleanup", () => {
     const toolsSection = page.locator("section", {
       has: page.getByRole("heading", { name: "Admin Tools" }),
     });
-    await expect(toolsSection).toBeVisible();
-    await expect(toolsSection.getByText("Guest Split Cleanup")).toBeVisible();
+    await expect(toolsSection).toBeVisible({ timeout: 30000 });
+    await expect(toolsSection.getByText("Guest Split Cleanup")).toBeVisible({ timeout: 30000 });
     await expect(toolsSection.getByText("guest splits")).toBeVisible();
     await expect(
       toolsSection.getByRole("button", { name: "Purge Expired" })

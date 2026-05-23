@@ -182,7 +182,7 @@ test.describe("Group Archiving", () => {
         users.alice.email, users.alice.password, [], "Archive UI Settings"
       );
 
-      await page.goto(`/groups/${groupId}/settings`);
+      await page.goto(`/en/groups/${groupId}/settings`);
       await expect(page.getByRole("button", { name: /Archive group/ })).toBeVisible();
 
       await dispose();
@@ -195,7 +195,7 @@ test.describe("Group Archiving", () => {
         users.alice.email, users.alice.password, [], "Archive Redirect Test"
       );
 
-      await page.goto(`/groups/${groupId}/settings`);
+      await page.goto(`/en/groups/${groupId}/settings`);
       page.on("dialog", (dialog) => dialog.accept());
       await page.getByRole("button", { name: /Archive group/ }).click();
       await page.waitForURL("**/groups", { timeout: 10000 });
@@ -246,7 +246,7 @@ test.describe("Group Archiving", () => {
 
       await trpcMutation(owner, "groups.archive", { groupId });
 
-      await page.goto(`/groups/${groupId}`);
+      await page.goto(`/en/groups/${groupId}`);
       await expect(page.getByText("This group is archived")).toBeVisible();
       // Add Expense button should be hidden
       await expect(page.getByRole("button", { name: "Add Expense" })).not.toBeVisible();
@@ -264,7 +264,7 @@ test.describe("Group Archiving", () => {
       await trpcMutation(owner, "groups.archive", { groupId });
 
       // Go to settings and unarchive
-      await page.goto(`/groups/${groupId}/settings`);
+      await page.goto(`/en/groups/${groupId}/settings`);
       await expect(page.getByText("This group is archived")).toBeVisible();
       await page.getByRole("button", { name: /Unarchive/ }).click();
 

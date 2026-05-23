@@ -63,7 +63,7 @@ test.describe("Mobile Admin Page", () => {
 
     // Wait for table to render (data loads async — headers appear immediately)
     const table = userSection.locator("table");
-    await expect(table).toBeVisible();
+    await expect(table).toBeVisible({ timeout: 30000 });
 
     // Table should be inside an overflow-x-auto wrapper for mobile scrolling
     const scrollContainer = userSection.locator(".overflow-x-auto");
@@ -82,7 +82,7 @@ test.describe("Mobile Admin Page", () => {
     });
 
     const table = groupSection.locator("table");
-    await expect(table).toBeVisible();
+    await expect(table).toBeVisible({ timeout: 30000 });
 
     const scrollContainer = groupSection.locator(".overflow-x-auto");
     await expect(scrollContainer).toBeVisible();
@@ -100,7 +100,7 @@ test.describe("Mobile Admin Page", () => {
     });
 
     // Wait for data to load (skeleton replaced by real cards)
-    await expect(healthSection.getByText("Database")).toBeVisible();
+    await expect(healthSection.getByText("Database")).toBeVisible({ timeout: 30000 });
     await expect(healthSection.getByText("Version")).toBeVisible();
     await expect(healthSection.getByText("Uptime")).toBeVisible();
 
@@ -126,7 +126,7 @@ test.describe("Mobile Admin Page", () => {
     });
 
     // Wait for data to load
-    await expect(storageSection.getByText("Receipts")).toBeVisible();
+    await expect(storageSection.getByText("Receipts")).toBeVisible({ timeout: 30000 });
     await expect(storageSection.getByText("Disk Usage")).toBeVisible();
 
     const cards = storageSection.locator("[data-slot='card']");

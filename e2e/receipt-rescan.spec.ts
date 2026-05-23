@@ -8,7 +8,7 @@ test.describe("Receipt rescan — smoke tests", () => {
       users.alice.email, users.alice.password, [], "Rescan Test"
     );
 
-    await page.goto(`/groups/${groupId}/scan`);
+    await page.goto(`/en/groups/${groupId}/scan`);
     await expect(page.getByRole("heading", { name: "Scan Receipt" })).toBeVisible();
     await expect(page.getByText("Upload a receipt")).toBeVisible();
 
