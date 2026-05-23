@@ -155,7 +155,7 @@
     Name="AI Provider Priority"
     Target="AI_PROVIDER_PRIORITY"
     Default="openai"
-    Description="Comma-separated provider priority chain, for example: openai-codex,meridian,openai. ShareTab uses the first available provider and falls back to the next provider if extraction fails. If ocr is omitted, it is appended automatically as final fallback."
+    Description="Comma-separated provider priority chain, for example: openai-codex,meridian,openai. ShareTab uses the first available provider and falls back to the next provider if extraction fails."
     Type="Variable"
     Display="always"
     Required="false"

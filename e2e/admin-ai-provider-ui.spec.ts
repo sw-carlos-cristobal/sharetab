@@ -113,4 +113,3 @@ test.describe("AI Provider Test UI", () => {
     await expect(page.getByTestId("ai-test-file-info")).toContainText("golden-fork.jpg");
   });
 });
-

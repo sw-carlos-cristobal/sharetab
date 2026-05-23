@@ -40,6 +40,13 @@ function parseProviderPriority(raw: string): AIProviderName[] {
     }
   }
 
+  if (deduped.length === 0) {
+    throw new Error(
+      `AI_PROVIDER_PRIORITY resolved to an empty list after removing unsupported entries. ` +
+      `Configure at least one valid provider: ${USER_SELECTABLE_PROVIDERS.join(", ")}`
+    );
+  }
+
   return deduped;
 }
 
