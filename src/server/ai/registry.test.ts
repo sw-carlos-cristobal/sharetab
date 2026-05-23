@@ -94,6 +94,12 @@ describe("getAIProvider", () => {
     const { getAIProvider } = await import("./registry");
     await expect(getAIProvider()).rejects.toThrow('Unknown AI provider: "not-a-provider"');
   });
+
+  test("throws when AI_PROVIDER_PRIORITY contains only removed providers", async () => {
+    process.env.AI_PROVIDER_PRIORITY = "ocr";
+    const { getAIProvider } = await import("./registry");
+    await expect(getAIProvider()).rejects.toThrow("resolved to an empty list");
+  });
 });
 
 describe("getAIProviderWithFallback", () => {
