@@ -19,7 +19,7 @@ test.describe("Back button navigation", () => {
     });
     const expense = (await expenseRes.json()).result?.data?.json;
 
-    await page.goto(`/groups/${groupId}/expenses/${expense.id}/edit`);
+    await page.goto(`/en/groups/${groupId}/expenses/${expense.id}/edit`);
     await expect(page.getByRole("heading", { name: "Edit Expense" })).toBeVisible();
 
     // Click the back button next to heading (Button+Link, not raw <a>)
@@ -39,7 +39,7 @@ test.describe("Back button navigation", () => {
       users.alice.email, users.alice.password, [], "Back Button Add Test"
     );
 
-    await page.goto(`/groups/${groupId}/expenses/new`);
+    await page.goto(`/en/groups/${groupId}/expenses/new`);
     await expect(page.getByRole("heading", { name: "Add Expense" })).toBeVisible();
 
     // Click the back button next to heading (Button+Link, not raw <a>)
@@ -59,7 +59,7 @@ test.describe("Back button navigation", () => {
       users.alice.email, users.alice.password, [], "Back Button Settings Test"
     );
 
-    await page.goto(`/groups/${groupId}/settings`);
+    await page.goto(`/en/groups/${groupId}/settings`);
     await expect(page.getByText("Group Settings")).toBeVisible();
 
     await page.locator(`a[href*="/groups/${groupId}"]`).first().click();
@@ -77,7 +77,7 @@ test.describe("Back button navigation", () => {
       users.alice.email, users.alice.password, [], "Back Button Scan Test"
     );
 
-    await page.goto(`/groups/${groupId}/scan`);
+    await page.goto(`/en/groups/${groupId}/scan`);
     await expect(page.getByRole("heading", { name: "Scan Receipt" })).toBeVisible();
 
     await page.locator(`a[href*="/groups/${groupId}"]`).first().click();
@@ -105,7 +105,7 @@ test.describe("Back button navigation", () => {
     });
     const expense = (await expenseRes.json()).result?.data?.json;
 
-    await page.goto(`/groups/${groupId}/expenses/${expense.id}/edit`);
+    await page.goto(`/en/groups/${groupId}/expenses/${expense.id}/edit`);
     await expect(page.getByRole("heading", { name: "Edit Expense" })).toBeVisible();
 
     // Verify sidebar Dashboard link exists and navigate via it
@@ -126,7 +126,7 @@ test.describe("Back button navigation", () => {
       users.alice.email, users.alice.password, [], "Sidebar Groups Test"
     );
 
-    await page.goto(`/groups/${groupId}/expenses/new`);
+    await page.goto(`/en/groups/${groupId}/expenses/new`);
     await expect(page.getByRole("heading", { name: "Add Expense" })).toBeVisible();
 
     // Click Groups in the sidebar

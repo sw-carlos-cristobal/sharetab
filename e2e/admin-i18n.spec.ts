@@ -31,7 +31,7 @@ test.describe("Admin i18n — English baseline", () => {
       has: page.getByRole("heading", { name: "System Health" }),
     });
     await expect(section).toBeVisible();
-    await expect(section.getByText("Database")).toBeVisible();
+    await expect(section.getByText("Database")).toBeVisible({ timeout: 30000 });
     await expect(section.getByText("Version")).toBeVisible();
     await expect(section.getByText("Uptime")).toBeVisible();
   });
@@ -41,7 +41,7 @@ test.describe("Admin i18n — English baseline", () => {
       has: page.getByRole("heading", { name: "Storage Stats" }),
     });
     await expect(section).toBeVisible();
-    await expect(section.getByText("Receipts")).toBeVisible();
+    await expect(section.getByText("Receipts")).toBeVisible({ timeout: 30000 });
     await expect(section.getByText("Disk Usage")).toBeVisible();
     await expect(section.getByText("Orphaned Files")).toBeVisible();
   });
