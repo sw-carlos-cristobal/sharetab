@@ -6,10 +6,11 @@ test.describe("Admin Delete User", () => {
     const admin = await authedContext(users.alice.email, users.alice.password);
     let tempCtx: Awaited<ReturnType<typeof authedContext>> | undefined;
     let groupId: string | undefined;
+    const tempEmail = uniqueEmail("deltest");
+    let tempId: string | undefined;
 
     try {
       // Register a temp user via the API
-      const tempEmail = uniqueEmail("deltest");
       const regRes = await trpcMutation(admin, "auth.register", {
         name: "TempUser Delete",
         email: tempEmail,
@@ -20,7 +21,7 @@ test.describe("Admin Delete User", () => {
       // Get the temp user's ID
       const listRes = await trpcQuery(admin, "admin.listUsers", { search: tempEmail, limit: 1 });
       const listData = await trpcResult(listRes);
-      const tempId = listData?.users?.[0]?.id;
+      tempId = listData?.users?.[0]?.id;
       expect(tempId).toBeDefined();
 
       // Create a group, invite temp user, add an expense
@@ -35,7 +36,7 @@ test.describe("Admin Delete User", () => {
       tempCtx = await authedContext(tempEmail, "password123");
       await trpcMutation(tempCtx, "groups.joinByInvite", { token });
 
-      // Get admin's member ID
+      // Get Alice's user ID from the group membership
       const detailRes = await trpcQuery(admin, "groups.get", { groupId });
       const detail = await trpcResult(detailRes);
       const adminId = detail.members.find(
@@ -68,6 +69,7 @@ test.describe("Admin Delete User", () => {
       expect(found).toBeDefined();
     } finally {
       if (groupId) await trpcMutation(admin, "groups.delete", { groupId }).catch(() => {});
+      if (tempId) await trpcMutation(admin, "admin.deleteUser", { userId: tempId }).catch(() => {});
       await tempCtx?.dispose();
       await admin.dispose();
     }
