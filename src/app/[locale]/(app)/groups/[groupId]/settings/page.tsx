@@ -176,9 +176,9 @@ export default function GroupSettingsPage({
                   </option>
                 ))}
               </select>
-              {currency !== group.data?.currency && (
-                <p className="text-xs text-amber-600 dark:text-amber-400">
-                  {t("settings.currencyChangeWarning")}
+              {updateGroup.error && (
+                <p className="text-xs text-destructive">
+                  {updateGroup.error.message}
                 </p>
               )}
             </div>

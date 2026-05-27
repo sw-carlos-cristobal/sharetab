@@ -95,6 +95,23 @@ export const groupsRouter = createTRPCRouter({
         throw new TRPCError({ code: "FORBIDDEN", message: "Only admins and owners can update groups" });
       }
       const { groupId, ...data } = input;
+
+      if (data.currency) {
+        const existing = await ctx.db.group.findUnique({
+          where: { id: groupId },
+          select: { currency: true },
+        });
+        if (existing && data.currency.toUpperCase() !== existing.currency.toUpperCase()) {
+          const hasMonetaryRows = await ctx.db.expense.count({ where: { groupId }, take: 1 });
+          if (hasMonetaryRows > 0) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Cannot change group currency after expenses have been added. Create a new group with the desired currency instead.",
+            });
+          }
+        }
+      }
+
       const group = await ctx.db.group.update({
         where: { id: groupId },
         data,

@@ -284,8 +284,8 @@ export const expensesRouter = createTRPCRouter({
       if (effectiveCurrency.toUpperCase() !== groupCurrency.toUpperCase()) {
         if (inputExchangeRate) {
           newExchangeRate = inputExchangeRate;
-        } else if (inputCurrency || data.amount) {
-          // Currency or amount changed -- re-fetch rate
+        } else if (inputCurrency || data.amount || data.expenseDate) {
+          // Currency, amount, or date changed -- re-fetch rate
           const dateStr = (data.expenseDate ?? existing.expenseDate.toISOString()).slice(0, 10);
           const fetched = await getExchangeRate(effectiveCurrency, groupCurrency, dateStr);
           if (fetched === null) {
