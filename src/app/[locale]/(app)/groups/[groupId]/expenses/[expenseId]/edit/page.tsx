@@ -94,6 +94,7 @@ export default function EditExpensePage({
   const isDifferentCurrency = effectiveCurrency.toUpperCase() !== groupCurrency.toUpperCase();
   const parsedManualRate = parseFloat(manualRate);
   const manualRateValid = useManualRate && !isNaN(parsedManualRate) && parsedManualRate > 0;
+  const currencyChanged = effectiveCurrency.toUpperCase() !== (expense.data?.currency ?? "").toUpperCase();
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -104,8 +105,8 @@ export default function EditExpensePage({
       expenseId,
       title,
       amount: amountCents,
-      currency: effectiveCurrency,
-      ...(isDifferentCurrency && manualRateValid ? { exchangeRate: parsedManualRate } : {}),
+      ...(currencyChanged ? { currency: effectiveCurrency } : {}),
+      ...(currencyChanged && isDifferentCurrency && manualRateValid ? { exchangeRate: parsedManualRate } : {}),
       category: category || undefined,
       paidById,
       splitMode,
