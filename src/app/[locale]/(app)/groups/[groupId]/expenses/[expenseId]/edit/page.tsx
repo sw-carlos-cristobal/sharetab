@@ -70,7 +70,7 @@ export default function EditExpensePage({
       setPaidById(e.paidById);
       setCurrency(e.currency);
       const groupCur = group.data.currency;
-      if (e.currency.toUpperCase() !== groupCur.toUpperCase() && e.exchangeRate && e.exchangeRate !== 1) {
+      if (e.currency.toUpperCase() !== groupCur.toUpperCase() && e.exchangeRate) {
         setUseManualRate(true);
         setManualRate(String(e.exchangeRate));
       }
