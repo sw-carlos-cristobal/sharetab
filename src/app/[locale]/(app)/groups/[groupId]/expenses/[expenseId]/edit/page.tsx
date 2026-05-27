@@ -4,7 +4,8 @@ import { use, useMemo, useState, useEffect } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { trpc } from "@/lib/trpc";
-import { parseToCents, centsToDecimal } from "@/lib/money";
+import { parseToCents, centsToDecimal, formatCents } from "@/lib/money";
+import { COMMON_CURRENCIES } from "@/lib/currencies";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -55,6 +56,9 @@ export default function EditExpensePage({
   const [paidById, setPaidById] = useState("");
   const [splitMode, setSplitMode] = useState<SplitMode>("EQUAL");
   const [shares, setShares] = useState<ShareEntry[]>([]);
+  const [currency, setCurrency] = useState<string>("");
+  const [manualRate, setManualRate] = useState<string>("");
+  const [useManualRate, setUseManualRate] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -64,6 +68,7 @@ export default function EditExpensePage({
       setAmountStr(centsToDecimal(e.amount));
       setCategory(e.category ?? "");
       setPaidById(e.paidById);
+      setCurrency(e.currency);
       if (e.splitMode !== "ITEM") {
         setSplitMode(e.splitMode as SplitMode);
       }
@@ -84,6 +89,11 @@ export default function EditExpensePage({
     })) ?? [];
 
   const amountCents = parseToCents(amountStr);
+  const groupCurrency = group.data?.currency ?? "USD";
+  const effectiveCurrency = currency || groupCurrency;
+  const isDifferentCurrency = effectiveCurrency.toUpperCase() !== groupCurrency.toUpperCase();
+  const parsedManualRate = parseFloat(manualRate);
+  const manualRateValid = useManualRate && !isNaN(parsedManualRate) && parsedManualRate > 0;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -94,6 +104,8 @@ export default function EditExpensePage({
       expenseId,
       title,
       amount: amountCents,
+      currency: effectiveCurrency,
+      ...(isDifferentCurrency && manualRateValid ? { exchangeRate: parsedManualRate } : {}),
       category: category || undefined,
       paidById,
       splitMode,
@@ -155,19 +167,89 @@ export default function EditExpensePage({
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="amount">{t("new.amount")}</Label>
-              <Input
-                id="amount"
-                type="number"
-                step="0.01"
-                min="0.01"
-                placeholder={t("new.amountPlaceholder")}
-                value={amountStr}
-                onChange={(e) => setAmountStr(e.target.value)}
-                required
-              />
+            <div className="grid grid-cols-[1fr_auto] gap-2">
+              <div className="space-y-2">
+                <Label htmlFor="amount">{t("new.amount")}</Label>
+                <Input
+                  id="amount"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  placeholder={t("new.amountPlaceholder")}
+                  value={amountStr}
+                  onChange={(e) => setAmountStr(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="currency">{t("new.currency")}</Label>
+                <select
+                  id="currency"
+                  value={effectiveCurrency}
+                  onChange={(e) => setCurrency(e.target.value)}
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  {COMMON_CURRENCIES.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.code}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
+
+            {isDifferentCurrency && (
+              <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm dark:border-blue-800 dark:bg-blue-950/50">
+                <p className="text-blue-800 dark:text-blue-200">
+                  {t("new.differentCurrencyNote", {
+                    expenseCurrency: effectiveCurrency,
+                    groupCurrency,
+                  })}
+                </p>
+                <div className="mt-2 flex items-center gap-2">
+                  <label className="flex items-center gap-1.5 text-xs text-blue-700 dark:text-blue-300">
+                    <input
+                      type="checkbox"
+                      checked={useManualRate}
+                      onChange={(e) => setUseManualRate(e.target.checked)}
+                      className="rounded"
+                    />
+                    {t("new.manualRateOverride")}
+                  </label>
+                </div>
+                {useManualRate && (
+                  <div className="mt-2">
+                    <Input
+                      type="number"
+                      step="any"
+                      min="0.000001"
+                      placeholder={t("new.exchangeRatePlaceholder", {
+                        from: effectiveCurrency,
+                        to: groupCurrency,
+                      })}
+                      value={manualRate}
+                      onChange={(e) => setManualRate(e.target.value)}
+                    />
+                    {manualRateValid && amountCents > 0 && (
+                      <p className="mt-1 text-xs text-blue-700 dark:text-blue-300">
+                        {t("new.convertedAmount", {
+                          amount: formatCents(
+                            Math.round(amountCents * parsedManualRate),
+                            groupCurrency,
+                            locale
+                          ),
+                        })}
+                      </p>
+                    )}
+                  </div>
+                )}
+                {!useManualRate && (
+                  <p className="mt-1 text-xs text-blue-600 dark:text-blue-400">
+                    {t("new.autoRateNote")}
+                  </p>
+                )}
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="category">{t("new.category")}</Label>
@@ -228,7 +310,7 @@ export default function EditExpensePage({
                   totalCents={amountCents}
                   onChange={setShares}
                   locale={locale}
-                  currency={group.data?.currency}
+                  currency={effectiveCurrency}
                 />
               )}
               {splitMode === "EXACT" && (
@@ -237,7 +319,7 @@ export default function EditExpensePage({
                   totalCents={amountCents}
                   onChange={setShares}
                   locale={locale}
-                  currency={group.data?.currency}
+                  currency={effectiveCurrency}
                 />
               )}
               {splitMode === "PERCENTAGE" && (
@@ -246,7 +328,7 @@ export default function EditExpensePage({
                   totalCents={amountCents}
                   onChange={setShares}
                   locale={locale}
-                  currency={group.data?.currency}
+                  currency={effectiveCurrency}
                 />
               )}
               {splitMode === "SHARES" && (
@@ -255,7 +337,7 @@ export default function EditExpensePage({
                   totalCents={amountCents}
                   onChange={setShares}
                   locale={locale}
-                  currency={group.data?.currency}
+                  currency={effectiveCurrency}
                 />
               )}
             </div>
