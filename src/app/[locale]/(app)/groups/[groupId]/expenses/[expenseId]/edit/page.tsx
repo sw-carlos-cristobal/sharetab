@@ -192,7 +192,11 @@ export default function EditExpensePage({
                 <select
                   id="currency"
                   value={effectiveCurrency}
-                  onChange={(e) => setCurrency(e.target.value)}
+                  onChange={(e) => {
+                    setCurrency(e.target.value);
+                    setManualRate("");
+                    setUseManualRate(false);
+                  }}
                   className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 >
                   {COMMON_CURRENCIES.map((c) => (
