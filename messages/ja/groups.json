@@ -45,6 +45,7 @@
     "title": "グループ設定",
     "name": "名前",
     "currency": "通貨",
+    "currencyChangeWarning": "通貨の変更は将来の経費にのみ影響します。既存の経費は元の換算レートを維持します。",
     "members": "メンバー",
     "addMember": "メンバーを追加",
     "removeMember": "削除",

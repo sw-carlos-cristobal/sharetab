@@ -441,3 +441,199 @@ describe("computeBalances + simplifyDebts integration", () => {
     expect(debts).toHaveLength(0);
   });
 });
+
+// ── Multi-currency: computeBalances with baseCurrencyAmount ──
+
+describe("computeBalances with multi-currency (baseCurrencyAmount)", () => {
+  test("uses baseCurrencyAmount for payer credit when set", () => {
+    // Expense: 100 EUR (= 110 USD at 1.1 rate), split between Alice and Bob
+    const balances = computeBalances(
+      [
+        {
+          paidById: "alice",
+          amount: 10000, // 100 EUR in cents
+          baseCurrencyAmount: 11000, // 110 USD in cents
+          shares: [
+            { userId: "alice", amount: 5000 },
+            { userId: "bob", amount: 5000 },
+          ],
+        },
+      ],
+      []
+    );
+
+    const alice = balances.find((b) => b.userId === "alice")!;
+    const bob = balances.find((b) => b.userId === "bob")!;
+
+    // Alice paid 110 USD (baseCurrencyAmount), owes 55 USD (scaled from 50 EUR)
+    expect(alice.paid).toBe(11000);
+    expect(alice.owes).toBe(5500);
+    expect(alice.net).toBe(5500);
+
+    // Bob paid 0, owes 55 USD (scaled from 50 EUR)
+    expect(bob.paid).toBe(0);
+    expect(bob.owes).toBe(5500);
+    expect(bob.net).toBe(-5500);
+  });
+
+  test("scales shares proportionally with rounding remainder on last share", () => {
+    // 100 EUR at 1.1 = 110 USD, split 3 ways (33.33 EUR each)
+    // Scaled: 33.33 * 1.1 = 36.67 -> 3667 cents each, but 3667*3 = 11001 != 11000
+    // Last share should get the remainder
+    const balances = computeBalances(
+      [
+        {
+          paidById: "alice",
+          amount: 10000,
+          baseCurrencyAmount: 11000,
+          shares: [
+            { userId: "alice", amount: 3334 },
+            { userId: "bob", amount: 3333 },
+            { userId: "charlie", amount: 3333 },
+          ],
+        },
+      ],
+      []
+    );
+
+    // Sum of all owes should equal baseCurrencyAmount
+    const totalOwes = balances.reduce((sum, b) => sum + b.owes, 0);
+    expect(totalOwes).toBe(11000);
+
+    // Net should sum to 0
+    const netSum = balances.reduce((sum, b) => sum + b.net, 0);
+    expect(netSum).toBe(0);
+  });
+
+  test("null baseCurrencyAmount falls back to amount (backwards compatible)", () => {
+    const balances = computeBalances(
+      [
+        {
+          paidById: "alice",
+          amount: 1000,
+          baseCurrencyAmount: null,
+          shares: [
+            { userId: "alice", amount: 500 },
+            { userId: "bob", amount: 500 },
+          ],
+        },
+      ],
+      []
+    );
+
+    const alice = balances.find((b) => b.userId === "alice")!;
+    expect(alice.paid).toBe(1000);
+    expect(alice.owes).toBe(500);
+    expect(alice.net).toBe(500);
+  });
+
+  test("undefined baseCurrencyAmount falls back to amount (backwards compatible)", () => {
+    const balances = computeBalances(
+      [
+        {
+          paidById: "alice",
+          amount: 1000,
+          // baseCurrencyAmount not set at all
+          shares: [
+            { userId: "alice", amount: 500 },
+            { userId: "bob", amount: 500 },
+          ],
+        },
+      ],
+      []
+    );
+
+    const alice = balances.find((b) => b.userId === "alice")!;
+    expect(alice.paid).toBe(1000);
+    expect(alice.net).toBe(500);
+  });
+
+  test("settlement with baseCurrencyAmount uses converted amount", () => {
+    // Settlement: Bob pays Alice 50 EUR (= 55 USD)
+    const balances = computeBalances(
+      [],
+      [
+        {
+          fromId: "bob",
+          toId: "alice",
+          amount: 5000, // 50 EUR
+          baseCurrencyAmount: 5500, // 55 USD
+        },
+      ]
+    );
+
+    const bob = balances.find((b) => b.userId === "bob")!;
+    const alice = balances.find((b) => b.userId === "alice")!;
+
+    expect(bob.paid).toBe(5500); // Uses baseCurrencyAmount
+    expect(alice.owes).toBe(5500);
+  });
+
+  test("mixed single-currency and multi-currency expenses", () => {
+    const balances = computeBalances(
+      [
+        // USD expense (no conversion) - $100 split 2 ways
+        {
+          paidById: "alice",
+          amount: 10000,
+          shares: [
+            { userId: "alice", amount: 5000 },
+            { userId: "bob", amount: 5000 },
+          ],
+        },
+        // EUR expense converted to USD - 50 EUR = 55 USD, split 2 ways
+        {
+          paidById: "bob",
+          amount: 5000,
+          baseCurrencyAmount: 5500,
+          shares: [
+            { userId: "alice", amount: 2500 },
+            { userId: "bob", amount: 2500 },
+          ],
+        },
+      ],
+      []
+    );
+
+    const alice = balances.find((b) => b.userId === "alice")!;
+    const bob = balances.find((b) => b.userId === "bob")!;
+
+    // Alice: paid 10000 USD, owes 5000 + 2750 (scaled) = 7750
+    expect(alice.paid).toBe(10000);
+    expect(alice.owes).toBe(7750);
+    expect(alice.net).toBe(2250);
+
+    // Bob: paid 5500 USD (converted), owes 5000 + 2750 (scaled) = 7750
+    expect(bob.paid).toBe(5500);
+    expect(bob.owes).toBe(7750);
+    expect(bob.net).toBe(-2250);
+
+    // Net sums to zero
+    expect(alice.net + bob.net).toBe(0);
+  });
+
+  test("baseCurrencyAmount equal to amount does not trigger scaling", () => {
+    // Edge case: baseCurrencyAmount set but equals amount (same currency recorded with explicit rate)
+    const balances = computeBalances(
+      [
+        {
+          paidById: "alice",
+          amount: 1000,
+          baseCurrencyAmount: 1000,
+          shares: [
+            { userId: "alice", amount: 500 },
+            { userId: "bob", amount: 500 },
+          ],
+        },
+      ],
+      []
+    );
+
+    const alice = balances.find((b) => b.userId === "alice")!;
+    const bob = balances.find((b) => b.userId === "bob")!;
+
+    expect(alice.paid).toBe(1000);
+    expect(alice.owes).toBe(500);
+    expect(bob.owes).toBe(500);
+  });
+});

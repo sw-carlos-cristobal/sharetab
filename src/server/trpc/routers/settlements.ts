@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, groupMemberProcedure } from "../init";
+import { getExchangeRate, convertCents } from "../../lib/exchange-rates";
 
 export const settlementsRouter = createTRPCRouter({
   list: groupMemberProcedure
@@ -38,6 +39,7 @@ export const settlementsRouter = createTRPCRouter({
         toId: z.string(),
         amount: z.number().int().positive(),
         currency: z.string().length(3).default("USD"),
+        exchangeRate: z.number().positive().optional(), // manual override
         note: z.string().max(500).optional(),
       })
     )
@@ -47,7 +49,7 @@ export const settlementsRouter = createTRPCRouter({
       // Block settlements on archived groups
       const group = await ctx.db.group.findUnique({
         where: { id: input.groupId },
-        select: { archivedAt: true },
+        select: { archivedAt: true, currency: true },
       });
       if (group?.archivedAt) {
         throw new TRPCError({
@@ -90,6 +92,28 @@ export const settlementsRouter = createTRPCRouter({
         });
       }
 
+      // Currency conversion: compute base currency amount if currencies differ
+      const groupCurrency = group?.currency ?? "USD";
+      let exchangeRate: number | null = null;
+      let baseCurrencyAmount: number | null = null;
+
+      if (input.currency.toUpperCase() !== groupCurrency.toUpperCase()) {
+        if (input.exchangeRate) {
+          exchangeRate = input.exchangeRate;
+        } else {
+          exchangeRate = await getExchangeRate(input.currency, groupCurrency);
+        }
+
+        if (exchangeRate === null) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Could not fetch exchange rate. Please provide a manual rate or try again.",
+          });
+        }
+
+        baseCurrencyAmount = convertCents(input.amount, exchangeRate);
+      }
+
       const settlement = await ctx.db.settlement.create({
         data: {
           groupId: input.groupId,
@@ -97,6 +121,8 @@ export const settlementsRouter = createTRPCRouter({
           toId: input.toId,
           amount: input.amount,
           currency: input.currency,
+          exchangeRate: exchangeRate ?? 1.0,
+          baseCurrencyAmount,
           note: input.note,
         },
       });

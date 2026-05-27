@@ -24,6 +24,12 @@
     "selectMember": "选择成员",
     "backToGroup": "返回群组",
     "expenseDetails": "支出详情",
+    "currency": "货币",
+    "differentCurrencyNote": "此支出使用{expenseCurrency}，但群组使用{groupCurrency}。金额将自动转换。",
+    "manualRateOverride": "手动设置汇率",
+    "exchangeRatePlaceholder": "1 {from} = ? {to}",
+    "convertedAmount": "换算金额：{amount}",
+    "autoRateNote": "保存时将自动获取汇率。",
     "unnamed": "未命名"
   },
   "edit": {
@@ -44,6 +50,7 @@
     "category": "类别",
     "unknown": "未知",
     "deleting": "删除中...",
+    "exchangeRate": "汇率：1 {from} = {rate} {to}",
     "notFound": "未找到支出",
     "notFoundDescription": "该支出不存在或已被删除。",
     "backToGroup": "返回群组"

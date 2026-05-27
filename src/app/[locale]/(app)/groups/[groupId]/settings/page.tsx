@@ -4,6 +4,7 @@ import { use, useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { trpc } from "@/lib/trpc";
+import { COMMON_CURRENCIES } from "@/lib/currencies";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -26,6 +27,7 @@ export default function GroupSettingsPage({
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [currency, setCurrency] = useState("");
   const [placeholderName, setPlaceholderName] = useState("");
   const [editingPlaceholder, setEditingPlaceholder] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
@@ -34,6 +36,7 @@ export default function GroupSettingsPage({
     if (group.data) {
       setName(group.data.name);
       setDescription(group.data.description ?? "");
+      setCurrency(group.data.currency);
     }
   }, [group.data]);
 
@@ -90,6 +93,7 @@ export default function GroupSettingsPage({
       groupId,
       name,
       description: description || undefined,
+      currency: currency || undefined,
     });
   }
 
@@ -157,6 +161,26 @@ export default function GroupSettingsPage({
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="currency">{t("settings.currency")}</Label>
+              <select
+                id="currency"
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                {COMMON_CURRENCIES.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.code} - {c.name}
+                  </option>
+                ))}
+              </select>
+              {currency !== group.data?.currency && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  {t("settings.currencyChangeWarning")}
+                </p>
+              )}
             </div>
             <Button type="submit" disabled={updateGroup.isPending}>
               {updateGroup.isPending ? t("settings.saving") : t("settings.saveChanges")}

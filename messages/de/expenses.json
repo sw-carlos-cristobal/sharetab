@@ -24,6 +24,12 @@
     "selectMember": "Mitglied auswählen",
     "backToGroup": "Zurück zur Gruppe",
     "expenseDetails": "Ausgabendetails",
+    "currency": "Währung",
+    "differentCurrencyNote": "Diese Ausgabe ist in {expenseCurrency}, aber die Gruppe verwendet {groupCurrency}. Der Betrag wird automatisch umgerechnet.",
+    "manualRateOverride": "Wechselkurs manuell festlegen",
+    "exchangeRatePlaceholder": "1 {from} = ? {to}",
+    "convertedAmount": "Umgerechnet: {amount}",
+    "autoRateNote": "Der Wechselkurs wird beim Speichern automatisch abgerufen.",
     "unnamed": "Unbenannt"
   },
   "edit": {
@@ -44,6 +50,7 @@
     "category": "Kategorie",
     "unknown": "Unbekannt",
     "deleting": "Löschen...",
+    "exchangeRate": "Kurs: 1 {from} = {rate} {to}",
     "notFound": "Ausgabe nicht gefunden",
     "notFoundDescription": "Diese Ausgabe existiert nicht oder wurde gelöscht.",
     "backToGroup": "Zurück zur Gruppe"

@@ -45,6 +45,7 @@
     "title": "群组设置",
     "name": "名称",
     "currency": "货币",
+    "currencyChangeWarning": "更改货币仅影响未来的支出。现有支出将保留其原始汇率。",
     "members": "成员",
     "addMember": "添加成员",
     "removeMember": "移除",

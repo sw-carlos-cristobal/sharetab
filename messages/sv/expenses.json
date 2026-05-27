@@ -24,6 +24,12 @@
     "selectMember": "Välj medlem",
     "backToGroup": "Tillbaka till gruppen",
     "expenseDetails": "Utgiftsdetaljer",
+    "currency": "Valuta",
+    "differentCurrencyNote": "Denna utgift är i {expenseCurrency}, men gruppen använder {groupCurrency}. Beloppet konverteras automatiskt.",
+    "manualRateOverride": "Ange växelkurs manuellt",
+    "exchangeRatePlaceholder": "1 {from} = ? {to}",
+    "convertedAmount": "Konverterat: {amount}",
+    "autoRateNote": "Växelkursen hämtas automatiskt när du sparar.",
     "unnamed": "Namnlös"
   },
   "edit": {
@@ -44,6 +50,7 @@
     "category": "Kategori",
     "unknown": "Okänd",
     "deleting": "Tar bort...",
+    "exchangeRate": "Kurs: 1 {from} = {rate} {to}",
     "notFound": "Utgift hittades inte",
     "notFoundDescription": "Denna utgift finns inte eller har tagits bort.",
     "backToGroup": "Tillbaka till gruppen"

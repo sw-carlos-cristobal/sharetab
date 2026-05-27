@@ -24,6 +24,12 @@
     "selectMember": "Sélectionner un membre",
     "backToGroup": "Retour au groupe",
     "expenseDetails": "Détails de la dépense",
+    "currency": "Devise",
+    "differentCurrencyNote": "Cette dépense est en {expenseCurrency}, mais le groupe utilise {groupCurrency}. Le montant sera converti automatiquement.",
+    "manualRateOverride": "Définir le taux de change manuellement",
+    "exchangeRatePlaceholder": "1 {from} = ? {to}",
+    "convertedAmount": "Converti : {amount}",
+    "autoRateNote": "Le taux de change sera récupéré automatiquement lors de l'enregistrement.",
     "unnamed": "Sans nom"
   },
   "edit": {
@@ -44,6 +50,7 @@
     "category": "Catégorie",
     "unknown": "Inconnu",
     "deleting": "Suppression...",
+    "exchangeRate": "Taux : 1 {from} = {rate} {to}",
     "notFound": "Dépense introuvable",
     "notFoundDescription": "Cette dépense n'existe pas ou a été supprimée.",
     "backToGroup": "Retour au groupe"

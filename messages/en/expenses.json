@@ -22,6 +22,12 @@
     "selectMember": "Select member",
     "backToGroup": "Back to group",
     "expenseDetails": "Expense details",
+    "currency": "Currency",
+    "differentCurrencyNote": "This expense is in {expenseCurrency}, but the group uses {groupCurrency}. The amount will be auto-converted.",
+    "manualRateOverride": "Set exchange rate manually",
+    "exchangeRatePlaceholder": "1 {from} = ? {to}",
+    "convertedAmount": "Converted: {amount}",
+    "autoRateNote": "Exchange rate will be fetched automatically when you save.",
     "submit": "Add Expense",
     "submitting": "Adding...",
     "unnamed": "Unnamed"
@@ -44,6 +50,7 @@
     "delete": "Delete",
     "deleteConfirm": "Delete this expense?",
     "deleting": "Deleting...",
+    "exchangeRate": "Rate: 1 {from} = {rate} {to}",
     "notFound": "Expense not found",
     "notFoundDescription": "This expense doesn't exist or has been deleted.",
     "backToGroup": "Back to Group"

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, groupMemberProcedure } from "../init";
 import { SplitMode } from "@/generated/prisma/client";
+import { getExchangeRate, convertCents } from "../../lib/exchange-rates";
 
 const expenseShareSchema = z.object({
   userId: z.string(),
@@ -70,6 +71,7 @@ export const expensesRouter = createTRPCRouter({
         description: z.string().max(1000).optional(),
         amount: z.number().int().positive(),
         currency: z.string().length(3).default("USD"),
+        exchangeRate: z.number().positive().optional(), // manual override
         category: z.string().max(50).optional(),
         expenseDate: z.string().datetime().optional(),
         paidById: z.string(),
@@ -82,7 +84,7 @@ export const expensesRouter = createTRPCRouter({
       // Block expenses on archived groups
       const group = await ctx.db.group.findUnique({
         where: { id: input.groupId },
-        select: { archivedAt: true },
+        select: { archivedAt: true, currency: true },
       });
       if (group?.archivedAt) {
         throw new TRPCError({
@@ -111,13 +113,40 @@ export const expensesRouter = createTRPCRouter({
         });
       }
 
-      // Validate shares sum equals total
+      // Validate shares sum equals total (in expense's original currency)
       const sharesSum = input.shares.reduce((sum, s) => sum + s.amount, 0);
       if (sharesSum !== input.amount) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: `Shares sum (${sharesSum}) does not equal expense amount (${input.amount})`,
         });
+      }
+
+      // Currency conversion: compute base currency amount if currencies differ
+      let exchangeRate: number | null = null;
+      let baseCurrencyAmount: number | null = null;
+
+      const groupCurrency = group?.currency ?? "USD";
+      if (input.currency.toUpperCase() !== groupCurrency.toUpperCase()) {
+        if (input.exchangeRate) {
+          // Manual override
+          exchangeRate = input.exchangeRate;
+        } else {
+          // Auto-fetch from frankfurter.app
+          const dateStr = input.expenseDate
+            ? input.expenseDate.slice(0, 10) // YYYY-MM-DD from ISO string
+            : undefined;
+          exchangeRate = await getExchangeRate(input.currency, groupCurrency, dateStr);
+        }
+
+        if (exchangeRate === null) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Could not fetch exchange rate. Please provide a manual rate or try again.",
+          });
+        }
+
+        baseCurrencyAmount = convertCents(input.amount, exchangeRate);
       }
 
       const expense = await ctx.db.expense.create({
@@ -127,6 +156,8 @@ export const expensesRouter = createTRPCRouter({
           description: input.description,
           amount: input.amount,
           currency: input.currency,
+          exchangeRate: exchangeRate ?? 1.0,
+          baseCurrencyAmount,
           category: input.category,
           expenseDate: input.expenseDate ? new Date(input.expenseDate) : new Date(),
           paidById: input.paidById,
@@ -168,6 +199,8 @@ export const expensesRouter = createTRPCRouter({
         title: z.string().min(1).max(200).optional(),
         description: z.string().max(1000).optional(),
         amount: z.number().int().positive().optional(),
+        currency: z.string().length(3).optional(),
+        exchangeRate: z.number().positive().optional(), // manual override
         category: z.string().max(50).optional(),
         expenseDate: z.string().datetime().optional(),
         paidById: z.string().optional(),
@@ -179,7 +212,7 @@ export const expensesRouter = createTRPCRouter({
       // Block updates on archived groups
       const groupCheck = await ctx.db.group.findUnique({
         where: { id: input.groupId },
-        select: { archivedAt: true },
+        select: { archivedAt: true, currency: true },
       });
       if (groupCheck?.archivedAt) {
         throw new TRPCError({
@@ -216,7 +249,7 @@ export const expensesRouter = createTRPCRouter({
         }
       }
 
-      const { groupId, expenseId, shares, ...data } = input;
+      const { groupId, expenseId, shares, currency: inputCurrency, exchangeRate: inputExchangeRate, ...data } = input;
 
       if (shares) {
         // Validate all share userIds are group members
@@ -241,6 +274,37 @@ export const expensesRouter = createTRPCRouter({
         }
       }
 
+      // Recompute currency conversion if currency or amount changed
+      const effectiveCurrency = inputCurrency ?? existing.currency;
+      const effectiveAmount = data.amount ?? existing.amount;
+      const groupCurrency = groupCheck?.currency ?? "USD";
+      let newExchangeRate: number | null = existing.exchangeRate;
+      let newBaseCurrencyAmount: number | null = existing.baseCurrencyAmount;
+
+      if (effectiveCurrency.toUpperCase() !== groupCurrency.toUpperCase()) {
+        if (inputExchangeRate) {
+          newExchangeRate = inputExchangeRate;
+        } else if (inputCurrency || data.amount) {
+          // Currency or amount changed -- re-fetch rate
+          const dateStr = (data.expenseDate ?? existing.expenseDate.toISOString()).slice(0, 10);
+          const fetched = await getExchangeRate(effectiveCurrency, groupCurrency, dateStr);
+          if (fetched === null) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Could not fetch exchange rate. Please provide a manual rate or try again.",
+            });
+          }
+          newExchangeRate = fetched;
+        }
+        newBaseCurrencyAmount = newExchangeRate
+          ? convertCents(effectiveAmount, newExchangeRate)
+          : null;
+      } else {
+        // Same currency as group -- clear conversion fields
+        newExchangeRate = 1.0;
+        newBaseCurrencyAmount = null;
+      }
+
       const expense = await ctx.db.$transaction(async (tx) => {
         if (shares) {
           await tx.expenseShare.deleteMany({ where: { expenseId } });
@@ -259,6 +323,9 @@ export const expensesRouter = createTRPCRouter({
           where: { id: expenseId },
           data: {
             ...data,
+            ...(inputCurrency ? { currency: inputCurrency } : {}),
+            exchangeRate: newExchangeRate ?? 1.0,
+            baseCurrencyAmount: newBaseCurrencyAmount,
             ...(data.expenseDate ? { expenseDate: new Date(data.expenseDate) } : {}),
           },
           include: { shares: true },

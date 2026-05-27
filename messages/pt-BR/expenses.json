@@ -24,6 +24,12 @@
     "selectMember": "Selecionar membro",
     "backToGroup": "Voltar ao grupo",
     "expenseDetails": "Detalhes da despesa",
+    "currency": "Moeda",
+    "differentCurrencyNote": "Esta despesa é em {expenseCurrency}, mas o grupo usa {groupCurrency}. O valor será convertido automaticamente.",
+    "manualRateOverride": "Definir taxa de câmbio manualmente",
+    "exchangeRatePlaceholder": "1 {from} = ? {to}",
+    "convertedAmount": "Convertido: {amount}",
+    "autoRateNote": "A taxa de câmbio será obtida automaticamente ao salvar.",
     "unnamed": "Sem nome"
   },
   "edit": {
@@ -44,6 +50,7 @@
     "category": "Categoria",
     "unknown": "Desconhecido",
     "deleting": "Excluindo...",
+    "exchangeRate": "Taxa: 1 {from} = {rate} {to}",
     "notFound": "Despesa não encontrada",
     "notFoundDescription": "Esta despesa não existe ou foi excluída.",
     "backToGroup": "Voltar ao grupo"

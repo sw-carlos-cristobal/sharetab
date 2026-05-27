@@ -46,6 +46,7 @@
     "name": "Nombre",
     "description": "Descripción",
     "currency": "Moneda",
+    "currencyChangeWarning": "Cambiar la moneda solo afecta gastos futuros. Los gastos existentes mantendrán sus tasas de conversión originales.",
     "members": "Miembros",
     "addMember": "Agregar miembro",
     "removeMember": "Eliminar",

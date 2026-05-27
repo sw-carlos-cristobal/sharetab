@@ -22,6 +22,12 @@
     "selectMember": "Seleccionar miembro",
     "backToGroup": "Volver al grupo",
     "expenseDetails": "Detalles del gasto",
+    "currency": "Moneda",
+    "differentCurrencyNote": "Este gasto es en {expenseCurrency}, pero el grupo usa {groupCurrency}. El monto se convertirá automáticamente.",
+    "manualRateOverride": "Establecer tipo de cambio manualmente",
+    "exchangeRatePlaceholder": "1 {from} = ? {to}",
+    "convertedAmount": "Convertido: {amount}",
+    "autoRateNote": "El tipo de cambio se obtendrá automáticamente al guardar.",
     "submit": "Agregar gasto",
     "submitting": "Agregando...",
     "unnamed": "Sin nombre"
@@ -44,6 +50,7 @@
     "delete": "Eliminar",
     "deleteConfirm": "¿Eliminar este gasto?",
     "deleting": "Eliminando...",
+    "exchangeRate": "Tasa: 1 {from} = {rate} {to}",
     "notFound": "Gasto no encontrado",
     "notFoundDescription": "Este gasto no existe o ha sido eliminado.",
     "backToGroup": "Volver al grupo"
