@@ -199,7 +199,7 @@ export const expensesRouter = createTRPCRouter({
         title: z.string().min(1).max(200).optional(),
         description: z.string().max(1000).optional(),
         amount: z.number().int().positive().optional(),
-        currency: z.string().length(3).transform((c) => c.toUpperCase()).optional(),
+        currency: z.string().length(3).regex(/^[a-zA-Z]{3}$/).transform((c) => c.toUpperCase()).optional(),
         exchangeRate: z.number().positive().optional(), // manual override
         category: z.string().max(50).optional(),
         expenseDate: z.string().datetime().optional(),

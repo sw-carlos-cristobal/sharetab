@@ -503,7 +503,9 @@ export const receiptsRouter = createTRPCRouter({
       );
 
       // Currency conversion for receipt expenses
-      const receiptCurrency = (extractedData.currency ?? group!.currency).toUpperCase();
+      const rawCurrency = extractedData.currency;
+      const isValidIso = rawCurrency && /^[a-zA-Z]{3}$/.test(rawCurrency);
+      const receiptCurrency = (isValidIso ? rawCurrency : group!.currency).toUpperCase();
       const groupCurrency = group!.currency.toUpperCase();
       let exchangeRate: number | null = null;
       let baseCurrencyAmount: number | null = null;
