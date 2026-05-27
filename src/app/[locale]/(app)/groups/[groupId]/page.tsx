@@ -396,7 +396,7 @@ export default function GroupDetailPage({
                   </div>
                 </div>
                 <p className="ml-4 shrink-0 text-lg font-semibold tabular-nums">
-                  {formatCents(expense.amount, g.currency, locale)}
+                  {formatCents(expense.amount, expense.currency ?? g.currency, locale)}
                 </p>
               </div>
             </Link>

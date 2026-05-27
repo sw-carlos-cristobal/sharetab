@@ -98,8 +98,9 @@ export function computeBalances(
     if (expense.baseCurrencyAmount != null && expense.baseCurrencyAmount !== expense.amount) {
       const ratio = expense.baseCurrencyAmount / expense.amount;
       let distributed = 0;
-      const scaledShares = expense.shares.map((share, i) => {
-        if (i === expense.shares.length - 1) {
+      const sortedShares = [...expense.shares].sort((a, b) => a.userId.localeCompare(b.userId));
+      const scaledShares = sortedShares.map((share, i) => {
+        if (i === sortedShares.length - 1) {
           // Last share gets the remainder to avoid rounding drift
           return { userId: share.userId, amount: effectiveAmount - distributed };
         }

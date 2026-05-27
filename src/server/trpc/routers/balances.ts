@@ -182,9 +182,10 @@ export const balancesRouter = createTRPCRouter({
         if (expense.baseCurrencyAmount != null && expense.baseCurrencyAmount !== expense.amount) {
           const ratio = expense.baseCurrencyAmount / expense.amount;
           let distributed = 0;
-          for (let i = 0; i < expense.shares.length; i++) {
-            const share = expense.shares[i];
-            const scaledAmount = i === expense.shares.length - 1
+          const sortedShares = [...expense.shares].sort((a, b) => a.userId.localeCompare(b.userId));
+          for (let i = 0; i < sortedShares.length; i++) {
+            const share = sortedShares[i];
+            const scaledAmount = i === sortedShares.length - 1
               ? effectiveAmount - distributed
               : Math.round(share.amount * ratio);
             distributed += scaledAmount;
