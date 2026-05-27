@@ -62,14 +62,14 @@ export default function EditExpensePage({
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    if (expense.data && !loaded) {
+    if (expense.data && group.data && !loaded) {
       const e = expense.data;
       setTitle(e.title);
       setAmountStr(centsToDecimal(e.amount));
       setCategory(e.category ?? "");
       setPaidById(e.paidById);
       setCurrency(e.currency);
-      const groupCur = group.data?.currency ?? "USD";
+      const groupCur = group.data.currency;
       if (e.currency.toUpperCase() !== groupCur.toUpperCase() && e.exchangeRate && e.exchangeRate !== 1) {
         setUseManualRate(true);
         setManualRate(String(e.exchangeRate));
