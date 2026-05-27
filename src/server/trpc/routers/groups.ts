@@ -102,11 +102,14 @@ export const groupsRouter = createTRPCRouter({
           select: { currency: true },
         });
         if (existing && data.currency.toUpperCase() !== existing.currency.toUpperCase()) {
-          const hasMonetaryRows = await ctx.db.expense.count({ where: { groupId }, take: 1 });
-          if (hasMonetaryRows > 0) {
+          const [expenseCount, settlementCount] = await Promise.all([
+            ctx.db.expense.count({ where: { groupId }, take: 1 }),
+            ctx.db.settlement.count({ where: { groupId }, take: 1 }),
+          ]);
+          if (expenseCount > 0 || settlementCount > 0) {
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message: "Cannot change group currency after expenses have been added. Create a new group with the desired currency instead.",
+              message: "Cannot change group currency after expenses or settlements have been recorded. Create a new group with the desired currency instead.",
             });
           }
         }

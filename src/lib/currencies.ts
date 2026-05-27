@@ -47,6 +47,7 @@ export type CurrencyCode = (typeof COMMON_CURRENCIES)[number]["code"];
  * Get the display label for a currency code.
  */
 export function getCurrencyLabel(code: string): string {
-  const found = COMMON_CURRENCIES.find((c) => c.code === code);
-  return found ? `${found.code} - ${found.name}` : code;
+  const upper = code.toUpperCase();
+  const found = COMMON_CURRENCIES.find((c) => c.code === upper);
+  return found ? `${found.code} - ${found.name}` : upper;
 }

@@ -38,7 +38,7 @@ export const settlementsRouter = createTRPCRouter({
         fromId: z.string().optional(),
         toId: z.string(),
         amount: z.number().int().positive(),
-        currency: z.string().length(3).default("USD"),
+        currency: z.string().length(3).transform((c) => c.toUpperCase()).default("USD"),
         exchangeRate: z.number().positive().optional(), // manual override
         note: z.string().max(500).optional(),
       })

@@ -40,8 +40,11 @@ export async function getExchangeRate(
 
   // Check cache
   const cached = rateCache.get(key);
-  if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
-    return cached.rate;
+  if (cached) {
+    if (Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
+      return cached.rate;
+    }
+    rateCache.delete(key);
   }
 
   try {
