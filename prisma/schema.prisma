@@ -148,8 +148,10 @@ model Expense {
   groupId     String
   title       String
   description String?   @db.Text
-  amount      Int       // total in cents
+  amount      Int       // total in cents (in expense currency)
   currency    String    @default("USD")
+  exchangeRate        Float?  @default(1.0) // rate: 1 unit of expense currency = X units of group currency
+  baseCurrencyAmount  Int?    // amount converted to group currency (cents); null = same currency
   category    String?
   expenseDate DateTime  @default(now())
   splitMode   SplitMode @default(EQUAL)
@@ -264,8 +266,10 @@ model Settlement {
   groupId  String
   fromId   String
   toId     String
-  amount   Int     // cents
+  amount   Int     // cents (in settlement currency)
   currency String  @default("USD")
+  exchangeRate        Float?  @default(1.0) // rate: 1 unit of settlement currency = X units of group currency
+  baseCurrencyAmount  Int?    // amount converted to group currency (cents); null = same currency
   note     String?
 
   group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)

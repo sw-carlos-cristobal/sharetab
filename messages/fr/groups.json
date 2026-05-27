@@ -45,6 +45,7 @@
     "title": "Paramètres du groupe",
     "name": "Nom",
     "currency": "Devise",
+    "currencyChangeWarning": "Le changement de devise n'affecte que les dépenses futures. Les dépenses existantes conserveront leurs taux de conversion d'origine.",
     "members": "Membres",
     "addMember": "Ajouter un membre",
     "removeMember": "Retirer",

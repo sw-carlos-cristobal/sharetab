@@ -46,6 +46,7 @@
     "name": "Name",
     "description": "Description",
     "currency": "Currency",
+    "currencyChangeWarning": "Changing currency only affects future expenses. Existing expenses will keep their original conversion rates.",
     "members": "Members",
     "addMember": "Add member",
     "removeMember": "Remove",

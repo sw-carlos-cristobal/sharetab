@@ -45,6 +45,7 @@
     "title": "그룹 설정",
     "name": "이름",
     "currency": "통화",
+    "currencyChangeWarning": "통화 변경은 향후 비용에만 영향을 미칩니다. 기존 비용은 원래 환율을 유지합니다.",
     "members": "멤버",
     "addMember": "멤버 추가",
     "removeMember": "제거",

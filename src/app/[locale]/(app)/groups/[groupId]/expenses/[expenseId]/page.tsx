@@ -23,6 +23,7 @@ export default function ExpenseDetailPage({
   const t = useTranslations("expenses");
 
   const expense = trpc.expenses.get.useQuery({ groupId, expenseId });
+  const group = trpc.groups.get.useQuery({ groupId });
   const deleteExpense = trpc.expenses.delete.useMutation({
     onSuccess: () => router.push(`/groups/${groupId}`),
   });
@@ -44,6 +45,8 @@ export default function ExpenseDetailPage({
   }
 
   const e = expense.data;
+  const groupCurrency = group.data?.currency ?? "USD";
+  const isCurrencyConverted = e.baseCurrencyAmount != null && e.currency.toUpperCase() !== groupCurrency.toUpperCase();
 
   return (
     <div className="mx-auto max-w-lg space-y-6">
@@ -57,9 +60,25 @@ export default function ExpenseDetailPage({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>{formatCents(e.amount, e.currency, locale)}</span>
+            <div>
+              <span>{formatCents(e.amount, e.currency, locale)}</span>
+              {isCurrencyConverted && (
+                <span className="ml-2 text-sm font-normal text-muted-foreground">
+                  ({formatCents(e.baseCurrencyAmount!, groupCurrency, locale)})
+                </span>
+              )}
+            </div>
             <Badge variant="secondary">{e.splitMode}</Badge>
           </CardTitle>
+          {isCurrencyConverted && (
+            <p className="text-xs text-muted-foreground">
+              {t("detail.exchangeRate", {
+                rate: e.exchangeRate?.toFixed(4) ?? "1.0000",
+                from: e.currency,
+                to: groupCurrency,
+              })}
+            </p>
+          )}
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4 text-sm">

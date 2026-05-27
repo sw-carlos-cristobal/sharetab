@@ -45,6 +45,7 @@
     "title": "Gruppinställningar",
     "name": "Namn",
     "currency": "Valuta",
+    "currencyChangeWarning": "Att ändra valuta påverkar bara framtida utgifter. Befintliga utgifter behåller sina ursprungliga omräkningskurser.",
     "members": "Medlemmar",
     "addMember": "Lägg till medlem",
     "removeMember": "Ta bort",

@@ -60,7 +60,7 @@ export const groupsRouter = createTRPCRouter({
       z.object({
         name: z.string().min(1).max(100),
         description: z.string().max(500).optional(),
-        currency: z.string().length(3).default("USD"),
+        currency: z.string().length(3).regex(/^[a-zA-Z]{3}$/).transform((c) => c.toUpperCase()).default("USD"),
         emoji: z.string().max(4).optional(),
       })
     )
@@ -85,7 +85,7 @@ export const groupsRouter = createTRPCRouter({
         groupId: z.string(),
         name: z.string().min(1).max(100).optional(),
         description: z.string().max(500).optional(),
-        currency: z.string().length(3).optional(),
+        currency: z.string().length(3).regex(/^[a-zA-Z]{3}$/).transform((c) => c.toUpperCase()).optional(),
         emoji: z.string().max(4).optional(),
         simplifyDebts: z.boolean().optional(),
       })
@@ -95,6 +95,26 @@ export const groupsRouter = createTRPCRouter({
         throw new TRPCError({ code: "FORBIDDEN", message: "Only admins and owners can update groups" });
       }
       const { groupId, ...data } = input;
+
+      if (data.currency) {
+        const existing = await ctx.db.group.findUnique({
+          where: { id: groupId },
+          select: { currency: true },
+        });
+        if (existing && data.currency.toUpperCase() !== existing.currency.toUpperCase()) {
+          const [expenseCount, settlementCount] = await Promise.all([
+            ctx.db.expense.count({ where: { groupId }, take: 1 }),
+            ctx.db.settlement.count({ where: { groupId }, take: 1 }),
+          ]);
+          if (expenseCount > 0 || settlementCount > 0) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Cannot change group currency after expenses or settlements have been recorded. Create a new group with the desired currency instead.",
+            });
+          }
+        }
+      }
+
       const group = await ctx.db.group.update({
         where: { id: groupId },
         data,

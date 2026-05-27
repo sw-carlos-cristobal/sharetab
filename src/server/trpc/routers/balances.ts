@@ -12,12 +12,13 @@ export const balancesRouter = createTRPCRouter({
           select: {
             paidById: true,
             amount: true,
+            baseCurrencyAmount: true,
             shares: { select: { userId: true, amount: true } },
           },
         }),
         ctx.db.settlement.findMany({
           where: { groupId: input.groupId },
-          select: { fromId: true, toId: true, amount: true },
+          select: { fromId: true, toId: true, amount: true, baseCurrencyAmount: true },
         }),
       ]);
 
@@ -34,12 +35,13 @@ export const balancesRouter = createTRPCRouter({
           select: {
             paidById: true,
             amount: true,
+            baseCurrencyAmount: true,
             shares: { select: { userId: true, amount: true } },
           },
         }),
         ctx.db.settlement.findMany({
           where: { groupId: input.groupId },
-          select: { fromId: true, toId: true, amount: true },
+          select: { fromId: true, toId: true, amount: true, baseCurrencyAmount: true },
         }),
       ]);
 
@@ -56,11 +58,12 @@ export const balancesRouter = createTRPCRouter({
           select: {
             paidById: true,
             amount: true,
+            baseCurrencyAmount: true,
             shares: { select: { userId: true, amount: true } },
           },
         },
         settlements: {
-          select: { fromId: true, toId: true, amount: true },
+          select: { fromId: true, toId: true, amount: true, baseCurrencyAmount: true },
         },
         members: {
           select: { user: { select: { id: true, name: true, venmoUsername: true } } },
@@ -147,11 +150,12 @@ export const balancesRouter = createTRPCRouter({
           select: {
             paidById: true,
             amount: true,
+            baseCurrencyAmount: true,
             shares: { select: { userId: true, amount: true } },
           },
         },
         settlements: {
-          select: { fromId: true, toId: true, amount: true },
+          select: { fromId: true, toId: true, amount: true, baseCurrencyAmount: true },
         },
       },
     });
@@ -170,12 +174,30 @@ export const balancesRouter = createTRPCRouter({
       let owes = 0;
 
       for (const expense of group.expenses) {
+        const effectiveAmount = expense.baseCurrencyAmount ?? expense.amount;
         if (expense.paidById === ctx.user.id) {
-          paid += expense.amount;
+          paid += effectiveAmount;
         }
-        for (const share of expense.shares) {
-          if (share.userId === ctx.user.id) {
-            owes += share.amount;
+        // Scale shares proportionally if currency was converted
+        if (expense.baseCurrencyAmount != null && expense.baseCurrencyAmount !== expense.amount) {
+          const ratio = expense.baseCurrencyAmount / expense.amount;
+          let distributed = 0;
+          const sortedShares = [...expense.shares].sort((a, b) => a.userId.localeCompare(b.userId));
+          for (let i = 0; i < sortedShares.length; i++) {
+            const share = sortedShares[i];
+            const scaledAmount = i === sortedShares.length - 1
+              ? effectiveAmount - distributed
+              : Math.round(share.amount * ratio);
+            distributed += scaledAmount;
+            if (share.userId === ctx.user.id) {
+              owes += scaledAmount;
+            }
+          }
+        } else {
+          for (const share of expense.shares) {
+            if (share.userId === ctx.user.id) {
+              owes += share.amount;
+            }
           }
         }
       }
@@ -185,8 +207,9 @@ export const balancesRouter = createTRPCRouter({
       // e.g., if Alice pays Bob $50, Alice's paid goes up and Bob's owes goes up,
       // reducing Bob's net balance (what others owe him) by $50.
       for (const settlement of group.settlements) {
-        if (settlement.fromId === ctx.user.id) paid += settlement.amount;
-        if (settlement.toId === ctx.user.id) owes += settlement.amount;
+        const effectiveAmount = settlement.baseCurrencyAmount ?? settlement.amount;
+        if (settlement.fromId === ctx.user.id) paid += effectiveAmount;
+        if (settlement.toId === ctx.user.id) owes += effectiveAmount;
       }
 
       const net = paid - owes;

@@ -45,6 +45,7 @@
     "title": "Gruppeneinstellungen",
     "name": "Name",
     "currency": "Währung",
+    "currencyChangeWarning": "Die Änderung der Währung wirkt sich nur auf zukünftige Ausgaben aus. Bestehende Ausgaben behalten ihre ursprünglichen Umrechnungskurse.",
     "members": "Mitglieder",
     "addMember": "Mitglied hinzufügen",
     "removeMember": "Entfernen",

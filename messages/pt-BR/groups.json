@@ -45,6 +45,7 @@
     "title": "Configurações do grupo",
     "name": "Nome",
     "currency": "Moeda",
+    "currencyChangeWarning": "A alteração da moeda afeta apenas despesas futuras. As despesas existentes manterão suas taxas de conversão originais.",
     "members": "Membros",
     "addMember": "Adicionar membro",
     "removeMember": "Remover",

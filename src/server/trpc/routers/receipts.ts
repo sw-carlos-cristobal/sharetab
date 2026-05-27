@@ -10,6 +10,7 @@ import {
   getAIProvidersWithFallback,
   getConfiguredProviderPriority,
 } from "@/server/ai/registry";
+import { getExchangeRate, convertCents } from "../../lib/exchange-rates";
 
 /**
  * Verify that a receipt exists and the user has access to it (via group membership).
@@ -501,6 +502,26 @@ export const receiptsRouter = createTRPCRouter({
         }))
       );
 
+      // Currency conversion for receipt expenses
+      const rawCurrency = extractedData.currency;
+      const isValidIso = rawCurrency && /^[a-zA-Z]{3}$/.test(rawCurrency);
+      const receiptCurrency = (isValidIso ? rawCurrency : group!.currency).toUpperCase();
+      const groupCurrency = group!.currency.toUpperCase();
+      let exchangeRate: number | null = null;
+      let baseCurrencyAmount: number | null = null;
+
+      if (receiptCurrency !== groupCurrency) {
+        const receiptDate = extractedData.date?.slice(0, 10);
+        exchangeRate = await getExchangeRate(receiptCurrency, groupCurrency, receiptDate);
+        if (exchangeRate === null) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Could not fetch exchange rate for receipt currency. Please try again.",
+          });
+        }
+        baseCurrencyAmount = convertCents(totalAmount, exchangeRate);
+      }
+
       // All writes in a single transaction for atomicity
       const expense = await ctx.db.$transaction(async (tx) => {
         const exp = await tx.expense.create({
@@ -508,7 +529,9 @@ export const receiptsRouter = createTRPCRouter({
             groupId: input.groupId,
             title: input.title,
             amount: totalAmount,
-            currency: extractedData.currency,
+            currency: receiptCurrency,
+            exchangeRate: exchangeRate ?? 1.0,
+            baseCurrencyAmount,
             splitMode: "ITEM",
             paidById: input.paidById,
             addedById: ctx.user.id,

@@ -24,6 +24,12 @@
     "selectMember": "メンバーを選択",
     "backToGroup": "グループに戻る",
     "expenseDetails": "経費の詳細",
+    "currency": "通貨",
+    "differentCurrencyNote": "この経費は{expenseCurrency}ですが、グループは{groupCurrency}を使用しています。金額は自動的に換算されます。",
+    "manualRateOverride": "為替レートを手動で設定",
+    "exchangeRatePlaceholder": "1 {from} = ? {to}",
+    "convertedAmount": "換算額: {amount}",
+    "autoRateNote": "保存時に為替レートが自動的に取得されます。",
     "unnamed": "名前なし"
   },
   "edit": {
@@ -44,6 +50,7 @@
     "category": "カテゴリ",
     "unknown": "不明",
     "deleting": "削除中...",
+    "exchangeRate": "レート: 1 {from} = {rate} {to}",
     "notFound": "経費が見つかりません",
     "notFoundDescription": "この経費は存在しないか、削除されました。",
     "backToGroup": "グループに戻る"
