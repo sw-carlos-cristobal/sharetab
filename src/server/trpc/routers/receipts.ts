@@ -509,7 +509,8 @@ export const receiptsRouter = createTRPCRouter({
       let baseCurrencyAmount: number | null = null;
 
       if (receiptCurrency !== groupCurrency) {
-        exchangeRate = await getExchangeRate(receiptCurrency, groupCurrency);
+        const receiptDate = extractedData.date?.slice(0, 10);
+        exchangeRate = await getExchangeRate(receiptCurrency, groupCurrency, receiptDate);
         if (exchangeRate === null) {
           throw new TRPCError({
             code: "BAD_REQUEST",

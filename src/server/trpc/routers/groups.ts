@@ -60,7 +60,7 @@ export const groupsRouter = createTRPCRouter({
       z.object({
         name: z.string().min(1).max(100),
         description: z.string().max(500).optional(),
-        currency: z.string().length(3).transform((c) => c.toUpperCase()).default("USD"),
+        currency: z.string().length(3).regex(/^[a-zA-Z]{3}$/).transform((c) => c.toUpperCase()).default("USD"),
         emoji: z.string().max(4).optional(),
       })
     )
@@ -85,7 +85,7 @@ export const groupsRouter = createTRPCRouter({
         groupId: z.string(),
         name: z.string().min(1).max(100).optional(),
         description: z.string().max(500).optional(),
-        currency: z.string().length(3).transform((c) => c.toUpperCase()).optional(),
+        currency: z.string().length(3).regex(/^[a-zA-Z]{3}$/).transform((c) => c.toUpperCase()).optional(),
         emoji: z.string().max(4).optional(),
         simplifyDebts: z.boolean().optional(),
       })
