@@ -69,12 +69,17 @@ export default function EditExpensePage({
       setCategory(e.category ?? "");
       setPaidById(e.paidById);
       setCurrency(e.currency);
+      const groupCur = group.data?.currency ?? "USD";
+      if (e.currency.toUpperCase() !== groupCur.toUpperCase() && e.exchangeRate && e.exchangeRate !== 1) {
+        setUseManualRate(true);
+        setManualRate(String(e.exchangeRate));
+      }
       if (e.splitMode !== "ITEM") {
         setSplitMode(e.splitMode as SplitMode);
       }
       setLoaded(true);
     }
-  }, [expense.data, loaded]);
+  }, [expense.data, group.data, loaded]);
 
   const updateExpense = trpc.expenses.update.useMutation({
     onSuccess: () => {
