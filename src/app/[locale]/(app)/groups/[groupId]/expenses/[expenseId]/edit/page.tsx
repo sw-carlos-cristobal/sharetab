@@ -106,7 +106,7 @@ export default function EditExpensePage({
       title,
       amount: amountCents,
       ...(currencyChanged ? { currency: effectiveCurrency } : {}),
-      ...(currencyChanged && isDifferentCurrency && manualRateValid ? { exchangeRate: parsedManualRate } : {}),
+      ...(isDifferentCurrency && manualRateValid ? { exchangeRate: parsedManualRate } : {}),
       category: category || undefined,
       paidById,
       splitMode,
