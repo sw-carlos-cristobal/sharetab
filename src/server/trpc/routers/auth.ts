@@ -86,30 +86,34 @@ export const authRouter = createTRPCRouter({
       }
 
       const passwordHash = await bcrypt.hash(input.password, 12);
-      const user = await ctx.db.user.create({
-        data: {
-          name: input.name,
-          email: input.email,
-          passwordHash,
-        },
-      });
-
-      if (input.inviteCode && mode === "invite-only") {
-        const claimed = await ctx.db.systemInvite.updateMany({
-          where: {
-            code: input.inviteCode,
-            usedAt: null,
-            revokedAt: null,
+      const user = await ctx.db.$transaction(async (tx) => {
+        const created = await tx.user.create({
+          data: {
+            name: input.name,
+            email: input.email,
+            passwordHash,
           },
-          data: { usedById: user.id, usedAt: new Date() },
         });
-        if (claimed.count === 0) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Invite code was already used",
+
+        if (input.inviteCode && mode === "invite-only") {
+          const claimed = await tx.systemInvite.updateMany({
+            where: {
+              code: input.inviteCode,
+              usedAt: null,
+              revokedAt: null,
+            },
+            data: { usedById: created.id, usedAt: new Date() },
           });
+          if (claimed.count === 0) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Invite code was already used",
+            });
+          }
         }
-      }
+
+        return created;
+      });
 
       return { id: user.id, name: user.name, email: user.email };
     }),
