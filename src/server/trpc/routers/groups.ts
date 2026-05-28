@@ -498,7 +498,12 @@ async function mergePlaceholderIntoUser(
     const groupReceiptItemIds = (
       await tx.receiptItem.findMany({
         where: {
-          receipt: { expense: { groupId } },
+          receipt: {
+            OR: [
+              { expense: { groupId } },
+              { groupId },
+            ],
+          },
         },
         select: { id: true },
       })
