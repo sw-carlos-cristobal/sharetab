@@ -71,6 +71,20 @@ export const receiptsRouter = createTRPCRouter({
         throw new TRPCError({ code: "NOT_FOUND", message: "Receipt not found" });
       }
 
+      if (input.groupId) {
+        const membership = await ctx.db.groupMember.findUnique({
+          where: {
+            userId_groupId: {
+              userId: ctx.user.id,
+              groupId: input.groupId,
+            },
+          },
+        });
+        if (!membership) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Not a member of this group" });
+        }
+      }
+
       // Note: old items are NOT deleted here — processReceiptImage handles
       // delete + recreate atomically, so if the AI provider fails the old items remain.
 
@@ -744,9 +758,8 @@ export const receiptsRouter = createTRPCRouter({
       // Clean up the uploaded image file
       try {
         const { unlink } = await import("fs/promises");
-        const { join } = await import("path");
-        const { getUploadDir } = await import("../../lib/upload-dir");
-        const filepath = join(getUploadDir(), receipt.imagePath);
+        const { resolveUploadPath } = await import("../../lib/upload-dir");
+        const filepath = resolveUploadPath(receipt.imagePath);
         await unlink(filepath);
       } catch {
         // Non-fatal: file may already be missing

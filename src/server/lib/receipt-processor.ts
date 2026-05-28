@@ -26,9 +26,8 @@ export async function processReceiptImage({
   logPrefix = "receipt",
 }: ProcessReceiptImageOptions) {
   const { readFile } = await import("fs/promises");
-  const { join } = await import("path");
-  const { getUploadDir } = await import("./upload-dir");
-  const filepath = join(getUploadDir(), receipt.imagePath);
+  const { resolveUploadPath } = await import("./upload-dir");
+  const filepath = resolveUploadPath(receipt.imagePath);
   const imageBuffer = await readFile(filepath);
 
   logger.info(`${logPrefix}.processing`, {

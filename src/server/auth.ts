@@ -59,11 +59,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return { id: user.id, name: user.name, email: user.email, image: user.image, locale: user.locale };
       },
     }),
-    ...(process.env.GOOGLE_CLIENT_ID
+    ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
       ? [
           Google({
             clientId: process.env.GOOGLE_CLIENT_ID,
-            clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
           }),
         ]
       : []),

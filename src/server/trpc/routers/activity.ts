@@ -14,7 +14,7 @@ export const activityRouter = createTRPCRouter({
       const items = await ctx.db.activityLog.findMany({
         where: { groupId: input.groupId },
         take: input.limit + 1,
-        ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {}),
+        ...(input.cursor ? { cursor: { id: input.cursor } } : {}),
         orderBy: { createdAt: "desc" },
         include: {
           user: { select: { id: true, name: true, image: true } },

@@ -18,6 +18,7 @@ vi.mock("./normalize-date", () => ({
 
 vi.mock("./upload-dir", () => ({
   getUploadDir: () => "/tmp/uploads",
+  resolveUploadPath: (relativePath: string) => `/tmp/uploads/${relativePath}`,
 }));
 
 vi.mock("fs/promises", () => ({

@@ -24,7 +24,7 @@ export const expensesRouter = createTRPCRouter({
       const expenses = await ctx.db.expense.findMany({
         where: { groupId: input.groupId },
         take: input.limit + 1,
-        ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {}),
+        ...(input.cursor ? { cursor: { id: input.cursor } } : {}),
         orderBy: { expenseDate: "desc" },
         include: {
           paidBy: { select: { id: true, name: true, email: true, image: true } },
@@ -149,43 +149,47 @@ export const expensesRouter = createTRPCRouter({
         baseCurrencyAmount = convertCents(input.amount, exchangeRate);
       }
 
-      const expense = await ctx.db.expense.create({
-        data: {
-          groupId: input.groupId,
-          title: input.title,
-          description: input.description,
-          amount: input.amount,
-          currency: input.currency,
-          exchangeRate: exchangeRate ?? 1.0,
-          baseCurrencyAmount,
-          category: input.category,
-          expenseDate: input.expenseDate ? new Date(input.expenseDate) : new Date(),
-          paidById: input.paidById,
-          addedById: ctx.user.id,
-          splitMode: input.splitMode,
-          receiptId: input.receiptId,
-          shares: {
-            create: input.shares.map((s) => ({
-              userId: s.userId,
-              amount: s.amount,
-              shares: s.shares ?? 1,
-              percentage: s.percentage,
-            })),
+      const expense = await ctx.db.$transaction(async (tx) => {
+        const created = await tx.expense.create({
+          data: {
+            groupId: input.groupId,
+            title: input.title,
+            description: input.description,
+            amount: input.amount,
+            currency: input.currency,
+            exchangeRate: exchangeRate ?? 1.0,
+            baseCurrencyAmount,
+            category: input.category,
+            expenseDate: input.expenseDate ? new Date(input.expenseDate) : new Date(),
+            paidById: input.paidById,
+            addedById: ctx.user.id,
+            splitMode: input.splitMode,
+            receiptId: input.receiptId,
+            shares: {
+              create: input.shares.map((s) => ({
+                userId: s.userId,
+                amount: s.amount,
+                shares: s.shares ?? 1,
+                percentage: s.percentage,
+              })),
+            },
           },
-        },
-        include: {
-          shares: true,
-        },
-      });
+          include: {
+            shares: true,
+          },
+        });
 
-      await ctx.db.activityLog.create({
-        data: {
-          groupId: input.groupId,
-          userId: ctx.user.id,
-          type: "EXPENSE_CREATED",
-          entityId: expense.id,
-          metadata: { title: input.title, amount: input.amount },
-        },
+        await tx.activityLog.create({
+          data: {
+            groupId: input.groupId,
+            userId: ctx.user.id,
+            type: "EXPENSE_CREATED",
+            entityId: created.id,
+            metadata: { title: input.title, amount: input.amount },
+          },
+        });
+
+        return created;
       });
 
       return expense;
@@ -206,7 +210,10 @@ export const expensesRouter = createTRPCRouter({
         paidById: z.string().optional(),
         splitMode: z.nativeEnum(SplitMode).optional(),
         shares: z.array(expenseShareSchema).optional(),
-      })
+      }).refine(
+        (data) => !data.amount || data.shares,
+        { message: "Shares are required when updating the amount", path: ["shares"] }
+      )
     )
     .mutation(async ({ ctx, input }) => {
       // Block updates on archived groups
@@ -319,7 +326,7 @@ export const expensesRouter = createTRPCRouter({
           });
         }
 
-        return tx.expense.update({
+        const updated = await tx.expense.update({
           where: { id: expenseId },
           data: {
             ...data,
@@ -330,15 +337,17 @@ export const expensesRouter = createTRPCRouter({
           },
           include: { shares: true },
         });
-      });
 
-      await ctx.db.activityLog.create({
-        data: {
-          groupId,
-          userId: ctx.user.id,
-          type: "EXPENSE_UPDATED",
-          entityId: expenseId,
-        },
+        await tx.activityLog.create({
+          data: {
+            groupId,
+            userId: ctx.user.id,
+            type: "EXPENSE_UPDATED",
+            entityId: expenseId,
+          },
+        });
+
+        return updated;
       });
 
       return expense;
@@ -376,15 +385,18 @@ export const expensesRouter = createTRPCRouter({
         });
       }
 
-      await ctx.db.expense.delete({ where: { id: input.expenseId } });
+      await ctx.db.$transaction(async (tx) => {
+        await tx.expense.delete({ where: { id: input.expenseId } });
 
-      await ctx.db.activityLog.create({
-        data: {
-          groupId: input.groupId,
-          userId: ctx.user.id,
-          type: "EXPENSE_DELETED",
-          metadata: { title: expense.title, amount: expense.amount },
-        },
+        await tx.activityLog.create({
+          data: {
+            groupId: input.groupId,
+            userId: ctx.user.id,
+            type: "EXPENSE_DELETED",
+            entityId: input.expenseId,
+            metadata: { title: expense.title, amount: expense.amount },
+          },
+        });
       });
 
       return { success: true };

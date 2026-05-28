@@ -71,7 +71,6 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 ENV PGDATA=/var/lib/postgresql/data
-ENV DATABASE_URL="postgresql://sharetab:sharetab@localhost:5432/sharetab"
 
 VOLUME ["/var/lib/postgresql/data", "/app/uploads", "/app/claude", "/app/chatgpt"]
 

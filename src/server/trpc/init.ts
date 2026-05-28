@@ -84,13 +84,16 @@ export const protectedProcedure = t.procedure
       throw new TRPCError({ code: "UNAUTHORIZED" });
     }
 
-    // Check if user is suspended
     const user = await ctx.db.user.findUnique({
       where: { id: ctx.session.user.id },
       select: { suspendedAt: true },
     });
 
-    if (user?.suspendedAt) {
+    if (!user) {
+      throw new TRPCError({ code: "UNAUTHORIZED" });
+    }
+
+    if (user.suspendedAt) {
       throw new TRPCError({
         code: "FORBIDDEN",
         message: "Your account has been suspended. Please contact an administrator.",

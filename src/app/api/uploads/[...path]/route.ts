@@ -2,8 +2,7 @@ import { NextRequest } from "next/server";
 import { auth } from "@/server/auth";
 import { db } from "@/server/db";
 import { readFile, stat } from "fs/promises";
-import { resolve, sep } from "path";
-import { getUploadDir } from "@/server/lib/upload-dir";
+import { resolveUploadPath } from "@/server/lib/upload-dir";
 
 const MIME_TYPES: Record<string, string> = {
   jpg: "image/jpeg",
@@ -22,11 +21,10 @@ export async function GET(
   const { path } = await params;
   const filePath = path.join("/");
 
-  const uploadDir = getUploadDir();
-  const fullPath = resolve(uploadDir, filePath);
-
-  // Prevent directory traversal by verifying resolved path stays within uploadDir
-  if (!fullPath.startsWith(uploadDir + sep) && fullPath !== uploadDir) {
+  let fullPath: string;
+  try {
+    fullPath = resolveUploadPath(filePath);
+  } catch {
     return new Response("Forbidden", { status: 403 });
   }
 

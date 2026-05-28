@@ -116,7 +116,7 @@ export const adminRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const items = await ctx.db.adminAuditLog.findMany({
         take: input.limit + 1,
-        ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {}),
+        ...(input.cursor ? { cursor: { id: input.cursor } } : {}),
         ...(input.action
           ? { where: { action: input.action as AdminAction } }
           : {}),
@@ -273,7 +273,7 @@ export const adminRouter = createTRPCRouter({
         ctx.db.user.findMany({
           take: input.limit + 1,
           ...(input.cursor
-            ? { cursor: { id: input.cursor }, skip: 1 }
+            ? { cursor: { id: input.cursor } }
             : {}),
           where,
           select: {
@@ -295,8 +295,8 @@ export const adminRouter = createTRPCRouter({
 
       let nextCursor: string | undefined;
       if (users.length > input.limit) {
-        users.pop();
-        nextCursor = users.at(-1)?.id;
+        const next = users.pop();
+        nextCursor = next?.id;
       }
 
       return {
@@ -534,7 +534,7 @@ export const adminRouter = createTRPCRouter({
         ctx.db.group.findMany({
           take: input.limit + 1,
           ...(input.cursor
-            ? { cursor: { id: input.cursor }, skip: 1 }
+            ? { cursor: { id: input.cursor } }
             : {}),
           where,
           select: {
@@ -568,8 +568,8 @@ export const adminRouter = createTRPCRouter({
 
       let nextCursor: string | undefined;
       if (groups.length > input.limit) {
-        groups.pop();
-        nextCursor = groups.at(-1)?.id;
+        const next = groups.pop();
+        nextCursor = next?.id;
       }
 
       const groupIds = groups.map((g) => g.id);
@@ -822,7 +822,7 @@ export const adminRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const items = await ctx.db.activityLog.findMany({
         take: input.limit + 1,
-        ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {}),
+        ...(input.cursor ? { cursor: { id: input.cursor } } : {}),
         orderBy: { createdAt: "desc" },
         include: {
           user: { select: { id: true, name: true, email: true } },

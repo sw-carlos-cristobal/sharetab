@@ -62,7 +62,6 @@ export const authRouter = createTRPCRouter({
         const invite = await ctx.db.systemInvite.findUnique({
           where: { code: input.inviteCode },
         });
-
         if (
           !invite ||
           invite.revokedAt ||
@@ -87,21 +86,35 @@ export const authRouter = createTRPCRouter({
       }
 
       const passwordHash = await bcrypt.hash(input.password, 12);
-      const user = await ctx.db.user.create({
-        data: {
-          name: input.name,
-          email: input.email,
-          passwordHash,
-        },
-      });
-
-      // Mark invite as used if provided
-      if (input.inviteCode && mode === "invite-only") {
-        await ctx.db.systemInvite.update({
-          where: { code: input.inviteCode },
-          data: { usedById: user.id, usedAt: new Date() },
+      const user = await ctx.db.$transaction(async (tx) => {
+        const created = await tx.user.create({
+          data: {
+            name: input.name,
+            email: input.email,
+            passwordHash,
+          },
         });
-      }
+
+        if (input.inviteCode && mode === "invite-only") {
+          const claimed = await tx.systemInvite.updateMany({
+            where: {
+              code: input.inviteCode,
+              usedAt: null,
+              revokedAt: null,
+              OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+            },
+            data: { usedById: created.id, usedAt: new Date() },
+          });
+          if (claimed.count === 0) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "Invalid or expired invite code.",
+            });
+          }
+        }
+
+        return created;
+      });
 
       return { id: user.id, name: user.name, email: user.email };
     }),

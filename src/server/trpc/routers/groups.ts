@@ -399,6 +399,12 @@ export const groupsRouter = createTRPCRouter({
       if (!user?.isPlaceholder) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "User is not a placeholder" });
       }
+      const membership = await ctx.db.groupMember.findUnique({
+        where: { userId_groupId: { userId: input.placeholderUserId, groupId: input.groupId } },
+      });
+      if (!membership) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Placeholder is not a member of this group" });
+      }
       return ctx.db.user.update({
         where: { id: input.placeholderUserId },
         data: { placeholderName: input.name, name: input.name },
@@ -423,6 +429,13 @@ export const groupsRouter = createTRPCRouter({
       });
       if (!placeholder?.isPlaceholder) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Not a placeholder user" });
+      }
+
+      const placeholderMember = await ctx.db.groupMember.findUnique({
+        where: { userId_groupId: { userId: input.placeholderUserId, groupId: input.groupId } },
+      });
+      if (!placeholderMember) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Placeholder is not a member of this group" });
       }
 
       // Verify realUserId is a member of the same group
@@ -454,14 +467,21 @@ async function mergePlaceholderIntoUser(
   groupId: string,
 ) {
   await db.$transaction(async (tx) => {
-    // Reassign expense shares (skip if real user already has a share on the same expense)
-    const shares = await tx.expenseShare.findMany({ where: { userId: placeholderUserId } });
+    const groupExpenseIds = (
+      await tx.expense.findMany({
+        where: { groupId },
+        select: { id: true },
+      })
+    ).map((e) => e.id);
+
+    const shares = await tx.expenseShare.findMany({
+      where: { userId: placeholderUserId, expenseId: { in: groupExpenseIds } },
+    });
     for (const share of shares) {
       const existing = await tx.expenseShare.findUnique({
         where: { expenseId_userId: { expenseId: share.expenseId, userId: realUserId } },
       });
       if (existing) {
-        // Merge amounts
         await tx.expenseShare.update({
           where: { id: existing.id },
           data: { amount: existing.amount + share.amount },
@@ -475,44 +495,65 @@ async function mergePlaceholderIntoUser(
       }
     }
 
-    // Reassign receipt item assignments
-    await tx.receiptItemAssignment.updateMany({
-      where: { userId: placeholderUserId },
-      data: { userId: realUserId },
-    });
+    const groupReceiptItemIds = (
+      await tx.receiptItem.findMany({
+        where: {
+          receipt: {
+            OR: [
+              { expense: { groupId } },
+              { groupId },
+            ],
+          },
+        },
+        select: { id: true },
+      })
+    ).map((ri) => ri.id);
+    if (groupReceiptItemIds.length > 0) {
+      const placeholderAssignments = await tx.receiptItemAssignment.findMany({
+        where: { userId: placeholderUserId, receiptItemId: { in: groupReceiptItemIds } },
+      });
+      for (const assignment of placeholderAssignments) {
+        const existing = await tx.receiptItemAssignment.findFirst({
+          where: { receiptItemId: assignment.receiptItemId, userId: realUserId },
+        });
+        if (existing) {
+          await tx.receiptItemAssignment.delete({ where: { id: assignment.id } });
+        } else {
+          await tx.receiptItemAssignment.update({
+            where: { id: assignment.id },
+            data: { userId: realUserId },
+          });
+        }
+      }
+    }
 
-    // Reassign expenses paid by placeholder
     await tx.expense.updateMany({
-      where: { paidById: placeholderUserId },
+      where: { paidById: placeholderUserId, groupId },
       data: { paidById: realUserId },
     });
     await tx.expense.updateMany({
-      where: { addedById: placeholderUserId },
+      where: { addedById: placeholderUserId, groupId },
       data: { addedById: realUserId },
     });
 
-    // Reassign settlements
     await tx.settlement.updateMany({
-      where: { fromId: placeholderUserId },
+      where: { fromId: placeholderUserId, groupId },
       data: { fromId: realUserId },
     });
     await tx.settlement.updateMany({
-      where: { toId: placeholderUserId },
+      where: { toId: placeholderUserId, groupId },
       data: { toId: realUserId },
     });
 
-    // Reassign activity logs
     await tx.activityLog.updateMany({
-      where: { userId: placeholderUserId },
+      where: { userId: placeholderUserId, groupId },
       data: { userId: realUserId },
     });
 
-    // Remove placeholder group membership
     await tx.groupMember.deleteMany({
       where: { userId: placeholderUserId, groupId },
     });
 
-    // Log the merge
     await tx.activityLog.create({
       data: {
         groupId,
@@ -522,7 +563,11 @@ async function mergePlaceholderIntoUser(
       },
     });
 
-    // Delete the placeholder user
-    await tx.user.delete({ where: { id: placeholderUserId } });
+    const remainingMemberships = await tx.groupMember.count({
+      where: { userId: placeholderUserId },
+    });
+    if (remainingMemberships === 0) {
+      await tx.user.delete({ where: { id: placeholderUserId } });
+    }
   });
 }
