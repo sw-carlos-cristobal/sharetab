@@ -14,7 +14,7 @@ export const settlementsRouter = createTRPCRouter({
       const items = await ctx.db.settlement.findMany({
         where: { groupId: input.groupId },
         take: input.limit + 1,
-        ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {}),
+        ...(input.cursor ? { cursor: { id: input.cursor } } : {}),
         include: {
           from: { select: { id: true, name: true, image: true } },
           to: { select: { id: true, name: true, image: true } },
@@ -114,26 +114,31 @@ export const settlementsRouter = createTRPCRouter({
         baseCurrencyAmount = convertCents(input.amount, exchangeRate);
       }
 
-      const settlement = await ctx.db.settlement.create({
-        data: {
-          groupId: input.groupId,
-          fromId: effectiveFromId,
-          toId: input.toId,
-          amount: input.amount,
-          currency: input.currency,
-          exchangeRate: exchangeRate ?? 1.0,
-          baseCurrencyAmount,
-          note: input.note,
-        },
-      });
+      const settlement = await ctx.db.$transaction(async (tx) => {
+        const created = await tx.settlement.create({
+          data: {
+            groupId: input.groupId,
+            fromId: effectiveFromId,
+            toId: input.toId,
+            amount: input.amount,
+            currency: input.currency,
+            exchangeRate: exchangeRate ?? 1.0,
+            baseCurrencyAmount,
+            note: input.note,
+          },
+        });
 
-      await ctx.db.activityLog.create({
-        data: {
-          groupId: input.groupId,
-          userId: ctx.user.id,
-          type: "SETTLEMENT_CREATED",
-          metadata: { toId: input.toId, amount: input.amount },
-        },
+        await tx.activityLog.create({
+          data: {
+            groupId: input.groupId,
+            userId: ctx.user.id,
+            type: "SETTLEMENT_CREATED",
+            entityId: created.id,
+            metadata: { toId: input.toId, amount: input.amount },
+          },
+        });
+
+        return created;
       });
 
       return settlement;

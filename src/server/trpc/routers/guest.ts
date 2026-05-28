@@ -162,7 +162,7 @@ export const guestRouter = createTRPCRouter({
         where: { userId: ctx.user.id },
         orderBy: { createdAt: "desc" },
         take: input.limit + 1,
-        ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {}),
+        ...(input.cursor ? { cursor: { id: input.cursor } } : {}),
       });
 
       let nextCursor: string | undefined;
