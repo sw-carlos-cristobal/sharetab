@@ -153,5 +153,8 @@ export async function getAIProvidersWithFallback(): Promise<AIProvider[]> {
 
 export async function getAIProviderWithFallback(): Promise<AIProvider> {
   const [provider] = await getAIProvidersWithFallback();
+  if (!provider) {
+    throw new Error("No AI providers available");
+  }
   return provider;
 }
