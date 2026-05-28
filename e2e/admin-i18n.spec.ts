@@ -126,13 +126,13 @@ test.describe("Admin i18n — multi-locale rendering", () => {
 
     test(`[${locale}] admin sections have no empty headings`, async ({ page }) => {
       await loginAndGoToAdmin(page, locale);
+      await page.waitForLoadState("networkidle");
 
-      const headings = page.getByRole("heading");
-      const count = await headings.count();
-      expect(count).toBeGreaterThan(0);
+      const headings = await page.getByRole("heading").all();
+      expect(headings.length).toBeGreaterThan(0);
 
-      for (let i = 0; i < count; i++) {
-        const text = await headings.nth(i).textContent();
+      for (const heading of headings) {
+        const text = await heading.textContent({ timeout: 5000 });
         expect(text?.trim().length).toBeGreaterThan(0);
       }
     });
