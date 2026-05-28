@@ -59,16 +59,15 @@ export const authRouter = createTRPCRouter({
           });
         }
 
-        const claimed = await ctx.db.systemInvite.updateMany({
-          where: {
-            code: input.inviteCode,
-            usedAt: null,
-            revokedAt: null,
-            OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
-          },
-          data: { usedAt: new Date() },
+        const invite = await ctx.db.systemInvite.findUnique({
+          where: { code: input.inviteCode },
         });
-        if (claimed.count === 0) {
+        if (
+          !invite ||
+          invite.revokedAt ||
+          invite.usedAt ||
+          (invite.expiresAt && invite.expiresAt < new Date())
+        ) {
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: "Invalid or expired invite code",
@@ -96,10 +95,20 @@ export const authRouter = createTRPCRouter({
       });
 
       if (input.inviteCode && mode === "invite-only") {
-        await ctx.db.systemInvite.update({
-          where: { code: input.inviteCode },
-          data: { usedById: user.id },
+        const claimed = await ctx.db.systemInvite.updateMany({
+          where: {
+            code: input.inviteCode,
+            usedAt: null,
+            revokedAt: null,
+          },
+          data: { usedById: user.id, usedAt: new Date() },
         });
+        if (claimed.count === 0) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Invite code was already used",
+          });
+        }
       }
 
       return { id: user.id, name: user.name, email: user.email };

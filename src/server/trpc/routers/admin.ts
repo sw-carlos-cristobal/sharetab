@@ -295,8 +295,8 @@ export const adminRouter = createTRPCRouter({
 
       let nextCursor: string | undefined;
       if (users.length > input.limit) {
-        users.pop();
-        nextCursor = users.at(-1)?.id;
+        const next = users.pop();
+        nextCursor = next?.id;
       }
 
       return {
@@ -568,8 +568,8 @@ export const adminRouter = createTRPCRouter({
 
       let nextCursor: string | undefined;
       if (groups.length > input.limit) {
-        groups.pop();
-        nextCursor = groups.at(-1)?.id;
+        const next = groups.pop();
+        nextCursor = next?.id;
       }
 
       const groupIds = groups.map((g) => g.id);
