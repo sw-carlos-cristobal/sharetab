@@ -744,9 +744,8 @@ export const receiptsRouter = createTRPCRouter({
       // Clean up the uploaded image file
       try {
         const { unlink } = await import("fs/promises");
-        const { join } = await import("path");
-        const { getUploadDir } = await import("../../lib/upload-dir");
-        const filepath = join(getUploadDir(), receipt.imagePath);
+        const { resolveUploadPath } = await import("../../lib/upload-dir");
+        const filepath = resolveUploadPath(receipt.imagePath);
         await unlink(filepath);
       } catch {
         // Non-fatal: file may already be missing

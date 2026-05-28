@@ -39,3 +39,42 @@ describe("getUploadDir", () => {
     expect(result).toBe(path.resolve(process.cwd(), "data/receipts"));
   });
 });
+
+describe("resolveUploadPath", () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    vi.resetModules();
+    process.env = { ...originalEnv };
+    delete process.env.UPLOAD_DIR;
+  });
+
+  test("resolves a valid relative path within upload dir", async () => {
+    const { resolveUploadPath } = await import("./upload-dir");
+    const result = resolveUploadPath("receipts/image.jpg");
+    const expected = path.resolve(path.join(process.cwd(), "uploads"), "receipts/image.jpg");
+    expect(result).toBe(expected);
+  });
+
+  test("throws on path traversal with ..", async () => {
+    const { resolveUploadPath } = await import("./upload-dir");
+    expect(() => resolveUploadPath("../etc/passwd")).toThrow("Path traversal detected");
+  });
+
+  test("throws on deeply nested path traversal", async () => {
+    const { resolveUploadPath } = await import("./upload-dir");
+    expect(() => resolveUploadPath("foo/../../etc/passwd")).toThrow("Path traversal detected");
+  });
+
+  test("throws on absolute path outside upload dir", async () => {
+    const { resolveUploadPath } = await import("./upload-dir");
+    expect(() => resolveUploadPath("/etc/passwd")).toThrow("Path traversal detected");
+  });
+
+  test("allows nested subdirectory within upload dir", async () => {
+    const { resolveUploadPath } = await import("./upload-dir");
+    const result = resolveUploadPath("a/b/c/file.png");
+    const expected = path.resolve(path.join(process.cwd(), "uploads"), "a/b/c/file.png");
+    expect(result).toBe(expected);
+  });
+});
