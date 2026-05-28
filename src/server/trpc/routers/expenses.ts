@@ -210,7 +210,10 @@ export const expensesRouter = createTRPCRouter({
         paidById: z.string().optional(),
         splitMode: z.nativeEnum(SplitMode).optional(),
         shares: z.array(expenseShareSchema).optional(),
-      })
+      }).refine(
+        (data) => !data.amount || data.shares,
+        { message: "Shares are required when updating the amount", path: ["shares"] }
+      )
     )
     .mutation(async ({ ctx, input }) => {
       // Block updates on archived groups
