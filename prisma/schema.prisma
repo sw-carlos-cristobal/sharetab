@@ -150,7 +150,7 @@ model Expense {
   description String?   @db.Text
   amount      Int       // total in cents (in expense currency)
   currency    String    @default("USD")
-  exchangeRate        Float?  @default(1.0) // rate: 1 unit of expense currency = X units of group currency
+  exchangeRate        Float   @default(1.0) // rate: 1 unit of expense currency = X units of group currency
   baseCurrencyAmount  Int?    // amount converted to group currency (cents); null = same currency
   category    String?
   expenseDate DateTime  @default(now())
@@ -169,6 +169,7 @@ model Expense {
   updatedAt DateTime @updatedAt
 
   @@index([groupId])
+  @@index([groupId, expenseDate(sort: Desc)])
   @@index([paidById])
   @@index([addedById])
 }
@@ -268,7 +269,7 @@ model Settlement {
   toId     String
   amount   Int     // cents (in settlement currency)
   currency String  @default("USD")
-  exchangeRate        Float?  @default(1.0) // rate: 1 unit of settlement currency = X units of group currency
+  exchangeRate        Float   @default(1.0) // rate: 1 unit of settlement currency = X units of group currency
   baseCurrencyAmount  Int?    // amount converted to group currency (cents); null = same currency
   note     String?
 
@@ -279,6 +280,7 @@ model Settlement {
   settledAt DateTime @default(now())
 
   @@index([groupId])
+  @@index([groupId, settledAt(sort: Desc)])
   @@index([fromId])
   @@index([toId])
 }
