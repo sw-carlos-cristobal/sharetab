@@ -69,8 +69,8 @@ export const authRouter = createTRPCRouter({
           (invite.expiresAt && invite.expiresAt < new Date())
         ) {
           throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Invalid or expired invite code",
+            code: "FORBIDDEN",
+            message: "Invalid or expired invite code.",
           });
         }
       }
@@ -106,8 +106,8 @@ export const authRouter = createTRPCRouter({
           });
           if (claimed.count === 0) {
             throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: "Invite code was already used",
+              code: "FORBIDDEN",
+              message: "Invalid or expired invite code.",
             });
           }
         }
