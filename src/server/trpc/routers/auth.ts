@@ -101,6 +101,7 @@ export const authRouter = createTRPCRouter({
               code: input.inviteCode,
               usedAt: null,
               revokedAt: null,
+              OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
             },
             data: { usedById: created.id, usedAt: new Date() },
           });

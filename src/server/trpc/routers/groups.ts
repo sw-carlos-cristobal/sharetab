@@ -509,10 +509,22 @@ async function mergePlaceholderIntoUser(
       })
     ).map((ri) => ri.id);
     if (groupReceiptItemIds.length > 0) {
-      await tx.receiptItemAssignment.updateMany({
+      const placeholderAssignments = await tx.receiptItemAssignment.findMany({
         where: { userId: placeholderUserId, receiptItemId: { in: groupReceiptItemIds } },
-        data: { userId: realUserId },
       });
+      for (const assignment of placeholderAssignments) {
+        const existing = await tx.receiptItemAssignment.findFirst({
+          where: { receiptItemId: assignment.receiptItemId, userId: realUserId },
+        });
+        if (existing) {
+          await tx.receiptItemAssignment.delete({ where: { id: assignment.id } });
+        } else {
+          await tx.receiptItemAssignment.update({
+            where: { id: assignment.id },
+            data: { userId: realUserId },
+          });
+        }
+      }
     }
 
     await tx.expense.updateMany({

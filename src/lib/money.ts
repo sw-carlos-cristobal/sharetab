@@ -21,7 +21,7 @@ export function formatCents(cents: number, currency = "USD", locale: string = de
 
 export function parseToCents(value: string): number {
   const trimmed = value.trim().replace(/,/g, "");
-  if (!trimmed || isNaN(Number(trimmed))) return 0;
+  if (!trimmed || !/^-?\d+(\.\d+)?$/.test(trimmed)) return 0;
   const negative = trimmed.startsWith("-");
   const abs = negative ? trimmed.slice(1) : trimmed;
   const dotIndex = abs.lastIndexOf(".");
