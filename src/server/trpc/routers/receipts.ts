@@ -71,6 +71,20 @@ export const receiptsRouter = createTRPCRouter({
         throw new TRPCError({ code: "NOT_FOUND", message: "Receipt not found" });
       }
 
+      if (input.groupId) {
+        const membership = await ctx.db.groupMember.findUnique({
+          where: {
+            userId_groupId: {
+              userId: ctx.user.id,
+              groupId: input.groupId,
+            },
+          },
+        });
+        if (!membership) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Not a member of this group" });
+        }
+      }
+
       // Note: old items are NOT deleted here — processReceiptImage handles
       // delete + recreate atomically, so if the AI provider fails the old items remain.
 
