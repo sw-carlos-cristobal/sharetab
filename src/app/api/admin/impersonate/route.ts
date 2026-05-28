@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { auth } from "@/server/auth";
 import { db } from "@/server/db";
 import { logAdminAction } from "@/server/trpc/routers/admin";
-import { signPayload } from "@/server/lib/signed-cookie";
+import { signPayload, verifyAndParse } from "@/server/lib/signed-cookie";
 
 const COOKIE_NAME = "sharetab-impersonate";
 
@@ -80,7 +80,26 @@ export async function POST(req: Request) {
  * Clears the impersonation cookie.
  */
 export async function DELETE() {
+  const session = await auth();
+  const adminEmail = process.env.ADMIN_EMAIL;
+
+  if (!session?.user?.id || !adminEmail || session.user.email !== adminEmail) {
+    return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const cookieStore = await cookies();
+  const raw = cookieStore.get(COOKIE_NAME)?.value;
+
+  if (raw) {
+    const data = verifyAndParse<{ targetId?: string; targetEmail?: string; targetName?: string }>(raw);
+    if (data?.targetId) {
+      await logAdminAction(db, session.user.id, "IMPERSONATION_ENDED", data.targetId, {
+        targetEmail: data.targetEmail,
+        targetName: data.targetName,
+      });
+    }
+  }
+
   cookieStore.delete(COOKIE_NAME);
   return Response.json({ success: true });
 }
