@@ -170,49 +170,9 @@ export const balancesRouter = createTRPCRouter({
     }[] = [];
 
     for (const group of groups) {
-      let paid = 0;
-      let owes = 0;
-
-      for (const expense of group.expenses) {
-        const effectiveAmount = expense.baseCurrencyAmount ?? expense.amount;
-        if (expense.paidById === ctx.user.id) {
-          paid += effectiveAmount;
-        }
-        // Scale shares proportionally if currency was converted
-        if (expense.baseCurrencyAmount != null && expense.baseCurrencyAmount !== expense.amount) {
-          const ratio = expense.baseCurrencyAmount / expense.amount;
-          let distributed = 0;
-          const sortedShares = [...expense.shares].sort((a, b) => a.userId.localeCompare(b.userId));
-          for (let i = 0; i < sortedShares.length; i++) {
-            const share = sortedShares[i];
-            const scaledAmount = i === sortedShares.length - 1
-              ? effectiveAmount - distributed
-              : Math.round(share.amount * ratio);
-            distributed += scaledAmount;
-            if (share.userId === ctx.user.id) {
-              owes += scaledAmount;
-            }
-          }
-        } else {
-          for (const share of expense.shares) {
-            if (share.userId === ctx.user.id) {
-              owes += share.amount;
-            }
-          }
-        }
-      }
-
-      // Settlements are modeled as virtual expenses: the payer (fromId) "paid"
-      // and the receiver (toId) "owes", which correctly adjusts net balances.
-      // e.g., if Alice pays Bob $50, Alice's paid goes up and Bob's owes goes up,
-      // reducing Bob's net balance (what others owe him) by $50.
-      for (const settlement of group.settlements) {
-        const effectiveAmount = settlement.baseCurrencyAmount ?? settlement.amount;
-        if (settlement.fromId === ctx.user.id) paid += effectiveAmount;
-        if (settlement.toId === ctx.user.id) owes += effectiveAmount;
-      }
-
-      const net = paid - owes;
+      const balances = computeBalances(group.expenses, group.settlements);
+      const userBalance = balances.find((b) => b.userId === ctx.user.id);
+      const net = userBalance?.net ?? 0;
       if (net > 0) totalOwed += net;
       if (net < 0) totalOwing += -net;
 
