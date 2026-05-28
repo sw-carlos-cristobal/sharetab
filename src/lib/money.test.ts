@@ -96,10 +96,16 @@ describe("parseToCents", () => {
     expect(parseToCents("0.50")).toBe(50);
   });
 
-  test("rounds to nearest cent", () => {
-    expect(parseToCents("12.999")).toBe(1300);
+  test("truncates beyond two decimal places", () => {
+    expect(parseToCents("12.999")).toBe(1299);
     expect(parseToCents("12.994")).toBe(1299);
-    expect(parseToCents("0.005")).toBe(1);
+    expect(parseToCents("0.005")).toBe(0);
+  });
+
+  test("avoids floating-point corruption", () => {
+    expect(parseToCents("1.005")).toBe(100);
+    expect(parseToCents("2.675")).toBe(267);
+    expect(parseToCents("1.15")).toBe(115);
   });
 
   test("returns 0 for invalid input", () => {
