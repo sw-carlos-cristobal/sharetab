@@ -588,51 +588,58 @@ async function recordLanguageSwitcher(browser: Browser): Promise<string> {
 async function recordVenmoPay(browser: Browser): Promise<string> {
   // ── Setup (authenticated as Alice, the admin): enable Venmo, set handle, create a split ──
   const setupCtx = await browser.newContext({ baseURL: BASE_URL });
-  const setupPage = await loginAs(setupCtx);
-  const shareToken: string = await setupPage.evaluate(async () => {
-    const headers = { "Content-Type": "application/json" };
-    await fetch("/api/trpc/admin.setVenmoEnabled", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ json: { enabled: true } }),
-    });
-    await fetch("/api/trpc/auth.updateProfile", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ json: { venmoUsername: "alice-venmo" } }),
-    });
-    const res = await fetch("/api/trpc/guest.createSplit", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        json: {
-          receiptData: {
-            merchantName: "The Golden Fork",
-            subtotal: 4000,
-            tax: 400,
-            tip: 600,
-            total: 5000,
-            currency: "USD",
+  let shareToken: string | undefined;
+  try {
+    const setupPage = await loginAs(setupCtx);
+    shareToken = await setupPage.evaluate(async () => {
+      const headers = { "Content-Type": "application/json" };
+      await fetch("/api/trpc/admin.setVenmoEnabled", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ json: { enabled: true } }),
+      });
+      await fetch("/api/trpc/auth.updateProfile", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ json: { venmoUsername: "alice-venmo" } }),
+      });
+      const res = await fetch("/api/trpc/guest.createSplit", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          json: {
+            receiptData: {
+              merchantName: "The Golden Fork",
+              subtotal: 4000,
+              tax: 400,
+              tip: 600,
+              total: 5000,
+              currency: "USD",
+            },
+            items: [
+              { name: "Ribeye Steak", quantity: 1, unitPrice: 2000, totalPrice: 2000 },
+              { name: "Caesar Salad", quantity: 1, unitPrice: 1000, totalPrice: 1000 },
+              { name: "Cheesecake", quantity: 1, unitPrice: 1000, totalPrice: 1000 },
+            ],
+            people: [{ name: "Alice Johnson" }, { name: "Bob" }, { name: "Charlie" }],
+            assignments: [
+              { itemIndex: 0, personIndices: [0] },
+              { itemIndex: 1, personIndices: [1] },
+              { itemIndex: 2, personIndices: [2] },
+            ],
+            paidByIndex: 0,
           },
-          items: [
-            { name: "Ribeye Steak", quantity: 1, unitPrice: 2000, totalPrice: 2000 },
-            { name: "Caesar Salad", quantity: 1, unitPrice: 1000, totalPrice: 1000 },
-            { name: "Cheesecake", quantity: 1, unitPrice: 1000, totalPrice: 1000 },
-          ],
-          people: [{ name: "Alice Johnson" }, { name: "Bob" }, { name: "Charlie" }],
-          assignments: [
-            { itemIndex: 0, personIndices: [0] },
-            { itemIndex: 1, personIndices: [1] },
-            { itemIndex: 2, personIndices: [2] },
-          ],
-          paidByIndex: 0,
-        },
-      }),
+        }),
+      });
+      if (!res.ok) {
+        throw new Error(`guest.createSplit failed: HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      return data.result?.data?.json?.shareToken as string | undefined;
     });
-    const data = await res.json();
-    return data.result?.data?.json?.shareToken;
-  });
-  await setupCtx.close();
+  } finally {
+    await setupCtx.close();
+  }
 
   if (!shareToken) {
     throw new Error("venmo-pay: setup did not return a shareToken (guest.createSplit failed?)");
