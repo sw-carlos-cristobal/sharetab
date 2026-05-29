@@ -66,6 +66,8 @@ next-env.d.ts
 /blob-report/
 /tmp-screenshots/
 /test-screenshots/
+# e2e tests write screenshots here for local inspection; not displayed in docs
+/docs/screenshots/
 .claude/settings.local.json
 /.playwright-mcp
 .mcp.json
