@@ -696,6 +696,7 @@ async function main() {
     process.exit(1);
   }
 
+  const failed: string[] = [];
   for (const { name, fn, desktop } of filtered) {
     console.log(`Recording ${name}...`);
     try {
@@ -706,11 +707,19 @@ async function main() {
       cleanupWebm(webmPath);
     } catch (err) {
       console.error(`  FAILED: ${name}`, err);
-      // Continue with other features
+      failed.push(name);
+      // Continue with other features so one bad scene doesn't block the rest
     }
   }
 
   await browser.close();
+
+  // Continue-on-error above keeps the other scenes recording, but a failure must
+  // still surface as a non-zero exit so broken/missing gifs aren't silently shipped.
+  if (failed.length > 0) {
+    console.error(`\n${failed.length} feature(s) failed: ${failed.join(", ")}`);
+    process.exit(1);
+  }
   console.log("All GIFs generated in demo/");
 }
 
