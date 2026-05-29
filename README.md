@@ -52,6 +52,12 @@ ShareTab is a free, self-hosted alternative to Splitwise for tracking shared exp
   <img src="demo/add-expense.gif" width="320" alt="Adding an expense with equal split" />
 </p>
 
+### Multi-currency -- spend in any currency, settle in the group's
+
+<p align="center">
+  <img src="demo/multi-currency.gif" width="320" alt="Adding an expense in EUR for a USD group, with automatic exchange-rate conversion" />
+</p>
+
 ### Create a group -- emoji, currency, and description
 
 <p align="center">
@@ -62,6 +68,12 @@ ShareTab is a free, self-hosted alternative to Splitwise for tracking shared exp
 
 <p align="center">
   <img src="demo/settle-up.gif" width="320" alt="Settlement dialog with From, To, and Amount" />
+</p>
+
+### Venmo payments -- one tap to pay your share
+
+<p align="center">
+  <img src="demo/venmo-pay.gif" width="320" alt="Guest split with one-tap Venmo deep-link pay buttons for each person" />
 </p>
 
 ### Invite members -- share a link
@@ -86,6 +98,12 @@ ShareTab is a free, self-hosted alternative to Splitwise for tracking shared exp
 
 <p align="center">
   <img src="demo/dark-mode.gif" width="320" alt="Dark mode toggle" />
+</p>
+
+### 9 languages -- switch the entire UI in one click
+
+<p align="center">
+  <img src="demo/language-switcher.gif" width="100%" alt="Switching the interface language between English, Spanish, and Japanese with locale-aware formatting" />
 </p>
 
 ### Admin dashboard -- manage users, AI providers, and system settings
