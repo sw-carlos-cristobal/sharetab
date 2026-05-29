@@ -1,10 +1,38 @@
+# dependencies & build output (regenerated in-image)
 node_modules
 .next
+src/generated
+*.tsbuildinfo
+
+# vcs & tooling
 .git
 .github
 .claude
+.mcp.json
+.playwright-mcp
+workspace.code-workspace
+
+# secrets
 .env
 .env.local
+
+# runtime data (dev only — never ship into the image)
+data
+.pgdata
 uploads
+
+# tests & their fixtures (not needed for a production build)
+e2e
+test-results
+playwright-report
+blob-report
+coverage
+tmp-screenshots
+test-screenshots
+
+# docs, demo media & deprecated OCR data (not used at build time)
+docs
+demo
+eng.traineddata
 *.md
 !README.md
