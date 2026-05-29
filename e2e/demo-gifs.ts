@@ -543,10 +543,12 @@ async function recordMultiCurrency(browser: Browser): Promise<string> {
   await page.locator("select#currency").selectOption("EUR");
   await page.waitForTimeout(PAUSE_MEDIUM);
 
-  // Enable a manual rate to show the live converted total ("Converted: $92.65")
+  // Enable a manual rate to show the live converted total ("Converted: $92.65").
+  // Target the rate field by its "1 EUR = ? USD" placeholder rather than DOM order.
   await page.getByText("Set exchange rate manually").click();
-  await page.waitForTimeout(400);
-  await page.locator('input[type="number"]').last().fill("1.09");
+  const rateInput = page.getByPlaceholder(/= \?/);
+  await rateInput.waitFor({ timeout: 5000 });
+  await rateInput.fill("1.09");
   await page.waitForTimeout(PAUSE_HERO);
 
   // Submit and land back on the group
@@ -562,19 +564,22 @@ async function recordLanguageSwitcher(browser: Browser): Promise<string> {
   const page = await loginAs(context);
   await page.waitForTimeout(PAUSE_MEDIUM);
 
-  // English → Español
+  // English → Español (localePrefix is "always", so the route replace is observable)
   await page.getByTestId("language-switcher").first().click();
   await page.getByRole("menuitem", { name: "🇪🇸 Español" }).click();
+  await page.waitForURL("**/es/**", { timeout: 15000 });
   await page.waitForTimeout(PAUSE_HERO);
 
   // Español → 日本語
   await page.getByTestId("language-switcher").first().click();
   await page.getByRole("menuitem", { name: "🇯🇵 日本語" }).click();
+  await page.waitForURL("**/ja/**", { timeout: 15000 });
   await page.waitForTimeout(PAUSE_HERO);
 
   // 日本語 → English
   await page.getByTestId("language-switcher").first().click();
   await page.getByRole("menuitem", { name: "🇺🇸 English" }).click();
+  await page.waitForURL("**/en/**", { timeout: 15000 });
   await page.waitForTimeout(PAUSE_MEDIUM);
 
   return finalizeRecording(page, context);
@@ -628,6 +633,10 @@ async function recordVenmoPay(browser: Browser): Promise<string> {
     return data.result?.data?.json?.shareToken;
   });
   await setupCtx.close();
+
+  if (!shareToken) {
+    throw new Error("venmo-pay: setup did not return a shareToken (guest.createSplit failed?)");
+  }
 
   // ── Record: a guest opens the shared split and sees one-tap Venmo pay buttons ──
   const context = await createRecordingContext(browser, MOBILE);

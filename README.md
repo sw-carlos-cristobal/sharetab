@@ -52,7 +52,7 @@ ShareTab is a free, self-hosted alternative to Splitwise for tracking shared exp
   <img src="demo/add-expense.gif" width="320" alt="Adding an expense with equal split" />
 </p>
 
-### Multi-currency -- spend in any currency, settle in the group's
+### Multi-currency -- spend in any currency, settle in the group's currency
 
 <p align="center">
   <img src="demo/multi-currency.gif" width="320" alt="Adding an expense in EUR for a USD group, with automatic exchange-rate conversion" />
