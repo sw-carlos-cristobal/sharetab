@@ -519,6 +519,151 @@ async function recordAdminDashboard(browser: Browser): Promise<string> {
   return finalizeRecording(page, context);
 }
 
+async function recordMultiCurrency(browser: Browser): Promise<string> {
+  const context = await createRecordingContext(browser, MOBILE);
+  const page = await loginAs(context);
+
+  const groupId = await getApartmentGroupId(page);
+
+  // Navigate to new expense page (Apartment group is USD)
+  await page.goto(`/groups/${groupId}/expenses/new`);
+  await page.waitForURL(/\/expenses\/new$/, { timeout: 15000 });
+  await page.waitForSelector("select#currency", { timeout: 10000 });
+  await page.waitForTimeout(800);
+
+  // Fill in a trip expense
+  await page.getByLabel("Description").fill("Dinner in Paris");
+  await page.waitForTimeout(400);
+  await page.getByLabel("Amount").fill("85.00");
+  await page.waitForTimeout(400);
+  await page.locator("select#paidBy").selectOption({ index: 1 });
+  await page.waitForTimeout(400);
+
+  // Switch the expense currency to EUR — group uses USD, so the conversion panel appears
+  await page.locator("select#currency").selectOption("EUR");
+  await page.waitForTimeout(PAUSE_MEDIUM);
+
+  // Enable a manual rate to show the live converted total ("Converted: $92.65").
+  // Target the rate field by its "1 EUR = ? USD" placeholder rather than DOM order.
+  await page.getByText("Set exchange rate manually").click();
+  const rateInput = page.getByPlaceholder(/= \?/);
+  await rateInput.waitFor({ timeout: 5000 });
+  await rateInput.fill("1.09");
+  await page.waitForTimeout(PAUSE_HERO);
+
+  // Submit and land back on the group
+  await page.getByRole("button", { name: "Add Expense" }).click();
+  await page.waitForURL(/\/groups\/\w+$/, { timeout: 15000 });
+  await page.waitForTimeout(PAUSE_MEDIUM);
+
+  return finalizeRecording(page, context);
+}
+
+async function recordLanguageSwitcher(browser: Browser): Promise<string> {
+  const context = await createRecordingContext(browser, DESKTOP);
+  const page = await loginAs(context);
+  await page.waitForTimeout(PAUSE_MEDIUM);
+
+  // English → Español (localePrefix is "always", so the route replace is observable)
+  await page.getByTestId("language-switcher").first().click();
+  await page.getByRole("menuitem", { name: "🇪🇸 Español" }).click();
+  await page.waitForURL("**/es/**", { timeout: 15000 });
+  await page.waitForTimeout(PAUSE_HERO);
+
+  // Español → 日本語
+  await page.getByTestId("language-switcher").first().click();
+  await page.getByRole("menuitem", { name: "🇯🇵 日本語" }).click();
+  await page.waitForURL("**/ja/**", { timeout: 15000 });
+  await page.waitForTimeout(PAUSE_HERO);
+
+  // 日本語 → English
+  await page.getByTestId("language-switcher").first().click();
+  await page.getByRole("menuitem", { name: "🇺🇸 English" }).click();
+  await page.waitForURL("**/en/**", { timeout: 15000 });
+  await page.waitForTimeout(PAUSE_MEDIUM);
+
+  return finalizeRecording(page, context);
+}
+
+async function recordVenmoPay(browser: Browser): Promise<string> {
+  // ── Setup (authenticated as Alice, the admin): enable Venmo, set handle, create a split ──
+  const setupCtx = await browser.newContext({ baseURL: BASE_URL });
+  let shareToken: string | undefined;
+  try {
+    const setupPage = await loginAs(setupCtx);
+    shareToken = await setupPage.evaluate(async () => {
+      const headers = { "Content-Type": "application/json" };
+      await fetch("/api/trpc/admin.setVenmoEnabled", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ json: { enabled: true } }),
+      });
+      await fetch("/api/trpc/auth.updateProfile", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ json: { venmoUsername: "alice-venmo" } }),
+      });
+      const res = await fetch("/api/trpc/guest.createSplit", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          json: {
+            receiptData: {
+              merchantName: "The Golden Fork",
+              subtotal: 4000,
+              tax: 400,
+              tip: 600,
+              total: 5000,
+              currency: "USD",
+            },
+            items: [
+              { name: "Ribeye Steak", quantity: 1, unitPrice: 2000, totalPrice: 2000 },
+              { name: "Caesar Salad", quantity: 1, unitPrice: 1000, totalPrice: 1000 },
+              { name: "Cheesecake", quantity: 1, unitPrice: 1000, totalPrice: 1000 },
+            ],
+            people: [{ name: "Alice Johnson" }, { name: "Bob" }, { name: "Charlie" }],
+            assignments: [
+              { itemIndex: 0, personIndices: [0] },
+              { itemIndex: 1, personIndices: [1] },
+              { itemIndex: 2, personIndices: [2] },
+            ],
+            paidByIndex: 0,
+          },
+        }),
+      });
+      if (!res.ok) {
+        throw new Error(`guest.createSplit failed: HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      return data.result?.data?.json?.shareToken as string | undefined;
+    });
+  } finally {
+    await setupCtx.close();
+  }
+
+  if (!shareToken) {
+    throw new Error("venmo-pay: setup did not return a shareToken (guest.createSplit failed?)");
+  }
+
+  // ── Record: a guest opens the shared split and sees one-tap Venmo pay buttons ──
+  const context = await createRecordingContext(browser, MOBILE);
+  const page = await context.newPage();
+
+  await page.goto(`/split/${shareToken}`);
+  await page.waitForSelector('[data-testid="venmo-handle-display"]', { timeout: 15000 });
+  await page.waitForTimeout(PAUSE_MEDIUM);
+
+  // Reveal the per-person "Pay with Venmo" buttons
+  await page.locator('[data-testid^="venmo-pay-"]').first().scrollIntoViewIfNeeded();
+  await page.waitForTimeout(PAUSE_HERO);
+  await page.evaluate(() =>
+    window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }),
+  );
+  await page.waitForTimeout(PAUSE_HERO);
+
+  return finalizeRecording(page, context);
+}
+
 // ── Main ──
 
 async function main() {
@@ -526,18 +671,28 @@ async function main() {
 
   const browser = await chromium.launch({ headless: true });
 
+  // NOTE: ordering matters. Scenes that only VIEW the seeded "Apartment" group run
+  // first so their backgrounds stay pristine; scenes that MUTATE shared data
+  // (add-expense / multi-currency add expenses, receipt-scan adds a pending receipt,
+  // venmo-pay enables Venmo globally) run LAST. main() filters by CLI name but always
+  // preserves THIS array order, so keep mutators at the bottom.
   const features = [
+    // ── view-only / self-cleaning scenes ──
     { name: "dashboard", fn: recordDashboard, desktop: true },
-    { name: "add-expense", fn: recordAddExpense, desktop: false },
-    { name: "receipt-scan", fn: recordReceiptScan, desktop: false },
     { name: "settle-up", fn: recordSettleUp, desktop: false },
-    { name: "dark-mode", fn: recordDarkMode, desktop: false },
-    { name: "guest-split", fn: recordGuestSplit, desktop: false },
-    { name: "create-group", fn: recordCreateGroup, desktop: false },
-    { name: "split-modes", fn: recordSplitModes, desktop: false },
-    { name: "invite-members", fn: recordInviteMembers, desktop: false },
     { name: "group-settings", fn: recordGroupSettings, desktop: false },
+    { name: "dark-mode", fn: recordDarkMode, desktop: false },
+    { name: "split-modes", fn: recordSplitModes, desktop: false },
+    { name: "language-switcher", fn: recordLanguageSwitcher, desktop: true },
+    { name: "invite-members", fn: recordInviteMembers, desktop: false },
+    { name: "create-group", fn: recordCreateGroup, desktop: false },
+    { name: "guest-split", fn: recordGuestSplit, desktop: false },
     { name: "admin-dashboard", fn: recordAdminDashboard, desktop: true },
+    // ── mutating scenes (run last so they don't pollute the views above) ──
+    { name: "add-expense", fn: recordAddExpense, desktop: false },
+    { name: "multi-currency", fn: recordMultiCurrency, desktop: false },
+    { name: "receipt-scan", fn: recordReceiptScan, desktop: false },
+    { name: "venmo-pay", fn: recordVenmoPay, desktop: false },
   ];
 
   // Filter by CLI args: `tsx e2e/demo-gifs.ts dashboard dark-mode admin-dashboard`
@@ -548,6 +703,7 @@ async function main() {
     process.exit(1);
   }
 
+  const failed: string[] = [];
   for (const { name, fn, desktop } of filtered) {
     console.log(`Recording ${name}...`);
     try {
@@ -558,11 +714,19 @@ async function main() {
       cleanupWebm(webmPath);
     } catch (err) {
       console.error(`  FAILED: ${name}`, err);
-      // Continue with other features
+      failed.push(name);
+      // Continue with other features so one bad scene doesn't block the rest
     }
   }
 
   await browser.close();
+
+  // Continue-on-error above keeps the other scenes recording, but a failure must
+  // still surface as a non-zero exit so broken/missing gifs aren't silently shipped.
+  if (failed.length > 0) {
+    console.error(`\n${failed.length} feature(s) failed: ${failed.join(", ")}`);
+    process.exit(1);
+  }
   console.log("All GIFs generated in demo/");
 }
 
