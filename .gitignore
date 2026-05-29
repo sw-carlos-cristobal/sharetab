@@ -65,6 +65,7 @@ next-env.d.ts
 !/demo/social-preview.png
 /blob-report/
 /tmp-screenshots/
+/test-screenshots/
 .claude/settings.local.json
 /.playwright-mcp
 .mcp.json
