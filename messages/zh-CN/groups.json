@@ -7,7 +7,11 @@
     "namePlaceholder": "例如：合租、巴黎旅行",
     "currency": "货币",
     "submit": "创建群组",
-    "submitting": "创建中..."
+    "submitting": "创建中...",
+    "details": "群组详情",
+    "description": "描述（可选）",
+    "descriptionPlaceholder": "这个群组用于什么？",
+    "icon": "图标"
   },
   "detail": {
     "expenses": "费用",
@@ -103,5 +107,21 @@
     "linkInfo": "拥有此链接的任何人都可以加入群组。"
   },
   "empty": "暂无群组",
-  "emptyDescription": "创建您的第一个群组，开始与朋友分摊费用。"
+  "emptyDescription": "创建您的第一个群组，开始与朋友分摊费用。",
+  "list": {
+    "subtitle": "管理你的共享费用",
+    "newGroup": "新建群组",
+    "searchPlaceholder": "搜索群组...",
+    "archived": "已归档",
+    "archivedBadge": "已归档",
+    "noArchived": "没有已归档的群组。",
+    "noGroups": "暂无群组。",
+    "noGroupsDescription": "创建一个群组，开始与朋友分摊费用。",
+    "createFirst": "创建你的第一个群组",
+    "noSearchResults": "没有符合搜索条件的群组。",
+    "memberCount": "{count}名成员",
+    "expenseCount": "{count}笔费用",
+    "unarchive": "取消归档",
+    "showAll": "显示全部{count}个群组"
+  }
 }

@@ -282,5 +282,10 @@
     "step1Label": "Passo 1:",
     "step2Label": "Passo 2:",
     "step2Hint": "O fluxo do OpenAI redireciona para localhost:1455. Espera-se que esse callback falhe no navegador aqui, então copie a URL completa redirecionada da barra de endereços."
+  },
+  "impersonation": {
+    "impersonating": "Personificando <strong>{name}</strong>",
+    "stopping": "Parando...",
+    "stop": "Parar personificação"
   }
 }

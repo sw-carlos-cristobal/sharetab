@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +13,7 @@ const CURRENCY_OPTIONS = ["USD", "EUR", "GBP", "CAD", "AUD", "JPY", "INR", "BRL"
 const EMOJI_OPTIONS = ["💰", "🏠", "✈️", "🍽️", "🎉", "🛒", "🚗", "💼"];
 
 export default function NewGroupPage() {
+  const t = useTranslations("groups.new");
   const router = useRouter();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -36,18 +38,18 @@ export default function NewGroupPage() {
 
   return (
     <div className="mx-auto max-w-lg">
-      <h1 className="mb-6 text-2xl font-bold">Create a new group</h1>
+      <h1 className="mb-6 text-2xl font-bold">{t("title")}</h1>
       <Card>
         <CardHeader>
-          <CardTitle>Group details</CardTitle>
+          <CardTitle>{t("details")}</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Group name</Label>
+              <Label htmlFor="name">{t("name")}</Label>
               <Input
                 id="name"
-                placeholder="e.g., Apartment, Trip to Japan"
+                placeholder={t("namePlaceholder")}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
@@ -56,10 +58,10 @@ export default function NewGroupPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="description">Description (optional)</Label>
+              <Label htmlFor="description">{t("description")}</Label>
               <Input
                 id="description"
-                placeholder="What is this group for?"
+                placeholder={t("descriptionPlaceholder")}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 maxLength={500}
@@ -67,7 +69,7 @@ export default function NewGroupPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Icon</Label>
+              <Label>{t("icon")}</Label>
               <div className="flex flex-wrap gap-2">
                 {EMOJI_OPTIONS.map((e) => (
                   <button
@@ -87,7 +89,7 @@ export default function NewGroupPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="currency">Currency</Label>
+              <Label htmlFor="currency">{t("currency")}</Label>
               <select
                 id="currency"
                 value={currency}
@@ -109,7 +111,7 @@ export default function NewGroupPage() {
             )}
 
             <Button type="submit" className="w-full" disabled={createGroup.isPending}>
-              {createGroup.isPending ? "Creating..." : "Create Group"}
+              {createGroup.isPending ? t("submitting") : t("submit")}
             </Button>
           </form>
         </CardContent>

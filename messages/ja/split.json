@@ -128,5 +128,31 @@
     "splitFinalized": "分割が確定されました！",
     "groupSize": "グループの人数",
     "groupSizeHint": "カップルやグループの場合は2以上を入力"
+  },
+  "result": {
+    "loading": "割り勘を読み込み中...",
+    "notFound": "割り勘が見つかりません",
+    "expiredMessage": "この割り勘は期限切れです。割り勘は7日間利用できます。",
+    "invalidMessage": "この割り勘リンクは無効か、削除されました。",
+    "splitYourOwn": "自分の会計を割り勘する",
+    "billSplit": "割り勘",
+    "someone": "誰か",
+    "shareText": "{merchant}の割り勘 — 合計{total}",
+    "aReceipt": "レシート",
+    "linkCopied": "リンクをクリップボードにコピーしました",
+    "paidBy": "<name>{payer}</name>が支払い",
+    "venmoHandle": "Venmo: @{handle}",
+    "totalBill": "合計金額",
+    "eachPersonOwes": "各自の支払額",
+    "subtotal": "小計",
+    "tax": "税金",
+    "tip": "チップ",
+    "total": "合計",
+    "receiptDetails": "レシートの詳細",
+    "expiresOn": "この割り勘リンクは{date}に期限切れになります。",
+    "or": "または",
+    "createAccount": "アカウントを作成",
+    "copyLink": "リンクをコピー",
+    "share": "共有"
   }
 }
