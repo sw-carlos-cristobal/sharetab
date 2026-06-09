@@ -1,10 +1,11 @@
 "use client";
 
-import { use, useState, useEffect, useRef } from "react";
+import { use, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { formatCents } from "@/lib/money";
+import { copyToClipboard } from "@/lib/clipboard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -24,9 +25,7 @@ export default function SharedSplitPage({
   const { token } = use(params);
   const locale = useLocale();
   const tv = useTranslations("split.venmo");
-  const [venmoHandle, setVenmoHandle] = useState("");
-  const venmoInitRef = useRef(false);
-  const { data: authSession, status: authStatus } = useSession();
+  const { data: authSession } = useSession();
   const split = trpc.guest.getSplit.useQuery({ token });
   const venmoSetting = trpc.admin.getVenmoEnabled.useQuery();
   const profile = trpc.auth.getProfile.useQuery(undefined, {
@@ -37,19 +36,14 @@ export default function SharedSplitPage({
     onSuccess: () => { utils.guest.getSplit.invalidate({ token }); },
   });
 
-  // Initialize venmo handle once from split record, then creator's profile as fallback
-  useEffect(() => {
-    if (venmoInitRef.current) return;
-    if (split.data?.payerVenmoHandle) {
-      setVenmoHandle(split.data.payerVenmoHandle);
-      venmoInitRef.current = true;
-    } else if (split.data?.isCreator && profile.data?.venmoUsername) {
-      setVenmoHandle(profile.data.venmoUsername);
-      venmoInitRef.current = true;
-    } else if (split.data && !split.isLoading && authStatus !== "loading" && (profile.isFetched || !authSession?.user)) {
-      venmoInitRef.current = true;
-    }
-  }, [split.data, profile.data?.venmoUsername, profile.isFetched, split.isLoading, authSession?.user, authStatus]);
+  // The venmo handle is derived from the split record (falling back to the
+  // creator's profile) until the user edits it, at which point the edited
+  // value takes over. No state-syncing effect needed.
+  const [venmoHandleEdit, setVenmoHandleEdit] = useState<string | null>(null);
+  const venmoHandle =
+    venmoHandleEdit ??
+    split.data?.payerVenmoHandle ??
+    (split.data?.isCreator ? profile.data?.venmoUsername ?? "" : "");
 
   if (split.isLoading) {
     return (
@@ -96,15 +90,19 @@ export default function SharedSplitPage({
       } catch {
         // User cancelled
       }
-    } else {
-      await navigator.clipboard.writeText(url);
+    } else if (await copyToClipboard(url)) {
       toast.success("Link copied to clipboard");
+    } else {
+      toast.error("Could not copy link to clipboard");
     }
   }
 
   async function handleCopy() {
-    await navigator.clipboard.writeText(window.location.href);
-    toast.success("Link copied to clipboard");
+    if (await copyToClipboard(window.location.href)) {
+      toast.success("Link copied to clipboard");
+    } else {
+      toast.error("Could not copy link to clipboard");
+    }
   }
 
   const initials = getInitials;
@@ -129,7 +127,7 @@ export default function SharedSplitPage({
                 placeholder={tv("handlePlaceholder")}
                 aria-label={tv("handle")}
                 value={venmoHandle}
-                onChange={(e) => setVenmoHandle(e.target.value)}
+                onChange={(e) => setVenmoHandleEdit(e.target.value)}
                 onBlur={() => {
                   const trimmed = venmoHandle.trim() || null;
                   if (trimmed !== (split.data?.payerVenmoHandle ?? null)) {

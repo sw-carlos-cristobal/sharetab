@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { execFileSync } from "child_process";
 import { logger } from "./logger";
 
 interface BuildInfo {
@@ -28,7 +29,6 @@ export function getBuildInfo(): BuildInfo {
   } catch {
     if (process.env.NODE_ENV !== "test") {
       try {
-        const { execFileSync } = require("child_process");
         commitSha = execFileSync("git", ["rev-parse", "--short", "HEAD"], { encoding: "utf-8" }).trim();
       } catch (error) {
         logger.warn("build-info.commitSha.failed", {

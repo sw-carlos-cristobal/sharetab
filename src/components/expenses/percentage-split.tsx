@@ -23,14 +23,18 @@ export function PercentageSplit({
   onChange,
   locale,
   currency,
+  initialPercentages,
 }: {
   members: Member[];
   totalCents: number;
   onChange: (shares: ShareEntry[]) => void;
   locale?: string;
   currency?: string;
+  /** Initial percentage strings per user ID (e.g. when editing an existing expense). */
+  initialPercentages?: Record<string, string>;
 }) {
   const [percentages, setPercentages] = useState<Record<string, string>>(() => {
+    if (initialPercentages) return initialPercentages;
     // Pre-fill equal percentages so switching from Equal mode isn't jarring.
     // The last member absorbs the rounding difference so the prefill sums to
     // exactly 100 (e.g. 19 members: 18 x 5.26 + 5.32) — the validation

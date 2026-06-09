@@ -62,9 +62,11 @@ export function ItemAssignment({
       setEditingItem(null);
       utils.receipts.getReceiptItems.invalidate({ receiptId });
     },
+    onError: (e) => toast.error(e.message),
   });
   const deleteItem = trpc.receipts.deleteItem.useMutation({
     onSuccess: () => utils.receipts.getReceiptItems.invalidate({ receiptId }),
+    onError: (e) => toast.error(e.message),
   });
   const addItem = trpc.receipts.addItem.useMutation({
     onSuccess: () => {
@@ -72,18 +74,26 @@ export function ItemAssignment({
       setNewItem({ name: "", quantity: "1", totalPrice: "" });
       utils.receipts.getReceiptItems.invalidate({ receiptId });
     },
+    onError: (e) => toast.error(e.message),
   });
   const splitItem = trpc.receipts.splitItem.useMutation({
     onSuccess: () => utils.receipts.getReceiptItems.invalidate({ receiptId }),
+    onError: (e) => toast.error(e.message),
   });
   const saveForLater = trpc.receipts.saveForLater.useMutation({
     onSuccess: () => onSaveForLater?.(),
+    onError: (e) => toast.error(e.message),
   });
 
-  // Reset zoom/pan when image is hidden
-  useEffect(() => {
-    if (!showImage) { setZoom(1); setPan({ x: 0, y: 0 }); }
-  }, [showImage]);
+  // Toggle the image and reset zoom/pan when hiding it. showImage is only
+  // changed here, so resetting in the handler (instead of an effect) is safe.
+  function toggleImage() {
+    if (showImage) {
+      setZoom(1);
+      setPan({ x: 0, y: 0 });
+    }
+    setShowImage(!showImage);
+  }
 
   // Wheel zoom — must be non-passive to call preventDefault
   useEffect(() => {
@@ -313,7 +323,7 @@ export function ItemAssignment({
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => setShowImage(!showImage)}
+          onClick={toggleImage}
         >
           <ImageIcon className="mr-2 h-4 w-4" />
           {showImage ? t("hideImage") : t("viewImage")}

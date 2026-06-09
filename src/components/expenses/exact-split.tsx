@@ -13,14 +13,19 @@ export function ExactSplit({
   onChange,
   locale,
   currency,
+  initialAmounts,
 }: {
   members: Member[];
   totalCents: number;
   onChange: (shares: ShareEntry[]) => void;
   locale?: string;
   currency?: string;
+  /** Initial decimal amount strings per user ID (e.g. when editing an existing expense). */
+  initialAmounts?: Record<string, string>;
 }) {
-  const [amounts, setAmounts] = useState<Record<string, string>>({});
+  const [amounts, setAmounts] = useState<Record<string, string>>(
+    () => initialAmounts ?? {}
+  );
 
   useEffect(() => {
     const shares: ShareEntry[] = [];

@@ -1,8 +1,10 @@
 "use client";
 
-import { use, useMemo, useState, useEffect } from "react";
+import { use, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
+import type { inferRouterOutputs } from "@trpc/server";
+import type { AppRouter } from "@/server/trpc/router";
 import { trpc } from "@/lib/trpc";
 import { parseToCents, centsToDecimal, formatCents } from "@/lib/money";
 import { COMMON_CURRENCIES } from "@/lib/currencies";
@@ -16,6 +18,10 @@ import { EqualSplit } from "@/components/expenses/equal-split";
 import { ExactSplit } from "@/components/expenses/exact-split";
 import { PercentageSplit } from "@/components/expenses/percentage-split";
 import { SharesSplit } from "@/components/expenses/shares-split";
+
+type RouterOutputs = inferRouterOutputs<AppRouter>;
+type ExpenseData = RouterOutputs["expenses"]["get"];
+type GroupData = NonNullable<RouterOutputs["groups"]["get"]>;
 
 type SplitMode = "EQUAL" | "EXACT" | "PERCENTAGE" | "SHARES";
 
@@ -37,11 +43,54 @@ export default function EditExpensePage({
   params: Promise<{ groupId: string; expenseId: string }>;
 }) {
   const { groupId, expenseId } = use(params);
-  const router = useRouter();
-  const locale = useLocale();
   const t = useTranslations("expenses");
   const group = trpc.groups.get.useQuery({ groupId });
   const expense = trpc.expenses.get.useQuery({ groupId, expenseId });
+
+  if (expense.isLoading || group.isLoading) {
+    return <LoadingSpinner />;
+  }
+  if (!expense.data || !group.data) {
+    return (
+      <div className="mx-auto max-w-md py-16 text-center">
+        <ArrowLeft className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+        <h2 className="mb-2 text-lg font-semibold">{t("detail.notFound")}</h2>
+        <p className="mb-4 text-sm text-muted-foreground">
+          {t("detail.notFoundDescription")}
+        </p>
+        <Button nativeButton={false} render={<Link href={`/groups/${groupId}`} />}>
+          {t("detail.backToGroup")}
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <EditExpenseForm
+      groupId={groupId}
+      expenseId={expenseId}
+      expense={expense.data}
+      group={group.data}
+    />
+  );
+}
+
+// Rendered only once expense + group data is available, so all form state can
+// be initialized directly from the loaded data (no sync-from-query effects).
+function EditExpenseForm({
+  groupId,
+  expenseId,
+  expense,
+  group,
+}: {
+  groupId: string;
+  expenseId: string;
+  expense: ExpenseData;
+  group: GroupData;
+}) {
+  const router = useRouter();
+  const locale = useLocale();
+  const t = useTranslations("expenses");
 
   const splitModes = useMemo(() => [
     { value: "EQUAL" as SplitMode, label: t("new.splitEqual"), description: t("new.splitEqualDescription") },
@@ -50,36 +99,66 @@ export default function EditExpensePage({
     { value: "SHARES" as SplitMode, label: t("new.splitShares"), description: t("new.splitSharesDescription") },
   ], [t]);
 
-  const [title, setTitle] = useState("");
-  const [amountStr, setAmountStr] = useState("");
-  const [category, setCategory] = useState("");
-  const [paidById, setPaidById] = useState("");
-  const [splitMode, setSplitMode] = useState<SplitMode>("EQUAL");
-  const [shares, setShares] = useState<ShareEntry[]>([]);
-  const [currency, setCurrency] = useState<string>("");
-  const [manualRate, setManualRate] = useState<string>("");
-  const [useManualRate, setUseManualRate] = useState(false);
-  const [loaded, setLoaded] = useState(false);
+  const isItemSplit = expense.splitMode === "ITEM";
+  const initiallyDifferentCurrency =
+    expense.currency.toUpperCase() !== group.currency.toUpperCase();
 
-  useEffect(() => {
-    if (expense.data && group.data && !loaded) {
-      const e = expense.data;
-      setTitle(e.title);
-      setAmountStr(centsToDecimal(e.amount));
-      setCategory(e.category ?? "");
-      setPaidById(e.paidById);
-      setCurrency(e.currency);
-      const groupCur = group.data.currency;
-      if (e.currency.toUpperCase() !== groupCur.toUpperCase() && e.exchangeRate) {
-        setUseManualRate(true);
-        setManualRate(String(e.exchangeRate));
-      }
-      if (e.splitMode !== "ITEM") {
-        setSplitMode(e.splitMode as SplitMode);
-      }
-      setLoaded(true);
-    }
-  }, [expense.data, group.data, loaded]);
+  const [title, setTitle] = useState(expense.title);
+  const [amountStr, setAmountStr] = useState(() => centsToDecimal(expense.amount));
+  const [category, setCategory] = useState(expense.category ?? "");
+  const [paidById, setPaidById] = useState(expense.paidById);
+  const [splitMode, setSplitMode] = useState<SplitMode>(
+    isItemSplit ? "EQUAL" : (expense.splitMode as SplitMode)
+  );
+  const [shares, setShares] = useState<ShareEntry[]>([]);
+  const [currency, setCurrency] = useState<string>(expense.currency);
+  const [manualRate, setManualRate] = useState<string>(
+    initiallyDifferentCurrency && expense.exchangeRate ? String(expense.exchangeRate) : ""
+  );
+  const [useManualRate, setUseManualRate] = useState(
+    initiallyDifferentCurrency && !!expense.exchangeRate
+  );
+
+  // Seed the split editors with the saved shares so editing doesn't silently
+  // rewrite the split. Only the saved mode is seeded; other modes keep their
+  // new-expense defaults. (percentage is stored in basis points: 5000 = 50%)
+  const initialSelected = useMemo(
+    () =>
+      expense.splitMode === "EQUAL"
+        ? expense.shares.map((s) => s.userId)
+        : undefined,
+    [expense]
+  );
+  const initialAmounts = useMemo(
+    () =>
+      expense.splitMode === "EXACT"
+        ? Object.fromEntries(
+            expense.shares.map((s) => [s.userId, centsToDecimal(s.amount)])
+          )
+        : undefined,
+    [expense]
+  );
+  const initialPercentages = useMemo(
+    () =>
+      expense.splitMode === "PERCENTAGE"
+        ? Object.fromEntries(
+            expense.shares.map((s) => [
+              s.userId,
+              s.percentage != null ? String(s.percentage / 100) : "0",
+            ])
+          )
+        : undefined,
+    [expense]
+  );
+  const initialShareUnits = useMemo(
+    () =>
+      expense.splitMode === "SHARES"
+        ? Object.fromEntries(
+            expense.shares.map((s) => [s.userId, String(s.shares ?? 1)])
+          )
+        : undefined,
+    [expense]
+  );
 
   const updateExpense = trpc.expenses.update.useMutation({
     onSuccess: () => {
@@ -87,19 +166,18 @@ export default function EditExpensePage({
     },
   });
 
-  const members: MemberInfo[] =
-    group.data?.members.map((m) => ({
-      id: m.user.id,
-      name: m.user.placeholderName ?? m.user.name ?? m.user.email,
-    })) ?? [];
+  const members: MemberInfo[] = group.members.map((m) => ({
+    id: m.user.id,
+    name: m.user.placeholderName ?? m.user.name ?? m.user.email,
+  }));
 
   const amountCents = parseToCents(amountStr);
-  const groupCurrency = group.data?.currency ?? "USD";
+  const groupCurrency = group.currency;
   const effectiveCurrency = currency || groupCurrency;
   const isDifferentCurrency = effectiveCurrency.toUpperCase() !== groupCurrency.toUpperCase();
   const parsedManualRate = parseFloat(manualRate);
   const manualRateValid = useManualRate && !isNaN(parsedManualRate) && parsedManualRate > 0;
-  const currencyChanged = effectiveCurrency.toUpperCase() !== (expense.data?.currency ?? "").toUpperCase();
+  const currencyChanged = effectiveCurrency.toUpperCase() !== expense.currency.toUpperCase();
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -118,26 +196,6 @@ export default function EditExpensePage({
       shares,
     });
   }
-
-  if (expense.isLoading || group.isLoading) {
-    return <LoadingSpinner />;
-  }
-  if (!expense.data) {
-    return (
-      <div className="mx-auto max-w-md py-16 text-center">
-        <ArrowLeft className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-        <h2 className="mb-2 text-lg font-semibold">{t("detail.notFound")}</h2>
-        <p className="mb-4 text-sm text-muted-foreground">
-          {t("detail.notFoundDescription")}
-        </p>
-        <Button nativeButton={false} render={<Link href={`/groups/${groupId}`} />}>
-          {t("detail.backToGroup")}
-        </Button>
-      </div>
-    );
-  }
-
-  const isItemSplit = expense.data.splitMode === "ITEM";
 
   return (
     <div className="mx-auto max-w-lg space-y-6">
@@ -321,6 +379,7 @@ export default function EditExpensePage({
                   onChange={setShares}
                   locale={locale}
                   currency={effectiveCurrency}
+                  initialSelected={initialSelected}
                 />
               )}
               {splitMode === "EXACT" && (
@@ -330,6 +389,7 @@ export default function EditExpensePage({
                   onChange={setShares}
                   locale={locale}
                   currency={effectiveCurrency}
+                  initialAmounts={initialAmounts}
                 />
               )}
               {splitMode === "PERCENTAGE" && (
@@ -339,6 +399,7 @@ export default function EditExpensePage({
                   onChange={setShares}
                   locale={locale}
                   currency={effectiveCurrency}
+                  initialPercentages={initialPercentages}
                 />
               )}
               {splitMode === "SHARES" && (
@@ -348,6 +409,7 @@ export default function EditExpensePage({
                   onChange={setShares}
                   locale={locale}
                   currency={effectiveCurrency}
+                  initialShareUnits={initialShareUnits}
                 />
               )}
             </div>

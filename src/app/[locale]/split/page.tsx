@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { trpc } from "@/lib/trpc";
@@ -54,6 +54,10 @@ export default function GuestSplitPage() {
   const [items, setItems] = useState<GuestItem[]>([]);
   const [extracted, setExtracted] = useState<ExtractedData | null>(null);
   const [people, setPeople] = useState<string[]>([""]); // start with one empty name
+  // Stable keys for the (removable) person rows so deleting a row doesn't
+  // re-key the rows below it. Kept in lockstep with `people`.
+  const personKeyCounter = useRef(1);
+  const [personKeys, setPersonKeys] = useState<number[]>([0]);
   const [assignments, setAssignments] = useState<Record<number, Set<number>>>({}); // itemIdx -> Set<personIdx>
   const [paidByIndex, setPaidByIndex] = useState(0);
   const [tipOverride, setTipOverride] = useState("");
@@ -73,6 +77,7 @@ export default function GuestSplitPage() {
   const [splitQuantity, setSplitQuantity] = useState("");
 
   // tRPC
+  const utils = trpc.useUtils();
   const processReceipt = trpc.guest.processReceipt.useMutation();
   const providerInfo = trpc.guest.getScanProviderInfo.useQuery();
   const receiptData = trpc.guest.getReceiptItems.useQuery(
@@ -167,6 +172,7 @@ export default function GuestSplitPage() {
 
   function removePerson(idx: number) {
     setPeople((p) => p.filter((_, i) => i !== idx));
+    setPersonKeys((keys) => keys.filter((_, i) => i !== idx));
     // Clean up assignments
     setAssignments((prev) => {
       const next: Record<number, Set<number>> = {};
@@ -258,6 +264,14 @@ export default function GuestSplitPage() {
       }
       return next;
     });
+    // Shift index-based UI state so the edit/split forms don't retarget the
+    // wrong item when an item above them is deleted.
+    setEditingItem((prev) =>
+      prev === null || prev === idx ? null : prev > idx ? prev - 1 : prev
+    );
+    setSplittingIndex((prev) =>
+      prev === null || prev === idx ? null : prev > idx ? prev - 1 : prev
+    );
   }
 
   function handleAddItem(e: React.FormEvent) {
@@ -509,7 +523,7 @@ export default function GuestSplitPage() {
           {/* Person list */}
           <div className="space-y-3">
             {people.map((name, idx) => (
-              <div key={idx} className="flex items-center gap-2">
+              <div key={personKeys[idx] ?? idx} className="flex items-center gap-2">
                 <Avatar className="h-10 w-10 shrink-0">
                   <AvatarFallback className="text-sm bg-primary/10 text-primary">
                     {name.trim() ? initials(name) : `P${idx + 1}`}
@@ -540,7 +554,10 @@ export default function GuestSplitPage() {
           <Button
             variant="outline"
             className="w-full h-12"
-            onClick={() => setPeople((p) => [...p, ""])}
+            onClick={() => {
+              setPeople((p) => [...p, ""]);
+              setPersonKeys((keys) => [...keys, personKeyCounter.current++]);
+            }}
             data-testid="add-person-btn"
           >
             <Plus className="mr-2 h-4 w-4" />
@@ -609,6 +626,10 @@ export default function GuestSplitPage() {
                             { receiptId, correctionHint: correctionHint.trim() },
                             {
                               onSuccess: (data) => {
+                                // Drop the cached query data, otherwise the
+                                // load effect would repopulate the stale
+                                // pre-rescan items from the cache.
+                                utils.guest.getReceiptItems.reset({ receiptId });
                                 setItems([]); // will be refetched
                                 setExtracted({
                                   merchantName: data.merchantName ?? undefined,

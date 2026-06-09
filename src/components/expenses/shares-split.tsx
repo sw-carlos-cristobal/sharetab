@@ -13,15 +13,18 @@ export function SharesSplit({
   onChange,
   locale,
   currency,
+  initialShareUnits,
 }: {
   members: Member[];
   totalCents: number;
   onChange: (shares: ShareEntry[]) => void;
   locale?: string;
   currency?: string;
+  /** Initial share-unit strings per user ID (e.g. when editing an existing expense). */
+  initialShareUnits?: Record<string, string>;
 }) {
   const [shareUnits, setShareUnits] = useState<Record<string, string>>(
-    () => Object.fromEntries(members.map((m) => [m.id, "1"]))
+    () => initialShareUnits ?? Object.fromEntries(members.map((m) => [m.id, "1"]))
   );
 
   useEffect(() => {

@@ -12,15 +12,18 @@ export function EqualSplit({
   onChange,
   locale,
   currency,
+  initialSelected,
 }: {
   members: Member[];
   totalCents: number;
   onChange: (shares: ShareEntry[]) => void;
   locale?: string;
   currency?: string;
+  /** User IDs to pre-select (e.g. when editing an existing expense). Defaults to all members. */
+  initialSelected?: string[];
 }) {
   const [selected, setSelected] = useState<Set<string>>(
-    new Set(members.map((m) => m.id))
+    () => new Set(initialSelected ?? members.map((m) => m.id))
   );
 
   useEffect(() => {

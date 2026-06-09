@@ -13,6 +13,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Check, Copy, Link } from "lucide-react";
+import { toast } from "sonner";
+import { copyToClipboard } from "@/lib/clipboard";
 
 export function InviteDialog({
   groupId,
@@ -26,7 +28,9 @@ export function InviteDialog({
   const [copied, setCopied] = useState(false);
   const t = useTranslations("groups");
 
-  const createInvite = trpc.groups.createInvite.useMutation();
+  const createInvite = trpc.groups.createInvite.useMutation({
+    onError: (e) => toast.error(e.message),
+  });
 
   function handleGenerate() {
     createInvite.mutate({ groupId });
@@ -40,7 +44,10 @@ export function InviteDialog({
   async function handleCopy() {
     if (!createInvite.data) return;
     const url = getInviteUrl(createInvite.data.token);
-    await navigator.clipboard.writeText(url);
+    if (!(await copyToClipboard(url))) {
+      toast.error("Could not copy link to clipboard");
+      return;
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
