@@ -77,3 +77,6 @@ next-env.d.ts
 eng.traineddata
 docs/superpowers/
 test-pg-data/
+
+# Claude Code session artifacts (agent worktrees, local settings)
+.claude/
