@@ -8,7 +8,11 @@ import { getUploadDir } from "@/server/lib/upload-dir";
 import { randomUUID } from "crypto";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic"];
-const MAX_SIZE = parseInt(process.env.MAX_UPLOAD_SIZE_MB ?? "10") * 1024 * 1024;
+// Fall back to 10MB when the env var is unset or non-numeric — a NaN limit
+// would make every size comparison false and disable the check entirely.
+const parsedMaxMb = parseInt(process.env.MAX_UPLOAD_SIZE_MB ?? "10", 10);
+const MAX_SIZE_MB = parsedMaxMb > 0 ? parsedMaxMb : 10;
+const MAX_SIZE = MAX_SIZE_MB * 1024 * 1024;
 
 /**
  * Detect MIME type from magic bytes to prevent client MIME spoofing.
@@ -51,8 +55,32 @@ const parsedGuestLimit = Math.floor(Number(process.env.GUEST_RATE_LIMIT_MAX));
 const GUEST_RATE_LIMIT = parsedGuestLimit > 0 ? parsedGuestLimit : 10;
 const GUEST_RATE_WINDOW = 60 * 60 * 1000; // 1 hour
 
+// Global cap across all guest uploads per window: per-IP limits can be
+// bypassed by rotating spoofed forwarded-IP headers, so bound total
+// unauthenticated disk usage regardless of source.
+const parsedGlobalLimit = Math.floor(Number(process.env.GUEST_UPLOAD_GLOBAL_LIMIT));
+const GUEST_GLOBAL_LIMIT = parsedGlobalLimit > 0 ? parsedGlobalLimit : 100;
+const GLOBAL_KEY = "__global__";
+
 function checkGuestRateLimit(ip: string): boolean {
   const now = Date.now();
+
+  // Prune expired entries so spoofed-IP churn can't grow the map unboundedly
+  if (guestUploads.size > 1000) {
+    for (const [key, value] of guestUploads) {
+      if (now > value.resetAt) guestUploads.delete(key);
+    }
+  }
+
+  const globalEntry = guestUploads.get(GLOBAL_KEY);
+  if (!globalEntry || now > globalEntry.resetAt) {
+    guestUploads.set(GLOBAL_KEY, { count: 1, resetAt: now + GUEST_RATE_WINDOW });
+  } else if (globalEntry.count >= GUEST_GLOBAL_LIMIT) {
+    return false;
+  } else {
+    globalEntry.count++;
+  }
+
   const entry = guestUploads.get(ip);
   if (!entry || now > entry.resetAt) {
     guestUploads.set(ip, { count: 1, resetAt: now + GUEST_RATE_WINDOW });
@@ -101,7 +129,7 @@ export async function POST(req: NextRequest) {
 
   if (file.size > MAX_SIZE) {
     return Response.json(
-      { error: `File too large. Max: ${process.env.MAX_UPLOAD_SIZE_MB ?? 10}MB` },
+      { error: `File too large. Max: ${MAX_SIZE_MB}MB` },
       { status: 400 }
     );
   }

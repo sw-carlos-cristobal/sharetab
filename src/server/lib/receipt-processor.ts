@@ -77,59 +77,64 @@ export async function processReceiptImage({
       }`
     );
   }
+  const extraction = result;
+  const usedProvider = provider;
 
   logger.info(`${logPrefix}.extracted`, {
     receiptId,
-    provider: provider.name,
-    items: result.items.length,
-    total: result.total,
+    provider: usedProvider.name,
+    items: extraction.items.length,
+    total: extraction.total,
     durationMs: Date.now() - start,
   });
 
-  // Delete any existing items before (re-)creating — prevents duplicates on reprocess
-  await db.receiptItem.deleteMany({ where: { receiptId } });
+  const normalizedDate = normalizeDate(extraction.date);
 
-  // Create receipt items in DB
-  await db.receiptItem.createMany({
-    data: result.items.map((item, i) => ({
-      receiptId,
-      name: item.name,
-      quantity: item.quantity,
-      unitPrice: item.unitPrice,
-      totalPrice: item.totalPrice,
-      sortOrder: i,
-    })),
-  });
+  // Replace items and finalize the receipt atomically — a crash or a
+  // concurrent reprocess must never leave a COMPLETED receipt with missing
+  // or duplicated items.
+  await db.$transaction(async (tx) => {
+    await tx.receiptItem.deleteMany({ where: { receiptId } });
 
-  const normalizedDate = normalizeDate(result.date);
+    await tx.receiptItem.createMany({
+      data: extraction.items.map((item, i) => ({
+        receiptId,
+        name: item.name,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        totalPrice: item.totalPrice,
+        sortOrder: i,
+      })),
+    });
 
-  await db.receipt.update({
-    where: { id: receiptId },
-    data: {
-      status: "COMPLETED",
-      aiProvider: provider.name,
-      rawResponse: result as unknown as Prisma.InputJsonValue,
-      extractedData: {
-        merchantName: result.merchantName,
-        date: normalizedDate,
-        subtotal: result.subtotal,
-        tax: result.tax,
-        tip: result.tip,
-        total: result.total,
-        currency: result.currency,
-      } as unknown as Prisma.InputJsonValue,
-    },
+    await tx.receipt.update({
+      where: { id: receiptId },
+      data: {
+        status: "COMPLETED",
+        aiProvider: usedProvider.name,
+        rawResponse: extraction as unknown as Prisma.InputJsonValue,
+        extractedData: {
+          merchantName: extraction.merchantName,
+          date: normalizedDate,
+          subtotal: extraction.subtotal,
+          tax: extraction.tax,
+          tip: extraction.tip,
+          total: extraction.total,
+          currency: extraction.currency,
+        } as unknown as Prisma.InputJsonValue,
+      },
+    });
   });
 
   return {
     status: "COMPLETED" as const,
-    merchantName: result.merchantName,
+    merchantName: extraction.merchantName,
     date: normalizedDate,
-    subtotal: result.subtotal,
-    tax: result.tax,
-    tip: result.tip,
-    total: result.total,
-    currency: result.currency,
-    itemCount: result.items.length,
+    subtotal: extraction.subtotal,
+    tax: extraction.tax,
+    tip: extraction.tip,
+    total: extraction.total,
+    currency: extraction.currency,
+    itemCount: extraction.items.length,
   };
 }

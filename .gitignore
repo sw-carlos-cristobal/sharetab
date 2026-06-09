@@ -76,3 +76,4 @@ next-env.d.ts
 *.code-workspace
 eng.traineddata
 docs/superpowers/
+test-pg-data/

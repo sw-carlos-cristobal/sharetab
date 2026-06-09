@@ -88,13 +88,29 @@ export const receiptsRouter = createTRPCRouter({
       // Note: old items are NOT deleted here — processReceiptImage handles
       // delete + recreate atomically, so if the AI provider fails the old items remain.
 
-      await ctx.db.receipt.update({
-        where: { id: input.receiptId },
+      // Conditional update doubles as a mutex: a receipt already PROCESSING
+      // is rejected so concurrent calls can't interleave delete/recreate.
+      // A PROCESSING receipt untouched for 5+ minutes is considered stale
+      // (crashed run) and may be re-claimed.
+      const claimed = await ctx.db.receipt.updateMany({
+        where: {
+          id: input.receiptId,
+          OR: [
+            { status: { not: "PROCESSING" } },
+            { updatedAt: { lt: new Date(Date.now() - 5 * 60 * 1000) } },
+          ],
+        },
         data: {
           status: "PROCESSING",
           ...(input.groupId ? { groupId: input.groupId, savedById: ctx.user.id } : {}),
         },
       });
+      if (claimed.count === 0) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Receipt is already being processed",
+        });
+      }
 
       try {
         return await processReceiptImage({
@@ -119,9 +135,11 @@ export const receiptsRouter = createTRPCRouter({
           },
         });
 
+        // Details are logged and stored in rawResponse; don't echo raw
+        // provider/internal errors to the client.
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: `Receipt processing failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+          message: "Receipt processing failed. Please try again.",
         });
       }
     }),
@@ -354,11 +372,25 @@ export const receiptsRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const receipt = await verifyReceiptAccess(ctx.db, input.receiptId, ctx.user.id);
 
-      // Reset status to PROCESSING and re-run extraction
-      await ctx.db.receipt.update({
-        where: { id: input.receiptId },
+      // Reset status to PROCESSING and re-run extraction; conditional update
+      // rejects concurrent reprocessing of the same receipt. A PROCESSING
+      // receipt untouched for 5+ minutes is stale and may be re-claimed.
+      const claimed = await ctx.db.receipt.updateMany({
+        where: {
+          id: input.receiptId,
+          OR: [
+            { status: { not: "PROCESSING" } },
+            { updatedAt: { lt: new Date(Date.now() - 5 * 60 * 1000) } },
+          ],
+        },
         data: { status: "PROCESSING" },
       });
+      if (claimed.count === 0) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Receipt is already being processed",
+        });
+      }
 
       try {
         return await processReceiptImage({

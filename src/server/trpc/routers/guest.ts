@@ -225,6 +225,23 @@ export const guestRouter = createTRPCRouter({
         });
       }
 
+      // Per-IP and global caps: the per-receipt limit alone can be multiplied
+      // by minting new receipts, and forwarded-IP headers can be spoofed when
+      // no trusted proxy strips them — the global cap bounds total
+      // unauthenticated AI spend regardless.
+      const ip = ctx.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+        || ctx.headers.get("x-real-ip")?.trim()
+        || "global";
+      const ipLimit = checkRateLimit(`guest-process-ip:${ip}`, 20, 60 * 60 * 1000);
+      const globalMax = parseInt(process.env.GUEST_AI_GLOBAL_LIMIT ?? "100", 10) || 100;
+      const globalLimit = checkRateLimit("guest-process-global", globalMax, 60 * 60 * 1000);
+      if (!ipLimit.allowed || !globalLimit.allowed) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: "Too many processing attempts. Please try again later.",
+        });
+      }
+
       const receipt = await ctx.db.receipt.findUnique({
         where: { id: input.receiptId },
       });
@@ -235,17 +252,26 @@ export const guestRouter = createTRPCRouter({
         throw new TRPCError({ code: "NOT_FOUND", message: "Receipt not found" });
       }
 
-      // If re-processing with corrections, clear old items first
-      if (input.correctionHint) {
-        await ctx.db.receiptItem.deleteMany({
-          where: { receiptId: input.receiptId },
-        });
-      }
-
-      await ctx.db.receipt.update({
-        where: { id: input.receiptId },
+      // Conditional update doubles as a mutex against concurrent processing.
+      // A PROCESSING receipt untouched for 5+ minutes is considered stale
+      // (crashed run) and may be re-claimed. Old items are replaced
+      // atomically inside processReceiptImage.
+      const claimed = await ctx.db.receipt.updateMany({
+        where: {
+          id: input.receiptId,
+          OR: [
+            { status: { not: "PROCESSING" } },
+            { updatedAt: { lt: new Date(Date.now() - 5 * 60 * 1000) } },
+          ],
+        },
         data: { status: "PROCESSING" },
       });
+      if (claimed.count === 0) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Receipt is already being processed",
+        });
+      }
 
       try {
         return await processReceiptImage({
@@ -270,9 +296,11 @@ export const guestRouter = createTRPCRouter({
           },
         });
 
+        // Details are logged server-side; never echo raw provider errors
+        // (model output, internal URLs) to unauthenticated guests.
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: `Receipt processing failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+          message: "Receipt processing failed. Please try again.",
         });
       }
     }),

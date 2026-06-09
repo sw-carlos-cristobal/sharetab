@@ -122,6 +122,8 @@ describe("getAIProviderWithFallback", () => {
 
   test("clearCache forces re-evaluation on next call", async () => {
     process.env.AI_PROVIDER_PRIORITY = "openai-codex";
+    const { OpenAICodexProvider } = await import("./providers/openai-codex");
+    vi.spyOn(OpenAICodexProvider.prototype, "isAvailable").mockResolvedValue(true);
     const { getAIProviderWithFallback, clearProviderCache } = await import("./registry");
 
     const first = await getAIProviderWithFallback();
@@ -138,7 +140,9 @@ describe("getAIProviderWithFallback", () => {
     process.env.AI_PROVIDER_PRIORITY = "openai-codex";
     const { getAIProviderWithFallback } = await import("./registry");
     const { OpenAICodexProvider } = await import("./providers/openai-codex");
-    const spy = vi.spyOn(OpenAICodexProvider.prototype, "isAvailable");
+    const spy = vi
+      .spyOn(OpenAICodexProvider.prototype, "isAvailable")
+      .mockResolvedValue(true);
 
     const first = await getAIProviderWithFallback();
     const second = await getAIProviderWithFallback();
@@ -149,6 +153,8 @@ describe("getAIProviderWithFallback", () => {
 
   test("cache expires after TTL and provider is re-evaluated", async () => {
     process.env.AI_PROVIDER_PRIORITY = "openai-codex";
+    const { OpenAICodexProvider } = await import("./providers/openai-codex");
+    vi.spyOn(OpenAICodexProvider.prototype, "isAvailable").mockResolvedValue(true);
     const { getAIProviderWithFallback } = await import("./registry");
 
     const first = await getAIProviderWithFallback();

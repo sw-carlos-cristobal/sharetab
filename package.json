@@ -46,6 +46,7 @@
   "overrides": {
     "@anthropic-ai/sdk": "^0.93.0",
     "@hono/node-server": ">=1.19.13",
+    "hono": ">=4.12.21",
     "postcss": ">=8.5.10",
     "fast-uri": ">=3.1.1"
   },
@@ -74,7 +75,6 @@
     "pg": "^8.20.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "shadcn": "^4.1.1",
     "sonner": "^2.0.7",
     "superjson": "^2.2.6",
     "tailwind-merge": "^3.5.0",
@@ -84,7 +84,8 @@
   "devDependencies": {
     "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@types/node": "^22",
+    "shadcn": "^4.1.1",
     "@types/nodemailer": "^7.0.11",
     "@types/pg": "^8.20.0",
     "@types/react": "^19",

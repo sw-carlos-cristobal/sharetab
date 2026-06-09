@@ -20,6 +20,7 @@ export const createTRPCContext = async (opts?: { req?: Request }) => {
     targetId: string;
     targetName: string | null;
     targetEmail: string;
+    startedAt?: string;
   }
   let impersonating: ImpersonationData | null = null;
 
@@ -28,7 +29,11 @@ export const createTRPCContext = async (opts?: { req?: Request }) => {
     const impCookie = cookieStore.get(IMPERSONATE_COOKIE);
     if (impCookie?.value && session?.user) {
       const data = verifyAndParse<ImpersonationData>(impCookie.value);
-      if (data && data.adminId === session.user.id) {
+      // Enforce expiry server-side: a replayed cookie value must not outlive
+      // the 1h browser maxAge. Cookies without startedAt are rejected.
+      const startedAtMs = data?.startedAt ? Date.parse(data.startedAt) : NaN;
+      const expired = !Number.isFinite(startedAtMs) || Date.now() - startedAtMs > 60 * 60 * 1000;
+      if (data && !expired && data.adminId === session.user.id) {
         impersonating = data;
         // Swap session user to the impersonated user
         if (session.user) {
@@ -57,6 +62,8 @@ const QUIET_PATHS = new Set(["admin.getLogs", "admin.getImpersonationStatus"]);
 const loggingMiddleware = t.middleware(async ({ path, type, next, ctx }) => {
   const start = Date.now();
   const userId = ctx.session?.user?.id;
+  // Attribute impersonated requests to the real admin, not just the target
+  const impersonatedBy = ctx.impersonating?.adminId;
 
   const result = await next();
 
@@ -66,9 +73,9 @@ const loggingMiddleware = t.middleware(async ({ path, type, next, ctx }) => {
   const ok = result.ok;
 
   if (ok) {
-    logger.info("trpc.ok", { path, type, userId, durationMs });
+    logger.info("trpc.ok", { path, type, userId, durationMs, ...(impersonatedBy ? { impersonatedBy } : {}) });
   } else {
-    logger.warn("trpc.error", { path, type, userId, durationMs });
+    logger.warn("trpc.error", { path, type, userId, durationMs, ...(impersonatedBy ? { impersonatedBy } : {}) });
   }
 
   return result;

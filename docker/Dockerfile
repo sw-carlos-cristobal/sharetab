@@ -1,17 +1,9 @@
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 ENV NPM_CONFIG_FETCH_RETRIES=5 \
     NPM_CONFIG_FETCH_RETRY_FACTOR=2 \
     NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=20000 \
     NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000 \
     NPM_CONFIG_FETCH_TIMEOUT=300000
-
-# --- Dependencies ---
-FROM base AS deps
-WORKDIR /app
-COPY package.json package-lock.json ./
-COPY prisma ./prisma
-COPY prisma.config.ts ./
-RUN npm ci --omit=dev --legacy-peer-deps
 
 # --- Builder ---
 FROM base AS builder
@@ -74,7 +66,8 @@ ENV PGDATA=/var/lib/postgresql/data
 
 VOLUME ["/var/lib/postgresql/data", "/app/uploads", "/app/claude", "/app/chatgpt"]
 
-HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+# start-period covers first-boot initdb + user creation + schema push
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=60s \
   CMD wget -qO- http://127.0.0.1:3000/api/health || exit 1
 
 ENTRYPOINT ["/app/entrypoint.sh"]

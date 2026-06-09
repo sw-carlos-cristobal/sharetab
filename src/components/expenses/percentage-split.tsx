@@ -37,6 +37,16 @@ export function PercentageSplit({
       }))
       .filter((e) => e.pct > 0);
 
+    // Only emit shares when percentages sum to ~100%. Otherwise the
+    // last-person remainder would silently absorb the entire shortfall
+    // (e.g. 30%/30% of $100 would submit $30/$70). Reporting no shares
+    // keeps the submit button disabled until the split is valid.
+    const totalPct = entries.reduce((sum, e) => sum + e.pct, 0);
+    if (Math.abs(totalPct - 100) >= 0.05) {
+      onChange([]);
+      return;
+    }
+
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
       const basisPoints = Math.round(entry.pct * 100); // 50.00% = 5000

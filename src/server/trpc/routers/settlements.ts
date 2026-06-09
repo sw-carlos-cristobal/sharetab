@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, groupMemberProcedure } from "../init";
 import { getExchangeRate, convertCents } from "../../lib/exchange-rates";
+import { MAX_MONEY_CENTS } from "@/lib/money";
 
 export const settlementsRouter = createTRPCRouter({
   list: groupMemberProcedure
@@ -37,9 +38,9 @@ export const settlementsRouter = createTRPCRouter({
         groupId: z.string(),
         fromId: z.string().optional(),
         toId: z.string(),
-        amount: z.number().int().positive(),
+        amount: z.number().int().positive().max(MAX_MONEY_CENTS),
         currency: z.string().length(3).regex(/^[a-zA-Z]{3}$/).transform((c) => c.toUpperCase()).default("USD"),
-        exchangeRate: z.number().positive().optional(), // manual override
+        exchangeRate: z.number().positive().finite().max(1_000_000).optional(), // manual override
         note: z.string().max(500).optional(),
       })
     )

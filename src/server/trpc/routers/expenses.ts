@@ -3,13 +3,24 @@ import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, groupMemberProcedure } from "../init";
 import { SplitMode } from "@/generated/prisma/client";
 import { getExchangeRate, convertCents } from "../../lib/exchange-rates";
+import { MAX_MONEY_CENTS } from "@/lib/money";
 
 const expenseShareSchema = z.object({
   userId: z.string(),
-  amount: z.number().int(),
+  amount: z.number().int().nonnegative().max(MAX_MONEY_CENTS),
   shares: z.number().int().optional(),
   percentage: z.number().int().optional(),
 });
+
+const expenseSharesArraySchema = z
+  .array(expenseShareSchema)
+  .min(1)
+  .refine(
+    (shares) => new Set(shares.map((s) => s.userId)).size === shares.length,
+    { message: "Duplicate user in shares" }
+  );
+
+const exchangeRateSchema = z.number().positive().finite().max(1_000_000);
 
 export const expensesRouter = createTRPCRouter({
   list: groupMemberProcedure
@@ -69,14 +80,14 @@ export const expensesRouter = createTRPCRouter({
         groupId: z.string(),
         title: z.string().min(1).max(200),
         description: z.string().max(1000).optional(),
-        amount: z.number().int().positive(),
+        amount: z.number().int().positive().max(MAX_MONEY_CENTS),
         currency: z.string().length(3).regex(/^[a-zA-Z]{3}$/).transform((c) => c.toUpperCase()).default("USD"),
-        exchangeRate: z.number().positive().optional(), // manual override
+        exchangeRate: exchangeRateSchema.optional(), // manual override
         category: z.string().max(50).optional(),
         expenseDate: z.string().datetime().optional(),
         paidById: z.string(),
         splitMode: z.nativeEnum(SplitMode),
-        shares: z.array(expenseShareSchema).min(1),
+        shares: expenseSharesArraySchema,
         receiptId: z.string().optional(),
       })
     )
@@ -202,14 +213,14 @@ export const expensesRouter = createTRPCRouter({
         expenseId: z.string(),
         title: z.string().min(1).max(200).optional(),
         description: z.string().max(1000).optional(),
-        amount: z.number().int().positive().optional(),
+        amount: z.number().int().positive().max(MAX_MONEY_CENTS).optional(),
         currency: z.string().length(3).regex(/^[a-zA-Z]{3}$/).transform((c) => c.toUpperCase()).optional(),
-        exchangeRate: z.number().positive().optional(), // manual override
+        exchangeRate: exchangeRateSchema.optional(), // manual override
         category: z.string().max(50).optional(),
         expenseDate: z.string().datetime().optional(),
         paidById: z.string().optional(),
         splitMode: z.nativeEnum(SplitMode).optional(),
-        shares: z.array(expenseShareSchema).optional(),
+        shares: expenseSharesArraySchema.optional(),
       }).refine(
         (data) => !data.amount || data.shares,
         { message: "Shares are required when updating the amount", path: ["shares"] }

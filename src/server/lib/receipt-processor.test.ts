@@ -33,7 +33,7 @@ describe("processReceiptImage fallback behavior", () => {
   });
 
   function makeDbMock() {
-    return {
+    const db = {
       receiptItem: {
         deleteMany: vi.fn().mockResolvedValue(undefined),
         createMany: vi.fn().mockResolvedValue(undefined),
@@ -41,7 +41,12 @@ describe("processReceiptImage fallback behavior", () => {
       receipt: {
         update: vi.fn().mockResolvedValue(undefined),
       },
+      // Interactive transaction: run the callback against the same mock
+      $transaction: vi.fn(
+        (fn: (tx: unknown) => Promise<unknown>) => fn(db)
+      ),
     };
+    return db;
   }
 
   const successResult = {
