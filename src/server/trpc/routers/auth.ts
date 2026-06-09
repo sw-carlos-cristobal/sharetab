@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, publicProcedure, protectedProcedure } from "../init";
 import { checkRateLimit } from "../../lib/rate-limit";
+import { getClientIp } from "../../lib/client-ip";
 import { locales } from "@/i18n/routing";
 
 export const authRouter = createTRPCRouter({
@@ -28,7 +29,7 @@ export const authRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       // Rate limit: 10 registrations per hour per IP (fall back to global key)
-      const ip = ctx.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "global";
+      const ip = getClientIp(ctx.headers);
       const maxRegAttempts = parseInt(process.env.REGISTER_RATE_LIMIT_MAX ?? "10");
       const { allowed } = checkRateLimit(`register:${ip}`, maxRegAttempts, 60 * 60 * 1000);
       if (!allowed) {

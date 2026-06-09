@@ -8,6 +8,7 @@ import { z } from "zod";
 import { db } from "./db";
 import { logger } from "./lib/logger";
 import { checkRateLimit } from "./lib/rate-limit";
+import { getClientIp } from "./lib/client-ip";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -28,11 +29,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         const parsed = loginSchema.safeParse(credentials);
         if (!parsed.success) return null;
 
-        // Rate limit login attempts (configurable for CI/testing)
+        // Rate limit login attempts per email (configurable for CI/testing)
         const maxLoginAttempts = parseInt(process.env.AUTH_RATE_LIMIT_MAX ?? "5");
         const { allowed } = checkRateLimit(
           `login:${parsed.data.email}`,
@@ -41,6 +42,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         );
         if (!allowed) {
           logger.warn("auth.rate_limited", { email: parsed.data.email });
+          return null;
+        }
+
+        // Rate limit login attempts per IP — bounds password spraying across
+        // many emails while staying generous for shared NATs/households.
+        const ip = getClientIp(request.headers);
+        const maxIpAttempts = parseInt(process.env.AUTH_IP_RATE_LIMIT_MAX ?? "30");
+        const { allowed: ipAllowed } = checkRateLimit(
+          `login-ip:${ip}`,
+          maxIpAttempts,
+          15 * 60 * 1000
+        );
+        if (!ipAllowed) {
+          logger.warn("auth.rate_limited_ip", { ip });
           return null;
         }
 
