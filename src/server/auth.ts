@@ -33,20 +33,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const parsed = loginSchema.safeParse(credentials);
         if (!parsed.success) return null;
 
-        // Rate limit login attempts per email (configurable for CI/testing)
-        const maxLoginAttempts = parsePositiveInt(process.env.AUTH_RATE_LIMIT_MAX, 5);
-        const { allowed } = checkRateLimit(
-          `login:${parsed.data.email}`,
-          maxLoginAttempts,
-          15 * 60 * 1000
-        );
-        if (!allowed) {
-          logger.warn("auth.rate_limited", { email: parsed.data.email });
-          return null;
-        }
-
         // Rate limit login attempts per IP — bounds password spraying across
         // many emails while staying generous for shared NATs/households.
+        // Checked BEFORE the per-email bucket so attempts denied by the IP
+        // cap don't also charge the email bucket: a user behind a rate-
+        // limited shared IP who keeps retrying must not end up locked out
+        // by their email bucket after the IP window clears.
         const ip = getClientIp(request.headers);
         const maxIpAttempts = parsePositiveInt(process.env.AUTH_IP_RATE_LIMIT_MAX, 30);
         const { allowed: ipAllowed } = checkRateLimit(
@@ -56,6 +48,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         );
         if (!ipAllowed) {
           logger.warn("auth.rate_limited_ip", { ip });
+          return null;
+        }
+
+        // Rate limit login attempts per email (configurable for CI/testing)
+        const maxLoginAttempts = parsePositiveInt(process.env.AUTH_RATE_LIMIT_MAX, 5);
+        const { allowed } = checkRateLimit(
+          `login:${parsed.data.email}`,
+          maxLoginAttempts,
+          15 * 60 * 1000
+        );
+        if (!allowed) {
+          logger.warn("auth.rate_limited", { email: parsed.data.email });
           return null;
         }
 
