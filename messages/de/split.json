@@ -128,5 +128,31 @@
     "splitFinalized": "Aufteilung abgeschlossen!",
     "groupSize": "Personen in Ihrer Gruppe",
     "groupSizeHint": "Geben Sie 2+ ein, wenn Sie als Paar oder Gruppe beitreten"
+  },
+  "result": {
+    "loading": "Teilung wird geladen...",
+    "notFound": "Teilung nicht gefunden",
+    "expiredMessage": "Diese Teilung ist abgelaufen. Teilungen sind 7 Tage lang verfügbar.",
+    "invalidMessage": "Dieser Teilungs-Link ist ungültig oder wurde entfernt.",
+    "splitYourOwn": "Eigene Rechnung teilen",
+    "billSplit": "Rechnungsteilung",
+    "someone": "Jemand",
+    "shareText": "Rechnungsteilung von {merchant} — insgesamt {total}",
+    "aReceipt": "einem Beleg",
+    "linkCopied": "Link in die Zwischenablage kopiert",
+    "paidBy": "Bezahlt von <name>{payer}</name>",
+    "venmoHandle": "Venmo: @{handle}",
+    "totalBill": "Gesamtrechnung",
+    "eachPersonOwes": "Jede Person schuldet",
+    "subtotal": "Zwischensumme",
+    "tax": "Steuer",
+    "tip": "Trinkgeld",
+    "total": "Gesamt",
+    "receiptDetails": "Belegdetails",
+    "expiresOn": "Dieser Teilungs-Link läuft am {date} ab.",
+    "or": "oder",
+    "createAccount": "Konto erstellen",
+    "copyLink": "Link kopieren",
+    "share": "Teilen"
   }
 }

@@ -7,7 +7,11 @@
     "namePlaceholder": "ex: Apartamento, Viagem a Paris",
     "currency": "Moeda",
     "submit": "Criar grupo",
-    "submitting": "Criando..."
+    "submitting": "Criando...",
+    "details": "Detalhes do grupo",
+    "description": "Descrição (opcional)",
+    "descriptionPlaceholder": "Para que serve este grupo?",
+    "icon": "Ícone"
   },
   "detail": {
     "expenses": "Despesas",
@@ -103,5 +107,21 @@
     "linkInfo": "Qualquer pessoa com este link pode entrar no grupo."
   },
   "empty": "Nenhum grupo ainda",
-  "emptyDescription": "Crie seu primeiro grupo para começar a dividir despesas com amigos."
+  "emptyDescription": "Crie seu primeiro grupo para começar a dividir despesas com amigos.",
+  "list": {
+    "subtitle": "Gerencie suas despesas compartilhadas",
+    "newGroup": "Novo grupo",
+    "searchPlaceholder": "Buscar grupos...",
+    "archived": "Arquivados",
+    "archivedBadge": "Arquivado",
+    "noArchived": "Nenhum grupo arquivado.",
+    "noGroups": "Nenhum grupo ainda.",
+    "noGroupsDescription": "Crie um grupo para começar a dividir despesas com amigos.",
+    "createFirst": "Crie seu primeiro grupo",
+    "noSearchResults": "Nenhum grupo corresponde à sua busca.",
+    "memberCount": "{count, plural, one {# membro} other {# membros}}",
+    "expenseCount": "{count, plural, one {# despesa} other {# despesas}}",
+    "unarchive": "Desarquivar",
+    "showAll": "Mostrar todos os {count} grupos"
+  }
 }

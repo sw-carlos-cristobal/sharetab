@@ -1,5 +1,15 @@
 const attempts = new Map<string, { count: number; resetAt: number }>();
 
+/**
+ * Parse a positive integer from an env value, falling back when unset or
+ * invalid. Without this, a non-numeric value becomes NaN and every
+ * `count >= NaN` comparison is false — silently disabling the limiter.
+ */
+export function parsePositiveInt(value: string | undefined, fallback: number): number {
+  const parsed = parseInt(value ?? "", 10);
+  return parsed > 0 ? parsed : fallback;
+}
+
 export function checkRateLimit(
   key: string,
   maxAttempts: number,
@@ -40,6 +50,19 @@ export function peekRateLimit(
     return { allowed: false, retryAfterMs: entry.resetAt - now };
   }
   return { allowed: true, retryAfterMs: 0 };
+}
+
+/**
+ * Return one previously consumed attempt to a key's budget. Use to undo a
+ * consumption when the guarded operation could not proceed (e.g. a mutex
+ * CONFLICT), so the caller's quota isn't burned by a no-op request.
+ */
+export function refundRateLimit(key: string): void {
+  const now = Date.now();
+  const entry = attempts.get(key);
+  if (entry && now <= entry.resetAt && entry.count > 0) {
+    entry.count--;
+  }
 }
 
 // Cleanup stale entries periodically

@@ -128,5 +128,31 @@
     "splitFinalized": "Delning slutförd!",
     "groupSize": "Antal i din grupp",
     "groupSizeHint": "Ange 2+ om ni går med som par eller grupp"
+  },
+  "result": {
+    "loading": "Laddar delning...",
+    "notFound": "Delningen hittades inte",
+    "expiredMessage": "Denna delning har gått ut. Delningar är tillgängliga i 7 dagar.",
+    "invalidMessage": "Denna delningslänk är ogiltig eller har tagits bort.",
+    "splitYourOwn": "Dela din egen nota",
+    "billSplit": "Notadelning",
+    "someone": "Någon",
+    "shareText": "Notadelning från {merchant} — {total} totalt",
+    "aReceipt": "ett kvitto",
+    "linkCopied": "Länk kopierad till urklipp",
+    "paidBy": "Betalad av <name>{payer}</name>",
+    "venmoHandle": "Venmo: @{handle}",
+    "totalBill": "Total nota",
+    "eachPersonOwes": "Varje person är skyldig",
+    "subtotal": "Delsumma",
+    "tax": "Moms",
+    "tip": "Dricks",
+    "total": "Totalt",
+    "receiptDetails": "Kvittodetaljer",
+    "expiresOn": "Denna delningslänk går ut den {date}.",
+    "or": "eller",
+    "createAccount": "Skapa ett konto",
+    "copyLink": "Kopiera länk",
+    "share": "Dela"
   }
 }

@@ -4,7 +4,30 @@ import { describe, test, expect, vi, beforeEach } from "vitest";
 vi.useFakeTimers();
 
 // Dynamic import to ensure timer mock is in place
-const { checkRateLimit, peekRateLimit } = await import("./rate-limit");
+const { checkRateLimit, peekRateLimit, refundRateLimit, parsePositiveInt } = await import("./rate-limit");
+
+describe("parsePositiveInt", () => {
+  test("parses a valid positive integer", () => {
+    expect(parsePositiveInt("30", 5)).toBe(30);
+  });
+
+  test("falls back when undefined", () => {
+    expect(parsePositiveInt(undefined, 5)).toBe(5);
+  });
+
+  test("falls back on non-numeric input instead of returning NaN", () => {
+    expect(parsePositiveInt("unlimited", 5)).toBe(5);
+  });
+
+  test("falls back on empty string", () => {
+    expect(parsePositiveInt("", 5)).toBe(5);
+  });
+
+  test("falls back on zero and negative values", () => {
+    expect(parsePositiveInt("0", 5)).toBe(5);
+    expect(parsePositiveInt("-10", 5)).toBe(5);
+  });
+});
 
 describe("checkRateLimit", () => {
   beforeEach(() => {
@@ -89,6 +112,23 @@ describe("checkRateLimit", () => {
     // Window expiry restores budget
     vi.advanceTimersByTime(60001);
     expect(peekRateLimit(key, 1).allowed).toBe(true);
+  });
+
+  test("refundRateLimit returns a consumed attempt", () => {
+    const key = "test-refund";
+    checkRateLimit(key, 1, 60000);
+    expect(checkRateLimit(key, 1, 60000).allowed).toBe(false);
+    refundRateLimit(key);
+    expect(checkRateLimit(key, 1, 60000).allowed).toBe(true);
+  });
+
+  test("refundRateLimit is a no-op on unknown or empty keys", () => {
+    refundRateLimit("test-refund-unknown");
+    const key = "test-refund-empty";
+    checkRateLimit(key, 5, 60000);
+    refundRateLimit(key);
+    refundRateLimit(key); // second refund must not go below zero
+    expect(checkRateLimit(key, 1, 60000).allowed).toBe(true);
   });
 
   test("retryAfterMs decreases as time passes", () => {

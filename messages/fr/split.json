@@ -128,5 +128,31 @@
     "splitFinalized": "Partage finalisé !",
     "groupSize": "Personnes dans votre groupe",
     "groupSizeHint": "Entrez 2+ si vous rejoignez en couple ou en groupe"
+  },
+  "result": {
+    "loading": "Chargement du partage...",
+    "notFound": "Partage introuvable",
+    "expiredMessage": "Ce partage a expiré. Les partages sont disponibles pendant 7 jours.",
+    "invalidMessage": "Ce lien de partage est invalide ou a été supprimé.",
+    "splitYourOwn": "Partager votre propre addition",
+    "billSplit": "Partage d'addition",
+    "someone": "Quelqu'un",
+    "shareText": "Partage d'addition de {merchant} — {total} au total",
+    "aReceipt": "un reçu",
+    "linkCopied": "Lien copié dans le presse-papiers",
+    "paidBy": "Payé par <name>{payer}</name>",
+    "venmoHandle": "Venmo : @{handle}",
+    "totalBill": "Addition totale",
+    "eachPersonOwes": "Ce que chaque personne doit",
+    "subtotal": "Sous-total",
+    "tax": "Taxes",
+    "tip": "Pourboire",
+    "total": "Total",
+    "receiptDetails": "Détails du reçu",
+    "expiresOn": "Ce lien de partage expire le {date}.",
+    "or": "ou",
+    "createAccount": "Créer un compte",
+    "copyLink": "Copier le lien",
+    "share": "Partager"
   }
 }
