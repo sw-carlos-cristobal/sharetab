@@ -17,11 +17,21 @@ const FALLBACK_IP = "global";
  * bucket and the guest global caps). Operators should front the app with a
  * proxy that sets these headers from the connection (see .env.example).
  */
+// Longest legitimate value is an IPv6 address with a zone id (~50 chars);
+// anything longer is garbage, but capping (rather than rejecting) keeps a
+// stable per-sender bucket and bounds rate-limit key size and log output.
+const MAX_IP_LENGTH = 64;
+
+function normalizeHeaderIp(value: string | null): string | undefined {
+  const first = value?.split(",")[0]?.trim();
+  return first ? first.slice(0, MAX_IP_LENGTH) : undefined;
+}
+
 export function getClientIp(headers: Headers): string {
   return (
-    headers.get("cf-connecting-ip")?.trim() ||
-    headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    headers.get("x-real-ip")?.trim() ||
+    normalizeHeaderIp(headers.get("cf-connecting-ip")) ||
+    normalizeHeaderIp(headers.get("x-forwarded-for")) ||
+    normalizeHeaderIp(headers.get("x-real-ip")) ||
     FALLBACK_IP
   );
 }

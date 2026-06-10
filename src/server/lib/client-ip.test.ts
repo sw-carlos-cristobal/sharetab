@@ -69,4 +69,32 @@ describe("getClientIp", () => {
     const headers = new Headers({ "x-forwarded-for": "", "x-real-ip": "" });
     expect(getClientIp(headers)).toBe("global");
   });
+
+  test("takes only the first comma entry from cf-connecting-ip", () => {
+    const headers = new Headers({
+      "cf-connecting-ip": "192.0.2.99, 203.0.113.7",
+    });
+    expect(getClientIp(headers)).toBe("192.0.2.99");
+  });
+
+  test("takes only the first comma entry from x-real-ip", () => {
+    const headers = new Headers({ "x-real-ip": "198.51.100.2, 203.0.113.7" });
+    expect(getClientIp(headers)).toBe("198.51.100.2");
+  });
+
+  test("falls through when cf-connecting-ip is only whitespace and commas", () => {
+    const headers = new Headers({
+      "cf-connecting-ip": " , ",
+      "x-forwarded-for": "203.0.113.7",
+    });
+    expect(getClientIp(headers)).toBe("203.0.113.7");
+  });
+
+  test("caps oversized header values at 64 characters", () => {
+    const garbage = "a".repeat(10_000);
+    const headers = new Headers({ "x-forwarded-for": garbage });
+    const result = getClientIp(headers);
+    expect(result.length).toBe(64);
+    expect(result).toBe("a".repeat(64));
+  });
 });
