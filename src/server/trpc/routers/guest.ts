@@ -212,12 +212,10 @@ export const guestRouter = createTRPCRouter({
   processReceipt: publicProcedure
     .input(z.object({ receiptId: z.string(), correctionHint: z.string().max(500).optional() }))
     .mutation(async ({ ctx, input }) => {
-      // Rate limit: 3 processing attempts per receipt per hour
-      const { allowed } = checkRateLimit(
-        `guest-process:${input.receiptId}`,
-        3,
-        60 * 60 * 1000
-      );
+      // Rate limit: 3 processing attempts per receipt per hour. Peek only —
+      // consumed after the processing claim succeeds, so a retry that lands
+      // while a run is in flight (CONFLICT) doesn't burn receipt attempts.
+      const { allowed } = peekRateLimit(`guest-process:${input.receiptId}`, 3);
       if (!allowed) {
         throw new TRPCError({
           code: "TOO_MANY_REQUESTS",
@@ -280,10 +278,12 @@ export const guestRouter = createTRPCRouter({
         });
       }
 
-      // Claim succeeded — consume the quota now. The peek above is the hard
-      // gate; results here are intentionally not re-checked (the tiny
-      // peek-to-consume race can only over-admit by a request or two, which
-      // is preferable to leaving the receipt stuck in PROCESSING).
+      // Claim succeeded — consume all quotas now. The peeks above are the
+      // hard gates; results here are intentionally not re-checked (the tiny
+      // peek-to-consume race can only over-admit by however many requests
+      // were concurrently in flight, which is preferable to rejecting after
+      // the claim and leaving the receipt stuck in PROCESSING).
+      checkRateLimit(`guest-process:${input.receiptId}`, 3, quotaWindow);
       checkRateLimit(`guest-process-ip:${ip}`, 20, quotaWindow);
       checkRateLimit("guest-process-global", globalMax, quotaWindow);
 

@@ -7,9 +7,12 @@ import { Input } from "@/components/ui/input";
 type Member = { id: string; name: string | null };
 type ShareEntry = { userId: string; amount: number; percentage: number };
 
-// Acceptable deviation from 100%: the equal prefill rounds each member's
-// percentage to 2 decimals, so the sum can legitimately drift by up to
-// 0.005 per member (e.g. 19 x 5.26 = 99.94). Floor of 0.05 for tiny groups.
+// Acceptable deviation from 100%. The equal prefill is normalized to sum to
+// exactly 100, but splits seeded from saved expenses carry stored percentages
+// (basis points) that can drift by up to 0.005 per member from rounding, so
+// the tolerance scales accordingly. The monetary skew this admits is bounded
+// at 0.005% of the total per member — rounding dust, absorbed by the last
+// share like all other rounding in this component.
 function percentTolerance(memberCount: number): number {
   return Math.max(0.05, memberCount * 0.005 + 0.001);
 }
@@ -28,9 +31,19 @@ export function PercentageSplit({
   currency?: string;
 }) {
   const [percentages, setPercentages] = useState<Record<string, string>>(() => {
-    // Pre-fill equal percentages so switching from Equal mode isn't jarring
-    const pct = members.length > 0 ? (100 / members.length).toFixed(2) : "0";
-    return Object.fromEntries(members.map((m) => [m.id, pct]));
+    // Pre-fill equal percentages so switching from Equal mode isn't jarring.
+    // The last member absorbs the rounding difference so the prefill sums to
+    // exactly 100 (e.g. 19 members: 18 x 5.26 + 5.32) — the validation
+    // tolerance never has to accommodate generated values.
+    if (members.length === 0) return {};
+    const per = Math.floor(10000 / members.length) / 100;
+    const last = Math.round((100 - per * (members.length - 1)) * 100) / 100;
+    return Object.fromEntries(
+      members.map((m, i) => [
+        m.id,
+        String(i === members.length - 1 ? last : per),
+      ])
+    );
   });
 
   useEffect(() => {
