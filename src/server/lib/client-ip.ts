@@ -9,9 +9,11 @@ export const FALLBACK_IP = "global";
  * Derives the client IP from proxy headers.
  *
  * Precedence: `cf-connecting-ip` (set by Cloudflare, hardest to spoof when
- * behind it), then the first entry of `x-forwarded-for`, then `x-real-ip`,
+ * behind it), then `x-real-ip` (set by the immediate reverse proxy), then
+ * the first entry of `x-forwarded-for` (easiest for clients to spoof),
  * falling back to a shared constant when none is present (so rate limiting
- * still applies globally rather than not at all).
+ * still applies globally rather than not at all). The same order is used
+ * by every per-IP limiter (login, guest uploads, guest AI quotas).
  *
  * SECURITY: these headers are client-supplied unless a trusted reverse proxy
  * strips/overwrites them. When ShareTab is exposed directly (no proxy), an
@@ -35,8 +37,8 @@ function normalizeHeaderIp(value: string | null): string | undefined {
 export function getClientIp(headers: Headers): string {
   return (
     normalizeHeaderIp(headers.get("cf-connecting-ip")) ||
-    normalizeHeaderIp(headers.get("x-forwarded-for")) ||
     normalizeHeaderIp(headers.get("x-real-ip")) ||
+    normalizeHeaderIp(headers.get("x-forwarded-for")) ||
     FALLBACK_IP
   );
 }

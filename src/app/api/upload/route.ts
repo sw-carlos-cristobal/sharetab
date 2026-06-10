@@ -5,6 +5,7 @@ import { logger } from "@/server/lib/logger";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { getUploadDir } from "@/server/lib/upload-dir";
+import { getClientIp } from "@/server/lib/client-ip";
 import { randomUUID } from "crypto";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic"];
@@ -135,10 +136,7 @@ export async function POST(req: NextRequest) {
   if (isGuest) {
     // Guest upload: rate limit by IP. Peek only — budget is consumed after
     // the upload passes validation so invalid requests can't burn it.
-    guestIp = req.headers.get("cf-connecting-ip")
-      || req.headers.get("x-real-ip")
-      || req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
-      || "unknown";
+    guestIp = getClientIp(req.headers);
     if (!hasGuestUploadBudget(guestIp)) {
       return Response.json({ error: "Too many uploads. Please try again later." }, { status: 429 });
     }

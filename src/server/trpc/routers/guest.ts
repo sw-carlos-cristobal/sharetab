@@ -6,6 +6,7 @@ import { createTRPCRouter, publicProcedure, protectedProcedure } from "../init";
 import { processReceiptImage } from "../../lib/receipt-processor";
 import { logger } from "../../lib/logger";
 import { checkRateLimit, refundRateLimit } from "../../lib/rate-limit";
+import { getClientIp } from "../../lib/client-ip";
 import { parseExtractedData, parseGuestItems, parseGuestPeople, parseGuestAssignments } from "../../lib/json-schemas";
 import { calculateSplitTotals } from "@/lib/split-calculator";
 import { normalizeGuestName } from "@/lib/guest-session";
@@ -232,10 +233,7 @@ export const guestRouter = createTRPCRouter({
       // non-consuming check; if the claim then fails with CONFLICT, the
       // consumed attempts are refunded so retries against an in-flight
       // receipt don't drain any bucket.
-      const ip = ctx.headers.get("cf-connecting-ip")?.trim()
-        || ctx.headers.get("x-real-ip")?.trim()
-        || ctx.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
-        || "global";
+      const ip = getClientIp(ctx.headers);
       const globalMax = parseInt(process.env.GUEST_AI_GLOBAL_LIMIT ?? "100", 10) || 100;
       const quotaWindow = 60 * 60 * 1000;
       const quotas: Array<{ key: string; max: number }> = [
@@ -379,9 +377,7 @@ export const guestRouter = createTRPCRouter({
       tipOverride: z.number().int().min(0).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const ip = ctx.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
-        || ctx.headers.get("x-real-ip")?.trim()
-        || "global";
+      const ip = getClientIp(ctx.headers);
       const maxGuest = parseInt(process.env.GUEST_RATE_LIMIT_MAX ?? "10", 10) || 10;
       const { allowed } = checkRateLimit(`guest-create-split:${ip}`, maxGuest, 60 * 60 * 1000);
       if (!allowed) {
@@ -536,9 +532,7 @@ export const guestRouter = createTRPCRouter({
       paidByName: z.string().trim().min(1).max(100),
     }))
     .mutation(async ({ ctx, input }) => {
-      const ip = ctx.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
-        || ctx.headers.get("x-real-ip")?.trim()
-        || "global";
+      const ip = getClientIp(ctx.headers);
       const maxGuest = parseInt(process.env.GUEST_RATE_LIMIT_MAX ?? "10", 10) || 10;
       const { allowed } = checkRateLimit(`guest-create-claim:${ip}`, maxGuest, 60 * 60 * 1000);
       if (!allowed) {
