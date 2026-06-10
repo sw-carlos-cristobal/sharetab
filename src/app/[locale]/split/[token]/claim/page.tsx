@@ -51,6 +51,7 @@ export default function ClaimPage({
   const locale = useLocale();
   const t = useTranslations("split.claim");
   const tv = useTranslations("split.venmo");
+  const tc = useTranslations("common");
 
   // --- State ---
   const [name, setName] = useState("");
@@ -392,7 +393,7 @@ export default function ClaimPage({
     if (await copyToClipboard(window.location.href)) {
       toast.success(t("linkCopied"));
     } else {
-      toast.error("Could not copy link to clipboard");
+      toast.error(tc("actions.copyFailed"));
     }
   }
 
@@ -404,7 +405,7 @@ export default function ClaimPage({
     if (await copyToClipboard(url.toString())) {
       toast.success(t("linkCopied"));
     } else {
-      toast.error("Could not copy link to clipboard");
+      toast.error(tc("actions.copyFailed"));
     }
   }
 

@@ -27,6 +27,7 @@ export function InviteDialog({
 }) {
   const [copied, setCopied] = useState(false);
   const t = useTranslations("groups");
+  const tc = useTranslations("common");
 
   const createInvite = trpc.groups.createInvite.useMutation({
     onError: (e) => toast.error(e.message),
@@ -45,7 +46,7 @@ export function InviteDialog({
     if (!createInvite.data) return;
     const url = getInviteUrl(createInvite.data.token);
     if (!(await copyToClipboard(url))) {
-      toast.error("Could not copy link to clipboard");
+      toast.error(tc("actions.copyFailed"));
       return;
     }
     setCopied(true);

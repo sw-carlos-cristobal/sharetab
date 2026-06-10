@@ -122,42 +122,50 @@ function EditExpenseForm({
   // Seed the split editors with the saved shares so editing doesn't silently
   // rewrite the split. Only the saved mode is seeded; other modes keep their
   // new-expense defaults. (percentage is stored in basis points: 5000 = 50%)
+  // Saved shares can reference users who have since left the group (member
+  // removal preserves financial history). The editors only render current
+  // members, so a hidden ex-member id would be unremovable and make every
+  // save fail server-side membership validation — filter them out.
+  const savedShares = useMemo(() => {
+    const currentMemberIds = new Set(group.members.map((m) => m.user.id));
+    return expense.shares.filter((s) => currentMemberIds.has(s.userId));
+  }, [expense, group]);
   const initialSelected = useMemo(
     () =>
       expense.splitMode === "EQUAL"
-        ? expense.shares.map((s) => s.userId)
+        ? savedShares.map((s) => s.userId)
         : undefined,
-    [expense]
+    [expense, savedShares]
   );
   const initialAmounts = useMemo(
     () =>
       expense.splitMode === "EXACT"
         ? Object.fromEntries(
-            expense.shares.map((s) => [s.userId, centsToDecimal(s.amount)])
+            savedShares.map((s) => [s.userId, centsToDecimal(s.amount)])
           )
         : undefined,
-    [expense]
+    [expense, savedShares]
   );
   const initialPercentages = useMemo(
     () =>
       expense.splitMode === "PERCENTAGE"
         ? Object.fromEntries(
-            expense.shares.map((s) => [
+            savedShares.map((s) => [
               s.userId,
               s.percentage != null ? String(s.percentage / 100) : "0",
             ])
           )
         : undefined,
-    [expense]
+    [expense, savedShares]
   );
   const initialShareUnits = useMemo(
     () =>
       expense.splitMode === "SHARES"
         ? Object.fromEntries(
-            expense.shares.map((s) => [s.userId, String(s.shares ?? 1)])
+            savedShares.map((s) => [s.userId, String(s.shares ?? 1)])
           )
         : undefined,
-    [expense]
+    [expense, savedShares]
   );
 
   const updateExpense = trpc.expenses.update.useMutation({

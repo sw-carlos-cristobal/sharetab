@@ -21,7 +21,8 @@
     "loading": "Chargement...",
     "saving": "Enregistrement...",
     "submit": "Envoyer",
-    "openMenu": "Ouvrir le menu"
+    "openMenu": "Ouvrir le menu",
+    "copyFailed": "Impossible de copier le lien dans le presse-papiers"
   },
   "brand": {
     "name": "ShareTab",

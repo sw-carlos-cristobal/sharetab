@@ -91,11 +91,13 @@ export default function DashboardPage() {
   const hasMoreGroups = (groups.data?.length ?? 0) > GROUPS_PER_PAGE;
 
   // Aggregate totals span all groups. When every group uses the same
-  // currency, display it; with mixed currencies there is no meaningful
-  // single currency, so fall back to USD (no FX conversion is attempted).
+  // currency, display it; with mixed currencies the unconverted sums are
+  // meaningless, so the aggregate numbers are suppressed entirely (no FX
+  // conversion is attempted) and a "mixed currencies" note is shown instead.
   const groupCurrencies = new Set(
     dashboard.data?.perGroup.map((g) => g.currency) ?? []
   );
+  const hasMixedCurrencies = groupCurrencies.size > 1;
   const aggregateCurrency =
     groupCurrencies.size === 1 ? [...groupCurrencies][0]! : "USD";
 
@@ -125,9 +127,15 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             {dashboard.data ? (
-              <span className="text-3xl font-bold tracking-tight tabular-nums text-green-600 dark:text-green-400">
-                {formatCents(dashboard.data.totalOwed, aggregateCurrency, locale)}
-              </span>
+              hasMixedCurrencies ? (
+                <span className="text-lg font-medium text-muted-foreground">
+                  {t("mixedCurrencies")}
+                </span>
+              ) : (
+                <span className="text-3xl font-bold tracking-tight tabular-nums text-green-600 dark:text-green-400">
+                  {formatCents(dashboard.data.totalOwed, aggregateCurrency, locale)}
+                </span>
+              )
             ) : (
               <SummarySkeleton />
             )}
@@ -147,9 +155,15 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             {dashboard.data ? (
-              <span className="text-3xl font-bold tracking-tight tabular-nums text-red-600 dark:text-red-400">
-                {formatCents(dashboard.data.totalOwing, aggregateCurrency, locale)}
-              </span>
+              hasMixedCurrencies ? (
+                <span className="text-lg font-medium text-muted-foreground">
+                  {t("mixedCurrencies")}
+                </span>
+              ) : (
+                <span className="text-3xl font-bold tracking-tight tabular-nums text-red-600 dark:text-red-400">
+                  {formatCents(dashboard.data.totalOwing, aggregateCurrency, locale)}
+                </span>
+              )
             ) : (
               <SummarySkeleton />
             )}
@@ -195,7 +209,9 @@ export default function DashboardPage() {
                     <span className="text-sm font-medium">{person.userName}</span>
                   </div>
                   <span className="text-sm font-semibold tabular-nums text-green-600 dark:text-green-400">
-                    {formatCents(person.amount, aggregateCurrency, locale)}
+                    {hasMixedCurrencies
+                      ? t("mixedCurrencies")
+                      : formatCents(person.amount, aggregateCurrency, locale)}
                   </span>
                 </div>
               ))}
@@ -239,7 +255,9 @@ export default function DashboardPage() {
                     <span className="text-sm font-medium">{person.userName}</span>
                   </div>
                   <span className="text-sm font-semibold tabular-nums text-red-600 dark:text-red-400">
-                    {formatCents(person.amount, aggregateCurrency, locale)}
+                    {hasMixedCurrencies
+                      ? t("mixedCurrencies")
+                      : formatCents(person.amount, aggregateCurrency, locale)}
                   </span>
                 </div>
               ))}

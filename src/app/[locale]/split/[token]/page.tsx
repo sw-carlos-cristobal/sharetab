@@ -25,6 +25,7 @@ export default function SharedSplitPage({
   const { token } = use(params);
   const locale = useLocale();
   const tv = useTranslations("split.venmo");
+  const tc = useTranslations("common");
   const { data: authSession } = useSession();
   const split = trpc.guest.getSplit.useQuery({ token });
   const venmoSetting = trpc.admin.getVenmoEnabled.useQuery();
@@ -93,7 +94,7 @@ export default function SharedSplitPage({
     } else if (await copyToClipboard(url)) {
       toast.success("Link copied to clipboard");
     } else {
-      toast.error("Could not copy link to clipboard");
+      toast.error(tc("actions.copyFailed"));
     }
   }
 
@@ -101,7 +102,7 @@ export default function SharedSplitPage({
     if (await copyToClipboard(window.location.href)) {
       toast.success("Link copied to clipboard");
     } else {
-      toast.error("Could not copy link to clipboard");
+      toast.error(tc("actions.copyFailed"));
     }
   }
 
