@@ -90,16 +90,24 @@ export default function DashboardPage() {
     : groups.data?.slice(0, GROUPS_PER_PAGE);
   const hasMoreGroups = (groups.data?.length ?? 0) > GROUPS_PER_PAGE;
 
-  // Aggregate totals span all groups. When every group uses the same
-  // currency, display it; with mixed currencies the unconverted sums are
-  // meaningless, so the aggregate numbers are suppressed entirely (no FX
-  // conversion is attempted) and a "mixed currencies" note is shown instead.
+  // Aggregate totals span all groups. When every contributing group uses
+  // the same currency, display it; with mixed currencies the unconverted
+  // sums are meaningless, so the aggregate numbers are suppressed entirely
+  // (no FX conversion is attempted) and a "mixed currencies" note is shown
+  // instead. Zero-balance groups are ignored: they contribute nothing to
+  // the totals, and per-person debts can't involve a net-zero member
+  // (simplifyDebts gives them no edges), so an empty or settled group in
+  // another currency must not suppress otherwise-valid aggregates.
   const groupCurrencies = new Set(
-    dashboard.data?.perGroup.map((g) => g.currency) ?? []
+    dashboard.data?.perGroup
+      .filter((g) => g.balance !== 0)
+      .map((g) => g.currency) ?? []
   );
   const hasMixedCurrencies = groupCurrencies.size > 1;
   const aggregateCurrency =
-    groupCurrencies.size === 1 ? [...groupCurrencies][0]! : "USD";
+    groupCurrencies.size === 1
+      ? [...groupCurrencies][0]!
+      : dashboard.data?.perGroup[0]?.currency ?? "USD";
 
   return (
     <div className="space-y-8">
