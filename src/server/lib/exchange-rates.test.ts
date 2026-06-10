@@ -27,7 +27,7 @@ describe("convertCents", () => {
   });
 
   test("rejects amounts that overflow the Int4 money column", () => {
-    // 100000 cents * 100000 rate = 10^10, beyond int4 max (2147483647)
+    // 10,000,000 cents * 1,000,000 rate = 10^13, beyond int4 max (2147483647)
     expect(() => convertCents(10_000_000, 1_000_000)).toThrow(
       "Converted amount is too large"
     );

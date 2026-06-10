@@ -61,12 +61,14 @@ export function PercentageSplit({
     // last-person remainder would silently absorb the entire shortfall
     // (e.g. 30%/30% of $100 would submit $30/$70). Reporting no shares
     // keeps the submit button disabled until the split is valid.
-    // Tolerance scales with member count to accept splits whose stored
-    // 2-decimal percentages carry rounding drift of up to 0.005 per member
-    // (see percentTolerance above); the equal prefill itself is normalized
-    // to sum to exactly 100 and needs no tolerance.
+    // Tolerance scales with the number of participating (non-zero) members
+    // to accept splits whose stored 2-decimal percentages carry rounding
+    // drift of up to 0.005 per member (see percentTolerance above) — zero
+    // entries contribute no drift, so counting them would over-widen the
+    // tolerance in large groups. The equal prefill itself is normalized to
+    // sum to exactly 100 and needs no tolerance.
     const totalPct = entries.reduce((sum, e) => sum + e.pct, 0);
-    if (Math.abs(totalPct - 100) >= percentTolerance(members.length)) {
+    if (Math.abs(totalPct - 100) >= percentTolerance(entries.length)) {
       onChange([]);
       return;
     }
@@ -101,6 +103,10 @@ export function PercentageSplit({
     (sum, m) => sum + (parseFloat(percentages[m.id] ?? "0") || 0),
     0
   );
+  // Mirror the emit logic: only non-zero entries carry rounding drift.
+  const participatingCount = members.filter(
+    (m) => (parseFloat(percentages[m.id] ?? "0") || 0) > 0
+  ).length;
 
   return (
     <div className="space-y-2">
@@ -133,13 +139,13 @@ export function PercentageSplit({
       })}
       <p
         className={`text-xs ${
-          Math.abs(totalPct - 100) < percentTolerance(members.length)
+          Math.abs(totalPct - 100) < percentTolerance(participatingCount)
             ? "text-green-600"
             : "text-amber-600"
         }`}
       >
         Total: {totalPct.toFixed(1)}%
-        {Math.abs(totalPct - 100) >= percentTolerance(members.length) && ` (should be 100%)`}
+        {Math.abs(totalPct - 100) >= percentTolerance(participatingCount) && ` (should be 100%)`}
       </p>
     </div>
   );
