@@ -4,7 +4,30 @@ import { describe, test, expect, vi, beforeEach } from "vitest";
 vi.useFakeTimers();
 
 // Dynamic import to ensure timer mock is in place
-const { checkRateLimit, peekRateLimit, refundRateLimit } = await import("./rate-limit");
+const { checkRateLimit, peekRateLimit, refundRateLimit, parsePositiveInt } = await import("./rate-limit");
+
+describe("parsePositiveInt", () => {
+  test("parses a valid positive integer", () => {
+    expect(parsePositiveInt("30", 5)).toBe(30);
+  });
+
+  test("falls back when undefined", () => {
+    expect(parsePositiveInt(undefined, 5)).toBe(5);
+  });
+
+  test("falls back on non-numeric input instead of returning NaN", () => {
+    expect(parsePositiveInt("unlimited", 5)).toBe(5);
+  });
+
+  test("falls back on empty string", () => {
+    expect(parsePositiveInt("", 5)).toBe(5);
+  });
+
+  test("falls back on zero and negative values", () => {
+    expect(parsePositiveInt("0", 5)).toBe(5);
+    expect(parsePositiveInt("-10", 5)).toBe(5);
+  });
+});
 
 describe("checkRateLimit", () => {
   beforeEach(() => {

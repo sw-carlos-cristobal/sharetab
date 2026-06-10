@@ -1,5 +1,15 @@
 const attempts = new Map<string, { count: number; resetAt: number }>();
 
+/**
+ * Parse a positive integer from an env value, falling back when unset or
+ * invalid. Without this, a non-numeric value becomes NaN and every
+ * `count >= NaN` comparison is false — silently disabling the limiter.
+ */
+export function parsePositiveInt(value: string | undefined, fallback: number): number {
+  const parsed = parseInt(value ?? "", 10);
+  return parsed > 0 ? parsed : fallback;
+}
+
 export function checkRateLimit(
   key: string,
   maxAttempts: number,

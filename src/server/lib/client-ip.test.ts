@@ -29,6 +29,20 @@ describe("getClientIp", () => {
     expect(getClientIp(headers)).toBe("203.0.113.7");
   });
 
+  test("prefers cf-connecting-ip over forwarded headers", () => {
+    const headers = new Headers({
+      "cf-connecting-ip": "192.0.2.99",
+      "x-forwarded-for": "203.0.113.7",
+      "x-real-ip": "198.51.100.2",
+    });
+    expect(getClientIp(headers)).toBe("192.0.2.99");
+  });
+
+  test("trims whitespace from cf-connecting-ip", () => {
+    const headers = new Headers({ "cf-connecting-ip": " 192.0.2.99 " });
+    expect(getClientIp(headers)).toBe("192.0.2.99");
+  });
+
   test("falls back to x-real-ip when x-forwarded-for is absent", () => {
     const headers = new Headers({ "x-real-ip": "198.51.100.2" });
     expect(getClientIp(headers)).toBe("198.51.100.2");

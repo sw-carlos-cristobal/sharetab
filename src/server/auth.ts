@@ -7,7 +7,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { db } from "./db";
 import { logger } from "./lib/logger";
-import { checkRateLimit } from "./lib/rate-limit";
+import { checkRateLimit, parsePositiveInt } from "./lib/rate-limit";
 import { getClientIp } from "./lib/client-ip";
 
 const loginSchema = z.object({
@@ -34,7 +34,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!parsed.success) return null;
 
         // Rate limit login attempts per email (configurable for CI/testing)
-        const maxLoginAttempts = parseInt(process.env.AUTH_RATE_LIMIT_MAX ?? "5");
+        const maxLoginAttempts = parsePositiveInt(process.env.AUTH_RATE_LIMIT_MAX, 5);
         const { allowed } = checkRateLimit(
           `login:${parsed.data.email}`,
           maxLoginAttempts,
@@ -48,7 +48,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // Rate limit login attempts per IP — bounds password spraying across
         // many emails while staying generous for shared NATs/households.
         const ip = getClientIp(request.headers);
-        const maxIpAttempts = parseInt(process.env.AUTH_IP_RATE_LIMIT_MAX ?? "30");
+        const maxIpAttempts = parsePositiveInt(process.env.AUTH_IP_RATE_LIMIT_MAX, 30);
         const { allowed: ipAllowed } = checkRateLimit(
           `login-ip:${ip}`,
           maxIpAttempts,
