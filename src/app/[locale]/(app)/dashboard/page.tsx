@@ -182,40 +182,49 @@ export default function DashboardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {overallDebts.isLoading && (
-              <div className="divide-y divide-border/60">
-                {[0, 1, 2].map((i) => (
-                  <PersonRowSkeleton key={i} />
-                ))}
-              </div>
-            )}
-            {overallDebts.data?.owedToYou.length === 0 && (
+            {/* Cross-currency nets are not meaningful — even the owed/owes
+                classification can be wrong — so suppress the rows entirely
+                and point at per-group balances instead. */}
+            {hasMixedCurrencies ? (
               <p className="py-3 text-center text-sm text-muted-foreground">
-                {t("settledUp")}
+                {t("mixedCurrenciesDebts")}
               </p>
-            )}
-            <div className="divide-y divide-border/60">
-              {overallDebts.data?.owedToYou.map((person) => (
-                <div
-                  key={person.userId}
-                  className="flex items-center justify-between rounded-md px-1 py-2.5 transition-colors hover:bg-muted/50"
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white shadow-sm ${avatarColor(person.userId)}`}
-                    >
-                      {getInitials(person.userName)}
-                    </div>
-                    <span className="text-sm font-medium">{person.userName}</span>
+            ) : (
+              <>
+                {overallDebts.isLoading && (
+                  <div className="divide-y divide-border/60">
+                    {[0, 1, 2].map((i) => (
+                      <PersonRowSkeleton key={i} />
+                    ))}
                   </div>
-                  <span className="text-sm font-semibold tabular-nums text-green-600 dark:text-green-400">
-                    {hasMixedCurrencies
-                      ? t("mixedCurrencies")
-                      : formatCents(person.amount, aggregateCurrency, locale)}
-                  </span>
+                )}
+                {overallDebts.data?.owedToYou.length === 0 && (
+                  <p className="py-3 text-center text-sm text-muted-foreground">
+                    {t("settledUp")}
+                  </p>
+                )}
+                <div className="divide-y divide-border/60">
+                  {overallDebts.data?.owedToYou.map((person) => (
+                    <div
+                      key={person.userId}
+                      className="flex items-center justify-between rounded-md px-1 py-2.5 transition-colors hover:bg-muted/50"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white shadow-sm ${avatarColor(person.userId)}`}
+                        >
+                          {getInitials(person.userName)}
+                        </div>
+                        <span className="text-sm font-medium">{person.userName}</span>
+                      </div>
+                      <span className="text-sm font-semibold tabular-nums text-green-600 dark:text-green-400">
+                        {formatCents(person.amount, aggregateCurrency, locale)}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -228,40 +237,46 @@ export default function DashboardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {overallDebts.isLoading && (
-              <div className="divide-y divide-border/60">
-                {[0, 1, 2].map((i) => (
-                  <PersonRowSkeleton key={i} />
-                ))}
-              </div>
-            )}
-            {overallDebts.data?.youOwe.length === 0 && (
+            {hasMixedCurrencies ? (
               <p className="py-3 text-center text-sm text-muted-foreground">
-                {t("settledUp")}
+                {t("mixedCurrenciesDebts")}
               </p>
-            )}
-            <div className="divide-y divide-border/60">
-              {overallDebts.data?.youOwe.map((person) => (
-                <div
-                  key={person.userId}
-                  className="flex items-center justify-between rounded-md px-1 py-2.5 transition-colors hover:bg-muted/50"
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white shadow-sm ${avatarColor(person.userId)}`}
-                    >
-                      {getInitials(person.userName)}
-                    </div>
-                    <span className="text-sm font-medium">{person.userName}</span>
+            ) : (
+              <>
+                {overallDebts.isLoading && (
+                  <div className="divide-y divide-border/60">
+                    {[0, 1, 2].map((i) => (
+                      <PersonRowSkeleton key={i} />
+                    ))}
                   </div>
-                  <span className="text-sm font-semibold tabular-nums text-red-600 dark:text-red-400">
-                    {hasMixedCurrencies
-                      ? t("mixedCurrencies")
-                      : formatCents(person.amount, aggregateCurrency, locale)}
-                  </span>
+                )}
+                {overallDebts.data?.youOwe.length === 0 && (
+                  <p className="py-3 text-center text-sm text-muted-foreground">
+                    {t("settledUp")}
+                  </p>
+                )}
+                <div className="divide-y divide-border/60">
+                  {overallDebts.data?.youOwe.map((person) => (
+                    <div
+                      key={person.userId}
+                      className="flex items-center justify-between rounded-md px-1 py-2.5 transition-colors hover:bg-muted/50"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white shadow-sm ${avatarColor(person.userId)}`}
+                        >
+                          {getInitials(person.userName)}
+                        </div>
+                        <span className="text-sm font-medium">{person.userName}</span>
+                      </div>
+                      <span className="text-sm font-semibold tabular-nums text-red-600 dark:text-red-400">
+                        {formatCents(person.amount, aggregateCurrency, locale)}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>

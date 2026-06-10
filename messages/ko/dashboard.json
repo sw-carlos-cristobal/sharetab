@@ -15,5 +15,6 @@
   "showMore": "더 보기",
   "members": "{count, plural, other {#명}}",
   "archivedGroups": "{count, plural, other {보관된 그룹 #개}}",
-  "mixedCurrencies": "여러 통화"
+  "mixedCurrencies": "여러 통화",
+  "mixedCurrenciesDebts": "그룹마다 다른 통화를 사용하므로 합산 잔액을 표시할 수 없습니다. 각 그룹을 열어 잔액을 확인하세요."
 }

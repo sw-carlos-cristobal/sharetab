@@ -15,5 +15,6 @@
   "showMore": "Mostrar mais",
   "members": "{count, plural, one {# membro} other {# membros}}",
   "archivedGroups": "{count, plural, one {# grupo arquivado} other {# grupos arquivados}}",
-  "mixedCurrencies": "Várias moedas"
+  "mixedCurrencies": "Várias moedas",
+  "mixedCurrenciesDebts": "Seus grupos usam moedas diferentes, então os saldos combinados não podem ser exibidos. Abra um grupo para ver o saldo dele."
 }
