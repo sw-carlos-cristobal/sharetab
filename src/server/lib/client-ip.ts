@@ -1,7 +1,13 @@
 /**
- * Sentinel returned when no client IP header is present. Callers that key
- * per-IP rate-limit buckets should treat this as "identity unknown" and
- * skip (or widen) the bucket rather than lumping every client together.
+ * Sentinel returned when no client IP header is present ("identity
+ * unknown"). Callers choose how to treat it based on the cost of lumping
+ * every client into one bucket:
+ * - Login (`src/server/auth.ts`) skips its per-IP bucket on this value —
+ *   a shared bucket would let one client lock every user out, and the
+ *   per-email bucket still bounds attempts.
+ * - Guest endpoints (createSplit/createClaim, uploads) deliberately keep
+ *   it as a shared key: with no client identity, one conservative global
+ *   throttle on unauthenticated traffic is the safer failure mode.
  */
 export const FALLBACK_IP = "global";
 
