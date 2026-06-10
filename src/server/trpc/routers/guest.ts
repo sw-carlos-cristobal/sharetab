@@ -225,10 +225,22 @@ export const guestRouter = createTRPCRouter({
         });
       }
 
+      const receipt = await ctx.db.receipt.findUnique({
+        where: { id: input.receiptId },
+      });
+      if (!receipt) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Receipt not found" });
+      }
+      if (!receipt.isGuest) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Receipt not found" });
+      }
+
       // Per-IP and global caps: the per-receipt limit alone can be multiplied
       // by minting new receipts, and forwarded-IP headers can be spoofed when
       // no trusted proxy strips them — the global cap bounds total
-      // unauthenticated AI spend regardless.
+      // unauthenticated AI spend regardless. Checked only AFTER the receipt
+      // is validated as a real guest receipt, so requests for random or
+      // nonexistent receipt ids cannot burn the shared quota.
       const ip = ctx.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
         || ctx.headers.get("x-real-ip")?.trim()
         || "global";
@@ -240,16 +252,6 @@ export const guestRouter = createTRPCRouter({
           code: "TOO_MANY_REQUESTS",
           message: "Too many processing attempts. Please try again later.",
         });
-      }
-
-      const receipt = await ctx.db.receipt.findUnique({
-        where: { id: input.receiptId },
-      });
-      if (!receipt) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Receipt not found" });
-      }
-      if (!receipt.isGuest) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Receipt not found" });
       }
 
       // Conditional update doubles as a mutex against concurrent processing.
