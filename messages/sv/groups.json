@@ -7,7 +7,11 @@
     "namePlaceholder": "till exempel Lägenhet, resa till Paris",
     "currency": "Valuta",
     "submit": "Skapa grupp",
-    "submitting": "Skapar..."
+    "submitting": "Skapar...",
+    "details": "Gruppdetaljer",
+    "description": "Beskrivning (valfritt)",
+    "descriptionPlaceholder": "Vad är denna grupp till för?",
+    "icon": "Ikon"
   },
   "detail": {
     "expenses": "Utgifter",
@@ -103,5 +107,21 @@
     "linkInfo": "Alla med denna länk kan gå med i gruppen."
   },
   "empty": "Inga grupper än",
-  "emptyDescription": "Skapa din första grupp för att börja dela utgifter med vänner."
+  "emptyDescription": "Skapa din första grupp för att börja dela utgifter med vänner.",
+  "list": {
+    "subtitle": "Hantera dina delade utgifter",
+    "newGroup": "Ny grupp",
+    "searchPlaceholder": "Sök grupper...",
+    "archived": "Arkiverade",
+    "archivedBadge": "Arkiverad",
+    "noArchived": "Inga arkiverade grupper.",
+    "noGroups": "Inga grupper än.",
+    "noGroupsDescription": "Skapa en grupp för att börja dela utgifter med vänner.",
+    "createFirst": "Skapa din första grupp",
+    "noSearchResults": "Inga grupper matchar din sökning.",
+    "memberCount": "{count, plural, one {# medlem} other {# medlemmar}}",
+    "expenseCount": "{count, plural, one {# utgift} other {# utgifter}}",
+    "unarchive": "Avarkivera",
+    "showAll": "Visa alla {count} grupper"
+  }
 }

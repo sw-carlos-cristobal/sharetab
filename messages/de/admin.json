@@ -282,5 +282,10 @@
     "step1Label": "Schritt 1:",
     "step2Label": "Schritt 2:",
     "step2Hint": "Der OpenAI-Ablauf leitet auf localhost:1455 um. Dieser Callback soll hier im Browser fehlschlagen, kopieren Sie daher die vollständige umgeleitete URL aus der Adressleiste."
+  },
+  "impersonation": {
+    "impersonating": "Angemeldet als <strong>{name}</strong>",
+    "stopping": "Wird beendet...",
+    "stop": "Identitätswechsel beenden"
   }
 }

@@ -282,5 +282,10 @@
     "step1Label": "Steg 1:",
     "step2Label": "Steg 2:",
     "step2Hint": "OpenAI-flödet omdirigerar till localhost:1455. Den callbacken förväntas misslyckas i webbläsaren här, så kopiera hela den omdirigerade URL:en från adressfältet."
+  },
+  "impersonation": {
+    "impersonating": "Imiterar <strong>{name}</strong>",
+    "stopping": "Stoppar...",
+    "stop": "Sluta imitera"
   }
 }

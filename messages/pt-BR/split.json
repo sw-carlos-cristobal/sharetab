@@ -128,5 +128,31 @@
     "splitFinalized": "Divisão finalizada!",
     "groupSize": "Pessoas no seu grupo",
     "groupSizeHint": "Digite 2+ se estiver entrando como casal ou grupo"
+  },
+  "result": {
+    "loading": "Carregando divisão...",
+    "notFound": "Divisão não encontrada",
+    "expiredMessage": "Esta divisão expirou. As divisões ficam disponíveis por 7 dias.",
+    "invalidMessage": "Este link de divisão é inválido ou foi removido.",
+    "splitYourOwn": "Divida sua própria conta",
+    "billSplit": "Divisão de conta",
+    "someone": "Alguém",
+    "shareText": "Divisão de conta de {merchant} — {total} no total",
+    "aReceipt": "um recibo",
+    "linkCopied": "Link copiado para a área de transferência",
+    "paidBy": "Pago por <name>{payer}</name>",
+    "venmoHandle": "Venmo: @{handle}",
+    "totalBill": "Conta total",
+    "eachPersonOwes": "Quanto cada pessoa deve",
+    "subtotal": "Subtotal",
+    "tax": "Impostos",
+    "tip": "Gorjeta",
+    "total": "Total",
+    "receiptDetails": "Detalhes do recibo",
+    "expiresOn": "Este link de divisão expira em {date}.",
+    "or": "ou",
+    "createAccount": "Criar uma conta",
+    "copyLink": "Copiar link",
+    "share": "Compartilhar"
   }
 }
