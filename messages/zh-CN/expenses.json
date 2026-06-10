@@ -37,7 +37,8 @@
     "submit": "保存更改",
     "submitting": "保存中...",
     "backToExpense": "返回支出",
-    "itemSplitWarning": "此支出是从收据扫描创建的（按项目分账）。编辑将转换为标准分账模式。"
+    "itemSplitWarning": "此支出是从收据扫描创建的（按项目分账）。编辑将转换为标准分账模式。",
+    "formerMemberSharesWarning": "此支出包含已退出群组成员的份额。他们的份额已重新分配给付款人——保存前请检查分摊。"
   },
   "detail": {
     "paidBy": "付款人",

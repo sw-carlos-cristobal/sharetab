@@ -85,14 +85,13 @@ export function ItemAssignment({
     onError: (e) => toast.error(e.message),
   });
 
-  // Toggle the image and reset zoom/pan when hiding it. showImage is only
-  // changed here, so resetting in the handler (instead of an effect) is safe.
+  // Toggle the image. Zoom/pan reset on every toggle (fresh view when
+  // opening, cleanup when hiding), and the visibility flip is a functional
+  // update so rapid successive clicks can't act on a stale captured value.
   function toggleImage() {
-    if (showImage) {
-      setZoom(1);
-      setPan({ x: 0, y: 0 });
-    }
-    setShowImage(!showImage);
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+    setShowImage((prev) => !prev);
   }
 
   // Wheel zoom — must be non-passive to call preventDefault

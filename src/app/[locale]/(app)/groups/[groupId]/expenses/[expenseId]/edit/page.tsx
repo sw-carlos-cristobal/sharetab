@@ -125,21 +125,49 @@ function EditExpenseForm({
   // Saved shares can reference users who have since left the group (member
   // removal preserves financial history). The editors only render current
   // members, so a hidden ex-member id would be unremovable and make every
-  // save fail server-side membership validation — filter them out.
-  const savedShares = useMemo(() => {
+  // save fail server-side membership validation. The ex-member portion is
+  // reassigned to the payer (or the first remaining member) so EXACT amounts
+  // still sum to the total and PERCENTAGE still sums to 100 — keeping the
+  // expense saveable — and a warning banner tells the user to review it.
+  const { savedShares, hasFormerMemberShares } = useMemo(() => {
     const currentMemberIds = new Set(group.members.map((m) => m.user.id));
-    return expense.shares.filter((s) => currentMemberIds.has(s.userId));
+    const kept = expense.shares.filter((s) => currentMemberIds.has(s.userId));
+    const dropped = expense.shares.filter((s) => !currentMemberIds.has(s.userId));
+    if (dropped.length === 0 || kept.length === 0) {
+      return { savedShares: kept, hasFormerMemberShares: dropped.length > 0 };
+    }
+    const target =
+      kept.find((s) => s.userId === expense.paidById) ?? kept[0];
+    const droppedAmount = dropped.reduce((sum, s) => sum + s.amount, 0);
+    const droppedPct = dropped.reduce((sum, s) => sum + (s.percentage ?? 0), 0);
+    const droppedUnits = dropped.reduce((sum, s) => sum + (s.shares ?? 0), 0);
+    return {
+      savedShares: kept.map((s) =>
+        s === target
+          ? {
+              ...s,
+              amount: s.amount + droppedAmount,
+              percentage:
+                s.percentage != null || droppedPct > 0
+                  ? (s.percentage ?? 0) + droppedPct
+                  : s.percentage,
+              shares: (s.shares ?? 1) + droppedUnits,
+            }
+          : s
+      ),
+      hasFormerMemberShares: true,
+    };
   }, [expense, group]);
   const initialSelected = useMemo(
     () =>
-      expense.splitMode === "EQUAL"
+      expense.splitMode === "EQUAL" && savedShares.length > 0
         ? savedShares.map((s) => s.userId)
         : undefined,
     [expense, savedShares]
   );
   const initialAmounts = useMemo(
     () =>
-      expense.splitMode === "EXACT"
+      expense.splitMode === "EXACT" && savedShares.length > 0
         ? Object.fromEntries(
             savedShares.map((s) => [s.userId, centsToDecimal(s.amount)])
           )
@@ -148,7 +176,7 @@ function EditExpenseForm({
   );
   const initialPercentages = useMemo(
     () =>
-      expense.splitMode === "PERCENTAGE"
+      expense.splitMode === "PERCENTAGE" && savedShares.length > 0
         ? Object.fromEntries(
             savedShares.map((s) => [
               s.userId,
@@ -160,7 +188,7 @@ function EditExpenseForm({
   );
   const initialShareUnits = useMemo(
     () =>
-      expense.splitMode === "SHARES"
+      expense.splitMode === "SHARES" && savedShares.length > 0
         ? Object.fromEntries(
             savedShares.map((s) => [s.userId, String(s.shares ?? 1)])
           )
@@ -218,6 +246,14 @@ function EditExpenseForm({
         <Card className="border-amber-300">
           <CardContent className="py-4 text-sm text-amber-700">
             {t("edit.itemSplitWarning")}
+          </CardContent>
+        </Card>
+      )}
+
+      {hasFormerMemberShares && (
+        <Card className="border-amber-300">
+          <CardContent className="py-4 text-sm text-amber-700">
+            {t("edit.formerMemberSharesWarning")}
           </CardContent>
         </Card>
       )}

@@ -18,8 +18,9 @@ export async function copyToClipboard(text: string): Promise<boolean> {
     }
   }
 
+  let textarea: HTMLTextAreaElement | null = null;
   try {
-    const textarea = document.createElement("textarea");
+    textarea = document.createElement("textarea");
     textarea.value = text;
     textarea.setAttribute("readonly", "");
     textarea.style.position = "fixed";
@@ -27,10 +28,12 @@ export async function copyToClipboard(text: string): Promise<boolean> {
     textarea.style.opacity = "0";
     document.body.appendChild(textarea);
     textarea.select();
-    const ok = document.execCommand("copy");
-    document.body.removeChild(textarea);
-    return ok;
+    return document.execCommand("copy");
   } catch {
     return false;
+  } finally {
+    // Remove in finally so a select()/execCommand() throw can't leak the
+    // node into the DOM on repeated failures.
+    textarea?.remove();
   }
 }

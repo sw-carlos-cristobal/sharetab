@@ -37,7 +37,8 @@
     "backToExpense": "Volver al gasto",
     "itemSplitWarning": "Este gasto fue creado desde un escaneo de recibo (reparto por ARTÍCULO). Al editarlo se convertirá a un modo de reparto estándar.",
     "submit": "Guardar cambios",
-    "submitting": "Guardando..."
+    "submitting": "Guardando...",
+    "formerMemberSharesWarning": "Este gasto incluye partes de antiguos miembros del grupo. Su parte se ha reasignado a quien pagó; revisa el reparto antes de guardar."
   },
   "detail": {
     "paidBy": "Pagado por",

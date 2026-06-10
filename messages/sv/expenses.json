@@ -37,7 +37,8 @@
     "submit": "Spara ändringar",
     "submitting": "Sparar...",
     "backToExpense": "Tillbaka till utgiften",
-    "itemSplitWarning": "Denna utgift skapades från en kvittoskanning (ARTIKELUPPDELNING). Redigering konverterar den till ett standarduppdelningsläge."
+    "itemSplitWarning": "Denna utgift skapades från en kvittoskanning (ARTIKELUPPDELNING). Redigering konverterar den till ett standarduppdelningsläge.",
+    "formerMemberSharesWarning": "Den här utgiften innehåller andelar för tidigare gruppmedlemmar. Deras del har flyttats till betalaren – granska uppdelningen innan du sparar."
   },
   "detail": {
     "paidBy": "Betalad av",
