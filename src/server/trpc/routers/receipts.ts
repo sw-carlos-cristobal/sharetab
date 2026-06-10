@@ -90,14 +90,16 @@ export const receiptsRouter = createTRPCRouter({
 
       // Conditional update doubles as a mutex: a receipt already PROCESSING
       // is rejected so concurrent calls can't interleave delete/recreate.
-      // A PROCESSING receipt untouched for 5+ minutes is considered stale
-      // (crashed run) and may be re-claimed.
+      // A PROCESSING receipt untouched for 15+ minutes is considered stale
+      // (crashed run) and may be re-claimed. The threshold deliberately
+      // exceeds the worst-case provider pipeline (2 passes x per-provider
+      // timeouts of 30-120s) so a slow-but-live run is never re-claimed.
       const claimed = await ctx.db.receipt.updateMany({
         where: {
           id: input.receiptId,
           OR: [
             { status: { not: "PROCESSING" } },
-            { updatedAt: { lt: new Date(Date.now() - 5 * 60 * 1000) } },
+            { updatedAt: { lt: new Date(Date.now() - 15 * 60 * 1000) } },
           ],
         },
         data: {
@@ -374,13 +376,14 @@ export const receiptsRouter = createTRPCRouter({
 
       // Reset status to PROCESSING and re-run extraction; conditional update
       // rejects concurrent reprocessing of the same receipt. A PROCESSING
-      // receipt untouched for 5+ minutes is stale and may be re-claimed.
+      // receipt untouched for 15+ minutes is stale and may be re-claimed
+      // (threshold exceeds the worst-case provider pipeline duration).
       const claimed = await ctx.db.receipt.updateMany({
         where: {
           id: input.receiptId,
           OR: [
             { status: { not: "PROCESSING" } },
-            { updatedAt: { lt: new Date(Date.now() - 5 * 60 * 1000) } },
+            { updatedAt: { lt: new Date(Date.now() - 15 * 60 * 1000) } },
           ],
         },
         data: { status: "PROCESSING" },

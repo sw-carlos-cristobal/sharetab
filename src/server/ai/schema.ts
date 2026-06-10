@@ -22,7 +22,13 @@ export const receiptExtractionSchema = z.object({
   tax: moneyCents.default(0),
   tip: moneyCents.default(0),
   total: moneyCents,
-  currency: z.string().max(10).default("USD"),
+  // Normalize to an uppercase ISO 4217-shaped code: downstream UI passes this
+  // into Intl.NumberFormat, which throws for malformed currency strings.
+  currency: z
+    .string()
+    .max(10)
+    .default("USD")
+    .transform((c) => (/^[a-zA-Z]{3}$/.test(c.trim()) ? c.trim().toUpperCase() : "USD")),
   confidence: z.number().min(0).max(1).optional(),
 });
 

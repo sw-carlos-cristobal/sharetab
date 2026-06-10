@@ -244,10 +244,20 @@ export const guestRouter = createTRPCRouter({
       const ip = ctx.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
         || ctx.headers.get("x-real-ip")?.trim()
         || "global";
+      // Check the IP bucket first and short-circuit: checkRateLimit consumes
+      // an attempt on every allowed call, so an over-limit IP must not keep
+      // draining the shared global quota with requests that are rejected
+      // anyway.
       const ipLimit = checkRateLimit(`guest-process-ip:${ip}`, 20, 60 * 60 * 1000);
+      if (!ipLimit.allowed) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: "Too many processing attempts. Please try again later.",
+        });
+      }
       const globalMax = parseInt(process.env.GUEST_AI_GLOBAL_LIMIT ?? "100", 10) || 100;
       const globalLimit = checkRateLimit("guest-process-global", globalMax, 60 * 60 * 1000);
-      if (!ipLimit.allowed || !globalLimit.allowed) {
+      if (!globalLimit.allowed) {
         throw new TRPCError({
           code: "TOO_MANY_REQUESTS",
           message: "Too many processing attempts. Please try again later.",
@@ -255,15 +265,17 @@ export const guestRouter = createTRPCRouter({
       }
 
       // Conditional update doubles as a mutex against concurrent processing.
-      // A PROCESSING receipt untouched for 5+ minutes is considered stale
-      // (crashed run) and may be re-claimed. Old items are replaced
-      // atomically inside processReceiptImage.
+      // A PROCESSING receipt untouched for 15+ minutes is considered stale
+      // (crashed run) and may be re-claimed. The threshold deliberately
+      // exceeds the worst-case provider pipeline (2 passes x per-provider
+      // timeouts of 30-120s) so a slow-but-live run is never re-claimed.
+      // Old items are replaced atomically inside processReceiptImage.
       const claimed = await ctx.db.receipt.updateMany({
         where: {
           id: input.receiptId,
           OR: [
             { status: { not: "PROCESSING" } },
-            { updatedAt: { lt: new Date(Date.now() - 5 * 60 * 1000) } },
+            { updatedAt: { lt: new Date(Date.now() - 15 * 60 * 1000) } },
           ],
         },
         data: { status: "PROCESSING" },

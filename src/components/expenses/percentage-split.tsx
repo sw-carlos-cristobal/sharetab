@@ -7,6 +7,13 @@ import { Input } from "@/components/ui/input";
 type Member = { id: string; name: string | null };
 type ShareEntry = { userId: string; amount: number; percentage: number };
 
+// Acceptable deviation from 100%: the equal prefill rounds each member's
+// percentage to 2 decimals, so the sum can legitimately drift by up to
+// 0.005 per member (e.g. 19 x 5.26 = 99.94). Floor of 0.05 for tiny groups.
+function percentTolerance(memberCount: number): number {
+  return Math.max(0.05, memberCount * 0.005 + 0.001);
+}
+
 export function PercentageSplit({
   members,
   totalCents,
@@ -41,8 +48,11 @@ export function PercentageSplit({
     // last-person remainder would silently absorb the entire shortfall
     // (e.g. 30%/30% of $100 would submit $30/$70). Reporting no shares
     // keeps the submit button disabled until the split is valid.
+    // Tolerance scales with member count: the equal prefill rounds each
+    // entry to 2 decimals (toFixed(2)), so legitimate drift is up to
+    // 0.005% per member (19 members -> 99.94, 24 -> 100.08).
     const totalPct = entries.reduce((sum, e) => sum + e.pct, 0);
-    if (Math.abs(totalPct - 100) >= 0.05) {
+    if (Math.abs(totalPct - 100) >= percentTolerance(members.length)) {
       onChange([]);
       return;
     }
@@ -109,13 +119,13 @@ export function PercentageSplit({
       })}
       <p
         className={`text-xs ${
-          Math.abs(totalPct - 100) < 0.05
+          Math.abs(totalPct - 100) < percentTolerance(members.length)
             ? "text-green-600"
             : "text-amber-600"
         }`}
       >
         Total: {totalPct.toFixed(1)}%
-        {Math.abs(totalPct - 100) >= 0.05 && ` (should be 100%)`}
+        {Math.abs(totalPct - 100) >= percentTolerance(members.length) && ` (should be 100%)`}
       </p>
     </div>
   );

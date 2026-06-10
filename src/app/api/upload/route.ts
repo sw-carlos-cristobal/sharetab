@@ -62,12 +62,36 @@ const parsedGlobalLimit = Math.floor(Number(process.env.GUEST_UPLOAD_GLOBAL_LIMI
 const GUEST_GLOBAL_LIMIT = parsedGlobalLimit > 0 ? parsedGlobalLimit : 100;
 const GLOBAL_KEY = "__global__";
 
+// Hard ceiling on tracked IP buckets. Pruning expired entries alone is not
+// enough: spoofed, rotating forwarded-IP headers can mint unlimited fresh
+// buckets inside a single window. Above the cap, oldest entries are evicted
+// (insertion order) — the global bucket remains the real abuse bound.
+const MAX_TRACKED_IPS = 5000;
+
 function pruneExpiredEntries(now: number): void {
-  // Prune expired entries so spoofed-IP churn can't grow the map unboundedly
-  if (guestUploads.size > 1000) {
-    for (const [key, value] of guestUploads) {
-      if (now > value.resetAt) guestUploads.delete(key);
-    }
+  if (guestUploads.size <= 1000) return;
+  for (const [key, value] of guestUploads) {
+    if (now > value.resetAt) guestUploads.delete(key);
+  }
+  if (guestUploads.size <= MAX_TRACKED_IPS) return;
+  for (const key of guestUploads.keys()) {
+    if (key === GLOBAL_KEY) continue;
+    guestUploads.delete(key);
+    if (guestUploads.size <= MAX_TRACKED_IPS) break;
+  }
+}
+
+function hasCapacity(key: string, limit: number, now: number): boolean {
+  const entry = guestUploads.get(key);
+  return !entry || now > entry.resetAt || entry.count < limit;
+}
+
+function increment(key: string, now: number): void {
+  const entry = guestUploads.get(key);
+  if (!entry || now > entry.resetAt) {
+    guestUploads.set(key, { count: 1, resetAt: now + GUEST_RATE_WINDOW });
+  } else {
+    entry.count++;
   }
 }
 
@@ -78,44 +102,28 @@ function pruneExpiredEntries(now: number): void {
 function hasGuestUploadBudget(ip: string): boolean {
   const now = Date.now();
   pruneExpiredEntries(now);
-
-  const globalEntry = guestUploads.get(GLOBAL_KEY);
-  if (globalEntry && now <= globalEntry.resetAt && globalEntry.count >= GUEST_GLOBAL_LIMIT) {
-    return false;
-  }
-  const entry = guestUploads.get(ip);
-  if (entry && now <= entry.resetAt && entry.count >= GUEST_RATE_LIMIT) {
-    return false;
-  }
-  return true;
+  return (
+    hasCapacity(GLOBAL_KEY, GUEST_GLOBAL_LIMIT, now) &&
+    hasCapacity(ip, GUEST_RATE_LIMIT, now)
+  );
 }
 
 /**
  * Consume one upload slot. Called only after the upload passes validation, so
- * rejected/invalid requests never burn budget. The per-IP bucket is consumed
- * first and must succeed before the global pool is touched — otherwise a
- * single over-limit IP could drain the shared global budget for everyone.
+ * rejected/invalid requests never burn budget. Both buckets are checked
+ * before either is incremented: an over-limit IP must not drain the shared
+ * global pool, and a full global pool must not burn the caller's IP budget.
  */
 function consumeGuestUploadBudget(ip: string): boolean {
   const now = Date.now();
-
-  const entry = guestUploads.get(ip);
-  if (!entry || now > entry.resetAt) {
-    guestUploads.set(ip, { count: 1, resetAt: now + GUEST_RATE_WINDOW });
-  } else if (entry.count >= GUEST_RATE_LIMIT) {
+  if (
+    !hasCapacity(ip, GUEST_RATE_LIMIT, now) ||
+    !hasCapacity(GLOBAL_KEY, GUEST_GLOBAL_LIMIT, now)
+  ) {
     return false;
-  } else {
-    entry.count++;
   }
-
-  const globalEntry = guestUploads.get(GLOBAL_KEY);
-  if (!globalEntry || now > globalEntry.resetAt) {
-    guestUploads.set(GLOBAL_KEY, { count: 1, resetAt: now + GUEST_RATE_WINDOW });
-  } else if (globalEntry.count >= GUEST_GLOBAL_LIMIT) {
-    return false;
-  } else {
-    globalEntry.count++;
-  }
+  increment(ip, now);
+  increment(GLOBAL_KEY, now);
   return true;
 }
 
