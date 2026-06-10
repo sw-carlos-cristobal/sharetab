@@ -7,7 +7,8 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { db } from "./db";
 import { logger } from "./lib/logger";
-import { checkRateLimit } from "./lib/rate-limit";
+import { checkRateLimit, parsePositiveInt } from "./lib/rate-limit";
+import { getClientIp, FALLBACK_IP } from "./lib/client-ip";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -28,12 +29,36 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         const parsed = loginSchema.safeParse(credentials);
         if (!parsed.success) return null;
 
-        // Rate limit login attempts (configurable for CI/testing)
-        const maxLoginAttempts = parseInt(process.env.AUTH_RATE_LIMIT_MAX ?? "5");
+        // Rate limit login attempts per IP — bounds password spraying across
+        // many emails while staying generous for shared NATs/households.
+        // Checked BEFORE the per-email bucket so attempts denied by the IP
+        // cap don't also charge the email bucket: a user behind a rate-
+        // limited shared IP who keeps retrying must not end up locked out
+        // by their email bucket after the IP window clears.
+        // Skipped when no proxy header identifies the client (direct
+        // deployments without a reverse proxy): a single shared bucket
+        // would let one client lock every user out of login, and the
+        // per-email bucket below still bounds attempts in that case.
+        const ip = getClientIp(request.headers);
+        if (ip !== FALLBACK_IP) {
+          const maxIpAttempts = parsePositiveInt(process.env.AUTH_IP_RATE_LIMIT_MAX, 30);
+          const { allowed: ipAllowed } = checkRateLimit(
+            `login-ip:${ip}`,
+            maxIpAttempts,
+            15 * 60 * 1000
+          );
+          if (!ipAllowed) {
+            logger.warn("auth.rate_limited_ip", { ip });
+            return null;
+          }
+        }
+
+        // Rate limit login attempts per email (configurable for CI/testing)
+        const maxLoginAttempts = parsePositiveInt(process.env.AUTH_RATE_LIMIT_MAX, 5);
         const { allowed } = checkRateLimit(
           `login:${parsed.data.email}`,
           maxLoginAttempts,
