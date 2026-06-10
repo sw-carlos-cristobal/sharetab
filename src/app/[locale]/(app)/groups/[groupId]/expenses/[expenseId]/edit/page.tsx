@@ -193,7 +193,12 @@ function EditExpenseForm({
                 s.percentage != null || droppedPct > 0
                   ? (s.percentage ?? 0) + droppedPct
                   : s.percentage,
-              shares: (s.shares ?? 1) + droppedUnits,
+              // Keyed on field presence like toSeed and the new-entry
+              // branch — don't invent shares for non-SHARES splits.
+              shares:
+                s.shares != null || dropped.some((d) => d.shares != null)
+                  ? (s.shares ?? 1) + droppedUnits
+                  : s.shares,
             }
           : s
       ),
