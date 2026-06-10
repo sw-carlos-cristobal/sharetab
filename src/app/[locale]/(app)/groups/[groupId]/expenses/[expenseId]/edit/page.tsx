@@ -170,8 +170,14 @@ function EditExpenseForm({
           {
             userId: targetId,
             amount: droppedAmount,
-            ...(droppedPct > 0 ? { percentage: droppedPct } : {}),
-            ...(droppedUnits > 0 ? { shares: droppedUnits } : {}),
+            // Keyed on field presence (not summed value) so explicit zeros
+            // survive, matching toSeed's != null convention.
+            ...(dropped.some((s) => s.percentage != null)
+              ? { percentage: droppedPct }
+              : {}),
+            ...(dropped.some((s) => s.shares != null)
+              ? { shares: droppedUnits }
+              : {}),
           },
         ],
         hasFormerMemberShares: true,
