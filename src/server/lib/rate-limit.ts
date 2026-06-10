@@ -42,6 +42,19 @@ export function peekRateLimit(
   return { allowed: true, retryAfterMs: 0 };
 }
 
+/**
+ * Return one previously consumed attempt to a key's budget. Use to undo a
+ * consumption when the guarded operation could not proceed (e.g. a mutex
+ * CONFLICT), so the caller's quota isn't burned by a no-op request.
+ */
+export function refundRateLimit(key: string): void {
+  const now = Date.now();
+  const entry = attempts.get(key);
+  if (entry && now <= entry.resetAt && entry.count > 0) {
+    entry.count--;
+  }
+}
+
 // Cleanup stale entries periodically
 setInterval(() => {
   const now = Date.now();

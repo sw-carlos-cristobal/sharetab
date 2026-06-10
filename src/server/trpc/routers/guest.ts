@@ -5,7 +5,7 @@ import { Prisma, GuestSplitStatus } from "@/generated/prisma/client";
 import { createTRPCRouter, publicProcedure, protectedProcedure } from "../init";
 import { processReceiptImage } from "../../lib/receipt-processor";
 import { logger } from "../../lib/logger";
-import { checkRateLimit, peekRateLimit } from "../../lib/rate-limit";
+import { checkRateLimit, refundRateLimit } from "../../lib/rate-limit";
 import { parseExtractedData, parseGuestItems, parseGuestPeople, parseGuestAssignments } from "../../lib/json-schemas";
 import { calculateSplitTotals } from "@/lib/split-calculator";
 import { normalizeGuestName } from "@/lib/guest-session";
@@ -212,17 +212,6 @@ export const guestRouter = createTRPCRouter({
   processReceipt: publicProcedure
     .input(z.object({ receiptId: z.string(), correctionHint: z.string().max(500).optional() }))
     .mutation(async ({ ctx, input }) => {
-      // Rate limit: 3 processing attempts per receipt per hour. Peek only —
-      // consumed after the processing claim succeeds, so a retry that lands
-      // while a run is in flight (CONFLICT) doesn't burn receipt attempts.
-      const { allowed } = peekRateLimit(`guest-process:${input.receiptId}`, 3);
-      if (!allowed) {
-        throw new TRPCError({
-          code: "TOO_MANY_REQUESTS",
-          message: "Too many processing attempts for this receipt. Please try again later.",
-        });
-      }
-
       const receipt = await ctx.db.receipt.findUnique({
         where: { id: input.receiptId },
       });
@@ -233,26 +222,40 @@ export const guestRouter = createTRPCRouter({
         throw new TRPCError({ code: "NOT_FOUND", message: "Receipt not found" });
       }
 
-      // Per-IP and global caps: the per-receipt limit alone can be multiplied
-      // by minting new receipts, and forwarded-IP headers can be spoofed when
-      // no trusted proxy strips them — the global cap bounds total
-      // unauthenticated AI spend regardless. Peek (non-consuming) here, only
-      // AFTER the receipt is validated as a real guest receipt; the budget is
-      // actually consumed after the processing claim succeeds, so rejected
-      // requests (bad receipt ids, CONFLICT retries) never burn shared quota.
+      // Quotas, checked only AFTER the receipt is validated as a real guest
+      // receipt so bad receipt ids can't burn budget:
+      //  - per receipt (3/h): bounds reprocessing of a single receipt
+      //  - per IP (20/h): bounds one client across receipts (spoofable headers)
+      //  - global: hard cap on total unauthenticated AI spend regardless
+      // Consumption is atomic (synchronous, single event-loop turn) BEFORE
+      // the processing claim, so concurrent requests cannot all slip past a
+      // non-consuming check; if the claim then fails with CONFLICT, the
+      // consumed attempts are refunded so retries against an in-flight
+      // receipt don't drain any bucket.
       const ip = ctx.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
         || ctx.headers.get("x-real-ip")?.trim()
         || "global";
       const globalMax = parseInt(process.env.GUEST_AI_GLOBAL_LIMIT ?? "100", 10) || 100;
       const quotaWindow = 60 * 60 * 1000;
-      if (
-        !peekRateLimit(`guest-process-ip:${ip}`, 20).allowed ||
-        !peekRateLimit("guest-process-global", globalMax).allowed
-      ) {
-        throw new TRPCError({
-          code: "TOO_MANY_REQUESTS",
-          message: "Too many processing attempts. Please try again later.",
-        });
+      const quotas: Array<{ key: string; max: number }> = [
+        { key: `guest-process:${input.receiptId}`, max: 3 },
+        { key: `guest-process-ip:${ip}`, max: 20 },
+        { key: "guest-process-global", max: globalMax },
+      ];
+      const consumed: string[] = [];
+      const refundConsumed = () => {
+        for (const key of consumed) refundRateLimit(key);
+      };
+      for (const quota of quotas) {
+        if (checkRateLimit(quota.key, quota.max, quotaWindow).allowed) {
+          consumed.push(quota.key);
+        } else {
+          refundConsumed();
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: "Too many processing attempts. Please try again later.",
+          });
+        }
       }
 
       // Conditional update doubles as a mutex against concurrent processing.
@@ -272,20 +275,12 @@ export const guestRouter = createTRPCRouter({
         data: { status: "PROCESSING" },
       });
       if (claimed.count === 0) {
+        refundConsumed();
         throw new TRPCError({
           code: "CONFLICT",
           message: "Receipt is already being processed",
         });
       }
-
-      // Claim succeeded — consume all quotas now. The peeks above are the
-      // hard gates; results here are intentionally not re-checked (the tiny
-      // peek-to-consume race can only over-admit by however many requests
-      // were concurrently in flight, which is preferable to rejecting after
-      // the claim and leaving the receipt stuck in PROCESSING).
-      checkRateLimit(`guest-process:${input.receiptId}`, 3, quotaWindow);
-      checkRateLimit(`guest-process-ip:${ip}`, 20, quotaWindow);
-      checkRateLimit("guest-process-global", globalMax, quotaWindow);
 
       try {
         return await processReceiptImage({
