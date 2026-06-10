@@ -71,7 +71,9 @@ export default function SharedSplitPage({
         <div className="space-y-2">
           <h2 className="text-xl font-bold">{t("notFound")}</h2>
           <p className="text-muted-foreground">
-            {split.error.message.includes("expired")
+            {/* Exact match on the server's expiry message (guest.getSplit) —
+                substring matching could misclassify unrelated errors */}
+            {split.error.message === "This split has expired"
               ? t("expiredMessage")
               : t("invalidMessage")}
           </p>
