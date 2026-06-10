@@ -21,6 +21,27 @@ export function checkRateLimit(
   return { allowed: true, retryAfterMs: 0 };
 }
 
+/**
+ * Check whether a key has remaining budget WITHOUT consuming an attempt.
+ * Use as a pre-gate when the real consumption must happen later (after
+ * validation or after acquiring a mutex), so rejected requests don't burn
+ * budget.
+ */
+export function peekRateLimit(
+  key: string,
+  maxAttempts: number
+): { allowed: boolean; retryAfterMs: number } {
+  const now = Date.now();
+  const entry = attempts.get(key);
+  if (!entry || now > entry.resetAt) {
+    return { allowed: true, retryAfterMs: 0 };
+  }
+  if (entry.count >= maxAttempts) {
+    return { allowed: false, retryAfterMs: entry.resetAt - now };
+  }
+  return { allowed: true, retryAfterMs: 0 };
+}
+
 // Cleanup stale entries periodically
 setInterval(() => {
   const now = Date.now();

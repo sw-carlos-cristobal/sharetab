@@ -5,7 +5,7 @@ import { Prisma, GuestSplitStatus } from "@/generated/prisma/client";
 import { createTRPCRouter, publicProcedure, protectedProcedure } from "../init";
 import { processReceiptImage } from "../../lib/receipt-processor";
 import { logger } from "../../lib/logger";
-import { checkRateLimit } from "../../lib/rate-limit";
+import { checkRateLimit, peekRateLimit } from "../../lib/rate-limit";
 import { parseExtractedData, parseGuestItems, parseGuestPeople, parseGuestAssignments } from "../../lib/json-schemas";
 import { calculateSplitTotals } from "@/lib/split-calculator";
 import { normalizeGuestName } from "@/lib/guest-session";
@@ -238,26 +238,19 @@ export const guestRouter = createTRPCRouter({
       // Per-IP and global caps: the per-receipt limit alone can be multiplied
       // by minting new receipts, and forwarded-IP headers can be spoofed when
       // no trusted proxy strips them — the global cap bounds total
-      // unauthenticated AI spend regardless. Checked only AFTER the receipt
-      // is validated as a real guest receipt, so requests for random or
-      // nonexistent receipt ids cannot burn the shared quota.
+      // unauthenticated AI spend regardless. Peek (non-consuming) here, only
+      // AFTER the receipt is validated as a real guest receipt; the budget is
+      // actually consumed after the processing claim succeeds, so rejected
+      // requests (bad receipt ids, CONFLICT retries) never burn shared quota.
       const ip = ctx.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
         || ctx.headers.get("x-real-ip")?.trim()
         || "global";
-      // Check the IP bucket first and short-circuit: checkRateLimit consumes
-      // an attempt on every allowed call, so an over-limit IP must not keep
-      // draining the shared global quota with requests that are rejected
-      // anyway.
-      const ipLimit = checkRateLimit(`guest-process-ip:${ip}`, 20, 60 * 60 * 1000);
-      if (!ipLimit.allowed) {
-        throw new TRPCError({
-          code: "TOO_MANY_REQUESTS",
-          message: "Too many processing attempts. Please try again later.",
-        });
-      }
       const globalMax = parseInt(process.env.GUEST_AI_GLOBAL_LIMIT ?? "100", 10) || 100;
-      const globalLimit = checkRateLimit("guest-process-global", globalMax, 60 * 60 * 1000);
-      if (!globalLimit.allowed) {
+      const quotaWindow = 60 * 60 * 1000;
+      if (
+        !peekRateLimit(`guest-process-ip:${ip}`, 20).allowed ||
+        !peekRateLimit("guest-process-global", globalMax).allowed
+      ) {
         throw new TRPCError({
           code: "TOO_MANY_REQUESTS",
           message: "Too many processing attempts. Please try again later.",
@@ -286,6 +279,13 @@ export const guestRouter = createTRPCRouter({
           message: "Receipt is already being processed",
         });
       }
+
+      // Claim succeeded — consume the quota now. The peek above is the hard
+      // gate; results here are intentionally not re-checked (the tiny
+      // peek-to-consume race can only over-admit by a request or two, which
+      // is preferable to leaving the receipt stuck in PROCESSING).
+      checkRateLimit(`guest-process-ip:${ip}`, 20, quotaWindow);
+      checkRateLimit("guest-process-global", globalMax, quotaWindow);
 
       try {
         return await processReceiptImage({

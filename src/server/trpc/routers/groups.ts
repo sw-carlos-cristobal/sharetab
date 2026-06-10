@@ -184,6 +184,15 @@ export const groupsRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       if (input.placeholderUserId) {
+        // Linking an invite to a placeholder hands the redeemer that
+        // placeholder's financial history, so gate it like the other
+        // placeholder operations (create/rename/merge are owner/admin-only).
+        if (ctx.membership.role !== "OWNER" && ctx.membership.role !== "ADMIN") {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Only admins and owners can create placeholder-linked invites",
+          });
+        }
         const placeholder = await ctx.db.user.findUnique({
           where: { id: input.placeholderUserId },
           select: { isPlaceholder: true },

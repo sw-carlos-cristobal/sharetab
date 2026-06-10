@@ -4,7 +4,7 @@ import { describe, test, expect, vi, beforeEach } from "vitest";
 vi.useFakeTimers();
 
 // Dynamic import to ensure timer mock is in place
-const { checkRateLimit } = await import("./rate-limit");
+const { checkRateLimit, peekRateLimit } = await import("./rate-limit");
 
 describe("checkRateLimit", () => {
   beforeEach(() => {
@@ -66,6 +66,29 @@ describe("checkRateLimit", () => {
 
     // key2 should still work
     expect(checkRateLimit(key2, 2, 60000).allowed).toBe(true);
+  });
+
+  test("peekRateLimit does not consume attempts", () => {
+    const key = "test-peek";
+    // Peek many times — none should count against the limit
+    for (let i = 0; i < 10; i++) {
+      expect(peekRateLimit(key, 2).allowed).toBe(true);
+    }
+    // Two real attempts still available
+    expect(checkRateLimit(key, 2, 60000).allowed).toBe(true);
+    expect(checkRateLimit(key, 2, 60000).allowed).toBe(true);
+    expect(checkRateLimit(key, 2, 60000).allowed).toBe(false);
+  });
+
+  test("peekRateLimit reports exhausted budget without consuming", () => {
+    const key = "test-peek-exhausted";
+    checkRateLimit(key, 1, 60000);
+    const peeked = peekRateLimit(key, 1);
+    expect(peeked.allowed).toBe(false);
+    expect(peeked.retryAfterMs).toBeGreaterThan(0);
+    // Window expiry restores budget
+    vi.advanceTimersByTime(60001);
+    expect(peekRateLimit(key, 1).allowed).toBe(true);
   });
 
   test("retryAfterMs decreases as time passes", () => {
