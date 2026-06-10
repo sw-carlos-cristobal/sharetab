@@ -106,7 +106,14 @@ function EditExpenseForm({
   const [title, setTitle] = useState(expense.title);
   const [amountStr, setAmountStr] = useState(() => centsToDecimal(expense.amount));
   const [category, setCategory] = useState(expense.category ?? "");
-  const [paidById, setPaidById] = useState(expense.paidById);
+  // The saved payer may have left the group (member removal preserves
+  // financial history). Server-side membership validation would reject the
+  // stale id, so start empty and force the user to pick a current member.
+  const [paidById, setPaidById] = useState(() =>
+    group.members.some((m) => m.user.id === expense.paidById)
+      ? expense.paidById
+      : ""
+  );
   const [splitMode, setSplitMode] = useState<SplitMode>(
     isItemSplit ? "EQUAL" : (expense.splitMode as SplitMode)
   );
@@ -126,21 +133,50 @@ function EditExpenseForm({
   // removal preserves financial history). The editors only render current
   // members, so a hidden ex-member id would be unremovable and make every
   // save fail server-side membership validation. The ex-member portion is
-  // reassigned to the payer (or the first remaining member) so EXACT amounts
-  // still sum to the total and PERCENTAGE still sums to 100 — keeping the
-  // expense saveable — and a warning banner tells the user to review it.
+  // reassigned to the payer when they're still a member (creating an entry
+  // for them if needed), otherwise to the first remaining share-holder, or
+  // the first current member when no saved shares survive at all — so EXACT
+  // amounts still sum to the total and PERCENTAGE still sums to 100, keeping
+  // the expense saveable — and a warning banner tells the user to review it.
   const { savedShares, hasFormerMemberShares } = useMemo(() => {
     const currentMemberIds = new Set(group.members.map((m) => m.user.id));
-    const kept = expense.shares.filter((s) => currentMemberIds.has(s.userId));
+    const toSeed = (s: ExpenseData["shares"][number]): ShareEntry => ({
+      userId: s.userId,
+      amount: s.amount,
+      ...(s.percentage != null ? { percentage: s.percentage } : {}),
+      ...(s.shares != null ? { shares: s.shares } : {}),
+    });
+    const kept = expense.shares
+      .filter((s) => currentMemberIds.has(s.userId))
+      .map(toSeed);
     const dropped = expense.shares.filter((s) => !currentMemberIds.has(s.userId));
-    if (dropped.length === 0 || kept.length === 0) {
-      return { savedShares: kept, hasFormerMemberShares: dropped.length > 0 };
+    if (dropped.length === 0) {
+      return { savedShares: kept, hasFormerMemberShares: false };
     }
-    const target =
-      kept.find((s) => s.userId === expense.paidById) ?? kept[0];
     const droppedAmount = dropped.reduce((sum, s) => sum + s.amount, 0);
     const droppedPct = dropped.reduce((sum, s) => sum + (s.percentage ?? 0), 0);
     const droppedUnits = dropped.reduce((sum, s) => sum + (s.shares ?? 0), 0);
+    const targetId = currentMemberIds.has(expense.paidById)
+      ? expense.paidById
+      : kept[0]?.userId ?? group.members[0]?.user.id;
+    if (!targetId) {
+      return { savedShares: kept, hasFormerMemberShares: true };
+    }
+    const target = kept.find((s) => s.userId === targetId);
+    if (!target) {
+      return {
+        savedShares: [
+          ...kept,
+          {
+            userId: targetId,
+            amount: droppedAmount,
+            ...(droppedPct > 0 ? { percentage: droppedPct } : {}),
+            ...(droppedUnits > 0 ? { shares: droppedUnits } : {}),
+          },
+        ],
+        hasFormerMemberShares: true,
+      };
+    }
     return {
       savedShares: kept.map((s) =>
         s === target
