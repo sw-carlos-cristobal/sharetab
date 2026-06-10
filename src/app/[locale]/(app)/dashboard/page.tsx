@@ -104,10 +104,13 @@ export default function DashboardPage() {
       .map((g) => g.currency) ?? []
   );
   const hasMixedCurrencies = groupCurrencies.size > 1;
+  // All-settled fallback uses the ordered groups list (updatedAt desc) so
+  // the zero totals show the first *displayed* group's currency; perGroup
+  // comes from an unordered query and its index 0 is arbitrary.
   const aggregateCurrency =
     groupCurrencies.size === 1
       ? [...groupCurrencies][0]!
-      : dashboard.data?.perGroup[0]?.currency ?? "USD";
+      : groups.data?.[0]?.currency ?? "USD";
 
   return (
     <div className="space-y-8">
