@@ -25,9 +25,10 @@ export const FALLBACK_IP = "global";
  * strips/overwrites them. When ShareTab is exposed directly (no proxy), an
  * attacker can rotate header values to get fresh per-IP rate-limit buckets.
  * The precedence above is likewise only meaningful behind a proxy that
- * manages these headers: if a deployment's proxy sets `x-forwarded-for`
- * but passes client-supplied `x-real-ip` through untouched, the client
- * chooses its own bucket regardless of order — no ordering fixes that.
+ * manages ALL of these headers: because `x-real-ip` is preferred, a proxy
+ * that sets `x-forwarded-for` but passes a client-supplied `x-real-ip`
+ * through untouched still lets the client pick its own bucket — operators
+ * must strip or overwrite the higher-precedence headers too.
  * Next.js route handlers do not expose the socket address, so callers must
  * treat per-IP limits as defense-in-depth, never the only control — pair
  * them with per-account or global caps (see `src/server/auth.ts` per-email
