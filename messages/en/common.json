@@ -21,7 +21,8 @@
     "loading": "Loading...",
     "saving": "Saving...",
     "submit": "Submit",
-    "openMenu": "Open menu"
+    "openMenu": "Open menu",
+    "copyFailed": "Could not copy link to clipboard"
   },
   "brand": {
     "name": "ShareTab",

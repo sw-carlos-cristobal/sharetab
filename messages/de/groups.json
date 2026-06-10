@@ -7,7 +7,11 @@
     "namePlaceholder": "z. B. WG, Reise nach Paris",
     "currency": "Währung",
     "submit": "Gruppe erstellen",
-    "submitting": "Erstellen..."
+    "submitting": "Erstellen...",
+    "details": "Gruppendetails",
+    "description": "Beschreibung (optional)",
+    "descriptionPlaceholder": "Wofür ist diese Gruppe?",
+    "icon": "Symbol"
   },
   "detail": {
     "expenses": "Ausgaben",
@@ -103,5 +107,21 @@
     "linkInfo": "Jeder mit diesem Link kann der Gruppe beitreten."
   },
   "empty": "Noch keine Gruppen",
-  "emptyDescription": "Erstellen Sie Ihre erste Gruppe, um Ausgaben mit Freunden zu teilen."
+  "emptyDescription": "Erstellen Sie Ihre erste Gruppe, um Ausgaben mit Freunden zu teilen.",
+  "list": {
+    "subtitle": "Verwalten Sie Ihre geteilten Ausgaben",
+    "newGroup": "Neue Gruppe",
+    "searchPlaceholder": "Gruppen suchen...",
+    "archived": "Archiviert",
+    "archivedBadge": "Archiviert",
+    "noArchived": "Keine archivierten Gruppen.",
+    "noGroups": "Noch keine Gruppen.",
+    "noGroupsDescription": "Erstellen Sie eine Gruppe, um Ausgaben mit Freunden zu teilen.",
+    "createFirst": "Erstellen Sie Ihre erste Gruppe",
+    "noSearchResults": "Keine Gruppen entsprechen Ihrer Suche.",
+    "memberCount": "{count, plural, one {# Mitglied} other {# Mitglieder}}",
+    "expenseCount": "{count, plural, one {# Ausgabe} other {# Ausgaben}}",
+    "unarchive": "Dearchivieren",
+    "showAll": "Alle {count} Gruppen anzeigen"
+  }
 }

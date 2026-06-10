@@ -7,7 +7,11 @@
     "namePlaceholder": "e.g. Apartment, Trip to Paris",
     "currency": "Currency",
     "submit": "Create group",
-    "submitting": "Creating..."
+    "submitting": "Creating...",
+    "details": "Group details",
+    "description": "Description (optional)",
+    "descriptionPlaceholder": "What is this group for?",
+    "icon": "Icon"
   },
   "detail": {
     "expenses": "Expenses",
@@ -103,5 +107,21 @@
     "linkInfo": "Anyone with this link can join the group."
   },
   "empty": "No groups yet",
-  "emptyDescription": "Create your first group to start splitting expenses with friends."
+  "emptyDescription": "Create your first group to start splitting expenses with friends.",
+  "list": {
+    "subtitle": "Manage your shared expenses",
+    "newGroup": "New Group",
+    "searchPlaceholder": "Search groups...",
+    "archived": "Archived",
+    "archivedBadge": "Archived",
+    "noArchived": "No archived groups.",
+    "noGroups": "No groups yet.",
+    "noGroupsDescription": "Create a group to start splitting expenses with friends.",
+    "createFirst": "Create your first group",
+    "noSearchResults": "No groups match your search.",
+    "memberCount": "{count, plural, one {# member} other {# members}}",
+    "expenseCount": "{count, plural, one {# expense} other {# expenses}}",
+    "unarchive": "Unarchive",
+    "showAll": "Show all {count} groups"
+  }
 }

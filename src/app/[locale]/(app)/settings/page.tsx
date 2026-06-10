@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
@@ -10,39 +10,86 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-export default function SettingsPage() {
+// Rendered only once the profile has loaded, so all fields can be
+// initialized directly from the data (no sync-from-query effects that
+// could clobber in-progress edits).
+function ProfileForm({
+  email,
+  initialName,
+  initialVenmoUsername,
+}: {
+  email: string;
+  initialName: string;
+  initialVenmoUsername: string;
+}) {
   const t = useTranslations("settings");
-  const { data: session, update } = useSession();
+  const { update } = useSession();
   const router = useRouter();
-  const [name, setName] = useState(session?.user?.name ?? "");
-  const [venmoUsername, setVenmoUsername] = useState("");
-  const [venmoTouched, setVenmoTouched] = useState(false);
-  const [hasSaved, setHasSaved] = useState(false);
-
-  const profile = trpc.auth.getProfile.useQuery();
-
-  useEffect(() => {
-    if (session?.user?.name && !hasSaved) {
-      setName(session.user.name);
-    }
-  }, [session?.user?.name, hasSaved]);
-
-  useEffect(() => {
-    if (profile.data && !venmoTouched) {
-      setVenmoUsername(profile.data.venmoUsername ?? "");
-    }
-  }, [profile.data, venmoTouched]);
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [name, setName] = useState(initialName);
+  const [venmoUsername, setVenmoUsername] = useState(initialVenmoUsername);
 
   const updateProfile = trpc.auth.updateProfile.useMutation({
     onSuccess: async () => {
-      setHasSaved(true);
       await update();
       router.refresh();
     },
   });
+
+  function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    updateProfile.mutate({
+      name,
+      venmoUsername: venmoUsername.trim() || null,
+    });
+  }
+
+  return (
+    <form onSubmit={handleSave} className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="email">{t("profile.email")}</Label>
+        <Input id="email" value={email} disabled />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="name">{t("profile.name")}</Label>
+        <Input
+          id="name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="venmo">{t("profile.venmo")}</Label>
+        <Input
+          id="venmo"
+          value={venmoUsername}
+          onChange={(e) => setVenmoUsername(e.target.value)}
+          placeholder={t("profile.venmoPlaceholder")}
+          data-testid="venmo-username-input"
+        />
+      </div>
+      <Button type="submit" disabled={updateProfile.isPending} data-testid="save-profile-btn">
+        {updateProfile.isPending ? t("profile.saving") : t("profile.save")}
+      </Button>
+      {updateProfile.isSuccess && (
+        <p className="text-sm text-green-600">{t("profile.saved")}</p>
+      )}
+      {updateProfile.error && (
+        <p className="text-sm text-red-600">{updateProfile.error.message}</p>
+      )}
+    </form>
+  );
+}
+
+export default function SettingsPage() {
+  const t = useTranslations("settings");
+  const { data: session } = useSession();
+
+  const profile = trpc.auth.getProfile.useQuery();
+
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   const changePassword = trpc.auth.changePassword.useMutation({
     onSuccess: () => {
@@ -51,14 +98,6 @@ export default function SettingsPage() {
       setConfirmPassword("");
     },
   });
-
-  function handleSave(e: React.FormEvent) {
-    e.preventDefault();
-    updateProfile.mutate({
-      name,
-      ...(venmoTouched || profile.data ? { venmoUsername: venmoUsername.trim() || null } : {}),
-    });
-  }
 
   function handleChangePassword(e: React.FormEvent) {
     e.preventDefault();
@@ -75,37 +114,22 @@ export default function SettingsPage() {
           <CardTitle>{t("profile.title")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSave} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">{t("profile.email")}</Label>
-              <Input id="email" value={session?.user?.email ?? ""} disabled />
+          {profile.data ? (
+            <ProfileForm
+              email={profile.data.email ?? session?.user?.email ?? ""}
+              initialName={profile.data.name ?? session?.user?.name ?? ""}
+              initialVenmoUsername={profile.data.venmoUsername ?? ""}
+            />
+          ) : (
+            <div className="space-y-4">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="space-y-2">
+                  <div className="h-4 w-24 animate-pulse rounded bg-muted" />
+                  <div className="h-9 w-full animate-pulse rounded bg-muted" />
+                </div>
+              ))}
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="name">{t("profile.name")}</Label>
-              <Input
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="venmo">{t("profile.venmo")}</Label>
-              <Input
-                id="venmo"
-                value={venmoUsername}
-                onChange={(e) => { setVenmoTouched(true); setVenmoUsername(e.target.value); }}
-                placeholder={t("profile.venmoPlaceholder")}
-                data-testid="venmo-username-input"
-              />
-            </div>
-            <Button type="submit" disabled={updateProfile.isPending} data-testid="save-profile-btn">
-              {updateProfile.isPending ? t("profile.saving") : t("profile.save")}
-            </Button>
-            {updateProfile.isSuccess && (
-              <p className="text-sm text-green-600">{t("profile.saved")}</p>
-            )}
-          </form>
+          )}
         </CardContent>
       </Card>
 

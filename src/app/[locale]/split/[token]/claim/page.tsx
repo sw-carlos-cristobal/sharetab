@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
 import { formatCents } from "@/lib/money";
+import { copyToClipboard } from "@/lib/clipboard";
 import { storedClaimIdentitySchema, type StoredClaimIdentity } from "@/lib/guest-session";
 import { calculateSplitTotals } from "@/lib/split-calculator";
 import { Button } from "@/components/ui/button";
@@ -50,6 +51,7 @@ export default function ClaimPage({
   const locale = useLocale();
   const t = useTranslations("split.claim");
   const tv = useTranslations("split.venmo");
+  const tc = useTranslations("common");
 
   // --- State ---
   const [name, setName] = useState("");
@@ -388,8 +390,11 @@ export default function ClaimPage({
   }
 
   async function copyLink() {
-    await navigator.clipboard.writeText(window.location.href);
-    toast.success(t("linkCopied"));
+    if (await copyToClipboard(window.location.href)) {
+      toast.success(t("linkCopied"));
+    } else {
+      toast.error(tc("actions.copyFailed"));
+    }
   }
 
   async function copyResultLink() {
@@ -397,8 +402,11 @@ export default function ClaimPage({
     url.pathname = url.pathname.replace(/\/claim$/, "");
     url.search = "";
     url.hash = "";
-    await navigator.clipboard.writeText(url.toString());
-    toast.success(t("linkCopied"));
+    if (await copyToClipboard(url.toString())) {
+      toast.success(t("linkCopied"));
+    } else {
+      toast.error(tc("actions.copyFailed"));
+    }
   }
 
   async function saveClaims() {

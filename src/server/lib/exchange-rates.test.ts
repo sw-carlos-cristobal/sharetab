@@ -25,6 +25,17 @@ describe("convertCents", () => {
   test("handles zero", () => {
     expect(convertCents(0, 1.5)).toBe(0);
   });
+
+  test("rejects amounts that overflow the Int4 money column", () => {
+    // 10,000,000 cents * 1,000,000 rate = 10^13, beyond int4 max (2147483647)
+    expect(() => convertCents(10_000_000, 1_000_000)).toThrow(
+      "Converted amount is too large"
+    );
+  });
+
+  test("accepts amounts at the Int4 boundary", () => {
+    expect(convertCents(2_147_483_647, 1.0)).toBe(2_147_483_647);
+  });
 });
 
 describe("getExchangeRate", () => {

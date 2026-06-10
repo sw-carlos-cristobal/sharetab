@@ -1,10 +1,10 @@
 <?xml version="1.0"?>
 <Container version="2">
   <Name>sharetab</Name>
-  <Repository>ghcr.io/sw-carlos-cristobal/sharetab:latest</Repository>
+  <Repository>ghcr.io/sw-carlos-cristobal/sharetab:stable</Repository>
   <Registry>https://github.com/sw-carlos-cristobal/sharetab/pkgs/container/sharetab</Registry>
   <Branch>
-    <Tag>latest</Tag>
+    <Tag>stable</Tag>
     <TagDescription>Latest stable release</TagDescription>
   </Branch>
   <Network>bridge</Network>

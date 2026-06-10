@@ -37,7 +37,8 @@
     "backToExpense": "Back to expense",
     "itemSplitWarning": "This expense was created from a receipt scan (ITEM split). Editing will convert it to a standard split mode.",
     "submit": "Save Changes",
-    "submitting": "Saving..."
+    "submitting": "Saving...",
+    "formerMemberSharesWarning": "This expense includes shares for former group members. Their portion has been reassigned to the payer — review the split before saving."
   },
   "detail": {
     "paidBy": "Paid by",

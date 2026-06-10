@@ -7,23 +7,47 @@ import { Input } from "@/components/ui/input";
 type Member = { id: string; name: string | null };
 type ShareEntry = { userId: string; amount: number; percentage: number };
 
+// Acceptable deviation from 100%. The equal prefill is normalized to sum to
+// exactly 100, but splits seeded from saved expenses carry stored percentages
+// (basis points) that can drift by up to 0.005 per member from rounding, so
+// the tolerance scales accordingly. The monetary skew this admits is bounded
+// at 0.005% of the total per member — rounding dust, absorbed by the last
+// share like all other rounding in this component.
+function percentTolerance(memberCount: number): number {
+  return Math.max(0.05, memberCount * 0.005 + 0.001);
+}
+
 export function PercentageSplit({
   members,
   totalCents,
   onChange,
   locale,
   currency,
+  initialPercentages,
 }: {
   members: Member[];
   totalCents: number;
   onChange: (shares: ShareEntry[]) => void;
   locale?: string;
   currency?: string;
+  /** Initial percentage strings per user ID (e.g. when editing an existing expense). */
+  initialPercentages?: Record<string, string>;
 }) {
   const [percentages, setPercentages] = useState<Record<string, string>>(() => {
-    // Pre-fill equal percentages so switching from Equal mode isn't jarring
-    const pct = members.length > 0 ? (100 / members.length).toFixed(2) : "0";
-    return Object.fromEntries(members.map((m) => [m.id, pct]));
+    if (initialPercentages) return initialPercentages;
+    // Pre-fill equal percentages so switching from Equal mode isn't jarring.
+    // The last member absorbs the rounding difference so the prefill sums to
+    // exactly 100 (e.g. 19 members: 18 x 5.26 + 5.32) — the validation
+    // tolerance never has to accommodate generated values.
+    if (members.length === 0) return {};
+    const per = Math.floor(10000 / members.length) / 100;
+    const last = Math.round((100 - per * (members.length - 1)) * 100) / 100;
+    return Object.fromEntries(
+      members.map((m, i) => [
+        m.id,
+        String(i === members.length - 1 ? last : per),
+      ])
+    );
   });
 
   useEffect(() => {
@@ -36,6 +60,22 @@ export function PercentageSplit({
         pct: parseFloat(percentages[m.id] ?? "0") || 0,
       }))
       .filter((e) => e.pct > 0);
+
+    // Only emit shares when percentages sum to ~100%. Otherwise the
+    // last-person remainder would silently absorb the entire shortfall
+    // (e.g. 30%/30% of $100 would submit $30/$70). Reporting no shares
+    // keeps the submit button disabled until the split is valid.
+    // Tolerance scales with the number of participating (non-zero) members
+    // to accept splits whose stored 2-decimal percentages carry rounding
+    // drift of up to 0.005 per member (see percentTolerance above) — zero
+    // entries contribute no drift, so counting them would over-widen the
+    // tolerance in large groups. The equal prefill itself is normalized to
+    // sum to exactly 100 and needs no tolerance.
+    const totalPct = entries.reduce((sum, e) => sum + e.pct, 0);
+    if (Math.abs(totalPct - 100) >= percentTolerance(entries.length)) {
+      onChange([]);
+      return;
+    }
 
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
@@ -67,6 +107,10 @@ export function PercentageSplit({
     (sum, m) => sum + (parseFloat(percentages[m.id] ?? "0") || 0),
     0
   );
+  // Mirror the emit logic: only non-zero entries carry rounding drift.
+  const participatingCount = members.filter(
+    (m) => (parseFloat(percentages[m.id] ?? "0") || 0) > 0
+  ).length;
 
   return (
     <div className="space-y-2">
@@ -99,13 +143,13 @@ export function PercentageSplit({
       })}
       <p
         className={`text-xs ${
-          Math.abs(totalPct - 100) < 0.05
+          Math.abs(totalPct - 100) < percentTolerance(participatingCount)
             ? "text-green-600"
             : "text-amber-600"
         }`}
       >
         Total: {totalPct.toFixed(1)}%
-        {Math.abs(totalPct - 100) >= 0.05 && ` (should be 100%)`}
+        {Math.abs(totalPct - 100) >= percentTolerance(participatingCount) && ` (should be 100%)`}
       </p>
     </div>
   );

@@ -2,10 +2,12 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { trpc } from '@/lib/trpc';
 import { UserCheck } from 'lucide-react';
 
 export function ImpersonationBanner() {
+  const t = useTranslations('admin.impersonation');
   const router = useRouter();
   const { data } = trpc.admin.getImpersonationStatus.useQuery(undefined, {
     staleTime: 0,
@@ -31,8 +33,10 @@ export function ImpersonationBanner() {
       <div className="mx-auto flex max-w-5xl items-center gap-3">
         <UserCheck className="h-4 w-4 shrink-0" />
         <span className="flex-1">
-          Impersonating{' '}
-          <strong>{data.targetName ?? data.targetEmail}</strong>
+          {t.rich('impersonating', {
+            name: data.targetName ?? data.targetEmail ?? '',
+            strong: (chunks) => <strong>{chunks}</strong>,
+          })}
           {data.targetName && (
             <span className="text-red-100">
               {' '}
@@ -46,7 +50,7 @@ export function ImpersonationBanner() {
           disabled={stopping}
           className="shrink-0 rounded bg-white/20 px-3 py-1 text-xs font-medium text-white hover:bg-white/30 disabled:opacity-50 transition-colors"
         >
-          {stopping ? 'Stopping...' : 'Stop Impersonating'}
+          {stopping ? t('stopping') : t('stop')}
         </button>
       </div>
     </div>

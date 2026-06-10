@@ -282,5 +282,10 @@
     "step1Label": "ステップ1:",
     "step2Label": "ステップ2:",
     "step2Hint": "OpenAIのフローはlocalhost:1455にリダイレクトします。このコールバックはブラウザでは失敗することが想定されているため、アドレスバーからリダイレクト先の完全なURLをコピーしてください。"
+  },
+  "impersonation": {
+    "impersonating": "<strong>{name}</strong>になりすまし中",
+    "stopping": "停止中...",
+    "stop": "なりすましを終了"
   }
 }

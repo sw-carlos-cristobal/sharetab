@@ -282,5 +282,10 @@
     "step1Label": "1단계:",
     "step2Label": "2단계:",
     "step2Hint": "OpenAI 흐름은 localhost:1455로 리다이렉트됩니다. 해당 콜백은 브라우저에서 실패하는 것이 정상이므로, 주소창에서 전체 리다이렉트 URL을 복사하세요."
+  },
+  "impersonation": {
+    "impersonating": "<strong>{name}</strong>(으)로 가장 중",
+    "stopping": "중지 중...",
+    "stop": "가장 중지"
   }
 }

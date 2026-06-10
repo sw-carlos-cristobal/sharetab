@@ -21,7 +21,8 @@
     "loading": "Laddar...",
     "saving": "Sparar...",
     "submit": "Skicka",
-    "openMenu": "Öppna meny"
+    "openMenu": "Öppna meny",
+    "copyFailed": "Det gick inte att kopiera länken till urklipp"
   },
   "brand": {
     "name": "ShareTab",

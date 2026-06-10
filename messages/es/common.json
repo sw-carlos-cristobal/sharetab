@@ -21,7 +21,8 @@
     "loading": "Cargando...",
     "saving": "Guardando...",
     "submit": "Enviar",
-    "openMenu": "Abrir menú"
+    "openMenu": "Abrir menú",
+    "copyFailed": "No se pudo copiar el enlace al portapapeles"
   },
   "brand": {
     "name": "ShareTab",

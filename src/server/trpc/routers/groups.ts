@@ -183,6 +183,30 @@ export const groupsRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      if (input.placeholderUserId) {
+        // Linking an invite to a placeholder hands the redeemer that
+        // placeholder's financial history, so gate it like the other
+        // placeholder operations (create/rename/merge are owner/admin-only).
+        if (ctx.membership.role !== "OWNER" && ctx.membership.role !== "ADMIN") {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Only admins and owners can create placeholder-linked invites",
+          });
+        }
+        const placeholder = await ctx.db.user.findUnique({
+          where: { id: input.placeholderUserId },
+          select: { isPlaceholder: true },
+        });
+        if (!placeholder?.isPlaceholder) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Not a placeholder user" });
+        }
+        const membership = await ctx.db.groupMember.findUnique({
+          where: { userId_groupId: { userId: input.placeholderUserId, groupId: input.groupId } },
+        });
+        if (!membership) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Placeholder is not a member of this group" });
+        }
+      }
       const invite = await ctx.db.groupInvite.create({
         data: {
           groupId: input.groupId,
@@ -233,9 +257,24 @@ export const groupsRouter = createTRPCRouter({
         }),
       ]);
 
-      // Auto-merge placeholder if invite was linked to one
+      // Auto-merge placeholder if invite was linked to one. Re-validate at
+      // redemption: the linked user must still be a placeholder member of this
+      // group (it may have been merged, removed, or never have been valid).
       if (invite.placeholderUserId) {
-        await mergePlaceholderIntoUser(ctx.db, invite.placeholderUserId, ctx.user.id, invite.groupId);
+        const placeholder = await ctx.db.user.findUnique({
+          where: { id: invite.placeholderUserId },
+          select: { isPlaceholder: true },
+        });
+        const placeholderMembership = placeholder?.isPlaceholder
+          ? await ctx.db.groupMember.findUnique({
+              where: {
+                userId_groupId: { userId: invite.placeholderUserId, groupId: invite.groupId },
+              },
+            })
+          : null;
+        if (placeholder?.isPlaceholder && placeholderMembership) {
+          await mergePlaceholderIntoUser(ctx.db, invite.placeholderUserId, ctx.user.id, invite.groupId);
+        }
       }
 
       return { groupId: invite.groupId, alreadyMember: false };
@@ -467,6 +506,16 @@ async function mergePlaceholderIntoUser(
   groupId: string,
 ) {
   await db.$transaction(async (tx) => {
+    // Hard guard: this helper reassigns financial history and may delete the
+    // user row, so it must never run against a real (non-placeholder) account.
+    const placeholder = await tx.user.findUnique({
+      where: { id: placeholderUserId },
+      select: { isPlaceholder: true },
+    });
+    if (!placeholder?.isPlaceholder) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Not a placeholder user" });
+    }
+
     const groupExpenseIds = (
       await tx.expense.findMany({
         where: { groupId },

@@ -282,5 +282,10 @@
     "step1Label": "第 1 步：",
     "step2Label": "第 2 步：",
     "step2Hint": "OpenAI 流程会重定向到 localhost:1455。该回调在浏览器中预期会失败，因此请从地址栏复制完整的重定向 URL。"
+  },
+  "impersonation": {
+    "impersonating": "正在模拟 <strong>{name}</strong>",
+    "stopping": "正在停止...",
+    "stop": "停止模拟"
   }
 }

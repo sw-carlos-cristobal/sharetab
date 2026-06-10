@@ -14,5 +14,7 @@
   "groups": "群组",
   "showMore": "显示更多",
   "members": "{count, plural, other {#位成员}}",
-  "archivedGroups": "{count, plural, other {#个已归档群组}}"
+  "archivedGroups": "{count, plural, other {#个已归档群组}}",
+  "mixedCurrencies": "多种货币",
+  "mixedCurrenciesDebts": "您的群组使用不同的货币，无法显示合并余额。请打开各群组查看其余额。"
 }

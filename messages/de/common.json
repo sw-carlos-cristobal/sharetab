@@ -21,7 +21,8 @@
     "loading": "Laden...",
     "saving": "Speichern...",
     "submit": "Absenden",
-    "openMenu": "Menü öffnen"
+    "openMenu": "Menü öffnen",
+    "copyFailed": "Link konnte nicht in die Zwischenablage kopiert werden"
   },
   "brand": {
     "name": "ShareTab",

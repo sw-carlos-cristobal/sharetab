@@ -7,7 +7,11 @@
     "namePlaceholder": "例: アパート、パリ旅行",
     "currency": "通貨",
     "submit": "グループを作成",
-    "submitting": "作成中..."
+    "submitting": "作成中...",
+    "details": "グループの詳細",
+    "description": "説明（任意）",
+    "descriptionPlaceholder": "このグループの用途は？",
+    "icon": "アイコン"
   },
   "detail": {
     "expenses": "支出",
@@ -103,5 +107,21 @@
     "linkInfo": "このリンクを持つ人は誰でもグループに参加できます。"
   },
   "empty": "グループがありません",
-  "emptyDescription": "最初のグループを作成して、友達との割り勘を始めましょう。"
+  "emptyDescription": "最初のグループを作成して、友達との割り勘を始めましょう。",
+  "list": {
+    "subtitle": "共有の支出を管理",
+    "newGroup": "新しいグループ",
+    "searchPlaceholder": "グループを検索...",
+    "archived": "アーカイブ済み",
+    "archivedBadge": "アーカイブ済み",
+    "noArchived": "アーカイブされたグループはありません。",
+    "noGroups": "グループがありません。",
+    "noGroupsDescription": "グループを作成して、友達との割り勘を始めましょう。",
+    "createFirst": "最初のグループを作成",
+    "noSearchResults": "検索に一致するグループがありません。",
+    "memberCount": "メンバー{count}人",
+    "expenseCount": "支出{count}件",
+    "unarchive": "アーカイブ解除",
+    "showAll": "{count}件のグループをすべて表示"
+  }
 }

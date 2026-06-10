@@ -26,6 +26,7 @@ import {
   ArrowUp,
   ArrowDown,
 } from "lucide-react";
+import { toast } from "sonner";
 
 type UserSortBy = "name" | "email" | "groupCount" | "createdAt";
 type UserStatus = "all" | "active" | "suspended" | "placeholder";
@@ -95,18 +96,21 @@ export function UserManagementSection({
       utils.admin.getAuditLog.invalidate();
       setDeleteTarget(null);
     },
+    onError: (e) => toast.error(e.message),
   });
   const suspendUser = trpc.admin.suspendUser.useMutation({
     onSuccess: () => {
       utils.admin.listUsers.invalidate();
       utils.admin.getAuditLog.invalidate();
     },
+    onError: (e) => toast.error(e.message),
   });
   const unsuspendUser = trpc.admin.unsuspendUser.useMutation({
     onSuccess: () => {
       utils.admin.listUsers.invalidate();
       utils.admin.getAuditLog.invalidate();
     },
+    onError: (e) => toast.error(e.message),
   });
 
   const [deleteTarget, setDeleteTarget] = useState<{
@@ -127,7 +131,12 @@ export function UserManagementSection({
       if (res.ok) {
         const [, locale] = window.location.pathname.split("/");
         window.location.href = locale ? `/${locale}/dashboard` : "/dashboard";
+      } else {
+        const data = await res.json().catch(() => null);
+        toast.error(data?.error ?? `Impersonation failed (${res.status})`);
       }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Impersonation failed");
     } finally {
       setImpersonating(false);
     }

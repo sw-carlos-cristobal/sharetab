@@ -43,9 +43,14 @@ if [ ! -s "$PGDATA/PG_VERSION" ]; then
   # Start temporarily to create user and database
   su-exec postgres pg_ctl -D "$PGDATA" -w start -o "-k /run/postgresql"
 
-  su-exec postgres psql -h /run/postgresql -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';"
-  su-exec postgres psql -h /run/postgresql -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;"
-  su-exec postgres psql -h /run/postgresql -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;"
+  # Use psql variable quoting (:"ident" / :'literal') so credentials containing
+  # quotes can't break or inject into the bootstrap SQL
+  su-exec postgres psql -h /run/postgresql -v ON_ERROR_STOP=1 \
+    -v db_user="$DB_USER" -v db_password="$DB_PASSWORD" -v db_name="$DB_NAME" <<'EOSQL'
+CREATE USER :"db_user" WITH PASSWORD :'db_password';
+CREATE DATABASE :"db_name" OWNER :"db_user";
+GRANT ALL PRIVILEGES ON DATABASE :"db_name" TO :"db_user";
+EOSQL
 
   su-exec postgres pg_ctl -D "$PGDATA" -w stop
   echo "PostgreSQL initialized."
@@ -102,7 +107,7 @@ echo "  ShareTab Configuration"
 echo "============================================"
 echo "  Version:        $(node -e "console.log(require('./package.json').version)" 2>/dev/null || echo 'unknown')"
 echo "  Commit:         $(cat .commit-sha 2>/dev/null || echo 'unknown')"
-echo "  Database:       ${DATABASE_URL%@*}@***"
+echo "  Database:       $(echo "$DATABASE_URL" | sed -E 's#//[^@]+@#//***:***@#')"
 echo "  DB User:        ${DB_USER:-sharetab}"
 echo "  DB Name:        ${DB_NAME:-sharetab}"
 echo "  Auth URL:       ${NEXTAUTH_URL:-not set}"
@@ -190,4 +195,30 @@ echo ""
 
 echo "Starting ShareTab..."
 export HOME=/home/nextjs
-exec su-exec nextjs node server.js
+
+# Run Node in the background so this script (PID 1) can forward signals.
+# 'docker stop' must reach Postgres too — otherwise it gets SIGKILLed when
+# the grace period expires and is forced into crash recovery on every
+# restart (the stale postmaster.pid this script used to clean up).
+stop_postgres() {
+  echo "Stopping PostgreSQL..."
+  su-exec postgres pg_ctl -D "$PGDATA" -m fast -w stop || true
+}
+
+shutdown() {
+  echo "Received stop signal, shutting down..."
+  if [ -n "$APP_PID" ]; then
+    kill -TERM "$APP_PID" 2>/dev/null || true
+    wait "$APP_PID" 2>/dev/null || true
+  fi
+  stop_postgres
+  exit 0
+}
+trap shutdown TERM INT
+
+su-exec nextjs node server.js &
+APP_PID=$!
+APP_EXIT=0
+wait "$APP_PID" || APP_EXIT=$?
+stop_postgres
+exit "$APP_EXIT"

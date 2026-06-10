@@ -37,7 +37,8 @@
     "submit": "Enregistrer les modifications",
     "submitting": "Enregistrement...",
     "backToExpense": "Retour à la dépense",
-    "itemSplitWarning": "Cette dépense a été créée à partir d'un scan de reçu (répartition par ARTICLE). La modifier la convertira en mode de répartition standard."
+    "itemSplitWarning": "Cette dépense a été créée à partir d'un scan de reçu (répartition par ARTICLE). La modifier la convertira en mode de répartition standard.",
+    "formerMemberSharesWarning": "Cette dépense comprend des parts d'anciens membres du groupe. Leur part a été réattribuée au payeur — vérifiez la répartition avant d'enregistrer."
   },
   "detail": {
     "paidBy": "Payé par",

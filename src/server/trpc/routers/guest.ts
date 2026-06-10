@@ -5,7 +5,8 @@ import { Prisma, GuestSplitStatus } from "@/generated/prisma/client";
 import { createTRPCRouter, publicProcedure, protectedProcedure } from "../init";
 import { processReceiptImage } from "../../lib/receipt-processor";
 import { logger } from "../../lib/logger";
-import { checkRateLimit } from "../../lib/rate-limit";
+import { checkRateLimit, refundRateLimit } from "../../lib/rate-limit";
+import { getClientIp } from "../../lib/client-ip";
 import { parseExtractedData, parseGuestItems, parseGuestPeople, parseGuestAssignments } from "../../lib/json-schemas";
 import { calculateSplitTotals } from "@/lib/split-calculator";
 import { normalizeGuestName } from "@/lib/guest-session";
@@ -212,19 +213,6 @@ export const guestRouter = createTRPCRouter({
   processReceipt: publicProcedure
     .input(z.object({ receiptId: z.string(), correctionHint: z.string().max(500).optional() }))
     .mutation(async ({ ctx, input }) => {
-      // Rate limit: 3 processing attempts per receipt per hour
-      const { allowed } = checkRateLimit(
-        `guest-process:${input.receiptId}`,
-        3,
-        60 * 60 * 1000
-      );
-      if (!allowed) {
-        throw new TRPCError({
-          code: "TOO_MANY_REQUESTS",
-          message: "Too many processing attempts for this receipt. Please try again later.",
-        });
-      }
-
       const receipt = await ctx.db.receipt.findUnique({
         where: { id: input.receiptId },
       });
@@ -235,17 +223,63 @@ export const guestRouter = createTRPCRouter({
         throw new TRPCError({ code: "NOT_FOUND", message: "Receipt not found" });
       }
 
-      // If re-processing with corrections, clear old items first
-      if (input.correctionHint) {
-        await ctx.db.receiptItem.deleteMany({
-          where: { receiptId: input.receiptId },
-        });
+      // Quotas, checked only AFTER the receipt is validated as a real guest
+      // receipt so bad receipt ids can't burn budget:
+      //  - per receipt (3/h): bounds reprocessing of a single receipt
+      //  - per IP (20/h): bounds one client across receipts (spoofable headers)
+      //  - global: hard cap on total unauthenticated AI spend regardless
+      // Consumption is atomic (synchronous, single event-loop turn) BEFORE
+      // the processing claim, so concurrent requests cannot all slip past a
+      // non-consuming check; if the claim then fails with CONFLICT, the
+      // consumed attempts are refunded so retries against an in-flight
+      // receipt don't drain any bucket.
+      const ip = getClientIp(ctx.headers);
+      const globalMax = parseInt(process.env.GUEST_AI_GLOBAL_LIMIT ?? "100", 10) || 100;
+      const quotaWindow = 60 * 60 * 1000;
+      const quotas: Array<{ key: string; max: number }> = [
+        { key: `guest-process:${input.receiptId}`, max: 3 },
+        { key: `guest-process-ip:${ip}`, max: 20 },
+        { key: "guest-process-global", max: globalMax },
+      ];
+      const consumed: string[] = [];
+      const refundConsumed = () => {
+        for (const key of consumed) refundRateLimit(key);
+      };
+      for (const quota of quotas) {
+        if (checkRateLimit(quota.key, quota.max, quotaWindow).allowed) {
+          consumed.push(quota.key);
+        } else {
+          refundConsumed();
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: "Too many processing attempts. Please try again later.",
+          });
+        }
       }
 
-      await ctx.db.receipt.update({
-        where: { id: input.receiptId },
+      // Conditional update doubles as a mutex against concurrent processing.
+      // A PROCESSING receipt untouched for 15+ minutes is considered stale
+      // (crashed run) and may be re-claimed. The threshold deliberately
+      // exceeds the worst-case provider pipeline (2 passes x per-provider
+      // timeouts of 30-120s) so a slow-but-live run is never re-claimed.
+      // Old items are replaced atomically inside processReceiptImage.
+      const claimed = await ctx.db.receipt.updateMany({
+        where: {
+          id: input.receiptId,
+          OR: [
+            { status: { not: "PROCESSING" } },
+            { updatedAt: { lt: new Date(Date.now() - 15 * 60 * 1000) } },
+          ],
+        },
         data: { status: "PROCESSING" },
       });
+      if (claimed.count === 0) {
+        refundConsumed();
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Receipt is already being processed",
+        });
+      }
 
       try {
         return await processReceiptImage({
@@ -270,9 +304,11 @@ export const guestRouter = createTRPCRouter({
           },
         });
 
+        // Details are logged server-side; never echo raw provider errors
+        // (model output, internal URLs) to unauthenticated guests.
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: `Receipt processing failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+          message: "Receipt processing failed. Please try again.",
         });
       }
     }),
@@ -341,9 +377,7 @@ export const guestRouter = createTRPCRouter({
       tipOverride: z.number().int().min(0).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const ip = ctx.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
-        || ctx.headers.get("x-real-ip")?.trim()
-        || "global";
+      const ip = getClientIp(ctx.headers);
       const maxGuest = parseInt(process.env.GUEST_RATE_LIMIT_MAX ?? "10", 10) || 10;
       const { allowed } = checkRateLimit(`guest-create-split:${ip}`, maxGuest, 60 * 60 * 1000);
       if (!allowed) {
@@ -498,9 +532,7 @@ export const guestRouter = createTRPCRouter({
       paidByName: z.string().trim().min(1).max(100),
     }))
     .mutation(async ({ ctx, input }) => {
-      const ip = ctx.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
-        || ctx.headers.get("x-real-ip")?.trim()
-        || "global";
+      const ip = getClientIp(ctx.headers);
       const maxGuest = parseInt(process.env.GUEST_RATE_LIMIT_MAX ?? "10", 10) || 10;
       const { allowed } = checkRateLimit(`guest-create-claim:${ip}`, maxGuest, 60 * 60 * 1000);
       if (!allowed) {

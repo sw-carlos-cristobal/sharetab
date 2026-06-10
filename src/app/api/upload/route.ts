@@ -5,10 +5,15 @@ import { logger } from "@/server/lib/logger";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { getUploadDir } from "@/server/lib/upload-dir";
+import { getClientIp } from "@/server/lib/client-ip";
 import { randomUUID } from "crypto";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic"];
-const MAX_SIZE = parseInt(process.env.MAX_UPLOAD_SIZE_MB ?? "10") * 1024 * 1024;
+// Fall back to 10MB when the env var is unset or non-numeric — a NaN limit
+// would make every size comparison false and disable the check entirely.
+const parsedMaxMb = parseInt(process.env.MAX_UPLOAD_SIZE_MB ?? "10", 10);
+const MAX_SIZE_MB = parsedMaxMb > 0 ? parsedMaxMb : 10;
+const MAX_SIZE = MAX_SIZE_MB * 1024 * 1024;
 
 /**
  * Detect MIME type from magic bytes to prevent client MIME spoofing.
@@ -51,29 +56,88 @@ const parsedGuestLimit = Math.floor(Number(process.env.GUEST_RATE_LIMIT_MAX));
 const GUEST_RATE_LIMIT = parsedGuestLimit > 0 ? parsedGuestLimit : 10;
 const GUEST_RATE_WINDOW = 60 * 60 * 1000; // 1 hour
 
-function checkGuestRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const entry = guestUploads.get(ip);
-  if (!entry || now > entry.resetAt) {
-    guestUploads.set(ip, { count: 1, resetAt: now + GUEST_RATE_WINDOW });
-    return true;
+// Global cap across all guest uploads per window: per-IP limits can be
+// bypassed by rotating spoofed forwarded-IP headers, so bound total
+// unauthenticated disk usage regardless of source.
+const parsedGlobalLimit = Math.floor(Number(process.env.GUEST_UPLOAD_GLOBAL_LIMIT));
+const GUEST_GLOBAL_LIMIT = parsedGlobalLimit > 0 ? parsedGlobalLimit : 100;
+const GLOBAL_KEY = "__global__";
+
+// Hard ceiling on tracked IP buckets. Pruning expired entries alone is not
+// enough: spoofed, rotating forwarded-IP headers can mint unlimited fresh
+// buckets inside a single window. Above the cap, oldest entries are evicted
+// (insertion order) — the global bucket remains the real abuse bound.
+const MAX_TRACKED_IPS = 5000;
+
+function pruneExpiredEntries(now: number): void {
+  if (guestUploads.size <= 1000) return;
+  for (const [key, value] of guestUploads) {
+    if (now > value.resetAt) guestUploads.delete(key);
   }
-  if (entry.count >= GUEST_RATE_LIMIT) return false;
-  entry.count++;
+  if (guestUploads.size <= MAX_TRACKED_IPS) return;
+  for (const key of guestUploads.keys()) {
+    if (key === GLOBAL_KEY) continue;
+    guestUploads.delete(key);
+    if (guestUploads.size <= MAX_TRACKED_IPS) break;
+  }
+}
+
+function hasCapacity(key: string, limit: number, now: number): boolean {
+  const entry = guestUploads.get(key);
+  return !entry || now > entry.resetAt || entry.count < limit;
+}
+
+function increment(key: string, now: number): void {
+  const entry = guestUploads.get(key);
+  if (!entry || now > entry.resetAt) {
+    guestUploads.set(key, { count: 1, resetAt: now + GUEST_RATE_WINDOW });
+  } else {
+    entry.count++;
+  }
+}
+
+/**
+ * Check remaining budget without consuming it — used as a cheap early
+ * rejection before the request body is parsed.
+ */
+function hasGuestUploadBudget(ip: string): boolean {
+  const now = Date.now();
+  pruneExpiredEntries(now);
+  return (
+    hasCapacity(GLOBAL_KEY, GUEST_GLOBAL_LIMIT, now) &&
+    hasCapacity(ip, GUEST_RATE_LIMIT, now)
+  );
+}
+
+/**
+ * Consume one upload slot. Called only after the upload passes validation, so
+ * rejected/invalid requests never burn budget. Both buckets are checked
+ * before either is incremented: an over-limit IP must not drain the shared
+ * global pool, and a full global pool must not burn the caller's IP budget.
+ */
+function consumeGuestUploadBudget(ip: string): boolean {
+  const now = Date.now();
+  if (
+    !hasCapacity(ip, GUEST_RATE_LIMIT, now) ||
+    !hasCapacity(GLOBAL_KEY, GUEST_GLOBAL_LIMIT, now)
+  ) {
+    return false;
+  }
+  increment(ip, now);
+  increment(GLOBAL_KEY, now);
   return true;
 }
 
 export async function POST(req: NextRequest) {
   const isGuest = req.nextUrl.searchParams.get("guest") === "true";
   let userId: string | undefined;
+  let guestIp: string | null = null;
 
   if (isGuest) {
-    // Guest upload: rate limit by IP
-    const ip = req.headers.get("cf-connecting-ip")
-      || req.headers.get("x-real-ip")
-      || req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
-      || "unknown";
-    if (!checkGuestRateLimit(ip)) {
+    // Guest upload: rate limit by IP. Peek only — budget is consumed after
+    // the upload passes validation so invalid requests can't burn it.
+    guestIp = getClientIp(req.headers);
+    if (!hasGuestUploadBudget(guestIp)) {
       return Response.json({ error: "Too many uploads. Please try again later." }, { status: 429 });
     }
   } else {
@@ -101,7 +165,7 @@ export async function POST(req: NextRequest) {
 
   if (file.size > MAX_SIZE) {
     return Response.json(
-      { error: `File too large. Max: ${process.env.MAX_UPLOAD_SIZE_MB ?? 10}MB` },
+      { error: `File too large. Max: ${MAX_SIZE_MB}MB` },
       { status: 400 }
     );
   }
@@ -129,6 +193,11 @@ export async function POST(req: NextRequest) {
       { error: "File content does not match an allowed image type" },
       { status: 400 }
     );
+  }
+
+  // All validation passed — now consume guest budget (per-IP, then global)
+  if (guestIp !== null && !consumeGuestUploadBudget(guestIp)) {
+    return Response.json({ error: "Too many uploads. Please try again later." }, { status: 429 });
   }
 
   await writeFile(filepath, buffer);

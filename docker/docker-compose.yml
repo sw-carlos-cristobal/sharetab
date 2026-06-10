@@ -37,7 +37,11 @@ services:
       - UPLOAD_DIR=/app/uploads
       - MAX_UPLOAD_SIZE_MB=${MAX_UPLOAD_SIZE_MB:-10}
       - AUTH_RATE_LIMIT_MAX=${AUTH_RATE_LIMIT_MAX:-5}
+      - AUTH_IP_RATE_LIMIT_MAX=${AUTH_IP_RATE_LIMIT_MAX:-30}
       - REGISTER_RATE_LIMIT_MAX=${REGISTER_RATE_LIMIT_MAX:-10}
+      - GUEST_RATE_LIMIT_MAX=${GUEST_RATE_LIMIT_MAX:-10}
+      - GUEST_UPLOAD_GLOBAL_LIMIT=${GUEST_UPLOAD_GLOBAL_LIMIT:-100}
+      - GUEST_AI_GLOBAL_LIMIT=${GUEST_AI_GLOBAL_LIMIT:-100}
       - LOG_LEVEL=${LOG_LEVEL:-info}
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -45,11 +49,14 @@ services:
       - claude:/app/claude
       - chatgpt:/app/chatgpt
     restart: unless-stopped
+    # Give the entrypoint time to stop Node and shut PostgreSQL down cleanly
+    stop_grace_period: 30s
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 60s
 
 volumes:
   pgdata:

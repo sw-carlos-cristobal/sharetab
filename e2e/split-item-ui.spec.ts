@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { readFileSync } from "fs";
 import { resolve } from "path";
 import { users, login, navigateToGroup, authedContext, trpcMutation, trpcQuery, trpcResult } from "./helpers";
 
@@ -25,7 +26,7 @@ test.describe("Split Item UI", () => {
     const ctx = await authedContext(users.alice.email, users.alice.password);
     const groupId = await getApartmentGroupId(ctx);
     const uploadRes = await ctx.post(`${BASE}/api/upload`, {
-      multipart: { file: { name: "split-ui.png", mimeType: "image/png", buffer: require("fs").readFileSync(RECEIPT_PATH) } },
+      multipart: { file: { name: "split-ui.png", mimeType: "image/png", buffer: readFileSync(RECEIPT_PATH) } },
     });
     const { receiptId } = await uploadRes.json();
 
@@ -84,7 +85,7 @@ test.describe("Split Item UI", () => {
     const ctx = await authedContext(users.alice.email, users.alice.password);
     const groupId = await getApartmentGroupId(ctx);
     const uploadRes = await ctx.post(`${BASE}/api/upload`, {
-      multipart: { file: { name: "sfl-ui.png", mimeType: "image/png", buffer: require("fs").readFileSync(RECEIPT_PATH) } },
+      multipart: { file: { name: "sfl-ui.png", mimeType: "image/png", buffer: readFileSync(RECEIPT_PATH) } },
     });
     const { receiptId } = await uploadRes.json();
     await trpcMutation(ctx, "receipts.processReceipt", { receiptId, groupId }, 120000);
@@ -162,7 +163,7 @@ test.describe("Split Item UI", () => {
     const groupId = await getApartmentGroupId(ctx);
 
     const uploadRes = await ctx.post(`${BASE}/api/upload`, {
-      multipart: { file: { name: "rehydrate-test.png", mimeType: "image/png", buffer: require("fs").readFileSync(RECEIPT_PATH) } },
+      multipart: { file: { name: "rehydrate-test.png", mimeType: "image/png", buffer: readFileSync(RECEIPT_PATH) } },
     });
     const { receiptId } = await uploadRes.json();
     await trpcMutation(ctx, "receipts.processReceipt", { receiptId, groupId }, 120000);
