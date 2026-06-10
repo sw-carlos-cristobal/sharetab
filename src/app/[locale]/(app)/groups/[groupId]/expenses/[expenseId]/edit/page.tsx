@@ -1,8 +1,10 @@
 "use client";
 
-import { use, useMemo, useState, useEffect } from "react";
+import { use, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
+import type { inferRouterOutputs } from "@trpc/server";
+import type { AppRouter } from "@/server/trpc/router";
 import { trpc } from "@/lib/trpc";
 import { parseToCents, centsToDecimal, formatCents } from "@/lib/money";
 import { COMMON_CURRENCIES } from "@/lib/currencies";
@@ -16,6 +18,10 @@ import { EqualSplit } from "@/components/expenses/equal-split";
 import { ExactSplit } from "@/components/expenses/exact-split";
 import { PercentageSplit } from "@/components/expenses/percentage-split";
 import { SharesSplit } from "@/components/expenses/shares-split";
+
+type RouterOutputs = inferRouterOutputs<AppRouter>;
+type ExpenseData = RouterOutputs["expenses"]["get"];
+type GroupData = NonNullable<RouterOutputs["groups"]["get"]>;
 
 type SplitMode = "EQUAL" | "EXACT" | "PERCENTAGE" | "SHARES";
 
@@ -37,11 +43,54 @@ export default function EditExpensePage({
   params: Promise<{ groupId: string; expenseId: string }>;
 }) {
   const { groupId, expenseId } = use(params);
-  const router = useRouter();
-  const locale = useLocale();
   const t = useTranslations("expenses");
   const group = trpc.groups.get.useQuery({ groupId });
   const expense = trpc.expenses.get.useQuery({ groupId, expenseId });
+
+  if (expense.isLoading || group.isLoading) {
+    return <LoadingSpinner />;
+  }
+  if (!expense.data || !group.data) {
+    return (
+      <div className="mx-auto max-w-md py-16 text-center">
+        <ArrowLeft className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+        <h2 className="mb-2 text-lg font-semibold">{t("detail.notFound")}</h2>
+        <p className="mb-4 text-sm text-muted-foreground">
+          {t("detail.notFoundDescription")}
+        </p>
+        <Button nativeButton={false} render={<Link href={`/groups/${groupId}`} />}>
+          {t("detail.backToGroup")}
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <EditExpenseForm
+      groupId={groupId}
+      expenseId={expenseId}
+      expense={expense.data}
+      group={group.data}
+    />
+  );
+}
+
+// Rendered only once expense + group data is available, so all form state can
+// be initialized directly from the loaded data (no sync-from-query effects).
+function EditExpenseForm({
+  groupId,
+  expenseId,
+  expense,
+  group,
+}: {
+  groupId: string;
+  expenseId: string;
+  expense: ExpenseData;
+  group: GroupData;
+}) {
+  const router = useRouter();
+  const locale = useLocale();
+  const t = useTranslations("expenses");
 
   const splitModes = useMemo(() => [
     { value: "EQUAL" as SplitMode, label: t("new.splitEqual"), description: t("new.splitEqualDescription") },
@@ -50,36 +99,144 @@ export default function EditExpensePage({
     { value: "SHARES" as SplitMode, label: t("new.splitShares"), description: t("new.splitSharesDescription") },
   ], [t]);
 
-  const [title, setTitle] = useState("");
-  const [amountStr, setAmountStr] = useState("");
-  const [category, setCategory] = useState("");
-  const [paidById, setPaidById] = useState("");
-  const [splitMode, setSplitMode] = useState<SplitMode>("EQUAL");
-  const [shares, setShares] = useState<ShareEntry[]>([]);
-  const [currency, setCurrency] = useState<string>("");
-  const [manualRate, setManualRate] = useState<string>("");
-  const [useManualRate, setUseManualRate] = useState(false);
-  const [loaded, setLoaded] = useState(false);
+  const isItemSplit = expense.splitMode === "ITEM";
+  const initiallyDifferentCurrency =
+    expense.currency.toUpperCase() !== group.currency.toUpperCase();
 
-  useEffect(() => {
-    if (expense.data && group.data && !loaded) {
-      const e = expense.data;
-      setTitle(e.title);
-      setAmountStr(centsToDecimal(e.amount));
-      setCategory(e.category ?? "");
-      setPaidById(e.paidById);
-      setCurrency(e.currency);
-      const groupCur = group.data.currency;
-      if (e.currency.toUpperCase() !== groupCur.toUpperCase() && e.exchangeRate) {
-        setUseManualRate(true);
-        setManualRate(String(e.exchangeRate));
-      }
-      if (e.splitMode !== "ITEM") {
-        setSplitMode(e.splitMode as SplitMode);
-      }
-      setLoaded(true);
+  const [title, setTitle] = useState(expense.title);
+  const [amountStr, setAmountStr] = useState(() => centsToDecimal(expense.amount));
+  const [category, setCategory] = useState(expense.category ?? "");
+  // The saved payer may have left the group (member removal preserves
+  // financial history). Server-side membership validation would reject the
+  // stale id, so start empty and force the user to pick a current member.
+  const [paidById, setPaidById] = useState(() =>
+    group.members.some((m) => m.user.id === expense.paidById)
+      ? expense.paidById
+      : ""
+  );
+  const [splitMode, setSplitMode] = useState<SplitMode>(
+    isItemSplit ? "EQUAL" : (expense.splitMode as SplitMode)
+  );
+  const [shares, setShares] = useState<ShareEntry[]>([]);
+  const [currency, setCurrency] = useState<string>(expense.currency);
+  const [manualRate, setManualRate] = useState<string>(
+    initiallyDifferentCurrency && expense.exchangeRate ? String(expense.exchangeRate) : ""
+  );
+  const [useManualRate, setUseManualRate] = useState(
+    initiallyDifferentCurrency && !!expense.exchangeRate
+  );
+
+  // Seed the split editors with the saved shares so editing doesn't silently
+  // rewrite the split. Only the saved mode is seeded; other modes keep their
+  // new-expense defaults. (percentage is stored in basis points: 5000 = 50%)
+  // Saved shares can reference users who have since left the group (member
+  // removal preserves financial history). The editors only render current
+  // members, so a hidden ex-member id would be unremovable and make every
+  // save fail server-side membership validation. The ex-member portion is
+  // reassigned to the payer when they're still a member (creating an entry
+  // for them if needed), otherwise to the first remaining share-holder, or
+  // the first current member when no saved shares survive at all — so EXACT
+  // amounts still sum to the total and PERCENTAGE still sums to 100, keeping
+  // the expense saveable — and a warning banner tells the user to review it.
+  const { savedShares, hasFormerMemberShares } = useMemo(() => {
+    const currentMemberIds = new Set(group.members.map((m) => m.user.id));
+    const toSeed = (s: ExpenseData["shares"][number]): ShareEntry => ({
+      userId: s.userId,
+      amount: s.amount,
+      ...(s.percentage != null ? { percentage: s.percentage } : {}),
+      ...(s.shares != null ? { shares: s.shares } : {}),
+    });
+    const kept = expense.shares
+      .filter((s) => currentMemberIds.has(s.userId))
+      .map(toSeed);
+    const dropped = expense.shares.filter((s) => !currentMemberIds.has(s.userId));
+    if (dropped.length === 0) {
+      return { savedShares: kept, hasFormerMemberShares: false };
     }
-  }, [expense.data, group.data, loaded]);
+    const droppedAmount = dropped.reduce((sum, s) => sum + s.amount, 0);
+    const droppedPct = dropped.reduce((sum, s) => sum + (s.percentage ?? 0), 0);
+    const droppedUnits = dropped.reduce((sum, s) => sum + (s.shares ?? 0), 0);
+    const targetId = currentMemberIds.has(expense.paidById)
+      ? expense.paidById
+      : kept[0]?.userId ?? group.members[0]?.user.id;
+    if (!targetId) {
+      return { savedShares: kept, hasFormerMemberShares: true };
+    }
+    const target = kept.find((s) => s.userId === targetId);
+    if (!target) {
+      return {
+        savedShares: [
+          ...kept,
+          {
+            userId: targetId,
+            amount: droppedAmount,
+            // Keyed on field presence (not summed value) so explicit zeros
+            // survive, matching toSeed's != null convention.
+            ...(dropped.some((s) => s.percentage != null)
+              ? { percentage: droppedPct }
+              : {}),
+            ...(dropped.some((s) => s.shares != null)
+              ? { shares: droppedUnits }
+              : {}),
+          },
+        ],
+        hasFormerMemberShares: true,
+      };
+    }
+    return {
+      savedShares: kept.map((s) =>
+        s === target
+          ? {
+              ...s,
+              amount: s.amount + droppedAmount,
+              percentage:
+                s.percentage != null || droppedPct > 0
+                  ? (s.percentage ?? 0) + droppedPct
+                  : s.percentage,
+              shares: (s.shares ?? 1) + droppedUnits,
+            }
+          : s
+      ),
+      hasFormerMemberShares: true,
+    };
+  }, [expense, group]);
+  const initialSelected = useMemo(
+    () =>
+      expense.splitMode === "EQUAL" && savedShares.length > 0
+        ? savedShares.map((s) => s.userId)
+        : undefined,
+    [expense, savedShares]
+  );
+  const initialAmounts = useMemo(
+    () =>
+      expense.splitMode === "EXACT" && savedShares.length > 0
+        ? Object.fromEntries(
+            savedShares.map((s) => [s.userId, centsToDecimal(s.amount)])
+          )
+        : undefined,
+    [expense, savedShares]
+  );
+  const initialPercentages = useMemo(
+    () =>
+      expense.splitMode === "PERCENTAGE" && savedShares.length > 0
+        ? Object.fromEntries(
+            savedShares.map((s) => [
+              s.userId,
+              s.percentage != null ? String(s.percentage / 100) : "0",
+            ])
+          )
+        : undefined,
+    [expense, savedShares]
+  );
+  const initialShareUnits = useMemo(
+    () =>
+      expense.splitMode === "SHARES" && savedShares.length > 0
+        ? Object.fromEntries(
+            savedShares.map((s) => [s.userId, String(s.shares ?? 1)])
+          )
+        : undefined,
+    [expense, savedShares]
+  );
 
   const updateExpense = trpc.expenses.update.useMutation({
     onSuccess: () => {
@@ -87,19 +244,18 @@ export default function EditExpensePage({
     },
   });
 
-  const members: MemberInfo[] =
-    group.data?.members.map((m) => ({
-      id: m.user.id,
-      name: m.user.placeholderName ?? m.user.name ?? m.user.email,
-    })) ?? [];
+  const members: MemberInfo[] = group.members.map((m) => ({
+    id: m.user.id,
+    name: m.user.placeholderName ?? m.user.name ?? m.user.email,
+  }));
 
   const amountCents = parseToCents(amountStr);
-  const groupCurrency = group.data?.currency ?? "USD";
+  const groupCurrency = group.currency;
   const effectiveCurrency = currency || groupCurrency;
   const isDifferentCurrency = effectiveCurrency.toUpperCase() !== groupCurrency.toUpperCase();
   const parsedManualRate = parseFloat(manualRate);
   const manualRateValid = useManualRate && !isNaN(parsedManualRate) && parsedManualRate > 0;
-  const currencyChanged = effectiveCurrency.toUpperCase() !== (expense.data?.currency ?? "").toUpperCase();
+  const currencyChanged = effectiveCurrency.toUpperCase() !== expense.currency.toUpperCase();
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -119,26 +275,6 @@ export default function EditExpensePage({
     });
   }
 
-  if (expense.isLoading || group.isLoading) {
-    return <LoadingSpinner />;
-  }
-  if (!expense.data) {
-    return (
-      <div className="mx-auto max-w-md py-16 text-center">
-        <ArrowLeft className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-        <h2 className="mb-2 text-lg font-semibold">{t("detail.notFound")}</h2>
-        <p className="mb-4 text-sm text-muted-foreground">
-          {t("detail.notFoundDescription")}
-        </p>
-        <Button nativeButton={false} render={<Link href={`/groups/${groupId}`} />}>
-          {t("detail.backToGroup")}
-        </Button>
-      </div>
-    );
-  }
-
-  const isItemSplit = expense.data.splitMode === "ITEM";
-
   return (
     <div className="mx-auto max-w-lg space-y-6">
       <div className="flex items-center gap-2">
@@ -152,6 +288,14 @@ export default function EditExpensePage({
         <Card className="border-amber-300">
           <CardContent className="py-4 text-sm text-amber-700">
             {t("edit.itemSplitWarning")}
+          </CardContent>
+        </Card>
+      )}
+
+      {hasFormerMemberShares && (
+        <Card className="border-amber-300">
+          <CardContent className="py-4 text-sm text-amber-700">
+            {t("edit.formerMemberSharesWarning")}
           </CardContent>
         </Card>
       )}
@@ -321,6 +465,7 @@ export default function EditExpensePage({
                   onChange={setShares}
                   locale={locale}
                   currency={effectiveCurrency}
+                  initialSelected={initialSelected}
                 />
               )}
               {splitMode === "EXACT" && (
@@ -330,6 +475,7 @@ export default function EditExpensePage({
                   onChange={setShares}
                   locale={locale}
                   currency={effectiveCurrency}
+                  initialAmounts={initialAmounts}
                 />
               )}
               {splitMode === "PERCENTAGE" && (
@@ -339,6 +485,7 @@ export default function EditExpensePage({
                   onChange={setShares}
                   locale={locale}
                   currency={effectiveCurrency}
+                  initialPercentages={initialPercentages}
                 />
               )}
               {splitMode === "SHARES" && (
@@ -348,6 +495,7 @@ export default function EditExpensePage({
                   onChange={setShares}
                   locale={locale}
                   currency={effectiveCurrency}
+                  initialShareUnits={initialShareUnits}
                 />
               )}
             </div>

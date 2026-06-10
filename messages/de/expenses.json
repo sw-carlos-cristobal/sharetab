@@ -37,7 +37,8 @@
     "submit": "Änderungen speichern",
     "submitting": "Speichern...",
     "backToExpense": "Zurück zur Ausgabe",
-    "itemSplitWarning": "Diese Ausgabe wurde aus einem Belegscan erstellt (ARTIKEL-Aufteilung). Beim Bearbeiten wird sie in einen Standard-Aufteilungsmodus umgewandelt."
+    "itemSplitWarning": "Diese Ausgabe wurde aus einem Belegscan erstellt (ARTIKEL-Aufteilung). Beim Bearbeiten wird sie in einen Standard-Aufteilungsmodus umgewandelt.",
+    "formerMemberSharesWarning": "Diese Ausgabe enthält Anteile ehemaliger Gruppenmitglieder. Ihr Anteil wurde dem Zahler zugewiesen – überprüfen Sie die Aufteilung vor dem Speichern."
   },
   "detail": {
     "paidBy": "Bezahlt von",

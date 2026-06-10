@@ -21,7 +21,8 @@
     "loading": "Carregando...",
     "saving": "Salvando...",
     "submit": "Enviar",
-    "openMenu": "Abrir menu"
+    "openMenu": "Abrir menu",
+    "copyFailed": "Não foi possível copiar o link para a área de transferência"
   },
   "brand": {
     "name": "ShareTab",

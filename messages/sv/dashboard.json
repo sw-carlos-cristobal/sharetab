@@ -14,5 +14,7 @@
   "groups": "Grupper",
   "showMore": "Visa mer",
   "members": "{count, plural, one {# medlem} other {# medlemmar}}",
-  "archivedGroups": "{count, plural, one {# arkiverad grupp} other {# arkiverade grupper}}"
+  "archivedGroups": "{count, plural, one {# arkiverad grupp} other {# arkiverade grupper}}",
+  "mixedCurrencies": "Blandade valutor",
+  "mixedCurrenciesDebts": "Dina grupper använder olika valutor, så sammanlagda saldon kan inte visas. Öppna en grupp för att se dess saldo."
 }

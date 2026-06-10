@@ -37,7 +37,8 @@
     "submit": "Salvar alterações",
     "submitting": "Salvando...",
     "backToExpense": "Voltar à despesa",
-    "itemSplitWarning": "Esta despesa foi criada a partir de um escaneamento de recibo (divisão por ITEM). Ao editar, será convertida para um modo de divisão padrão."
+    "itemSplitWarning": "Esta despesa foi criada a partir de um escaneamento de recibo (divisão por ITEM). Ao editar, será convertida para um modo de divisão padrão.",
+    "formerMemberSharesWarning": "Esta despesa inclui partes de ex-membros do grupo. A parte deles foi reatribuída a quem pagou — revise a divisão antes de salvar."
   },
   "detail": {
     "paidBy": "Pago por",

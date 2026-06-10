@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, useEffect } from "react";
+import { use, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { trpc } from "@/lib/trpc";
@@ -13,6 +13,101 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Archive, ArchiveRestore, ArrowLeft, Pencil, Trash2, UserPlus, Check, X } from "lucide-react";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { toast } from "sonner";
+
+// Details form is a separate component so its state is initialized exactly
+// once from the loaded group data. The page invalidates `groups.get` whenever
+// members change; syncing state on every refetch would clobber unsaved edits.
+function GroupDetailsForm({
+  groupId,
+  initialName,
+  initialDescription,
+  initialCurrency,
+}: {
+  groupId: string;
+  initialName: string;
+  initialDescription: string;
+  initialCurrency: string;
+}) {
+  const t = useTranslations("groups");
+  const utils = trpc.useUtils();
+
+  const [name, setName] = useState(initialName);
+  const [description, setDescription] = useState(initialDescription);
+  const [currency, setCurrency] = useState(initialCurrency);
+
+  const updateGroup = trpc.groups.update.useMutation({
+    onSuccess: () => {
+      utils.groups.get.invalidate({ groupId });
+      utils.groups.list.invalidate();
+    },
+  });
+
+  function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    updateGroup.mutate({
+      groupId,
+      name,
+      description: description || undefined,
+      currency: currency || undefined,
+    });
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("settings.details")}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSave} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="name">{t("settings.name")}</Label>
+            <Input
+              id="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="description">{t("settings.description")}</Label>
+            <Input
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="currency">{t("settings.currency")}</Label>
+            <select
+              id="currency"
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value)}
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              {COMMON_CURRENCIES.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.code} - {c.name}
+                </option>
+              ))}
+            </select>
+            {updateGroup.error && (
+              <p className="text-xs text-destructive">
+                {updateGroup.error.message}
+              </p>
+            )}
+          </div>
+          <Button type="submit" disabled={updateGroup.isPending}>
+            {updateGroup.isPending ? t("settings.saving") : t("settings.saveChanges")}
+          </Button>
+          {updateGroup.isSuccess && (
+            <p className="text-sm text-green-600">{t("settings.saved")}</p>
+          )}
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function GroupSettingsPage({
   params,
@@ -25,32 +120,15 @@ export default function GroupSettingsPage({
   const group = trpc.groups.get.useQuery({ groupId });
   const utils = trpc.useUtils();
 
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [currency, setCurrency] = useState("");
   const [placeholderName, setPlaceholderName] = useState("");
   const [editingPlaceholder, setEditingPlaceholder] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
-
-  useEffect(() => {
-    if (group.data) {
-      setName(group.data.name);
-      setDescription(group.data.description ?? "");
-      setCurrency(group.data.currency);
-    }
-  }, [group.data]);
-
-  const updateGroup = trpc.groups.update.useMutation({
-    onSuccess: () => {
-      utils.groups.get.invalidate({ groupId });
-      utils.groups.list.invalidate();
-    },
-  });
 
   const deleteGroup = trpc.groups.delete.useMutation({
     onSuccess: () => {
       router.push("/groups");
     },
+    onError: (e) => toast.error(e.message),
   });
 
   const archiveGroup = trpc.groups.archive.useMutation({
@@ -59,6 +137,7 @@ export default function GroupSettingsPage({
       utils.groups.listArchived.invalidate();
       router.push("/groups");
     },
+    onError: (e) => toast.error(e.message),
   });
 
   const unarchiveGroup = trpc.groups.unarchive.useMutation({
@@ -67,6 +146,7 @@ export default function GroupSettingsPage({
       utils.groups.list.invalidate();
       utils.groups.listArchived.invalidate();
     },
+    onError: (e) => toast.error(e.message),
   });
 
   const addPlaceholder = trpc.groups.addPlaceholder.useMutation({
@@ -81,21 +161,13 @@ export default function GroupSettingsPage({
       setEditingPlaceholder(null);
       utils.groups.get.invalidate({ groupId });
     },
+    onError: (e) => toast.error(e.message),
   });
 
   const removeMember = trpc.groups.removeMember.useMutation({
     onSuccess: () => utils.groups.get.invalidate({ groupId }),
+    onError: (e) => toast.error(e.message),
   });
-
-  function handleSave(e: React.FormEvent) {
-    e.preventDefault();
-    updateGroup.mutate({
-      groupId,
-      name,
-      description: description || undefined,
-      currency: currency || undefined,
-    });
-  }
 
   function handleAddPlaceholder(e: React.FormEvent) {
     e.preventDefault();
@@ -139,58 +211,12 @@ export default function GroupSettingsPage({
         </div>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("settings.details")}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSave} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">{t("settings.name")}</Label>
-              <Input
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="description">{t("settings.description")}</Label>
-              <Input
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="currency">{t("settings.currency")}</Label>
-              <select
-                id="currency"
-                value={currency}
-                onChange={(e) => setCurrency(e.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              >
-                {COMMON_CURRENCIES.map((c) => (
-                  <option key={c.code} value={c.code}>
-                    {c.code} - {c.name}
-                  </option>
-                ))}
-              </select>
-              {updateGroup.error && (
-                <p className="text-xs text-destructive">
-                  {updateGroup.error.message}
-                </p>
-              )}
-            </div>
-            <Button type="submit" disabled={updateGroup.isPending}>
-              {updateGroup.isPending ? t("settings.saving") : t("settings.saveChanges")}
-            </Button>
-            {updateGroup.isSuccess && (
-              <p className="text-sm text-green-600">{t("settings.saved")}</p>
-            )}
-          </form>
-        </CardContent>
-      </Card>
+      <GroupDetailsForm
+        groupId={groupId}
+        initialName={group.data.name}
+        initialDescription={group.data.description ?? ""}
+        initialCurrency={group.data.currency}
+      />
 
       <Card>
         <CardHeader>

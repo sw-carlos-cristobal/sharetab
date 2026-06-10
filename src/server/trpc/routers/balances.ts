@@ -146,6 +146,7 @@ export const balancesRouter = createTRPCRouter({
       select: {
         id: true,
         name: true,
+        currency: true,
         expenses: {
           select: {
             paidById: true,
@@ -166,6 +167,7 @@ export const balancesRouter = createTRPCRouter({
     const perGroup: {
       groupId: string;
       groupName: string;
+      currency: string;
       balance: number;
     }[] = [];
 
@@ -179,6 +181,7 @@ export const balancesRouter = createTRPCRouter({
       perGroup.push({
         groupId: group.id,
         groupName: group.name,
+        currency: group.currency,
         balance: net,
       });
     }

@@ -90,6 +90,28 @@ export default function DashboardPage() {
     : groups.data?.slice(0, GROUPS_PER_PAGE);
   const hasMoreGroups = (groups.data?.length ?? 0) > GROUPS_PER_PAGE;
 
+  // Aggregate totals span all groups. When every contributing group uses
+  // the same currency, display it; with mixed currencies the unconverted
+  // sums are meaningless, so the aggregate numbers are suppressed entirely
+  // (no FX conversion is attempted) and a "mixed currencies" note is shown
+  // instead. Zero-balance groups are ignored: they contribute nothing to
+  // the totals, and per-person debts can't involve a net-zero member
+  // (simplifyDebts gives them no edges), so an empty or settled group in
+  // another currency must not suppress otherwise-valid aggregates.
+  const groupCurrencies = new Set(
+    dashboard.data?.perGroup
+      .filter((g) => g.balance !== 0)
+      .map((g) => g.currency) ?? []
+  );
+  const hasMixedCurrencies = groupCurrencies.size > 1;
+  // All-settled fallback uses the ordered groups list (updatedAt desc) so
+  // the zero totals show the first *displayed* group's currency; perGroup
+  // comes from an unordered query and its index 0 is arbitrary.
+  const aggregateCurrency =
+    groupCurrencies.size === 1
+      ? [...groupCurrencies][0]!
+      : groups.data?.[0]?.currency ?? "USD";
+
   return (
     <div className="space-y-8">
       {/* ---- Header ---- */}
@@ -116,9 +138,15 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             {dashboard.data ? (
-              <span className="text-3xl font-bold tracking-tight tabular-nums text-green-600 dark:text-green-400">
-                {formatCents(dashboard.data.totalOwed, "USD", locale)}
-              </span>
+              hasMixedCurrencies ? (
+                <span className="text-lg font-medium text-muted-foreground">
+                  {t("mixedCurrencies")}
+                </span>
+              ) : (
+                <span className="text-3xl font-bold tracking-tight tabular-nums text-green-600 dark:text-green-400">
+                  {formatCents(dashboard.data.totalOwed, aggregateCurrency, locale)}
+                </span>
+              )
             ) : (
               <SummarySkeleton />
             )}
@@ -138,9 +166,15 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             {dashboard.data ? (
-              <span className="text-3xl font-bold tracking-tight tabular-nums text-red-600 dark:text-red-400">
-                {formatCents(dashboard.data.totalOwing, "USD", locale)}
-              </span>
+              hasMixedCurrencies ? (
+                <span className="text-lg font-medium text-muted-foreground">
+                  {t("mixedCurrencies")}
+                </span>
+              ) : (
+                <span className="text-3xl font-bold tracking-tight tabular-nums text-red-600 dark:text-red-400">
+                  {formatCents(dashboard.data.totalOwing, aggregateCurrency, locale)}
+                </span>
+              )
             ) : (
               <SummarySkeleton />
             )}
@@ -159,38 +193,49 @@ export default function DashboardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {overallDebts.isLoading && (
-              <div className="divide-y divide-border/60">
-                {[0, 1, 2].map((i) => (
-                  <PersonRowSkeleton key={i} />
-                ))}
-              </div>
-            )}
-            {overallDebts.data?.owedToYou.length === 0 && (
+            {/* Cross-currency nets are not meaningful — even the owed/owes
+                classification can be wrong — so suppress the rows entirely
+                and point at per-group balances instead. */}
+            {hasMixedCurrencies ? (
               <p className="py-3 text-center text-sm text-muted-foreground">
-                {t("settledUp")}
+                {t("mixedCurrenciesDebts")}
               </p>
-            )}
-            <div className="divide-y divide-border/60">
-              {overallDebts.data?.owedToYou.map((person) => (
-                <div
-                  key={person.userId}
-                  className="flex items-center justify-between rounded-md px-1 py-2.5 transition-colors hover:bg-muted/50"
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white shadow-sm ${avatarColor(person.userId)}`}
-                    >
-                      {getInitials(person.userName)}
-                    </div>
-                    <span className="text-sm font-medium">{person.userName}</span>
+            ) : (
+              <>
+                {overallDebts.isLoading && (
+                  <div className="divide-y divide-border/60">
+                    {[0, 1, 2].map((i) => (
+                      <PersonRowSkeleton key={i} />
+                    ))}
                   </div>
-                  <span className="text-sm font-semibold tabular-nums text-green-600 dark:text-green-400">
-                    {formatCents(person.amount, "USD", locale)}
-                  </span>
+                )}
+                {overallDebts.data?.owedToYou.length === 0 && (
+                  <p className="py-3 text-center text-sm text-muted-foreground">
+                    {t("settledUp")}
+                  </p>
+                )}
+                <div className="divide-y divide-border/60">
+                  {overallDebts.data?.owedToYou.map((person) => (
+                    <div
+                      key={person.userId}
+                      className="flex items-center justify-between rounded-md px-1 py-2.5 transition-colors hover:bg-muted/50"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white shadow-sm ${avatarColor(person.userId)}`}
+                        >
+                          {getInitials(person.userName)}
+                        </div>
+                        <span className="text-sm font-medium">{person.userName}</span>
+                      </div>
+                      <span className="text-sm font-semibold tabular-nums text-green-600 dark:text-green-400">
+                        {formatCents(person.amount, aggregateCurrency, locale)}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -203,38 +248,46 @@ export default function DashboardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {overallDebts.isLoading && (
-              <div className="divide-y divide-border/60">
-                {[0, 1, 2].map((i) => (
-                  <PersonRowSkeleton key={i} />
-                ))}
-              </div>
-            )}
-            {overallDebts.data?.youOwe.length === 0 && (
+            {hasMixedCurrencies ? (
               <p className="py-3 text-center text-sm text-muted-foreground">
-                {t("settledUp")}
+                {t("mixedCurrenciesDebts")}
               </p>
-            )}
-            <div className="divide-y divide-border/60">
-              {overallDebts.data?.youOwe.map((person) => (
-                <div
-                  key={person.userId}
-                  className="flex items-center justify-between rounded-md px-1 py-2.5 transition-colors hover:bg-muted/50"
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white shadow-sm ${avatarColor(person.userId)}`}
-                    >
-                      {getInitials(person.userName)}
-                    </div>
-                    <span className="text-sm font-medium">{person.userName}</span>
+            ) : (
+              <>
+                {overallDebts.isLoading && (
+                  <div className="divide-y divide-border/60">
+                    {[0, 1, 2].map((i) => (
+                      <PersonRowSkeleton key={i} />
+                    ))}
                   </div>
-                  <span className="text-sm font-semibold tabular-nums text-red-600 dark:text-red-400">
-                    {formatCents(person.amount, "USD", locale)}
-                  </span>
+                )}
+                {overallDebts.data?.youOwe.length === 0 && (
+                  <p className="py-3 text-center text-sm text-muted-foreground">
+                    {t("settledUp")}
+                  </p>
+                )}
+                <div className="divide-y divide-border/60">
+                  {overallDebts.data?.youOwe.map((person) => (
+                    <div
+                      key={person.userId}
+                      className="flex items-center justify-between rounded-md px-1 py-2.5 transition-colors hover:bg-muted/50"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white shadow-sm ${avatarColor(person.userId)}`}
+                        >
+                          {getInitials(person.userName)}
+                        </div>
+                        <span className="text-sm font-medium">{person.userName}</span>
+                      </div>
+                      <span className="text-sm font-semibold tabular-nums text-red-600 dark:text-red-400">
+                        {formatCents(person.amount, aggregateCurrency, locale)}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -337,7 +390,7 @@ export default function DashboardPage() {
                           }`}
                         >
                           {balance.balance > 0 ? "+" : ""}
-                          {formatCents(balance.balance, "USD", locale)}
+                          {formatCents(balance.balance, balance.currency, locale)}
                         </span>
                       )}
                       {balance && balance.balance === 0 && (

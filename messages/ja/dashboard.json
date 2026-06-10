@@ -14,5 +14,7 @@
   "groups": "グループ",
   "showMore": "もっと見る",
   "members": "{count, plural, other {#人のメンバー}}",
-  "archivedGroups": "{count, plural, other {#件のアーカイブ済みグループ}}"
+  "archivedGroups": "{count, plural, other {#件のアーカイブ済みグループ}}",
+  "mixedCurrencies": "複数の通貨",
+  "mixedCurrenciesDebts": "グループごとに通貨が異なるため、合算した残高は表示できません。各グループを開いて残高を確認してください。"
 }
