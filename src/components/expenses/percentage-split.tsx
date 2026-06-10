@@ -61,9 +61,10 @@ export function PercentageSplit({
     // last-person remainder would silently absorb the entire shortfall
     // (e.g. 30%/30% of $100 would submit $30/$70). Reporting no shares
     // keeps the submit button disabled until the split is valid.
-    // Tolerance scales with member count: the equal prefill rounds each
-    // entry to 2 decimals (toFixed(2)), so legitimate drift is up to
-    // 0.005% per member (19 members -> 99.94, 24 -> 100.08).
+    // Tolerance scales with member count to accept splits whose stored
+    // 2-decimal percentages carry rounding drift of up to 0.005 per member
+    // (see percentTolerance above); the equal prefill itself is normalized
+    // to sum to exactly 100 and needs no tolerance.
     const totalPct = entries.reduce((sum, e) => sum + e.pct, 0);
     if (Math.abs(totalPct - 100) >= percentTolerance(members.length)) {
       onChange([]);

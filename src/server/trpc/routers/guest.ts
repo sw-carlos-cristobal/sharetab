@@ -232,7 +232,8 @@ export const guestRouter = createTRPCRouter({
       // non-consuming check; if the claim then fails with CONFLICT, the
       // consumed attempts are refunded so retries against an in-flight
       // receipt don't drain any bucket.
-      const ip = ctx.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+      const ip = ctx.headers.get("cf-connecting-ip")?.trim()
+        || ctx.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
         || ctx.headers.get("x-real-ip")?.trim()
         || "global";
       const globalMax = parseInt(process.env.GUEST_AI_GLOBAL_LIMIT ?? "100", 10) || 100;
