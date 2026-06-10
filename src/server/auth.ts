@@ -8,7 +8,7 @@ import { z } from "zod";
 import { db } from "./db";
 import { logger } from "./lib/logger";
 import { checkRateLimit, parsePositiveInt } from "./lib/rate-limit";
-import { getClientIp } from "./lib/client-ip";
+import { getClientIp, FALLBACK_IP } from "./lib/client-ip";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -39,16 +39,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // cap don't also charge the email bucket: a user behind a rate-
         // limited shared IP who keeps retrying must not end up locked out
         // by their email bucket after the IP window clears.
+        // Skipped when no proxy header identifies the client (direct
+        // deployments without a reverse proxy): a single shared bucket
+        // would let one client lock every user out of login, and the
+        // per-email bucket below still bounds attempts in that case.
         const ip = getClientIp(request.headers);
-        const maxIpAttempts = parsePositiveInt(process.env.AUTH_IP_RATE_LIMIT_MAX, 30);
-        const { allowed: ipAllowed } = checkRateLimit(
-          `login-ip:${ip}`,
-          maxIpAttempts,
-          15 * 60 * 1000
-        );
-        if (!ipAllowed) {
-          logger.warn("auth.rate_limited_ip", { ip });
-          return null;
+        if (ip !== FALLBACK_IP) {
+          const maxIpAttempts = parsePositiveInt(process.env.AUTH_IP_RATE_LIMIT_MAX, 30);
+          const { allowed: ipAllowed } = checkRateLimit(
+            `login-ip:${ip}`,
+            maxIpAttempts,
+            15 * 60 * 1000
+          );
+          if (!ipAllowed) {
+            logger.warn("auth.rate_limited_ip", { ip });
+            return null;
+          }
         }
 
         // Rate limit login attempts per email (configurable for CI/testing)

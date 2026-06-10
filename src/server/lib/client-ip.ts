@@ -1,4 +1,9 @@
-const FALLBACK_IP = "global";
+/**
+ * Sentinel returned when no client IP header is present. Callers that key
+ * per-IP rate-limit buckets should treat this as "identity unknown" and
+ * skip (or widen) the bucket rather than lumping every client together.
+ */
+export const FALLBACK_IP = "global";
 
 /**
  * Derives the client IP from proxy headers.
