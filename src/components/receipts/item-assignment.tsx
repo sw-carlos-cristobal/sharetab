@@ -357,25 +357,35 @@ export function ItemAssignment({
               onDoubleClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}
               onTouchStart={(e) => {
                 if (e.touches.length === 2) {
-                  const dx = e.touches[0].clientX - e.touches[1].clientX;
-                  const dy = e.touches[0].clientY - e.touches[1].clientY;
+                  const touch0 = e.touches[0];
+                  const touch1 = e.touches[1];
+                  if (!touch0 || !touch1) return;
+                  const dx = touch0.clientX - touch1.clientX;
+                  const dy = touch0.clientY - touch1.clientY;
                   lastTouchDist.current = Math.sqrt(dx * dx + dy * dy);
                 } else {
-                  dragStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, panX: pan.x, panY: pan.y };
+                  const touch0 = e.touches[0];
+                  if (!touch0) return;
+                  dragStart.current = { x: touch0.clientX, y: touch0.clientY, panX: pan.x, panY: pan.y };
                 }
               }}
               onTouchMove={(e) => {
                 if (e.touches.length === 2 && lastTouchDist.current !== null) {
-                  const dx = e.touches[0].clientX - e.touches[1].clientX;
-                  const dy = e.touches[0].clientY - e.touches[1].clientY;
+                  const touch0 = e.touches[0];
+                  const touch1 = e.touches[1];
+                  if (!touch0 || !touch1) return;
+                  const dx = touch0.clientX - touch1.clientX;
+                  const dy = touch0.clientY - touch1.clientY;
                   const dist = Math.sqrt(dx * dx + dy * dy);
                   const factor = dist / lastTouchDist.current;
                   setZoom((z) => Math.min(Math.max(z * factor, 1), 5));
                   lastTouchDist.current = dist;
                 } else if (e.touches.length === 1 && dragStart.current) {
+                  const touch0 = e.touches[0];
+                  if (!touch0) return;
                   setPan({
-                    x: dragStart.current.panX + e.touches[0].clientX - dragStart.current.x,
-                    y: dragStart.current.panY + e.touches[0].clientY - dragStart.current.y,
+                    x: dragStart.current.panX + touch0.clientX - dragStart.current.x,
+                    y: dragStart.current.panY + touch0.clientY - dragStart.current.y,
                   });
                 }
               }}

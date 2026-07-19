@@ -179,7 +179,7 @@ export default function SharedSplitPage({
           const personItems = data.assignments
             .filter((a) => a.personIndices.includes(person.personIndex))
             .map((a) => data.items[a.itemIndex])
-            .filter(Boolean);
+            .filter((item): item is NonNullable<typeof item> => item != null);
 
           return (
             <Card key={idx} data-testid={`person-card-${idx}`}>

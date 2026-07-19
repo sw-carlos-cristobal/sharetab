@@ -229,6 +229,7 @@ export default function GuestSplitPage() {
   // Item editing
   function startEditing(idx: number) {
     const item = items[idx];
+    if (!item) return;
     setEditingItem(idx);
     setEditValues({
       name: item.name,
@@ -368,8 +369,8 @@ export default function GuestSplitPage() {
     // Build index mapping from unfiltered people → filtered validPeople
     const indexMap = new Map<number, number>();
     let validIdx = 0;
-    for (let i = 0; i < people.length; i++) {
-      if (people[i].trim()) {
+    for (const [i, person] of people.entries()) {
+      if (person.trim()) {
         indexMap.set(i, validIdx++);
       }
     }
@@ -405,13 +406,17 @@ export default function GuestSplitPage() {
   async function handleShareForClaiming() {
     if (!extracted || validPeople.length < 1) return;
 
+    // `validPeople.length < 1` already returned above, so index 0 always
+    // exists; the `?? ""` is unreachable but keeps the type `string`.
+    const fallbackName = validPeople[0] ?? "";
+
     try {
       const result = await createClaimSession.mutateAsync({
         receiptId: receiptId ?? undefined,
         receiptData: { ...extracted, tip },
         items,
-        creatorName: people[paidByIndex]?.trim() || validPeople[0],
-        paidByName: people[paidByIndex]?.trim() || validPeople[0],
+        creatorName: people[paidByIndex]?.trim() || fallbackName,
+        paidByName: people[paidByIndex]?.trim() || fallbackName,
       });
       router.push(`/split/${result.shareToken}/claim`);
     } catch (err) {
@@ -496,7 +501,7 @@ export default function GuestSplitPage() {
           <div className="text-center space-y-2 max-w-xs">
             <p className="font-semibold text-lg">{t("processing.title")}</p>
             <p className="text-sm text-muted-foreground animate-fade-in">
-              {tc(loadingMessageKeys[loadingMsgIdx])}
+              {tc(loadingMessageKeys[loadingMsgIdx] ?? loadingMessageKeys[0])}
             </p>
             <p className="text-xs text-muted-foreground">
               {t("processing.activeProvider")} <span className="font-medium text-foreground">{activeProvider}</span>
