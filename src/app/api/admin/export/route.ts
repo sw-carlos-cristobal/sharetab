@@ -1,6 +1,6 @@
-import { auth } from "@/server/auth";
-import { db } from "@/server/db";
-import { logAdminAction } from "@/server/trpc/routers/admin";
+import { auth } from '@/server/auth';
+import { db } from '@/server/db';
+import { logAdminAction } from '@/server/trpc/routers/admin';
 
 export async function GET() {
   // Auth check: admin only
@@ -8,7 +8,7 @@ export async function GET() {
   const adminEmail = process.env.ADMIN_EMAIL;
 
   if (!session?.user?.email || !adminEmail || session.user.email !== adminEmail) {
-    return new Response("Forbidden", { status: 403 });
+    return new Response('Forbidden', { status: 403 });
   }
 
   try {
@@ -80,7 +80,7 @@ export async function GET() {
     const exportData = {
       exportedAt: new Date().toISOString(),
       exportedBy: session.user.email,
-      version: "1.0",
+      version: '1.0',
       data: {
         users,
         groups,
@@ -100,21 +100,21 @@ export async function GET() {
     };
 
     // Log the export action
-    await logAdminAction(db, session.user.id!, "EXPORT_CREATED", null, {
+    await logAdminAction(db, session.user.id!, 'EXPORT_CREATED', null, {
       tableCount: Object.keys(exportData.data).length,
     });
 
     const json = JSON.stringify(exportData, null, 2);
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
 
     return new Response(json, {
       headers: {
-        "Content-Type": "application/json",
-        "Content-Disposition": `attachment; filename="sharetab-export-${timestamp}.json"`,
+        'Content-Type': 'application/json',
+        'Content-Disposition': `attachment; filename="sharetab-export-${timestamp}.json"`,
       },
     });
   } catch (error) {
-    console.error("Export failed:", error);
-    return new Response("Internal Server Error", { status: 500 });
+    console.error('Export failed:', error);
+    return new Response('Internal Server Error', { status: 500 });
   }
 }

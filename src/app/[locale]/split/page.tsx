@@ -1,26 +1,37 @@
-"use client";
+'use client';
 
-import { useState, useEffect, useCallback, useRef } from "react";
-import { useLocale, useTranslations } from "next-intl";
-import { useRouter } from "@/i18n/navigation";
-import { trpc } from "@/lib/trpc";
-import { formatCents, centsToDecimal, parseToCents } from "@/lib/money";
-import { calculateSplitTotals } from "@/lib/split-calculator";
-import { loadingMessageKeys } from "@/lib/loading-messages";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
+import { useRouter } from '@/i18n/navigation';
+import { trpc } from '@/lib/trpc';
+import { formatCents, centsToDecimal, parseToCents } from '@/lib/money';
+import { calculateSplitTotals } from '@/lib/split-calculator';
+import { loadingMessageKeys } from '@/lib/loading-messages';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
-  Camera, Loader2, Plus, Trash2, Check, Users, ArrowLeft, ArrowRight,
-  Share2, Pencil, Image as ImageIcon, RefreshCw, Scissors,
-} from "lucide-react";
-import { toast } from "sonner";
-import { getInitials } from "@/lib/avatar";
+  Camera,
+  Loader2,
+  Plus,
+  Trash2,
+  Check,
+  Users,
+  ArrowLeft,
+  ArrowRight,
+  Share2,
+  Pencil,
+  Image as ImageIcon,
+  RefreshCw,
+  Scissors,
+} from 'lucide-react';
+import { toast } from 'sonner';
+import { getInitials } from '@/lib/avatar';
 
-type Step = "upload" | "processing" | "people" | "assign";
+type Step = 'upload' | 'processing' | 'people' | 'assign';
 
 type GuestItem = {
   name: string;
@@ -42,39 +53,39 @@ type ExtractedData = {
 export default function GuestSplitPage() {
   const router = useRouter();
   const locale = useLocale();
-  const t = useTranslations("split");
-  const tc = useTranslations("common");
-  const [step, setStep] = useState<Step>("upload");
+  const t = useTranslations('split');
+  const tc = useTranslations('common');
+  const [step, setStep] = useState<Step>('upload');
   const [receiptId, setReceiptId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState('');
   const [loadingMsgIdx, setLoadingMsgIdx] = useState(0);
 
   // Data
   const [items, setItems] = useState<GuestItem[]>([]);
   const [extracted, setExtracted] = useState<ExtractedData | null>(null);
-  const [people, setPeople] = useState<string[]>([""]); // start with one empty name
+  const [people, setPeople] = useState<string[]>(['']); // start with one empty name
   // Stable keys for the (removable) person rows so deleting a row doesn't
   // re-key the rows below it. Kept in lockstep with `people`.
   const personKeyCounter = useRef(1);
   const [personKeys, setPersonKeys] = useState<number[]>([0]);
   const [assignments, setAssignments] = useState<Record<number, Set<number>>>({}); // itemIdx -> Set<personIdx>
   const [paidByIndex, setPaidByIndex] = useState(0);
-  const [tipOverride, setTipOverride] = useState("");
+  const [tipOverride, setTipOverride] = useState('');
   const [imagePath, setImagePath] = useState<string | null>(null);
   const [showImage, setShowImage] = useState(false);
-  const [correctionHint, setCorrectionHint] = useState("");
+  const [correctionHint, setCorrectionHint] = useState('');
   const [showRescan, setShowRescan] = useState(false);
 
   // Editing
   const [editingItem, setEditingItem] = useState<number | null>(null);
-  const [editValues, setEditValues] = useState({ name: "", quantity: "1", totalPrice: "" });
+  const [editValues, setEditValues] = useState({ name: '', quantity: '1', totalPrice: '' });
   const [addingItem, setAddingItem] = useState(false);
-  const [newItem, setNewItem] = useState({ name: "", quantity: "1", totalPrice: "" });
+  const [newItem, setNewItem] = useState({ name: '', quantity: '1', totalPrice: '' });
 
   // Splitting
   const [splittingIndex, setSplittingIndex] = useState<number | null>(null);
-  const [splitQuantity, setSplitQuantity] = useState("");
+  const [splitQuantity, setSplitQuantity] = useState('');
 
   // tRPC
   const utils = trpc.useUtils();
@@ -82,18 +93,17 @@ export default function GuestSplitPage() {
   const providerInfo = trpc.guest.getScanProviderInfo.useQuery();
   const receiptData = trpc.guest.getReceiptItems.useQuery(
     { receiptId: receiptId! },
-    { enabled: !!receiptId && step === "people" }
+    { enabled: !!receiptId && step === 'people' },
   );
   const createSplit = trpc.guest.createSplit.useMutation();
   const createClaimSession = trpc.guest.createClaimSession.useMutation();
 
-  const configuredProviderChain =
-    providerInfo.data?.configuredProviders?.join(" -> ") ?? "loading...";
-  const activeProvider = providerInfo.data?.activeProvider ?? "checking...";
+  const configuredProviderChain = providerInfo.data?.configuredProviders?.join(' -> ') ?? 'loading...';
+  const activeProvider = providerInfo.data?.activeProvider ?? 'checking...';
 
   // Rotate loading messages
   useEffect(() => {
-    if (step !== "processing") return;
+    if (step !== 'processing') return;
     setLoadingMsgIdx(Math.floor(Math.random() * loadingMessageKeys.length));
     const interval = setInterval(() => {
       setLoadingMsgIdx((i) => (i + 1) % loadingMessageKeys.length);
@@ -105,12 +115,14 @@ export default function GuestSplitPage() {
   useEffect(() => {
     if (receiptData.data && items.length === 0) {
       const { receipt, items: dbItems } = receiptData.data;
-      setItems(dbItems.map((i) => ({
-        name: i.name,
-        quantity: i.quantity,
-        unitPrice: i.unitPrice,
-        totalPrice: i.totalPrice,
-      })));
+      setItems(
+        dbItems.map((i) => ({
+          name: i.name,
+          quantity: i.quantity,
+          unitPrice: i.unitPrice,
+          totalPrice: i.totalPrice,
+        })),
+      );
       if (receipt.extractedData) {
         setExtracted(receipt.extractedData);
       }
@@ -125,19 +137,19 @@ export default function GuestSplitPage() {
     if (!file) return;
 
     setUploading(true);
-    setErrorMessage("");
+    setErrorMessage('');
 
     try {
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append('file', file);
 
-      const res = await fetch("/api/upload?guest=true", {
-        method: "POST",
+      const res = await fetch('/api/upload?guest=true', {
+        method: 'POST',
         body: formData,
       });
 
       if (!res.ok) {
-        let message = t("upload.uploadFailed");
+        let message = t('upload.uploadFailed');
         try {
           const data = await res.json();
           message = data.error ?? message;
@@ -148,7 +160,7 @@ export default function GuestSplitPage() {
       const data = await res.json();
       setReceiptId(data.receiptId);
       setImagePath(data.imagePath);
-      setStep("processing");
+      setStep('processing');
       setUploading(false);
 
       // Start AI processing
@@ -162,11 +174,11 @@ export default function GuestSplitPage() {
         total: result.total,
         currency: result.currency,
       });
-      setStep("people");
+      setStep('people');
     } catch (err) {
       setUploading(false);
-      setErrorMessage(err instanceof Error ? err.message : t("upload.uploadFailed"));
-      setStep("upload");
+      setErrorMessage(err instanceof Error ? err.message : t('upload.uploadFailed'));
+      setStep('upload');
     }
   }
 
@@ -241,16 +253,27 @@ export default function GuestSplitPage() {
   function saveEdit() {
     if (editingItem === null) return;
     const trimmedName = editValues.name.trim();
-    if (!trimmedName) { toast.error(t("assign.validationNameRequired")); return; }
+    if (!trimmedName) {
+      toast.error(t('assign.validationNameRequired'));
+      return;
+    }
     const totalPrice = parseToCents(editValues.totalPrice);
-    if (totalPrice <= 0) { toast.error(t("assign.validationPricePositive")); return; }
+    if (totalPrice <= 0) {
+      toast.error(t('assign.validationPricePositive'));
+      return;
+    }
     const quantity = parseInt(editValues.quantity);
-    if (!Number.isInteger(quantity) || quantity < 1) { toast.error(t("assign.validationQtyPositive")); return; }
-    setItems((prev) => prev.map((item, i) =>
-      i === editingItem
-        ? { name: trimmedName, quantity, unitPrice: Math.round(totalPrice / quantity), totalPrice }
-        : item
-    ));
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      toast.error(t('assign.validationQtyPositive'));
+      return;
+    }
+    setItems((prev) =>
+      prev.map((item, i) =>
+        i === editingItem
+          ? { name: trimmedName, quantity, unitPrice: Math.round(totalPrice / quantity), totalPrice }
+          : item,
+      ),
+    );
     setEditingItem(null);
   }
 
@@ -267,12 +290,8 @@ export default function GuestSplitPage() {
     });
     // Shift index-based UI state so the edit/split forms don't retarget the
     // wrong item when an item above them is deleted.
-    setEditingItem((prev) =>
-      prev === null || prev === idx ? null : prev > idx ? prev - 1 : prev
-    );
-    setSplittingIndex((prev) =>
-      prev === null || prev === idx ? null : prev > idx ? prev - 1 : prev
-    );
+    setEditingItem((prev) => (prev === null || prev === idx ? null : prev > idx ? prev - 1 : prev));
+    setSplittingIndex((prev) => (prev === null || prev === idx ? null : prev > idx ? prev - 1 : prev));
   }
 
   function handleAddItem(e: React.FormEvent) {
@@ -280,14 +299,17 @@ export default function GuestSplitPage() {
     const totalPrice = parseToCents(newItem.totalPrice);
     const quantity = parseInt(newItem.quantity) || 1;
     if (!newItem.name || totalPrice <= 0) return;
-    setItems((prev) => [...prev, {
-      name: newItem.name,
-      quantity,
-      unitPrice: Math.round(totalPrice / quantity),
-      totalPrice,
-    }]);
+    setItems((prev) => [
+      ...prev,
+      {
+        name: newItem.name,
+        quantity,
+        unitPrice: Math.round(totalPrice / quantity),
+        totalPrice,
+      },
+    ]);
     setAddingItem(false);
-    setNewItem({ name: "", quantity: "1", totalPrice: "" });
+    setNewItem({ name: '', quantity: '1', totalPrice: '' });
   }
 
   // Split item into two rows
@@ -334,8 +356,8 @@ export default function GuestSplitPage() {
 
   // Calculate totals
   const parsedTip = parseFloat(tipOverride);
-  const tip = tipOverride !== "" && isFinite(parsedTip) ? Math.round(parsedTip * 100) : (extracted?.tip ?? 0);
-  const currency = extracted?.currency ?? "USD";
+  const tip = tipOverride !== '' && isFinite(parsedTip) ? Math.round(parsedTip * 100) : (extracted?.tip ?? 0);
+  const currency = extracted?.currency ?? 'USD';
 
   const getPerPersonTotals = useCallback(() => {
     if (!extracted || items.length === 0) return [];
@@ -355,9 +377,9 @@ export default function GuestSplitPage() {
     });
   }, [items, assignments, extracted, tip, people.length]);
 
-  const perPersonTotals = step === "assign" ? getPerPersonTotals() : [];
+  const perPersonTotals = step === 'assign' ? getPerPersonTotals() : [];
   const validPeople = people.filter((n) => n.trim().length > 0);
-  const validPeopleIndices = new Set(people.map((n, i) => n.trim() ? i : -1).filter((i) => i >= 0));
+  const validPeopleIndices = new Set(people.map((n, i) => (n.trim() ? i : -1)).filter((i) => i >= 0));
   const assignedCount = Object.values(assignments).filter((s) => {
     return Array.from(s).some((pi) => validPeopleIndices.has(pi));
   }).length;
@@ -395,11 +417,14 @@ export default function GuestSplitPage() {
         people: validPeople.map((n) => ({ name: n })),
         assignments: assignmentList,
         paidByIndex: remappedPaidBy,
-        tipOverride: tipOverride !== "" && isFinite(parseFloat(tipOverride)) ? Math.round(parseFloat(tipOverride) * 100) : undefined,
+        tipOverride:
+          tipOverride !== '' && isFinite(parseFloat(tipOverride))
+            ? Math.round(parseFloat(tipOverride) * 100)
+            : undefined,
       });
       router.push(`/split/${result.shareToken}`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("assign.createSplitFailed"));
+      toast.error(err instanceof Error ? err.message : t('assign.createSplitFailed'));
     }
   }
 
@@ -408,7 +433,7 @@ export default function GuestSplitPage() {
 
     // `validPeople.length < 1` already returned above, so index 0 always
     // exists; the `?? ""` is unreachable but keeps the type `string`.
-    const fallbackName = validPeople[0] ?? "";
+    const fallbackName = validPeople[0] ?? '';
 
     try {
       const result = await createClaimSession.mutateAsync({
@@ -420,7 +445,7 @@ export default function GuestSplitPage() {
       });
       router.push(`/split/${result.shareToken}/claim`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("assign.createSessionFailed"));
+      toast.error(err instanceof Error ? err.message : t('assign.createSessionFailed'));
     }
   }
 
@@ -429,27 +454,26 @@ export default function GuestSplitPage() {
   return (
     <div className="space-y-6 pb-24">
       {/* Step: Upload */}
-      {step === "upload" && (
+      {step === 'upload' && (
         <div className="space-y-6">
           <div className="text-center space-y-2 pt-8">
-            <h1 className="text-3xl font-bold tracking-tight">{t("upload.title")}</h1>
-            <p className="text-muted-foreground">
-              {t("upload.subtitle")}
-            </p>
+            <h1 className="text-3xl font-bold tracking-tight">{t('upload.title')}</h1>
+            <p className="text-muted-foreground">{t('upload.subtitle')}</p>
           </div>
 
           {errorMessage && (
-            <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-              {errorMessage}
-            </div>
+            <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{errorMessage}</div>
           )}
 
           {/* Camera capture button - mobile optimized */}
-          <label className="flex flex-col items-center gap-4 rounded-2xl bg-primary p-8 text-primary-foreground cursor-pointer active:scale-[0.98] transition-transform" data-testid="guest-snap-upload">
+          <label
+            className="flex flex-col items-center gap-4 rounded-2xl bg-primary p-8 text-primary-foreground cursor-pointer active:scale-[0.98] transition-transform"
+            data-testid="guest-snap-upload"
+          >
             <div className="rounded-full bg-primary-foreground/20 p-4">
               <Camera className="h-10 w-10" />
             </div>
-            <span className="text-xl font-semibold">{t("upload.snapBill")}</span>
+            <span className="text-xl font-semibold">{t('upload.snapBill')}</span>
             <input
               type="file"
               accept="image/jpeg,image/png,image/webp,image/heic"
@@ -465,16 +489,19 @@ export default function GuestSplitPage() {
               <span className="w-full border-t" />
             </span>
             <span className="relative bg-background px-4 text-sm text-muted-foreground uppercase">
-              {t("upload.or")}
+              {t('upload.or')}
             </span>
           </div>
 
           {/* Gallery upload */}
-          <label className="flex flex-col items-center gap-4 rounded-2xl border-2 border-dashed border-muted-foreground/25 p-8 cursor-pointer hover:border-primary/50 transition-colors active:scale-[0.98]" data-testid="guest-gallery-upload">
+          <label
+            className="flex flex-col items-center gap-4 rounded-2xl border-2 border-dashed border-muted-foreground/25 p-8 cursor-pointer hover:border-primary/50 transition-colors active:scale-[0.98]"
+            data-testid="guest-gallery-upload"
+          >
             <div className="rounded-full bg-muted p-4">
               <ImageIcon className="h-8 w-8 text-muted-foreground" />
             </div>
-            <span className="text-lg font-medium text-muted-foreground">{t("upload.chooseGallery")}</span>
+            <span className="text-lg font-medium text-muted-foreground">{t('upload.chooseGallery')}</span>
             <input
               type="file"
               accept="image/jpeg,image/png,image/webp,image/heic"
@@ -488,42 +515,44 @@ export default function GuestSplitPage() {
           {uploading && (
             <div className="flex items-center justify-center gap-2 text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin" />
-              {t("upload.uploading")}
+              {t('upload.uploading')}
             </div>
           )}
         </div>
       )}
 
       {/* Step: Processing */}
-      {step === "processing" && (
+      {step === 'processing' && (
         <div className="flex flex-col items-center justify-center gap-6 py-20" data-testid="guest-processing">
           <Loader2 className="h-12 w-12 animate-spin text-primary" />
           <div className="text-center space-y-2 max-w-xs">
-            <p className="font-semibold text-lg">{t("processing.title")}</p>
+            <p className="font-semibold text-lg">{t('processing.title')}</p>
             <p className="text-sm text-muted-foreground animate-fade-in">
               {tc(loadingMessageKeys[loadingMsgIdx] ?? loadingMessageKeys[0])}
             </p>
             <p className="text-xs text-muted-foreground">
-              {t("processing.activeProvider")} <span className="font-medium text-foreground">{activeProvider}</span>
-              {" · "}{t("processing.fallbackChain")} <span className="font-medium text-foreground">{configuredProviderChain}</span>
+              {t('processing.activeProvider')} <span className="font-medium text-foreground">{activeProvider}</span>
+              {' · '}
+              {t('processing.fallbackChain')}{' '}
+              <span className="font-medium text-foreground">{configuredProviderChain}</span>
             </p>
           </div>
         </div>
       )}
 
       {/* Step: People */}
-      {step === "people" && (
+      {step === 'people' && (
         <div className="space-y-6">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" aria-label={tc("actions.back")} onClick={() => setStep("upload")}>
+            <Button variant="ghost" size="icon" aria-label={tc('actions.back')} onClick={() => setStep('upload')}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <h2 className="text-xl font-bold" data-testid="guest-people-step">{t("people.title")}</h2>
+            <h2 className="text-xl font-bold" data-testid="guest-people-step">
+              {t('people.title')}
+            </h2>
           </div>
 
-          <p className="text-sm text-muted-foreground">
-            {t("people.subtitle")}
-          </p>
+          <p className="text-sm text-muted-foreground">{t('people.subtitle')}</p>
 
           {/* Person list */}
           <div className="space-y-3">
@@ -537,7 +566,7 @@ export default function GuestSplitPage() {
                 <Input
                   value={name}
                   onChange={(e) => updatePersonName(idx, e.target.value)}
-                  placeholder={t("people.personPlaceholder", { index: idx + 1 })}
+                  placeholder={t('people.personPlaceholder', { index: idx + 1 })}
                   className="h-12 text-base"
                   data-testid={`person-input-${idx}`}
                 />
@@ -545,7 +574,7 @@ export default function GuestSplitPage() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    aria-label={t("people.removePerson")}
+                    aria-label={t('people.removePerson')}
                     onClick={() => removePerson(idx)}
                     className="shrink-0 text-muted-foreground hover:text-destructive"
                   >
@@ -560,18 +589,18 @@ export default function GuestSplitPage() {
             variant="outline"
             className="w-full h-12"
             onClick={() => {
-              setPeople((p) => [...p, ""]);
+              setPeople((p) => [...p, '']);
               setPersonKeys((keys) => [...keys, personKeyCounter.current++]);
             }}
             data-testid="add-person-btn"
           >
             <Plus className="mr-2 h-4 w-4" />
-            {t("people.addPerson")}
+            {t('people.addPerson')}
           </Button>
 
           {/* Who paid? */}
           <div className="space-y-2">
-            <Label htmlFor="who-paid">{t("people.whoPaid")}</Label>
+            <Label htmlFor="who-paid">{t('people.whoPaid')}</Label>
             <select
               id="who-paid"
               value={paidByIndex}
@@ -580,7 +609,7 @@ export default function GuestSplitPage() {
             >
               {people.map((name, idx) => (
                 <option key={idx} value={idx}>
-                  {name.trim() || t("people.personPlaceholder", { index: idx + 1 })}
+                  {name.trim() || t('people.personPlaceholder', { index: idx + 1 })}
                 </option>
               ))}
             </select>
@@ -592,29 +621,23 @@ export default function GuestSplitPage() {
               <Button
                 className="w-full h-14 text-lg"
                 disabled={validPeople.length < 1}
-                onClick={() => setStep("assign")}
+                onClick={() => setStep('assign')}
                 data-testid="next-assign-btn"
               >
-                {t("people.nextAssign")}
+                {t('people.nextAssign')}
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
               {!showRescan ? (
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => setShowRescan(true)}
-                >
+                <Button variant="outline" className="w-full" onClick={() => setShowRescan(true)}>
                   <RefreshCw className="mr-2 h-4 w-4" />
-                  {t("people.rescanCorrections")}
+                  {t('people.rescanCorrections')}
                 </Button>
               ) : (
                 <Card>
                   <CardContent className="space-y-3 pt-4">
-                    <p className="text-sm text-muted-foreground">
-                      {t("people.rescanDescription")}
-                    </p>
+                    <p className="text-sm text-muted-foreground">{t('people.rescanDescription')}</p>
                     <textarea
-                      placeholder={t("people.rescanPlaceholder")}
+                      placeholder={t('people.rescanPlaceholder')}
                       value={correctionHint}
                       onChange={(e) => setCorrectionHint(e.target.value)}
                       rows={3}
@@ -625,7 +648,7 @@ export default function GuestSplitPage() {
                         className="flex-1"
                         onClick={() => {
                           if (!correctionHint.trim() || !receiptId) return;
-                          setStep("processing");
+                          setStep('processing');
                           setShowRescan(false);
                           processReceipt.mutate(
                             { receiptId, correctionHint: correctionHint.trim() },
@@ -646,25 +669,28 @@ export default function GuestSplitPage() {
                                   currency: data.currency,
                                 });
                                 setAssignments({});
-                                setStep("people");
+                                setStep('people');
                               },
                               onError: (err) => {
                                 setErrorMessage(err.message);
-                                setStep("people");
+                                setStep('people');
                               },
-                            }
+                            },
                           );
                         }}
                         disabled={!correctionHint.trim()}
                       >
                         <RefreshCw className="mr-2 h-4 w-4" />
-                        {t("people.rescan")}
+                        {t('people.rescan')}
                       </Button>
                       <Button
                         variant="outline"
-                        onClick={() => { setShowRescan(false); setCorrectionHint(""); }}
+                        onClick={() => {
+                          setShowRescan(false);
+                          setCorrectionHint('');
+                        }}
                       >
-                        {t("people.cancel")}
+                        {t('people.cancel')}
                       </Button>
                     </div>
                   </CardContent>
@@ -676,25 +702,20 @@ export default function GuestSplitPage() {
       )}
 
       {/* Step: Assign */}
-      {step === "assign" && extracted && (
+      {step === 'assign' && extracted && (
         <div className="space-y-4" data-testid="guest-assign-step">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" aria-label={tc("actions.back")} onClick={() => setStep("people")}>
+            <Button variant="ghost" size="icon" aria-label={tc('actions.back')} onClick={() => setStep('people')}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <h2 className="text-xl font-bold">{t("assign.title")}</h2>
+            <h2 className="text-xl font-bold">{t('assign.title')}</h2>
           </div>
 
           {/* Receipt image toggle */}
           {imagePath && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setShowImage(!showImage)}
-            >
+            <Button type="button" variant="outline" size="sm" onClick={() => setShowImage(!showImage)}>
               <ImageIcon className="mr-2 h-4 w-4" />
-              {showImage ? t("assign.hideReceipt") : t("assign.viewReceipt")}
+              {showImage ? t('assign.hideReceipt') : t('assign.viewReceipt')}
             </Button>
           )}
 
@@ -707,7 +728,7 @@ export default function GuestSplitPage() {
                     change, out of scope here */}
                 <img
                   src={`/api/uploads/${imagePath}`}
-                  alt={t("assign.receiptImageAlt")}
+                  alt={t('assign.receiptImageAlt')}
                   className="mx-auto max-h-[400px] rounded-md object-contain"
                 />
               </CardContent>
@@ -717,26 +738,24 @@ export default function GuestSplitPage() {
           {/* Receipt summary */}
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">
-                {extracted.merchantName ?? t("assign.receiptSummary")}
-              </CardTitle>
+              <CardTitle className="text-base">{extracted.merchantName ?? t('assign.receiptSummary')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-1 text-sm">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">{t("assign.subtotal")}</span>
+                <span className="text-muted-foreground">{t('assign.subtotal')}</span>
                 <span>{formatCents(extracted.subtotal, currency, locale)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">{t("assign.tax")}</span>
+                <span className="text-muted-foreground">{t('assign.tax')}</span>
                 <span>{formatCents(extracted.tax, currency, locale)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">{t("assign.tip")}</span>
+                <span className="text-muted-foreground">{t('assign.tip')}</span>
                 <span>{formatCents(tip, currency, locale)}</span>
               </div>
               <Separator />
               <div className="flex justify-between font-semibold">
-                <span>{t("assign.total")}</span>
+                <span>{t('assign.total')}</span>
                 <span>{formatCents(extracted.subtotal + extracted.tax + tip, currency, locale)}</span>
               </div>
             </CardContent>
@@ -744,13 +763,13 @@ export default function GuestSplitPage() {
 
           {/* Tip override */}
           <div className="space-y-2">
-            <Label htmlFor="guest-tip">{t("assign.tipOverrideLabel")}</Label>
+            <Label htmlFor="guest-tip">{t('assign.tipOverrideLabel')}</Label>
             <Input
               id="guest-tip"
               type="number"
               step="0.01"
               min="0"
-              placeholder={t("assign.tipDetected", { amount: formatCents(extracted.tip, currency, locale) })}
+              placeholder={t('assign.tipDetected', { amount: formatCents(extracted.tip, currency, locale) })}
               value={tipOverride}
               onChange={(e) => setTipOverride(e.target.value)}
               className="h-12"
@@ -761,11 +780,11 @@ export default function GuestSplitPage() {
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={assignAllToEveryone} data-testid="guest-split-all-btn">
               <Users className="mr-2 h-4 w-4" />
-              {t("assign.splitAllEqually")}
+              {t('assign.splitAllEqually')}
             </Button>
             <Button variant="outline" size="sm" onClick={() => setAddingItem(true)} data-testid="guest-add-item-btn">
               <Plus className="mr-2 h-4 w-4" />
-              {t("assign.addItem")}
+              {t('assign.addItem')}
             </Button>
           </div>
 
@@ -775,7 +794,7 @@ export default function GuestSplitPage() {
               <CardContent className="py-3">
                 <form onSubmit={handleAddItem} className="space-y-2">
                   <Input
-                    placeholder={t("assign.itemNamePlaceholder")}
+                    placeholder={t('assign.itemNamePlaceholder')}
                     value={newItem.name}
                     onChange={(e) => setNewItem((p) => ({ ...p, name: e.target.value }))}
                     required
@@ -784,7 +803,7 @@ export default function GuestSplitPage() {
                   <div className="flex gap-2">
                     <Input
                       type="number"
-                      placeholder={t("assign.qtyPlaceholder")}
+                      placeholder={t('assign.qtyPlaceholder')}
                       value={newItem.quantity}
                       onChange={(e) => setNewItem((p) => ({ ...p, quantity: e.target.value }))}
                       className="w-20 h-12"
@@ -793,7 +812,7 @@ export default function GuestSplitPage() {
                     <Input
                       type="number"
                       step="0.01"
-                      placeholder={t("assign.pricePlaceholder")}
+                      placeholder={t('assign.pricePlaceholder')}
                       value={newItem.totalPrice}
                       onChange={(e) => setNewItem((p) => ({ ...p, totalPrice: e.target.value }))}
                       className="flex-1 h-12"
@@ -801,8 +820,12 @@ export default function GuestSplitPage() {
                     />
                   </div>
                   <div className="flex gap-2">
-                    <Button type="submit" size="sm" data-testid="guest-add-item-submit">{t("assign.add")}</Button>
-                    <Button type="button" variant="ghost" size="sm" onClick={() => setAddingItem(false)}>{t("assign.cancel")}</Button>
+                    <Button type="submit" size="sm" data-testid="guest-add-item-submit">
+                      {t('assign.add')}
+                    </Button>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setAddingItem(false)}>
+                      {t('assign.cancel')}
+                    </Button>
                   </div>
                 </form>
               </CardContent>
@@ -811,20 +834,20 @@ export default function GuestSplitPage() {
 
           {/* Items with assignment */}
           <div className="space-y-2">
-            <Label>{t("assign.tapToAssign", { assigned: assignedCount, total: items.length })}</Label>
+            <Label>{t('assign.tapToAssign', { assigned: assignedCount, total: items.length })}</Label>
             {items.map((item, itemIdx) => {
               const assigned = assignments[itemIdx] ?? new Set();
               const isEditing = editingItem === itemIdx;
 
               return (
-                <Card key={itemIdx} className={assigned.size === 0 ? "border-amber-300" : ""}>
+                <Card key={itemIdx} className={assigned.size === 0 ? 'border-amber-300' : ''}>
                   <CardContent className="py-3">
                     {isEditing ? (
                       <div className="mb-2 space-y-2">
                         <Input
                           value={editValues.name}
                           onChange={(e) => setEditValues((p) => ({ ...p, name: e.target.value }))}
-                          placeholder={t("assign.itemNamePlaceholder")}
+                          placeholder={t('assign.itemNamePlaceholder')}
                           className="h-12"
                         />
                         <div className="flex gap-2">
@@ -833,7 +856,7 @@ export default function GuestSplitPage() {
                             value={editValues.quantity}
                             onChange={(e) => setEditValues((p) => ({ ...p, quantity: e.target.value }))}
                             className="w-20 h-12"
-                            placeholder={t("assign.qtyPlaceholder")}
+                            placeholder={t('assign.qtyPlaceholder')}
                             min="1"
                           />
                           <Input
@@ -842,22 +865,28 @@ export default function GuestSplitPage() {
                             value={editValues.totalPrice}
                             onChange={(e) => setEditValues((p) => ({ ...p, totalPrice: e.target.value }))}
                             className="flex-1 h-12"
-                            placeholder={t("assign.pricePlaceholder")}
+                            placeholder={t('assign.pricePlaceholder')}
                           />
                         </div>
                         <div className="flex gap-1">
-                          <Button type="button" size="sm" onClick={saveEdit}>{t("assign.save")}</Button>
-                          <Button type="button" variant="ghost" size="sm" onClick={() => setEditingItem(null)}>{t("assign.cancel")}</Button>
+                          <Button type="button" size="sm" onClick={saveEdit}>
+                            {t('assign.save')}
+                          </Button>
+                          <Button type="button" variant="ghost" size="sm" onClick={() => setEditingItem(null)}>
+                            {t('assign.cancel')}
+                          </Button>
                         </div>
                       </div>
                     ) : (
                       <div className="mb-2 flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <span className="font-medium">{item.name}</span>
-                          {item.quantity > 1 && (
-                            <span className="text-xs text-muted-foreground">x{item.quantity}</span>
-                          )}
-                          <button type="button" onClick={() => startEditing(itemIdx)} className="text-muted-foreground hover:text-foreground p-1">
+                          {item.quantity > 1 && <span className="text-xs text-muted-foreground">x{item.quantity}</span>}
+                          <button
+                            type="button"
+                            onClick={() => startEditing(itemIdx)}
+                            className="text-muted-foreground hover:text-foreground p-1"
+                          >
                             <Pencil className="h-3 w-3" />
                           </button>
                           <button
@@ -872,11 +901,11 @@ export default function GuestSplitPage() {
                               type="button"
                               onClick={() => {
                                 setSplittingIndex(itemIdx);
-                                setSplitQuantity("1");
+                                setSplitQuantity('1');
                               }}
                               className="text-muted-foreground hover:text-foreground p-1"
-                              title={t("assign.split")}
-                              aria-label={t("assign.split") + ` ${item.name}`}
+                              title={t('assign.split')}
+                              aria-label={t('assign.split') + ` ${item.name}`}
                               data-testid={`guest-split-btn-${itemIdx}`}
                             >
                               <Scissors className="h-3 w-3" />
@@ -887,38 +916,47 @@ export default function GuestSplitPage() {
                       </div>
                     )}
                     {/* Inline split form */}
-                    {splittingIndex === itemIdx && (() => {
-                      const parsed = Number(splitQuantity);
-                      const validQty = Number.isSafeInteger(parsed) && parsed >= 1 && parsed < item.quantity;
-                      return (
-                        <div className="mb-2 flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">{t("assign.splitOff")}</span>
-                          <Input
-                            type="number"
-                            min={1}
-                            max={item.quantity - 1}
-                            value={splitQuantity}
-                            onChange={(e) => setSplitQuantity(e.target.value)}
-                            className="w-16 h-7 text-xs"
-                            data-testid={`guest-split-qty-${itemIdx}`}
-                          />
-                          <span className="text-xs text-muted-foreground">{t("assign.splitOfTotal", { total: item.quantity })}</span>
-                          <Button
-                            type="button"
-                            size="sm"
-                            className="h-7 text-xs"
-                            disabled={!validQty}
-                            onClick={() => handleSplitItem(itemIdx)}
-                            data-testid={`guest-split-submit-${itemIdx}`}
-                          >
-                            {t("assign.split")}
-                          </Button>
-                          <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setSplittingIndex(null)}>
-                            {t("assign.cancel")}
-                          </Button>
-                        </div>
-                      );
-                    })()}
+                    {splittingIndex === itemIdx &&
+                      (() => {
+                        const parsed = Number(splitQuantity);
+                        const validQty = Number.isSafeInteger(parsed) && parsed >= 1 && parsed < item.quantity;
+                        return (
+                          <div className="mb-2 flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">{t('assign.splitOff')}</span>
+                            <Input
+                              type="number"
+                              min={1}
+                              max={item.quantity - 1}
+                              value={splitQuantity}
+                              onChange={(e) => setSplitQuantity(e.target.value)}
+                              className="w-16 h-7 text-xs"
+                              data-testid={`guest-split-qty-${itemIdx}`}
+                            />
+                            <span className="text-xs text-muted-foreground">
+                              {t('assign.splitOfTotal', { total: item.quantity })}
+                            </span>
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="h-7 text-xs"
+                              disabled={!validQty}
+                              onClick={() => handleSplitItem(itemIdx)}
+                              data-testid={`guest-split-submit-${itemIdx}`}
+                            >
+                              {t('assign.split')}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={() => setSplittingIndex(null)}
+                            >
+                              {t('assign.cancel')}
+                            </Button>
+                          </div>
+                        );
+                      })()}
                     {/* Person toggle buttons */}
                     <div className="flex flex-wrap gap-1.5">
                       {people.map((name, personIdx) => {
@@ -931,14 +969,14 @@ export default function GuestSplitPage() {
                             onClick={() => toggleAssignment(itemIdx, personIdx)}
                             className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-sm transition-colors min-h-[36px] ${
                               isAssigned
-                                ? "bg-primary text-primary-foreground"
-                                : "bg-muted text-muted-foreground hover:bg-muted/80"
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-muted text-muted-foreground hover:bg-muted/80'
                             }`}
                           >
                             <Avatar className="h-5 w-5">
                               <AvatarFallback className="text-[9px]">{initials(name)}</AvatarFallback>
                             </Avatar>
-                            {name.split(" ")[0]}
+                            {name.split(' ')[0]}
                             {isAssigned && <Check className="h-3 w-3" />}
                           </button>
                         );
@@ -954,12 +992,14 @@ export default function GuestSplitPage() {
           {perPersonTotals.length > 0 && (
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">{t("assign.perPersonTotals")}</CardTitle>
+                <CardTitle className="text-base">{t('assign.perPersonTotals')}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-1">
                 {perPersonTotals.map((pt) => (
                   <div key={pt.personIndex} className="flex justify-between text-sm">
-                    <span>{people[pt.personIndex]?.trim() || t("people.personPlaceholder", { index: pt.personIndex + 1 })}</span>
+                    <span>
+                      {people[pt.personIndex]?.trim() || t('people.personPlaceholder', { index: pt.personIndex + 1 })}
+                    </span>
                     <span className="font-medium">{formatCents(pt.total, currency, locale)}</span>
                   </div>
                 ))}
@@ -977,10 +1017,10 @@ export default function GuestSplitPage() {
                 data-testid="create-split-btn"
               >
                 {createSplit.isPending
-                  ? t("assign.creatingSplit")
+                  ? t('assign.creatingSplit')
                   : !allAssigned
-                    ? t("assign.assignAllItems", { remaining: items.length - assignedCount })
-                    : t("assign.createSplitButton")}
+                    ? t('assign.assignAllItems', { remaining: items.length - assignedCount })
+                    : t('assign.createSplitButton')}
                 {allAssigned && !createSplit.isPending && <Share2 className="ml-2 h-5 w-5" />}
               </Button>
               <Button
@@ -990,14 +1030,10 @@ export default function GuestSplitPage() {
                 onClick={handleShareForClaiming}
                 data-testid="share-for-claiming-btn"
               >
-                {createClaimSession.isPending
-                  ? t("assign.creatingSession")
-                  : t("assign.shareForClaiming")}
+                {createClaimSession.isPending ? t('assign.creatingSession') : t('assign.shareForClaiming')}
                 {!createClaimSession.isPending && <Users className="ml-2 h-5 w-5" />}
               </Button>
-              <p className="text-xs text-center text-muted-foreground">
-                {t("assign.shareHint")}
-              </p>
+              <p className="text-xs text-center text-muted-foreground">{t('assign.shareHint')}</p>
             </div>
           </div>
         </div>

@@ -9,7 +9,7 @@
  *   it as a shared key: with no client identity, one conservative global
  *   throttle on unauthenticated traffic is the safer failure mode.
  */
-export const FALLBACK_IP = "global";
+export const FALLBACK_IP = 'global';
 
 /**
  * Derives the client IP from proxy headers.
@@ -41,15 +41,15 @@ export const FALLBACK_IP = "global";
 const MAX_IP_LENGTH = 64;
 
 function normalizeHeaderIp(value: string | null): string | undefined {
-  const first = value?.split(",")[0]?.trim();
+  const first = value?.split(',')[0]?.trim();
   return first ? first.slice(0, MAX_IP_LENGTH) : undefined;
 }
 
 export function getClientIp(headers: Headers): string {
   return (
-    normalizeHeaderIp(headers.get("cf-connecting-ip")) ||
-    normalizeHeaderIp(headers.get("x-real-ip")) ||
-    normalizeHeaderIp(headers.get("x-forwarded-for")) ||
+    normalizeHeaderIp(headers.get('cf-connecting-ip')) ||
+    normalizeHeaderIp(headers.get('x-real-ip')) ||
+    normalizeHeaderIp(headers.get('x-forwarded-for')) ||
     FALLBACK_IP
   );
 }

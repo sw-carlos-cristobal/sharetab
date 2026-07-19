@@ -1,13 +1,13 @@
-import { initTRPC, TRPCError } from "@trpc/server";
-import superjson from "superjson";
-import { z } from "zod";
-import { cookies } from "next/headers";
-import { auth } from "../auth";
-import { db } from "../db";
-import { logger } from "../lib/logger";
-import { verifyAndParse } from "../lib/signed-cookie";
+import { initTRPC, TRPCError } from '@trpc/server';
+import superjson from 'superjson';
+import { z } from 'zod';
+import { cookies } from 'next/headers';
+import { auth } from '../auth';
+import { db } from '../db';
+import { logger } from '../lib/logger';
+import { verifyAndParse } from '../lib/signed-cookie';
 
-const IMPERSONATE_COOKIE = "sharetab-impersonate";
+const IMPERSONATE_COOKIE = 'sharetab-impersonate';
 
 export const createTRPCContext = async (opts?: { req?: Request }) => {
   const session = await auth();
@@ -57,7 +57,7 @@ const t = initTRPC.context<TRPCContext>().create({
 });
 
 // Procedures that poll frequently and would spam the log buffer
-const QUIET_PATHS = new Set(["admin.getLogs", "admin.getImpersonationStatus"]);
+const QUIET_PATHS = new Set(['admin.getLogs', 'admin.getImpersonationStatus']);
 
 const loggingMiddleware = t.middleware(async ({ path, type, next, ctx }) => {
   const start = Date.now();
@@ -73,9 +73,9 @@ const loggingMiddleware = t.middleware(async ({ path, type, next, ctx }) => {
   const ok = result.ok;
 
   if (ok) {
-    logger.info("trpc.ok", { path, type, userId, durationMs, ...(impersonatedBy ? { impersonatedBy } : {}) });
+    logger.info('trpc.ok', { path, type, userId, durationMs, ...(impersonatedBy ? { impersonatedBy } : {}) });
   } else {
-    logger.warn("trpc.error", { path, type, userId, durationMs, ...(impersonatedBy ? { impersonatedBy } : {}) });
+    logger.warn('trpc.error', { path, type, userId, durationMs, ...(impersonatedBy ? { impersonatedBy } : {}) });
   }
 
   return result;
@@ -84,36 +84,34 @@ const loggingMiddleware = t.middleware(async ({ path, type, next, ctx }) => {
 export const createTRPCRouter = t.router;
 export const publicProcedure = t.procedure.use(loggingMiddleware);
 
-export const protectedProcedure = t.procedure
-  .use(loggingMiddleware)
-  .use(async ({ ctx, next }) => {
-    if (!ctx.session?.user?.id) {
-      throw new TRPCError({ code: "UNAUTHORIZED" });
-    }
+export const protectedProcedure = t.procedure.use(loggingMiddleware).use(async ({ ctx, next }) => {
+  if (!ctx.session?.user?.id) {
+    throw new TRPCError({ code: 'UNAUTHORIZED' });
+  }
 
-    const user = await ctx.db.user.findUnique({
-      where: { id: ctx.session.user.id },
-      select: { suspendedAt: true },
-    });
-
-    if (!user) {
-      throw new TRPCError({ code: "UNAUTHORIZED" });
-    }
-
-    if (user.suspendedAt) {
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message: "Your account has been suspended. Please contact an administrator.",
-      });
-    }
-
-    return next({
-      ctx: {
-        ...ctx,
-        user: ctx.session.user,
-      },
-    });
+  const user = await ctx.db.user.findUnique({
+    where: { id: ctx.session.user.id },
+    select: { suspendedAt: true },
   });
+
+  if (!user) {
+    throw new TRPCError({ code: 'UNAUTHORIZED' });
+  }
+
+  if (user.suspendedAt) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'Your account has been suspended. Please contact an administrator.',
+    });
+  }
+
+  return next({
+    ctx: {
+      ...ctx,
+      user: ctx.session.user,
+    },
+  });
+});
 
 export const groupMemberProcedure = protectedProcedure
   .input(z.object({ groupId: z.string() }))
@@ -127,7 +125,7 @@ export const groupMemberProcedure = protectedProcedure
       },
     });
     if (!membership) {
-      throw new TRPCError({ code: "FORBIDDEN", message: "Not a member of this group" });
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'Not a member of this group' });
     }
     return next({ ctx: { ...ctx, membership } });
   });

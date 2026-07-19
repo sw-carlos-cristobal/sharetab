@@ -1,31 +1,28 @@
-import { NextRequest } from "next/server";
-import { auth } from "@/server/auth";
-import { db } from "@/server/db";
-import { readFile, stat } from "fs/promises";
-import { resolveUploadPath } from "@/server/lib/upload-dir";
+import { NextRequest } from 'next/server';
+import { auth } from '@/server/auth';
+import { db } from '@/server/db';
+import { readFile, stat } from 'fs/promises';
+import { resolveUploadPath } from '@/server/lib/upload-dir';
 
 const MIME_TYPES: Record<string, string> = {
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  png: "image/png",
-  webp: "image/webp",
-  heic: "image/heic",
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  heic: 'image/heic',
 };
 
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: Promise<{ path: string[] }> }
-) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
   const session = await auth();
 
   const { path } = await params;
-  const filePath = path.join("/");
+  const filePath = path.join('/');
 
   let fullPath: string;
   try {
     fullPath = resolveUploadPath(filePath);
   } catch {
-    return new Response("Forbidden", { status: 403 });
+    return new Response('Forbidden', { status: 403 });
   }
 
   // Verify receipt ownership
@@ -35,7 +32,7 @@ export async function GET(
   });
 
   if (!receipt) {
-    return new Response("Not found", { status: 404 });
+    return new Response('Not found', { status: 404 });
   }
 
   if (receipt.isGuest) {
@@ -43,30 +40,28 @@ export async function GET(
   } else if (session?.user?.id) {
     // Authenticated user: must be the uploader or a member of the receipt's group
     const isUploader = receipt.uploadedById === session.user.id;
-    const isGroupMember = receipt.group?.members.some(
-      (m: { userId: string }) => m.userId === session.user.id
-    ) ?? false;
+    const isGroupMember = receipt.group?.members.some((m: { userId: string }) => m.userId === session.user.id) ?? false;
     if (!isUploader && !isGroupMember) {
-      return new Response("Forbidden", { status: 403 });
+      return new Response('Forbidden', { status: 403 });
     }
   } else {
     // Unauthenticated user trying to access non-guest receipt
-    return new Response("Unauthorized", { status: 401 });
+    return new Response('Unauthorized', { status: 401 });
   }
 
   try {
     await stat(fullPath);
     const buffer = await readFile(fullPath);
-    const ext = filePath.split(".").pop()?.toLowerCase() ?? "";
-    const contentType = MIME_TYPES[ext] ?? "application/octet-stream";
+    const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
+    const contentType = MIME_TYPES[ext] ?? 'application/octet-stream';
 
     return new Response(buffer, {
       headers: {
-        "Content-Type": contentType,
-        "Cache-Control": "private, max-age=86400",
+        'Content-Type': contentType,
+        'Cache-Control': 'private, max-age=86400',
       },
     });
   } catch {
-    return new Response("Not found", { status: 404 });
+    return new Response('Not found', { status: 404 });
   }
 }

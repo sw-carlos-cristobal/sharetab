@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import { formatCents } from "@/lib/money";
+import { useEffect, useState } from 'react';
+import { formatCents } from '@/lib/money';
 
 type Member = { id: string; name: string | null };
 type ShareEntry = { userId: string; amount: number };
@@ -22,9 +22,7 @@ export function EqualSplit({
   /** User IDs to pre-select (e.g. when editing an existing expense). Defaults to all members. */
   initialSelected?: string[];
 }) {
-  const [selected, setSelected] = useState<Set<string>>(
-    () => new Set(initialSelected ?? members.map((m) => m.id))
-  );
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(initialSelected ?? members.map((m) => m.id)));
 
   useEffect(() => {
     if (selected.size === 0 || totalCents <= 0) {
@@ -73,7 +71,7 @@ export function EqualSplit({
               onChange={() => toggle(m.id)}
               className="h-4 w-4 rounded border-gray-300"
             />
-            <span className="text-sm">{m.name ?? "Unnamed"}</span>
+            <span className="text-sm">{m.name ?? 'Unnamed'}</span>
           </div>
           {selected.has(m.id) && totalCents > 0 && (
             <span className="text-sm text-muted-foreground">
@@ -84,8 +82,7 @@ export function EqualSplit({
       ))}
       {selected.size > 0 && totalCents > 0 && (
         <p className="text-xs text-muted-foreground">
-          {formatCents(Math.round(perPerson), currency, locale)} per person
-          ({selected.size} selected)
+          {formatCents(Math.round(perPerson), currency, locale)} per person ({selected.size} selected)
         </p>
       )}
     </div>

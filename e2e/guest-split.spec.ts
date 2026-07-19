@@ -1,52 +1,52 @@
-import { test, expect, request } from "@playwright/test";
+import { test, expect, request } from '@playwright/test';
 
-const BASE = process.env.BASE_URL || "http://localhost:3001";
+const BASE = process.env.BASE_URL || 'http://localhost:3001';
 
-test.describe("Guest Bill Split — UI", () => {
-  test("split page loads without authentication", async ({ page }) => {
-    await page.goto("/en/split");
-    await expect(page.getByText("Split a bill")).toBeVisible();
+test.describe('Guest Bill Split — UI', () => {
+  test('split page loads without authentication', async ({ page }) => {
+    await page.goto('/en/split');
+    await expect(page.getByText('Split a bill')).toBeVisible();
     // Upload options: camera and gallery
-    await expect(page.getByText("Snap a Bill")).toBeVisible();
+    await expect(page.getByText('Snap a Bill')).toBeVisible();
   });
 
-  test("split page shows upload form with camera option", async ({ page }) => {
-    await page.goto("/en/split");
+  test('split page shows upload form with camera option', async ({ page }) => {
+    await page.goto('/en/split');
     const fileInput = page.locator('input[type="file"]').first();
     await expect(fileInput).toBeAttached();
   });
 
-  test("login page links to guest split", async ({ page }) => {
-    await page.goto("/en/login");
-    const splitLink = page.getByRole("link", { name: "Split without an account" });
+  test('login page links to guest split', async ({ page }) => {
+    await page.goto('/en/login');
+    const splitLink = page.getByRole('link', { name: 'Split without an account' });
     await expect(splitLink).toBeVisible();
-    await expect(splitLink).toHaveAttribute("href", /\/split$/);
+    await expect(splitLink).toHaveAttribute('href', /\/split$/);
   });
 });
 
-test.describe("Guest Bill Split — API happy path", () => {
-  test("createSplit creates a shareable split and getSplit retrieves it", async () => {
+test.describe('Guest Bill Split — API happy path', () => {
+  test('createSplit creates a shareable split and getSplit retrieves it', async () => {
     const ctx = await request.newContext({ baseURL: BASE });
 
     // Create a split via the API
-    const createRes = await ctx.post("/api/trpc/guest.createSplit", {
+    const createRes = await ctx.post('/api/trpc/guest.createSplit', {
       data: {
         json: {
           receiptData: {
-            merchantName: "Test Restaurant",
-            date: "2026-03-30",
+            merchantName: 'Test Restaurant',
+            date: '2026-03-30',
             subtotal: 3000,
             tax: 240,
             tip: 500,
             total: 3740,
-            currency: "USD",
+            currency: 'USD',
           },
           items: [
-            { name: "Burger", quantity: 1, unitPrice: 1500, totalPrice: 1500 },
-            { name: "Salad", quantity: 1, unitPrice: 1000, totalPrice: 1000 },
-            { name: "Fries", quantity: 1, unitPrice: 500, totalPrice: 500 },
+            { name: 'Burger', quantity: 1, unitPrice: 1500, totalPrice: 1500 },
+            { name: 'Salad', quantity: 1, unitPrice: 1000, totalPrice: 1000 },
+            { name: 'Fries', quantity: 1, unitPrice: 500, totalPrice: 500 },
           ],
-          people: [{ name: "Alice" }, { name: "Bob" }],
+          people: [{ name: 'Alice' }, { name: 'Bob' }],
           assignments: [
             { itemIndex: 0, personIndices: [0] },
             { itemIndex: 1, personIndices: [1] },
@@ -65,15 +65,15 @@ test.describe("Guest Bill Split — API happy path", () => {
     // Retrieve the split
     const getRes = await ctx.get(
       `/api/trpc/guest.getSplit?batch=1&input=${encodeURIComponent(
-        JSON.stringify({ "0": { json: { token: shareToken } } })
-      )}`
+        JSON.stringify({ '0': { json: { token: shareToken } } }),
+      )}`,
     );
     expect(getRes.ok()).toBe(true);
     const getBody = await getRes.json();
     const split = getBody[0]?.result?.data?.json;
 
     expect(split.shareToken).toBe(shareToken);
-    expect(split.receiptData.merchantName).toBe("Test Restaurant");
+    expect(split.receiptData.merchantName).toBe('Test Restaurant');
     expect(split.receiptData.total).toBe(3740);
     expect(split.items).toHaveLength(3);
     expect(split.people).toHaveLength(2);
@@ -82,37 +82,32 @@ test.describe("Guest Bill Split — API happy path", () => {
 
     // Verify summary has correct person names
     const names = split.summary.map((s: { name: string }) => s.name).sort();
-    expect(names).toEqual(["Alice", "Bob"]);
+    expect(names).toEqual(['Alice', 'Bob']);
 
     // Verify totals add up
-    const totalFromSummary = split.summary.reduce(
-      (sum: number, s: { total: number }) => sum + s.total,
-      0
-    );
+    const totalFromSummary = split.summary.reduce((sum: number, s: { total: number }) => sum + s.total, 0);
     expect(totalFromSummary).toBe(3740);
 
     await ctx.dispose();
   });
 
-  test("claim session finalization persists overridden tip and total", async () => {
+  test('claim session finalization persists overridden tip and total', async () => {
     const ctx = await request.newContext({ baseURL: BASE });
 
-    const createRes = await ctx.post("/api/trpc/guest.createClaimSession", {
+    const createRes = await ctx.post('/api/trpc/guest.createClaimSession', {
       data: {
         json: {
           receiptData: {
-            merchantName: "Tip Test Cafe",
+            merchantName: 'Tip Test Cafe',
             subtotal: 3000,
             tax: 300,
             tip: 300,
             total: 3600,
-            currency: "USD",
+            currency: 'USD',
           },
-          items: [
-            { name: "Brunch", quantity: 1, unitPrice: 3000, totalPrice: 3000 },
-          ],
-          creatorName: "Alice",
-          paidByName: "Alice",
+          items: [{ name: 'Brunch', quantity: 1, unitPrice: 3000, totalPrice: 3000 }],
+          creatorName: 'Alice',
+          paidByName: 'Alice',
         },
       },
     });
@@ -121,11 +116,11 @@ test.describe("Guest Bill Split — API happy path", () => {
     const shareToken = (await createRes.json()).result?.data?.json?.shareToken as string;
     expect(shareToken).toBeTruthy();
 
-    const joinRes = await ctx.post("/api/trpc/guest.joinSession", {
+    const joinRes = await ctx.post('/api/trpc/guest.joinSession', {
       data: {
         json: {
           token: shareToken,
-          name: "Alice",
+          name: 'Alice',
         },
       },
     });
@@ -136,7 +131,7 @@ test.describe("Guest Bill Split — API happy path", () => {
       personToken: string;
     };
 
-    const claimRes = await ctx.post("/api/trpc/guest.claimItems", {
+    const claimRes = await ctx.post('/api/trpc/guest.claimItems', {
       data: {
         json: {
           token: shareToken,
@@ -148,7 +143,7 @@ test.describe("Guest Bill Split — API happy path", () => {
     });
     expect(claimRes.ok()).toBe(true);
 
-    const finalizeRes = await ctx.post("/api/trpc/guest.finalizeSession", {
+    const finalizeRes = await ctx.post('/api/trpc/guest.finalizeSession', {
       data: {
         json: {
           token: shareToken,
@@ -162,8 +157,8 @@ test.describe("Guest Bill Split — API happy path", () => {
 
     const splitRes = await ctx.get(
       `/api/trpc/guest.getSplit?batch=1&input=${encodeURIComponent(
-        JSON.stringify({ "0": { json: { token: shareToken } } })
-      )}`
+        JSON.stringify({ '0': { json: { token: shareToken } } }),
+      )}`,
     );
     expect(splitRes.ok()).toBe(true);
     const splitBody = await splitRes.json();
@@ -177,27 +172,25 @@ test.describe("Guest Bill Split — API happy path", () => {
   });
 });
 
-test.describe("Guest Bill Split — Share Page", () => {
+test.describe('Guest Bill Split — Share Page', () => {
   let shareToken: string;
 
   test.beforeAll(async () => {
     // Create a split to test the share page
     const ctx = await request.newContext({ baseURL: BASE });
-    const res = await ctx.post("/api/trpc/guest.createSplit", {
+    const res = await ctx.post('/api/trpc/guest.createSplit', {
       data: {
         json: {
           receiptData: {
-            merchantName: "Pizza Place",
+            merchantName: 'Pizza Place',
             subtotal: 2400,
             tax: 200,
             tip: 400,
             total: 3000,
-            currency: "USD",
+            currency: 'USD',
           },
-          items: [
-            { name: "Large Pizza", quantity: 1, unitPrice: 2400, totalPrice: 2400 },
-          ],
-          people: [{ name: "Charlie" }, { name: "Dave" }],
+          items: [{ name: 'Large Pizza', quantity: 1, unitPrice: 2400, totalPrice: 2400 }],
+          people: [{ name: 'Charlie' }, { name: 'Dave' }],
           assignments: [{ itemIndex: 0, personIndices: [0, 1] }],
           paidByIndex: 0,
         },
@@ -208,26 +201,26 @@ test.describe("Guest Bill Split — Share Page", () => {
     await ctx.dispose();
   });
 
-  test("share page displays split summary", async ({ page }) => {
+  test('share page displays split summary', async ({ page }) => {
     await page.goto(`/split/${shareToken}`);
-    await expect(page.getByText("Pizza Place")).toBeVisible();
-    await expect(page.getByText("Charlie").first()).toBeVisible();
-    await expect(page.getByText("Dave").first()).toBeVisible();
-    await expect(page.getByText("$30.00").first()).toBeVisible();
+    await expect(page.getByText('Pizza Place')).toBeVisible();
+    await expect(page.getByText('Charlie').first()).toBeVisible();
+    await expect(page.getByText('Dave').first()).toBeVisible();
+    await expect(page.getByText('$30.00').first()).toBeVisible();
   });
 
-  test("share page has copy link and share buttons", async ({ page }) => {
+  test('share page has copy link and share buttons', async ({ page }) => {
     await page.goto(`/split/${shareToken}`);
-    await expect(page.getByRole("button", { name: /copy/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /copy/i })).toBeVisible();
   });
 
-  test("share page shows split your own bill link", async ({ page }) => {
+  test('share page shows split your own bill link', async ({ page }) => {
     await page.goto(`/split/${shareToken}`);
-    await expect(page.getByText("Split your own bill")).toBeVisible();
+    await expect(page.getByText('Split your own bill')).toBeVisible();
   });
 
-  test("invalid share token shows not found", async ({ page }) => {
-    await page.goto("/en/split/nonexistent-token-abc123");
-    await expect(page.getByText("Split not found")).toBeVisible();
+  test('invalid share token shows not found', async ({ page }) => {
+    await page.goto('/en/split/nonexistent-token-abc123');
+    await expect(page.getByText('Split not found')).toBeVisible();
   });
 });

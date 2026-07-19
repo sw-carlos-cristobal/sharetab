@@ -37,12 +37,7 @@ export function ImpersonationBanner() {
             name: data.targetName ?? data.targetEmail ?? '',
             strong: (chunks) => <strong>{chunks}</strong>,
           })}
-          {data.targetName && (
-            <span className="text-red-100">
-              {' '}
-              ({data.targetEmail})
-            </span>
-          )}
+          {data.targetName && <span className="text-red-100"> ({data.targetEmail})</span>}
         </span>
         <button
           type="button"

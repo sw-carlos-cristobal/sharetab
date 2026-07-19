@@ -1,24 +1,18 @@
-import { randomBytes, createHash } from "crypto";
-import { mkdirSync, readFileSync, writeFileSync, unlinkSync } from "fs";
-import { dirname, join } from "path";
-import { logger } from "./logger";
+import { randomBytes, createHash } from 'crypto';
+import { mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'fs';
+import { dirname, join } from 'path';
+import { logger } from './logger';
 
-const CLIENT_ID =
-  process.env.OPENAI_CODEX_CLIENT_ID ?? "app_EMoamEEZ73f0CkXaXp7hrann";
-const AUTHORIZE_ENDPOINT = "https://auth.openai.com/oauth/authorize";
-const TOKEN_ENDPOINT = "https://auth.openai.com/oauth/token";
-const CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex";
-const REDIRECT_URI = "http://localhost:1455/auth/callback";
-const ORIGINATOR = "codex_cli_rs";
-const CLIENT_VERSION = "0.99.0";
-const SCOPES = [
-  "openid",
-  "profile",
-  "email",
-  "offline_access",
-  "api.connectors.read",
-  "api.connectors.invoke",
-].join(" ");
+const CLIENT_ID = process.env.OPENAI_CODEX_CLIENT_ID ?? 'app_EMoamEEZ73f0CkXaXp7hrann';
+const AUTHORIZE_ENDPOINT = 'https://auth.openai.com/oauth/authorize';
+const TOKEN_ENDPOINT = 'https://auth.openai.com/oauth/token';
+const CODEX_BASE_URL = 'https://chatgpt.com/backend-api/codex';
+const REDIRECT_URI = 'http://localhost:1455/auth/callback';
+const ORIGINATOR = 'codex_cli_rs';
+const CLIENT_VERSION = '0.99.0';
+const SCOPES = ['openid', 'profile', 'email', 'offline_access', 'api.connectors.read', 'api.connectors.invoke'].join(
+  ' ',
+);
 const LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
 const EXPIRY_BUFFER_MS = 5 * 60 * 1000;
 
@@ -31,10 +25,10 @@ interface PendingLogin {
 interface OpenAICodexClaims {
   email?: string;
   exp?: number;
-  "https://api.openai.com/profile"?: {
+  'https://api.openai.com/profile'?: {
     email?: string;
   };
-  "https://api.openai.com/auth"?: {
+  'https://api.openai.com/auth'?: {
     chatgpt_plan_type?: string;
     chatgpt_user_id?: string;
     user_id?: string;
@@ -43,7 +37,7 @@ interface OpenAICodexClaims {
 }
 
 interface StoredAuth {
-  auth_mode?: "Chatgpt";
+  auth_mode?: 'Chatgpt';
   tokens?: {
     id_token: string;
     access_token: string;
@@ -65,13 +59,13 @@ interface ParsedStoredAuth {
 
 type HealthStatus =
   | {
-      status: "healthy";
+      status: 'healthy';
       email: string | null;
       planType: string | null;
       accountId: string | null;
     }
   | {
-      status: "not_authenticated" | "auth_expired" | "degraded";
+      status: 'not_authenticated' | 'auth_expired' | 'degraded';
       error?: string;
       email?: string | null;
       planType?: string | null;
@@ -83,9 +77,7 @@ interface OpenAICodexHealthCheckOptions {
 }
 
 let pendingLogin: PendingLogin | null = null;
-let openAICodexHealthCache:
-  | { result: HealthStatus; expiresAt: number }
-  | null = null;
+let openAICodexHealthCache: { result: HealthStatus; expiresAt: number } | null = null;
 let openAICodexHealthInFlight: Promise<HealthStatus> | null = null;
 
 const OPENAI_CODEX_HEALTH_CACHE_TTL_MS = {
@@ -100,24 +92,24 @@ const OPENAI_CODEX_HEALTH_CACHE_TTL_MS = {
 } as const;
 
 function generateCodeVerifier(): string {
-  return randomBytes(32).toString("base64url");
+  return randomBytes(32).toString('base64url');
 }
 
 function generateCodeChallenge(verifier: string): string {
-  return createHash("sha256").update(verifier).digest("base64url");
+  return createHash('sha256').update(verifier).digest('base64url');
 }
 
 function getCredentialPath(): string {
-  const codexHome = process.env.OPENAI_CODEX_DIR ?? "/app/chatgpt";
-  return join(codexHome, "auth.json");
+  const codexHome = process.env.OPENAI_CODEX_DIR ?? '/app/chatgpt';
+  return join(codexHome, 'auth.json');
 }
 
 function decodeJwtClaims(token: string): OpenAICodexClaims {
-  const [, payload] = token.split(".");
-  if (!payload) throw new Error("Invalid JWT");
-  const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
-  const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
-  return JSON.parse(Buffer.from(padded, "base64").toString("utf8")) as OpenAICodexClaims;
+  const [, payload] = token.split('.');
+  if (!payload) throw new Error('Invalid JWT');
+  const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+  return JSON.parse(Buffer.from(padded, 'base64').toString('utf8')) as OpenAICodexClaims;
 }
 
 function parseStoredAuth(raw: string): ParsedStoredAuth | null {
@@ -129,20 +121,14 @@ function parseStoredAuth(raw: string): ParsedStoredAuth | null {
 
   const idClaims = decodeJwtClaims(tokens.id_token);
   const accessClaims = decodeJwtClaims(tokens.access_token);
-  const authClaims = idClaims["https://api.openai.com/auth"];
+  const authClaims = idClaims['https://api.openai.com/auth'];
 
   return {
     accessToken: tokens.access_token,
     refreshToken: tokens.refresh_token,
     idToken: tokens.id_token,
-    accountId:
-      tokens.account_id ??
-      authClaims?.chatgpt_account_id ??
-      null,
-    email:
-      idClaims.email ??
-      idClaims["https://api.openai.com/profile"]?.email ??
-      null,
+    accountId: tokens.account_id ?? authClaims?.chatgpt_account_id ?? null,
+    email: idClaims.email ?? idClaims['https://api.openai.com/profile']?.email ?? null,
     planType: authClaims?.chatgpt_plan_type ?? null,
     expiresAt: accessClaims.exp ? accessClaims.exp * 1000 : null,
   };
@@ -150,7 +136,7 @@ function parseStoredAuth(raw: string): ParsedStoredAuth | null {
 
 function readStoredAuth(): ParsedStoredAuth | null {
   try {
-    const raw = readFileSync(getCredentialPath(), "utf8");
+    const raw = readFileSync(getCredentialPath(), 'utf8');
     return parseStoredAuth(raw);
   } catch {
     return null;
@@ -162,7 +148,7 @@ export function getStoredOpenAICodexTokenExpiry(): number | null {
 }
 
 function getOpenAICodexHealthCacheTtl(result: HealthStatus): number {
-  if (result.status !== "healthy") {
+  if (result.status !== 'healthy') {
     return OPENAI_CODEX_HEALTH_CACHE_TTL_MS[result.status];
   }
 
@@ -184,19 +170,14 @@ function getOpenAICodexHealthCacheTtl(result: HealthStatus): number {
   return OPENAI_CODEX_HEALTH_CACHE_TTL_MS.healthyLongLived;
 }
 
-function writeStoredAuth(tokens: {
-  access_token: string;
-  refresh_token: string;
-  id_token: string;
-}) {
+function writeStoredAuth(tokens: { access_token: string; refresh_token: string; id_token: string }) {
   const path = getCredentialPath();
   mkdirSync(dirname(path), { recursive: true });
   const idClaims = decodeJwtClaims(tokens.id_token);
-  const accountId =
-    idClaims["https://api.openai.com/auth"]?.chatgpt_account_id ?? null;
+  const accountId = idClaims['https://api.openai.com/auth']?.chatgpt_account_id ?? null;
 
   const auth: StoredAuth = {
-    auth_mode: "Chatgpt",
+    auth_mode: 'Chatgpt',
     tokens: {
       id_token: tokens.id_token,
       access_token: tokens.access_token,
@@ -214,8 +195,8 @@ function extractCodeAndState(input: string): { code: string; state: string | nul
   try {
     const url = new URL(trimmed);
     return {
-      code: url.searchParams.get("code") ?? trimmed,
-      state: url.searchParams.get("state"),
+      code: url.searchParams.get('code') ?? trimmed,
+      state: url.searchParams.get('state'),
     };
   } catch {
     return { code: trimmed, state: null };
@@ -232,14 +213,14 @@ async function refreshAuth(force = false): Promise<ParsedStoredAuth | null> {
 
   const body = new URLSearchParams({
     client_id: CLIENT_ID,
-    grant_type: "refresh_token",
+    grant_type: 'refresh_token',
     refresh_token: stored.refreshToken,
   });
 
   const response = await fetch(TOKEN_ENDPOINT, {
-    method: "POST",
+    method: 'POST',
     headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
+      'Content-Type': 'application/x-www-form-urlencoded',
       originator: ORIGINATOR,
     },
     body,
@@ -247,18 +228,18 @@ async function refreshAuth(force = false): Promise<ParsedStoredAuth | null> {
   });
 
   if (!response.ok) {
-    logger.warn("openaiCodex.refresh.failed", { status: response.status });
+    logger.warn('openaiCodex.refresh.failed', { status: response.status });
     return null;
   }
 
-  const refreshed = await response.json() as {
+  const refreshed = (await response.json()) as {
     id_token?: string;
     access_token?: string;
     refresh_token?: string;
   };
 
   if (!refreshed.id_token || !refreshed.access_token) {
-    logger.warn("openaiCodex.refresh.invalidResponse");
+    logger.warn('openaiCodex.refresh.invalidResponse');
     return null;
   }
 
@@ -277,11 +258,11 @@ async function probeModels(auth: ParsedStoredAuth): Promise<Response> {
     originator: ORIGINATOR,
   });
   if (auth.accountId) {
-    headers.set("ChatGPT-Account-ID", auth.accountId);
+    headers.set('ChatGPT-Account-ID', auth.accountId);
   }
 
   return fetch(`${CODEX_BASE_URL}/models?client_version=${CLIENT_VERSION}`, {
-    method: "GET",
+    method: 'GET',
     headers,
     signal: AbortSignal.timeout(20_000),
   });
@@ -293,7 +274,7 @@ export function isLoginInProgress(): boolean {
 
 export function startLogin(): Promise<string> {
   if (pendingLogin) {
-    throw new Error("A login is already in progress");
+    throw new Error('A login is already in progress');
   }
 
   try {
@@ -304,23 +285,23 @@ export function startLogin(): Promise<string> {
 
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
-  const state = randomBytes(32).toString("base64url");
+  const state = randomBytes(32).toString('base64url');
 
   const params = new URLSearchParams({
-    response_type: "code",
+    response_type: 'code',
     client_id: CLIENT_ID,
     redirect_uri: REDIRECT_URI,
     scope: SCOPES,
     code_challenge: codeChallenge,
-    code_challenge_method: "S256",
-    id_token_add_organizations: "true",
-    codex_cli_simplified_flow: "true",
+    code_challenge_method: 'S256',
+    id_token_add_organizations: 'true',
+    codex_cli_simplified_flow: 'true',
     state,
     originator: ORIGINATOR,
   });
 
   const timeout = setTimeout(() => {
-    logger.warn("openaiCodex.login.timeout");
+    logger.warn('openaiCodex.login.timeout');
     cancelLogin();
   }, LOGIN_TIMEOUT_MS);
 
@@ -328,21 +309,19 @@ export function startLogin(): Promise<string> {
   return Promise.resolve(`${AUTHORIZE_ENDPOINT}?${params.toString()}`);
 }
 
-export async function submitCode(
-  codeOrUrl: string
-): Promise<{ success: boolean; error?: string }> {
+export async function submitCode(codeOrUrl: string): Promise<{ success: boolean; error?: string }> {
   if (!pendingLogin) {
-    throw new Error("No login in progress");
+    throw new Error('No login in progress');
   }
 
   const { code, state } = extractCodeAndState(codeOrUrl);
   if (state && state !== pendingLogin.state) {
     cleanup();
-    return { success: false, error: "OAuth state mismatch" };
+    return { success: false, error: 'OAuth state mismatch' };
   }
 
   const body = new URLSearchParams({
-    grant_type: "authorization_code",
+    grant_type: 'authorization_code',
     code,
     redirect_uri: REDIRECT_URI,
     client_id: CLIENT_ID,
@@ -351,9 +330,9 @@ export async function submitCode(
 
   try {
     const response = await fetch(TOKEN_ENDPOINT, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
+        'Content-Type': 'application/x-www-form-urlencoded',
         originator: ORIGINATOR,
       },
       body: body.toString(),
@@ -369,7 +348,7 @@ export async function submitCode(
       };
     }
 
-    const tokens = await response.json() as {
+    const tokens = (await response.json()) as {
       id_token?: string;
       access_token?: string;
       refresh_token?: string;
@@ -379,22 +358,24 @@ export async function submitCode(
       cleanup();
       return {
         success: false,
-        error: "Token exchange response did not include all required tokens",
+        error: 'Token exchange response did not include all required tokens',
       };
     }
 
-    writeStoredAuth(tokens as {
-      access_token: string;
-      refresh_token: string;
-      id_token: string;
-    });
+    writeStoredAuth(
+      tokens as {
+        access_token: string;
+        refresh_token: string;
+        id_token: string;
+      },
+    );
     cleanup();
     return { success: true };
   } catch (error) {
     cleanup();
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Token exchange failed",
+      error: error instanceof Error ? error.message : 'Token exchange failed',
     };
   }
 }
@@ -408,15 +389,15 @@ export function logout(): { success: boolean; error?: string } {
   const path = getCredentialPath();
   try {
     unlinkSync(path);
-    logger.info("openaiCodex.logout.success", { path });
+    logger.info('openaiCodex.logout.success', { path });
     return { success: true };
   } catch (err) {
     const error = err as NodeJS.ErrnoException;
-    if (error.code === "ENOENT") {
-      logger.info("openaiCodex.logout.noCredentials", { path });
+    if (error.code === 'ENOENT') {
+      logger.info('openaiCodex.logout.noCredentials', { path });
       return { success: true };
     }
-    logger.error("openaiCodex.logout.error", { path, error: error.message });
+    logger.error('openaiCodex.logout.error', { path, error: error.message });
     return { success: false, error: error.message };
   }
 }
@@ -445,14 +426,14 @@ export async function retryAfterUnauthorized(): Promise<ParsedStoredAuth | null>
 async function runOpenAICodexHealthCheck(): Promise<HealthStatus> {
   const stored = await refreshAuth(false);
   if (!stored) {
-    return { status: "not_authenticated" };
+    return { status: 'not_authenticated' };
   }
 
   try {
     const response = await probeModels(stored);
     if (response.ok) {
       return {
-        status: "healthy",
+        status: 'healthy',
         email: stored.email,
         planType: stored.planType,
         accountId: stored.accountId,
@@ -463,18 +444,18 @@ async function runOpenAICodexHealthCheck(): Promise<HealthStatus> {
       const refreshed = await refreshAuth(true);
       if (!refreshed) {
         return {
-          status: "auth_expired",
+          status: 'auth_expired',
           email: stored.email,
           planType: stored.planType,
           accountId: stored.accountId,
-          error: "Stored ChatGPT OAuth token expired and refresh failed.",
+          error: 'Stored ChatGPT OAuth token expired and refresh failed.',
         };
       }
 
       const retry = await probeModels(refreshed);
       if (retry.ok) {
         return {
-          status: "healthy",
+          status: 'healthy',
           email: refreshed.email,
           planType: refreshed.planType,
           accountId: refreshed.accountId,
@@ -483,16 +464,16 @@ async function runOpenAICodexHealthCheck(): Promise<HealthStatus> {
 
       if (retry.status === 401) {
         return {
-          status: "auth_expired",
+          status: 'auth_expired',
           email: refreshed.email,
           planType: refreshed.planType,
           accountId: refreshed.accountId,
-          error: "Stored ChatGPT OAuth token expired and refresh failed.",
+          error: 'Stored ChatGPT OAuth token expired and refresh failed.',
         };
       }
 
       return {
-        status: "degraded",
+        status: 'degraded',
         email: refreshed.email,
         planType: refreshed.planType,
         accountId: refreshed.accountId,
@@ -501,7 +482,7 @@ async function runOpenAICodexHealthCheck(): Promise<HealthStatus> {
     }
 
     return {
-      status: "degraded",
+      status: 'degraded',
       email: stored.email,
       planType: stored.planType,
       accountId: stored.accountId,
@@ -509,18 +490,16 @@ async function runOpenAICodexHealthCheck(): Promise<HealthStatus> {
     };
   } catch (error) {
     return {
-      status: "degraded",
+      status: 'degraded',
       email: stored.email,
       planType: stored.planType,
       accountId: stored.accountId,
-      error: error instanceof Error ? error.message : "Health check failed",
+      error: error instanceof Error ? error.message : 'Health check failed',
     };
   }
 }
 
-export async function checkOpenAICodexHealth(
-  options: OpenAICodexHealthCheckOptions = {}
-): Promise<HealthStatus> {
+export async function checkOpenAICodexHealth(options: OpenAICodexHealthCheckOptions = {}): Promise<HealthStatus> {
   if (!options.force) {
     if (openAICodexHealthCache && openAICodexHealthCache.expiresAt > Date.now()) {
       return openAICodexHealthCache.result;

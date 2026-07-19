@@ -1,7 +1,7 @@
-import fs from "fs";
-import path from "path";
-import { execFileSync } from "child_process";
-import { logger } from "./logger";
+import fs from 'fs';
+import path from 'path';
+import { execFileSync } from 'child_process';
+import { logger } from './logger';
 
 interface BuildInfo {
   version: string;
@@ -13,25 +13,25 @@ let cached: BuildInfo | null = null;
 export function getBuildInfo(): BuildInfo {
   if (cached) return cached;
 
-  let version = "unknown";
+  let version = 'unknown';
   try {
-    const pkg = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), "package.json"), "utf-8"));
+    const pkg = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), 'package.json'), 'utf-8'));
     version = pkg.version;
   } catch (error) {
-    logger.warn("build-info.version.failed", {
+    logger.warn('build-info.version.failed', {
       error: error instanceof Error ? error.message : String(error),
     });
   }
 
-  let commitSha = "unknown";
+  let commitSha = 'unknown';
   try {
-    commitSha = fs.readFileSync(path.resolve(process.cwd(), ".commit-sha"), "utf-8").trim();
+    commitSha = fs.readFileSync(path.resolve(process.cwd(), '.commit-sha'), 'utf-8').trim();
   } catch {
-    if (process.env.NODE_ENV !== "test") {
+    if (process.env.NODE_ENV !== 'test') {
       try {
-        commitSha = execFileSync("git", ["rev-parse", "--short", "HEAD"], { encoding: "utf-8" }).trim();
+        commitSha = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { encoding: 'utf-8' }).trim();
       } catch (error) {
-        logger.warn("build-info.commitSha.failed", {
+        logger.warn('build-info.commitSha.failed', {
           error: error instanceof Error ? error.message : String(error),
         });
       }

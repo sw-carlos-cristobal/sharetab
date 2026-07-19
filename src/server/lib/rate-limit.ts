@@ -6,14 +6,14 @@ const attempts = new Map<string, { count: number; resetAt: number }>();
  * `count >= NaN` comparison is false — silently disabling the limiter.
  */
 export function parsePositiveInt(value: string | undefined, fallback: number): number {
-  const parsed = parseInt(value ?? "", 10);
+  const parsed = parseInt(value ?? '', 10);
   return parsed > 0 ? parsed : fallback;
 }
 
 export function checkRateLimit(
   key: string,
   maxAttempts: number,
-  windowMs: number
+  windowMs: number,
 ): { allowed: boolean; retryAfterMs: number } {
   const now = Date.now();
   const entry = attempts.get(key);
@@ -37,10 +37,7 @@ export function checkRateLimit(
  * validation or after acquiring a mutex), so rejected requests don't burn
  * budget.
  */
-export function peekRateLimit(
-  key: string,
-  maxAttempts: number
-): { allowed: boolean; retryAfterMs: number } {
+export function peekRateLimit(key: string, maxAttempts: number): { allowed: boolean; retryAfterMs: number } {
   const now = Date.now();
   const entry = attempts.get(key);
   if (!entry || now > entry.resetAt) {

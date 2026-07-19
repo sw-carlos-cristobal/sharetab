@@ -80,10 +80,7 @@ export function simplifyDebts(balances: MemberBalance[]): SimplifiedDebt[] {
  * Compute member balances from a set of expenses and settlements.
  * Returns per-member paid, owes, and net amounts.
  */
-export function computeBalances(
-  expenses: Expense[],
-  settlements: Settlement[]
-): MemberBalance[] {
+export function computeBalances(expenses: Expense[], settlements: Settlement[]): MemberBalance[] {
   const balanceMap = new Map<string, MemberBalance>();
 
   const getOrCreate = (userId: string): MemberBalance => {

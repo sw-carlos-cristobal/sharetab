@@ -1,9 +1,9 @@
-import { locales, type Locale } from "@/i18n/routing";
+import { locales, type Locale } from '@/i18n/routing';
 
 function splitPathSuffix(path: string) {
   const suffixIndex = path.search(/[?#]/);
   if (suffixIndex === -1) {
-    return { pathname: path, suffix: "" };
+    return { pathname: path, suffix: '' };
   }
 
   return {
@@ -13,7 +13,7 @@ function splitPathSuffix(path: string) {
 }
 
 export function isSafeInternalPath(path: string | null): path is string {
-  return !!path && path.startsWith("/") && !path.startsWith("//");
+  return !!path && path.startsWith('/') && !path.startsWith('//');
 }
 
 export function isSupportedLocale(value: string | null | undefined): value is Locale {
@@ -31,7 +31,7 @@ export function stripLocalePrefix(path: string): string {
   if (!locale) return path;
 
   const stripped = pathname.slice(locale.length + 1);
-  const normalized = stripped.startsWith("/") ? stripped : `/${stripped}`;
+  const normalized = stripped.startsWith('/') ? stripped : `/${stripped}`;
   return `${normalized}${suffix}`;
 }
 
@@ -41,8 +41,8 @@ export function withLocalePrefix(path: string, locale: Locale): string {
     return `${pathname}${suffix}`;
   }
 
-  const normalized = pathname.startsWith("/") ? pathname : `/${pathname}`;
-  const localized = normalized === "/" ? `/${locale}` : `/${locale}${normalized}`;
+  const normalized = pathname.startsWith('/') ? pathname : `/${pathname}`;
+  const localized = normalized === '/' ? `/${locale}` : `/${locale}${normalized}`;
   return `${localized}${suffix}`;
 }
 

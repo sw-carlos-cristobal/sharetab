@@ -1,9 +1,9 @@
-import type { PrismaClient } from "@/generated/prisma/client";
-import type { Prisma } from "@/generated/prisma/client";
-import type { AIProvider } from "../ai/provider";
-import { getAIProvidersWithFallback, clearProviderCache } from "../ai/registry";
-import { logger } from "./logger";
-import { normalizeDate } from "./normalize-date";
+import type { PrismaClient } from '@/generated/prisma/client';
+import type { Prisma } from '@/generated/prisma/client';
+import type { AIProvider } from '../ai/provider';
+import { getAIProvidersWithFallback, clearProviderCache } from '../ai/registry';
+import { logger } from './logger';
+import { normalizeDate } from './normalize-date';
 
 interface ProcessReceiptImageOptions {
   db: PrismaClient;
@@ -23,10 +23,10 @@ export async function processReceiptImage({
   receiptId,
   receipt,
   correctionHint,
-  logPrefix = "receipt",
+  logPrefix = 'receipt',
 }: ProcessReceiptImageOptions) {
-  const { readFile } = await import("fs/promises");
-  const { resolveUploadPath } = await import("./upload-dir");
+  const { readFile } = await import('fs/promises');
+  const { resolveUploadPath } = await import('./upload-dir');
   const filepath = resolveUploadPath(receipt.imagePath);
   const imageBuffer = await readFile(filepath);
 
@@ -38,7 +38,7 @@ export async function processReceiptImage({
 
   const start = Date.now();
   let provider: AIProvider | null = null;
-  let result: Awaited<ReturnType<AIProvider["extractReceipt"]>> | null = null;
+  let result: Awaited<ReturnType<AIProvider['extractReceipt']>> | null = null;
   let lastError: unknown;
 
   for (let pass = 0; pass < 2 && !result; pass++) {
@@ -46,11 +46,7 @@ export async function processReceiptImage({
 
     for (const candidate of providers) {
       try {
-        result = await candidate.extractReceipt(
-          imageBuffer,
-          receipt.mimeType,
-          correctionHint
-        );
+        result = await candidate.extractReceipt(imageBuffer, receipt.mimeType, correctionHint);
         provider = candidate;
         break;
       } catch (err) {
@@ -74,7 +70,7 @@ export async function processReceiptImage({
     throw new Error(
       `Receipt extraction failed across configured providers: ${
         lastError instanceof Error ? lastError.message : String(lastError)
-      }`
+      }`,
     );
   }
   const extraction = result;
@@ -110,7 +106,7 @@ export async function processReceiptImage({
     await tx.receipt.update({
       where: { id: receiptId },
       data: {
-        status: "COMPLETED",
+        status: 'COMPLETED',
         aiProvider: usedProvider.name,
         rawResponse: extraction as unknown as Prisma.InputJsonValue,
         extractedData: {
@@ -127,7 +123,7 @@ export async function processReceiptImage({
   });
 
   return {
-    status: "COMPLETED" as const,
+    status: 'COMPLETED' as const,
     merchantName: extraction.merchantName,
     date: normalizedDate,
     subtotal: extraction.subtotal,

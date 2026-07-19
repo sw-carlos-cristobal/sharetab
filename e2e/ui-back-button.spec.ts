@@ -1,139 +1,159 @@
-import { test, expect } from "@playwright/test";
-import { login, users, trpcMutation, createTestGroup } from "./helpers";
+import { test, expect } from '@playwright/test';
+import { login, users, trpcMutation, createTestGroup } from './helpers';
 
-test.describe("Back button navigation", () => {
-  test("back button on expense edit page navigates to expense detail", async ({ page }) => {
+test.describe('Back button navigation', () => {
+  test('back button on expense edit page navigates to expense detail', async ({ page }) => {
     await login(page, users.alice.email, users.alice.password);
 
     const { owner, groupId, memberIds, dispose } = await createTestGroup(
-      users.alice.email, users.alice.password, [], "Back Button Edit Test"
+      users.alice.email,
+      users.alice.password,
+      [],
+      'Back Button Edit Test',
     );
     const aliceId = memberIds[users.alice.email];
-    const expenseRes = await trpcMutation(owner, "expenses.create", {
+    const expenseRes = await trpcMutation(owner, 'expenses.create', {
       groupId,
-      title: "Test Expense",
+      title: 'Test Expense',
       amount: 1000,
-      splitMode: "EQUAL",
+      splitMode: 'EQUAL',
       paidById: aliceId,
       shares: [{ userId: aliceId, amount: 1000 }],
     });
     const expense = (await expenseRes.json()).result?.data?.json;
 
     await page.goto(`/en/groups/${groupId}/expenses/${expense.id}/edit`);
-    await expect(page.getByRole("heading", { name: "Edit Expense" })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Edit Expense' })).toBeVisible();
 
     // Click the back button next to heading (Button+Link, not raw <a>)
-    await page.getByRole("heading", { name: "Edit Expense" }).locator("..").getByRole("button").first().click();
+    await page.getByRole('heading', { name: 'Edit Expense' }).locator('..').getByRole('button').first().click();
 
     // Should navigate to expense detail page
-    await expect(page.getByRole("heading", { name: "Test Expense" })).toBeVisible({ timeout: 10000 });
-    expect(page.url()).not.toContain("/edit");
+    await expect(page.getByRole('heading', { name: 'Test Expense' })).toBeVisible({ timeout: 10000 });
+    expect(page.url()).not.toContain('/edit');
 
     await dispose();
   });
 
-  test("back button on add expense page navigates to group detail", async ({ page }) => {
+  test('back button on add expense page navigates to group detail', async ({ page }) => {
     await login(page, users.alice.email, users.alice.password);
 
     const { groupId, dispose } = await createTestGroup(
-      users.alice.email, users.alice.password, [], "Back Button Add Test"
+      users.alice.email,
+      users.alice.password,
+      [],
+      'Back Button Add Test',
     );
 
     await page.goto(`/en/groups/${groupId}/expenses/new`);
-    await expect(page.getByRole("heading", { name: "Add Expense" })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Add Expense' })).toBeVisible();
 
     // Click the back button next to heading (Button+Link, not raw <a>)
-    await page.getByRole("heading", { name: "Add Expense" }).locator("..").getByRole("button").first().click();
+    await page.getByRole('heading', { name: 'Add Expense' }).locator('..').getByRole('button').first().click();
 
     // Should navigate to group detail page
-    await expect(page.getByRole("heading", { name: "Back Button Add Test" })).toBeVisible({ timeout: 10000 });
-    expect(page.url()).not.toContain("/expenses/new");
+    await expect(page.getByRole('heading', { name: 'Back Button Add Test' })).toBeVisible({ timeout: 10000 });
+    expect(page.url()).not.toContain('/expenses/new');
 
     await dispose();
   });
 
-  test("back button on group settings page navigates to group detail", async ({ page }) => {
+  test('back button on group settings page navigates to group detail', async ({ page }) => {
     await login(page, users.alice.email, users.alice.password);
 
     const { groupId, dispose } = await createTestGroup(
-      users.alice.email, users.alice.password, [], "Back Button Settings Test"
+      users.alice.email,
+      users.alice.password,
+      [],
+      'Back Button Settings Test',
     );
 
     await page.goto(`/en/groups/${groupId}/settings`);
-    await expect(page.getByText("Group Settings")).toBeVisible();
+    await expect(page.getByText('Group Settings')).toBeVisible();
 
     await page.locator(`a[href*="/groups/${groupId}"]`).first().click();
 
-    await expect(page.getByRole("heading", { name: "Back Button Settings Test" })).toBeVisible({ timeout: 10000 });
-    expect(page.url()).not.toContain("/settings");
+    await expect(page.getByRole('heading', { name: 'Back Button Settings Test' })).toBeVisible({ timeout: 10000 });
+    expect(page.url()).not.toContain('/settings');
 
     await dispose();
   });
 
-  test("back button on scan page navigates to group detail", async ({ page }) => {
+  test('back button on scan page navigates to group detail', async ({ page }) => {
     await login(page, users.alice.email, users.alice.password);
 
     const { groupId, dispose } = await createTestGroup(
-      users.alice.email, users.alice.password, [], "Back Button Scan Test"
+      users.alice.email,
+      users.alice.password,
+      [],
+      'Back Button Scan Test',
     );
 
     await page.goto(`/en/groups/${groupId}/scan`);
-    await expect(page.getByRole("heading", { name: "Scan Receipt" })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Scan Receipt' })).toBeVisible();
 
     await page.locator(`a[href*="/groups/${groupId}"]`).first().click();
 
-    await expect(page.getByRole("heading", { name: "Back Button Scan Test" })).toBeVisible({ timeout: 10000 });
-    expect(page.url()).not.toContain("/scan");
+    await expect(page.getByRole('heading', { name: 'Back Button Scan Test' })).toBeVisible({ timeout: 10000 });
+    expect(page.url()).not.toContain('/scan');
 
     await dispose();
   });
 
-  test("sidebar Dashboard link works on expense edit page", async ({ page }) => {
+  test('sidebar Dashboard link works on expense edit page', async ({ page }) => {
     await login(page, users.alice.email, users.alice.password);
 
     const { owner, groupId, memberIds, dispose } = await createTestGroup(
-      users.alice.email, users.alice.password, [], "Sidebar Nav Test"
+      users.alice.email,
+      users.alice.password,
+      [],
+      'Sidebar Nav Test',
     );
     const aliceId = memberIds[users.alice.email];
-    const expenseRes = await trpcMutation(owner, "expenses.create", {
+    const expenseRes = await trpcMutation(owner, 'expenses.create', {
       groupId,
-      title: "Sidebar Test Expense",
+      title: 'Sidebar Test Expense',
       amount: 500,
-      splitMode: "EQUAL",
+      splitMode: 'EQUAL',
       paidById: aliceId,
       shares: [{ userId: aliceId, amount: 500 }],
     });
     const expense = (await expenseRes.json()).result?.data?.json;
 
     await page.goto(`/en/groups/${groupId}/expenses/${expense.id}/edit`);
-    await expect(page.getByRole("heading", { name: "Edit Expense" })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Edit Expense' })).toBeVisible();
 
     // Verify sidebar Dashboard link exists and navigate via it
     const dashLink = page.locator('aside a[href*="/dashboard"]');
     await expect(dashLink).toBeVisible();
     // Use evaluate to trigger navigation (Next.js Link click doesn't fire from form pages)
-    await dashLink.evaluate((el: HTMLAnchorElement) => { window.location.href = el.href; });
+    await dashLink.evaluate((el: HTMLAnchorElement) => {
+      window.location.href = el.href;
+    });
 
-    await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({ timeout: 15000 });
 
     await dispose();
   });
 
-  test("sidebar Groups link works on add expense page", async ({ page }) => {
+  test('sidebar Groups link works on add expense page', async ({ page }) => {
     await login(page, users.alice.email, users.alice.password);
 
     const { groupId, dispose } = await createTestGroup(
-      users.alice.email, users.alice.password, [], "Sidebar Groups Test"
+      users.alice.email,
+      users.alice.password,
+      [],
+      'Sidebar Groups Test',
     );
 
     await page.goto(`/en/groups/${groupId}/expenses/new`);
-    await expect(page.getByRole("heading", { name: "Add Expense" })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Add Expense' })).toBeVisible();
 
     // Click Groups in the sidebar
-    await page.getByRole("link", { name: "Groups" }).click();
+    await page.getByRole('link', { name: 'Groups' }).click();
 
-    await expect(page.getByRole("heading", { name: "Groups" })).toBeVisible({ timeout: 10000 });
-    expect(page.url()).toContain("/groups");
+    await expect(page.getByRole('heading', { name: 'Groups' })).toBeVisible({ timeout: 10000 });
+    expect(page.url()).toContain('/groups');
 
     await dispose();
   });

@@ -1,19 +1,13 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { useLocale, useTranslations } from "next-intl";
-import { trpc } from "@/lib/trpc";
-import { parseToCents, formatCents } from "@/lib/money";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { useState } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
+import { trpc } from '@/lib/trpc';
+import { parseToCents, formatCents } from '@/lib/money';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 type Member = { id: string; name: string | null };
 
@@ -36,16 +30,14 @@ export function SettleDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const t = useTranslations("groups");
+  const t = useTranslations('groups');
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t("settle.title")}</DialogTitle>
-          <DialogDescription>
-            {t("settle.description")}
-          </DialogDescription>
+          <DialogTitle>{t('settle.title')}</DialogTitle>
+          <DialogDescription>{t('settle.description')}</DialogDescription>
         </DialogHeader>
 
         {/* Mounted only while open so each open starts from the current
@@ -84,13 +76,11 @@ function SettleForm({
   onOpenChange: (open: boolean) => void;
 }) {
   const locale = useLocale();
-  const t = useTranslations("groups");
-  const [fromId, setFromId] = useState(suggestedFrom ?? "");
-  const [toId, setToId] = useState(suggestedTo ?? "");
-  const [amountStr, setAmountStr] = useState(
-    suggestedAmount ? (suggestedAmount / 100).toFixed(2) : ""
-  );
-  const [note, setNote] = useState("");
+  const t = useTranslations('groups');
+  const [fromId, setFromId] = useState(suggestedFrom ?? '');
+  const [toId, setToId] = useState(suggestedTo ?? '');
+  const [amountStr, setAmountStr] = useState(suggestedAmount ? (suggestedAmount / 100).toFixed(2) : '');
+  const [note, setNote] = useState('');
 
   const utils = trpc.useUtils();
   const settle = trpc.settlements.create.useMutation({
@@ -113,7 +103,7 @@ function SettleForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
-        <Label htmlFor="from">{t("settle.from")}</Label>
+        <Label htmlFor="from">{t('settle.from')}</Label>
         <select
           id="from"
           value={fromId}
@@ -121,17 +111,17 @@ function SettleForm({
           required
           className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         >
-          <option value="">{t("settle.selectMember")}</option>
+          <option value="">{t('settle.selectMember')}</option>
           {members.map((m) => (
             <option key={m.id} value={m.id}>
-              {m.name ?? t("settle.unnamed")}
+              {m.name ?? t('settle.unnamed')}
             </option>
           ))}
         </select>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="to">{t("settle.to")}</Label>
+        <Label htmlFor="to">{t('settle.to')}</Label>
         <select
           id="to"
           value={toId}
@@ -139,17 +129,17 @@ function SettleForm({
           required
           className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         >
-          <option value="">{t("settle.selectMember")}</option>
+          <option value="">{t('settle.selectMember')}</option>
           {members.map((m) => (
             <option key={m.id} value={m.id}>
-              {m.name ?? t("settle.unnamed")}
+              {m.name ?? t('settle.unnamed')}
             </option>
           ))}
         </select>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="settle-amount">{t("settle.amount")}</Label>
+        <Label htmlFor="settle-amount">{t('settle.amount')}</Label>
         <Input
           id="settle-amount"
           type="number"
@@ -166,29 +156,27 @@ function SettleForm({
             onClick={() => setAmountStr((suggestedAmount / 100).toFixed(2))}
             className="text-xs text-primary hover:underline"
           >
-            {t("settle.useSuggested", { amount: formatCents(suggestedAmount, currency, locale) })}
+            {t('settle.useSuggested', { amount: formatCents(suggestedAmount, currency, locale) })}
           </button>
         )}
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="note">{t("settle.note")}</Label>
+        <Label htmlFor="note">{t('settle.note')}</Label>
         <Input
           id="note"
-          placeholder={t("settle.notePlaceholder")}
+          placeholder={t('settle.notePlaceholder')}
           value={note}
           onChange={(e) => setNote(e.target.value)}
         />
       </div>
 
       {settle.error && (
-        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-          {settle.error.message}
-        </div>
+        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{settle.error.message}</div>
       )}
 
       <Button type="submit" className="w-full" disabled={settle.isPending}>
-        {settle.isPending ? t("settle.submitting") : t("settle.submit")}
+        {settle.isPending ? t('settle.submitting') : t('settle.submit')}
       </Button>
     </form>
   );

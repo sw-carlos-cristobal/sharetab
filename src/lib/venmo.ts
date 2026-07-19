@@ -1,5 +1,5 @@
 export function normalizeVenmoHandle(handle: string): string {
-  return handle.trim().replace(/^@/, "").trim();
+  return handle.trim().replace(/^@/, '').trim();
 }
 
 export function isValidVenmoHandle(handle: string): boolean {

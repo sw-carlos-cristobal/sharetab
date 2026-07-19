@@ -88,11 +88,13 @@ npx prisma db push   # Push schema without migration (dev only)
 ## Testing
 
 ### Unit Tests (Vitest)
+
 - `npm test` — run all unit tests (~222 tests, <1s)
 - Tests live co-located with source: `src/**/*.test.ts`
 - Covers: `money.ts`, `split-calculator.ts`, `rate-limit.ts`, `upload-dir.ts`, `balance-calculator.ts`, `ai/registry.ts`, `ai/providers/openai-codex.ts`, `lib/normalize-date.ts`, `lib/meridian-login.ts`, `lib/receipt-processor.ts`, `lib/auth-health-poller.ts`, `lib/openai-codex-login.ts`, `trpc/routers/admin.ts`
 
 ### E2E Tests (Playwright)
+
 - `BASE_URL=http://localhost:3000 npx playwright test` — run all e2e tests
 - `BASE_URL=http://localhost:3000 npx playwright test --headed` — visual testing
 - `RUN_AI_TESTS=1` — enable AI-dependent tests (requires configured AI provider)

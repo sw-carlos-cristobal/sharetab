@@ -1,35 +1,31 @@
-import { z } from "zod";
-import { TRPCError } from "@trpc/server";
-import { createTRPCRouter, publicProcedure, protectedProcedure } from "../init";
+import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
+import { createTRPCRouter, publicProcedure, protectedProcedure } from '../init';
 import {
   getAIProvidersWithFallback,
   getConfiguredProviderPriority,
   isProviderConfigured,
   createProviderByName,
-} from "@/server/ai/registry";
-import {
-  type AdminAction,
-  type PrismaClient,
-  Prisma,
-} from "@/generated/prisma/client";
-import nodemailer from "nodemailer";
-import fs from "fs";
-import * as fsp from "fs/promises";
-import path from "path";
-import { getRecentLogs } from "@/server/lib/logger";
+} from '@/server/ai/registry';
+import { type AdminAction, type PrismaClient, Prisma } from '@/generated/prisma/client';
+import nodemailer from 'nodemailer';
+import fs from 'fs';
+import * as fsp from 'fs/promises';
+import path from 'path';
+import { getRecentLogs } from '@/server/lib/logger';
 import {
   checkMeridianHealth,
   invalidateMeridianHealthCache,
   sendAuthExpiryEmail,
-} from "@/server/lib/auth-health-poller";
+} from '@/server/lib/auth-health-poller';
 import {
   startLogin,
   submitCode,
   cancelLogin,
   logout as logoutMeridian,
   isLoginInProgress,
-} from "@/server/lib/meridian-login";
-import { clearProviderCache } from "@/server/ai/registry";
+} from '@/server/lib/meridian-login';
+import { clearProviderCache } from '@/server/ai/registry';
 import {
   checkOpenAICodexHealth,
   invalidateOpenAICodexHealthCache,
@@ -38,9 +34,9 @@ import {
   cancelLogin as cancelOpenAICodexLogin,
   logout as logoutOpenAICodex,
   isLoginInProgress as isOpenAICodexLoginInProgress,
-} from "@/server/lib/openai-codex-login";
+} from '@/server/lib/openai-codex-login';
 
-import { getBuildInfo } from "@/server/lib/build-info";
+import { getBuildInfo } from '@/server/lib/build-info';
 
 const serverStartTime = new Date();
 const { version: cachedVersion, commitSha: cachedCommitSha } = getBuildInfo();
@@ -48,13 +44,11 @@ const { version: cachedVersion, commitSha: cachedCommitSha } = getBuildInfo();
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
   const adminEmail = process.env.ADMIN_EMAIL;
   // When impersonating, use the real admin email for the check
-  const effectiveEmail = ctx.impersonating
-    ? ctx.impersonating.adminEmail
-    : ctx.user.email;
+  const effectiveEmail = ctx.impersonating ? ctx.impersonating.adminEmail : ctx.user.email;
   if (!adminEmail || effectiveEmail !== adminEmail) {
     throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "Admin access required",
+      code: 'FORBIDDEN',
+      message: 'Admin access required',
     });
   }
   // For admin procedures, restore the real admin user context
@@ -81,7 +75,7 @@ export async function logAdminAction(
   adminId: string,
   action: AdminAction,
   targetId?: string | null,
-  metadata?: Record<string, unknown> | null
+  metadata?: Record<string, unknown> | null,
 ) {
   await db.adminAuditLog.create({
     data: {
@@ -108,16 +102,14 @@ export const adminRouter = createTRPCRouter({
         cursor: z.string().optional(),
         limit: z.number().min(1).max(100).default(50),
         action: z.string().optional(),
-      })
+      }),
     )
     .query(async ({ ctx, input }) => {
       const items = await ctx.db.adminAuditLog.findMany({
         take: input.limit + 1,
         ...(input.cursor ? { cursor: { id: input.cursor } } : {}),
-        ...(input.action
-          ? { where: { action: input.action as AdminAction } }
-          : {}),
-        orderBy: { createdAt: "desc" },
+        ...(input.action ? { where: { action: input.action as AdminAction } } : {}),
+        orderBy: { createdAt: 'desc' },
         include: {
           admin: {
             select: { id: true, name: true, email: true },
@@ -147,49 +139,44 @@ export const adminRouter = createTRPCRouter({
 
   getSystemHealth: adminProcedure.query(async ({ ctx }) => {
     // DB status
-    let dbStatus: "connected" | "disconnected" = "disconnected";
+    let dbStatus: 'connected' | 'disconnected' = 'disconnected';
     try {
       await ctx.db.$queryRaw`SELECT 1`;
-      dbStatus = "connected";
+      dbStatus = 'connected';
     } catch {
       // disconnected
     }
 
     // AI provider info
-    let aiProvider = "unknown";
+    let aiProvider = 'unknown';
     let aiAvailable = false;
-    let aiStatus: "available" | "requires_auth" | "unavailable" = "unavailable";
+    let aiStatus: 'available' | 'requires_auth' | 'unavailable' = 'unavailable';
     const authProvidersNeedingLogin: string[] = [];
     try {
       const configured = getConfiguredProviderPriority();
       const providers = await getAIProvidersWithFallback();
-      aiProvider = configured.join(" -> ");
+      aiProvider = configured.join(' -> ');
       aiAvailable = providers.length > 0;
 
       // Mark OAuth-backed providers that are configured but not currently usable.
-      if (configured.includes("meridian")) {
+      if (configured.includes('meridian')) {
         const meridianHealth = await checkMeridianHealth();
-        if (meridianHealth.status !== "healthy") {
-          authProvidersNeedingLogin.push("meridian");
+        if (meridianHealth.status !== 'healthy') {
+          authProvidersNeedingLogin.push('meridian');
         }
       }
 
-      if (configured.includes("openai-codex")) {
+      if (configured.includes('openai-codex')) {
         const openAICodexHealth = await checkOpenAICodexHealth();
-        if (
-          openAICodexHealth.status === "auth_expired" ||
-          openAICodexHealth.status === "not_authenticated"
-        ) {
-          authProvidersNeedingLogin.push("openai-codex");
+        if (openAICodexHealth.status === 'auth_expired' || openAICodexHealth.status === 'not_authenticated') {
+          authProvidersNeedingLogin.push('openai-codex');
         }
       }
 
-      aiStatus = authProvidersNeedingLogin.length > 0
-        ? "requires_auth"
-        : "available";
+      aiStatus = authProvidersNeedingLogin.length > 0 ? 'requires_auth' : 'available';
     } catch {
-      aiProvider = process.env.AI_PROVIDER_PRIORITY ?? "not configured";
-      aiStatus = "unavailable";
+      aiProvider = process.env.AI_PROVIDER_PRIORITY ?? 'not configured';
+      aiStatus = 'unavailable';
     }
 
     return {
@@ -211,33 +198,29 @@ export const adminRouter = createTRPCRouter({
         cursor: z.string().optional(),
         limit: z.number().int().min(1).max(100).default(20),
         search: z.string().max(200).optional(),
-        sortBy: z
-          .enum(["name", "email", "groupCount", "createdAt"])
-          .default("createdAt"),
-        sortDirection: z.enum(["asc", "desc"]).default("desc"),
-        status: z
-          .enum(["all", "active", "suspended", "placeholder"])
-          .default("all"),
-      })
+        sortBy: z.enum(['name', 'email', 'groupCount', 'createdAt']).default('createdAt'),
+        sortDirection: z.enum(['asc', 'desc']).default('desc'),
+        status: z.enum(['all', 'active', 'suspended', 'placeholder']).default('all'),
+      }),
     )
     .query(async ({ ctx, input }) => {
       // Build where clause
       const where: Prisma.UserWhereInput = {};
 
-      if (input.status === "active") {
+      if (input.status === 'active') {
         where.suspendedAt = null;
         where.isPlaceholder = false;
-      } else if (input.status === "suspended") {
+      } else if (input.status === 'suspended') {
         where.suspendedAt = { not: null };
-      } else if (input.status === "placeholder") {
+      } else if (input.status === 'placeholder') {
         where.isPlaceholder = true;
       }
 
       if (input.search) {
         where.OR = [
-          { name: { contains: input.search, mode: "insensitive" } },
-          { email: { contains: input.search, mode: "insensitive" } },
-          { placeholderName: { contains: input.search, mode: "insensitive" } },
+          { name: { contains: input.search, mode: 'insensitive' } },
+          { email: { contains: input.search, mode: 'insensitive' } },
+          { placeholderName: { contains: input.search, mode: 'insensitive' } },
         ];
       }
 
@@ -246,20 +229,20 @@ export const adminRouter = createTRPCRouter({
       const idTiebreaker: UserOrderBy = { id: dir };
       let orderBy: UserOrderBy[];
       switch (input.sortBy) {
-        case "name":
+        case 'name':
           orderBy = [
-            { name: { sort: dir, nulls: dir === "asc" ? "last" : "first" } },
+            { name: { sort: dir, nulls: dir === 'asc' ? 'last' : 'first' } },
             { placeholderName: dir },
             idTiebreaker,
           ];
           break;
-        case "email":
+        case 'email':
           orderBy = [{ email: dir }, idTiebreaker];
           break;
-        case "groupCount":
+        case 'groupCount':
           orderBy = [{ groupMembers: { _count: dir } }, idTiebreaker];
           break;
-        case "createdAt":
+        case 'createdAt':
         default:
           orderBy = [{ createdAt: dir }, idTiebreaker];
           break;
@@ -269,9 +252,7 @@ export const adminRouter = createTRPCRouter({
       const [users, ...counts] = await Promise.all([
         ctx.db.user.findMany({
           take: input.limit + 1,
-          ...(input.cursor
-            ? { cursor: { id: input.cursor } }
-            : {}),
+          ...(input.cursor ? { cursor: { id: input.cursor } } : {}),
           where,
           select: {
             id: true,
@@ -312,171 +293,151 @@ export const adminRouter = createTRPCRouter({
       };
     }),
 
-  suspendUser: adminProcedure
-    .input(z.object({ userId: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      if (input.userId === ctx.user.id) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Cannot suspend your own account",
-        });
-      }
-
-      const user = await ctx.db.user.findUnique({
-        where: { id: input.userId },
-        select: { id: true, email: true, suspendedAt: true },
+  suspendUser: adminProcedure.input(z.object({ userId: z.string() })).mutation(async ({ ctx, input }) => {
+    if (input.userId === ctx.user.id) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'Cannot suspend your own account',
       });
+    }
 
-      if (!user) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
-      }
+    const user = await ctx.db.user.findUnique({
+      where: { id: input.userId },
+      select: { id: true, email: true, suspendedAt: true },
+    });
 
-      if (user.suspendedAt) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "User is already suspended",
-        });
-      }
+    if (!user) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found' });
+    }
 
-      await ctx.db.user.update({
-        where: { id: input.userId },
-        data: { suspendedAt: new Date() },
+    if (user.suspendedAt) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'User is already suspended',
       });
+    }
 
-      await logAdminAction(
-        ctx.db,
-        ctx.user.id,
-        "USER_SUSPENDED",
-        input.userId,
-        { email: user.email }
-      );
+    await ctx.db.user.update({
+      where: { id: input.userId },
+      data: { suspendedAt: new Date() },
+    });
 
-      return { suspended: true, userId: input.userId };
-    }),
+    await logAdminAction(ctx.db, ctx.user.id, 'USER_SUSPENDED', input.userId, { email: user.email });
 
-  unsuspendUser: adminProcedure
-    .input(z.object({ userId: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      const user = await ctx.db.user.findUnique({
-        where: { id: input.userId },
-        select: { id: true, email: true, suspendedAt: true, isPlaceholder: true },
+    return { suspended: true, userId: input.userId };
+  }),
+
+  unsuspendUser: adminProcedure.input(z.object({ userId: z.string() })).mutation(async ({ ctx, input }) => {
+    const user = await ctx.db.user.findUnique({
+      where: { id: input.userId },
+      select: { id: true, email: true, suspendedAt: true, isPlaceholder: true },
+    });
+
+    if (!user) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found' });
+    }
+
+    if (!user.suspendedAt) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'User is not suspended',
       });
+    }
 
-      if (!user) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
-      }
-
-      if (!user.suspendedAt) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "User is not suspended",
-        });
-      }
-
-      if (user.isPlaceholder) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Cannot unsuspend a placeholder or deleted account",
-        });
-      }
-
-      await ctx.db.user.update({
-        where: { id: input.userId },
-        data: { suspendedAt: null },
+    if (user.isPlaceholder) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'Cannot unsuspend a placeholder or deleted account',
       });
+    }
 
-      await logAdminAction(
-        ctx.db,
-        ctx.user.id,
-        "USER_UNSUSPENDED",
-        input.userId,
-        { email: user.email }
-      );
+    await ctx.db.user.update({
+      where: { id: input.userId },
+      data: { suspendedAt: null },
+    });
 
-      return { unsuspended: true, userId: input.userId };
-    }),
+    await logAdminAction(ctx.db, ctx.user.id, 'USER_UNSUSPENDED', input.userId, { email: user.email });
 
-  deleteUser: adminProcedure
-    .input(z.object({ userId: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      if (input.userId === ctx.user.id) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Cannot delete your own account",
-        });
-      }
+    return { unsuspended: true, userId: input.userId };
+  }),
 
-      const user = await ctx.db.user.findUnique({
-        where: { id: input.userId },
-        select: { id: true, email: true },
+  deleteUser: adminProcedure.input(z.object({ userId: z.string() })).mutation(async ({ ctx, input }) => {
+    if (input.userId === ctx.user.id) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'Cannot delete your own account',
       });
+    }
 
-      if (!user) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "User not found",
-        });
-      }
+    const user = await ctx.db.user.findUnique({
+      where: { id: input.userId },
+      select: { id: true, email: true },
+    });
 
-      await ctx.db.$transaction(async (tx) => {
-        // Convert to placeholder to preserve financial history, then strip auth data
-        await tx.user.update({
-          where: { id: input.userId },
-          data: {
-            isPlaceholder: true,
-            name: "Deleted user",
-            placeholderName: "Deleted user",
-            email: `deleted-${input.userId}@placeholder.local`,
-            passwordHash: null,
-            image: null,
-            venmoUsername: null,
-            suspendedAt: new Date(),
-          },
-        });
-        // Remove auth records (sessions, accounts)
-        await tx.account.deleteMany({ where: { userId: input.userId } });
-        await tx.session.deleteMany({ where: { userId: input.userId } });
-        // Transfer ownership before removing memberships
-        const ownedGroups = await tx.groupMember.findMany({
-          where: { userId: input.userId, role: "OWNER" },
-          select: { groupId: true },
-        });
-        const keepMembershipGroupIds: string[] = [];
-        for (const { groupId } of ownedGroups) {
-          const nextOwner = await tx.groupMember.findFirst({
-            where: {
-              groupId,
-              userId: { not: input.userId },
-              user: { isPlaceholder: false, suspendedAt: null },
-            },
-            orderBy: { joinedAt: "asc" },
-          });
-          if (nextOwner) {
-            await tx.groupMember.update({
-              where: { id: nextOwner.id },
-              data: { role: "OWNER" },
-            });
-          } else {
-            keepMembershipGroupIds.push(groupId);
-          }
-        }
-        // Remove memberships except where user is the sole active owner
-        await tx.groupMember.deleteMany({
+    if (!user) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'User not found',
+      });
+    }
+
+    await ctx.db.$transaction(async (tx) => {
+      // Convert to placeholder to preserve financial history, then strip auth data
+      await tx.user.update({
+        where: { id: input.userId },
+        data: {
+          isPlaceholder: true,
+          name: 'Deleted user',
+          placeholderName: 'Deleted user',
+          email: `deleted-${input.userId}@placeholder.local`,
+          passwordHash: null,
+          image: null,
+          venmoUsername: null,
+          suspendedAt: new Date(),
+        },
+      });
+      // Remove auth records (sessions, accounts)
+      await tx.account.deleteMany({ where: { userId: input.userId } });
+      await tx.session.deleteMany({ where: { userId: input.userId } });
+      // Transfer ownership before removing memberships
+      const ownedGroups = await tx.groupMember.findMany({
+        where: { userId: input.userId, role: 'OWNER' },
+        select: { groupId: true },
+      });
+      const keepMembershipGroupIds: string[] = [];
+      for (const { groupId } of ownedGroups) {
+        const nextOwner = await tx.groupMember.findFirst({
           where: {
-            userId: input.userId,
-            ...(keepMembershipGroupIds.length > 0
-              ? { groupId: { notIn: keepMembershipGroupIds } }
-              : {}),
+            groupId,
+            userId: { not: input.userId },
+            user: { isPlaceholder: false, suspendedAt: null },
           },
+          orderBy: { joinedAt: 'asc' },
         });
+        if (nextOwner) {
+          await tx.groupMember.update({
+            where: { id: nextOwner.id },
+            data: { role: 'OWNER' },
+          });
+        } else {
+          keepMembershipGroupIds.push(groupId);
+        }
+      }
+      // Remove memberships except where user is the sole active owner
+      await tx.groupMember.deleteMany({
+        where: {
+          userId: input.userId,
+          ...(keepMembershipGroupIds.length > 0 ? { groupId: { notIn: keepMembershipGroupIds } } : {}),
+        },
       });
+    });
 
-      await logAdminAction(ctx.db, ctx.user.id, "USER_DELETED", input.userId, {
-        email: user.email,
-      });
+    await logAdminAction(ctx.db, ctx.user.id, 'USER_DELETED', input.userId, {
+      email: user.email,
+    });
 
-      return { deleted: true, userId: input.userId };
-    }),
+    return { deleted: true, userId: input.userId };
+  }),
 
   listGroups: adminProcedure
     .input(
@@ -484,25 +445,23 @@ export const adminRouter = createTRPCRouter({
         cursor: z.string().optional(),
         limit: z.number().int().min(1).max(100).default(20),
         search: z.string().max(200).optional(),
-        sortBy: z
-          .enum(["name", "memberCount", "expenseCount", "createdAt"])
-          .default("createdAt"),
-        sortDirection: z.enum(["asc", "desc"]).default("desc"),
-        status: z.enum(["all", "active", "archived"]).default("all"),
-      })
+        sortBy: z.enum(['name', 'memberCount', 'expenseCount', 'createdAt']).default('createdAt'),
+        sortDirection: z.enum(['asc', 'desc']).default('desc'),
+        status: z.enum(['all', 'active', 'archived']).default('all'),
+      }),
     )
     .query(async ({ ctx, input }) => {
       // Build where clause
       const where: Prisma.GroupWhereInput = {};
 
-      if (input.status === "active") {
+      if (input.status === 'active') {
         where.archivedAt = null;
-      } else if (input.status === "archived") {
+      } else if (input.status === 'archived') {
         where.archivedAt = { not: null };
       }
 
       if (input.search) {
-        where.name = { contains: input.search, mode: "insensitive" };
+        where.name = { contains: input.search, mode: 'insensitive' };
       }
 
       type GroupOrderBy = Prisma.GroupOrderByWithRelationInput;
@@ -510,16 +469,16 @@ export const adminRouter = createTRPCRouter({
       const idTiebreaker: GroupOrderBy = { id: dir };
       let orderBy: GroupOrderBy[];
       switch (input.sortBy) {
-        case "name":
+        case 'name':
           orderBy = [{ name: dir }, idTiebreaker];
           break;
-        case "memberCount":
+        case 'memberCount':
           orderBy = [{ members: { _count: dir } }, idTiebreaker];
           break;
-        case "expenseCount":
+        case 'expenseCount':
           orderBy = [{ expenses: { _count: dir } }, idTiebreaker];
           break;
-        case "createdAt":
+        case 'createdAt':
         default:
           orderBy = [{ createdAt: dir }, idTiebreaker];
           break;
@@ -530,9 +489,7 @@ export const adminRouter = createTRPCRouter({
       const [groups, ...countsArr] = await Promise.all([
         ctx.db.group.findMany({
           take: input.limit + 1,
-          ...(input.cursor
-            ? { cursor: { id: input.cursor } }
-            : {}),
+          ...(input.cursor ? { cursor: { id: input.cursor } } : {}),
           where,
           select: {
             id: true,
@@ -548,7 +505,7 @@ export const adminRouter = createTRPCRouter({
             },
             activityLogs: {
               select: { createdAt: true },
-              orderBy: { createdAt: "desc" },
+              orderBy: { createdAt: 'desc' },
               take: 1,
             },
           },
@@ -570,16 +527,15 @@ export const adminRouter = createTRPCRouter({
       }
 
       const groupIds = groups.map((g) => g.id);
-      const expenseSums = groupIds.length > 0
-        ? await ctx.db.expense.groupBy({
-            by: ["groupId"],
-            where: { groupId: { in: groupIds } },
-            _sum: { amount: true },
-          })
-        : [];
-      const sumByGroup = new Map(
-        expenseSums.map((e) => [e.groupId, e._sum.amount ?? 0])
-      );
+      const expenseSums =
+        groupIds.length > 0
+          ? await ctx.db.expense.groupBy({
+              by: ['groupId'],
+              where: { groupId: { in: groupIds } },
+              _sum: { amount: true },
+            })
+          : [];
+      const sumByGroup = new Map(expenseSums.map((e) => [e.groupId, e._sum.amount ?? 0]));
 
       const result = groups.map((g) => ({
         id: g.id,
@@ -601,73 +557,63 @@ export const adminRouter = createTRPCRouter({
       };
     }),
 
-  deleteGroup: adminProcedure
-    .input(z.object({ groupId: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      const group = await ctx.db.group.findUnique({
-        where: { id: input.groupId },
-        select: { id: true, name: true },
+  deleteGroup: adminProcedure.input(z.object({ groupId: z.string() })).mutation(async ({ ctx, input }) => {
+    const group = await ctx.db.group.findUnique({
+      where: { id: input.groupId },
+      select: { id: true, name: true },
+    });
+
+    if (!group) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Group not found',
       });
+    }
 
-      if (!group) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Group not found",
-        });
-      }
+    await ctx.db.group.delete({ where: { id: input.groupId } });
 
-      await ctx.db.group.delete({ where: { id: input.groupId } });
+    await logAdminAction(ctx.db, ctx.user.id, 'GROUP_DELETED', input.groupId, { name: group.name });
 
-      await logAdminAction(
-        ctx.db,
-        ctx.user.id,
-        "GROUP_DELETED",
-        input.groupId,
-        { name: group.name }
-      );
-
-      return { deleted: true, groupId: input.groupId };
-    }),
+    return { deleted: true, groupId: input.groupId };
+  }),
 
   // ─── AI Usage Statistics ─────────────────────────────────
 
   getAIStats: adminProcedure.query(async ({ ctx }) => {
-    const [total, byStatus, byProvider, last7Days, last30Days] =
-      await Promise.all([
-        ctx.db.receipt.count(),
-        ctx.db.receipt.groupBy({
-          by: ["status"],
-          _count: true,
-        }),
-        ctx.db.receipt.groupBy({
-          by: ["aiProvider"],
-          _count: true,
-          where: { aiProvider: { not: null } },
-        }),
-        ctx.db.receipt.count({
-          where: {
-            createdAt: {
-              gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-            },
+    const [total, byStatus, byProvider, last7Days, last30Days] = await Promise.all([
+      ctx.db.receipt.count(),
+      ctx.db.receipt.groupBy({
+        by: ['status'],
+        _count: true,
+      }),
+      ctx.db.receipt.groupBy({
+        by: ['aiProvider'],
+        _count: true,
+        where: { aiProvider: { not: null } },
+      }),
+      ctx.db.receipt.count({
+        where: {
+          createdAt: {
+            gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
           },
-        }),
-        ctx.db.receipt.count({
-          where: {
-            createdAt: {
-              gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-            },
+        },
+      }),
+      ctx.db.receipt.count({
+        where: {
+          createdAt: {
+            gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
           },
-        }),
-      ]);
+        },
+      }),
+    ]);
 
     return {
       total,
-      byStatus: Object.fromEntries(
-        byStatus.map((s) => [s.status, s._count])
-      ) as Record<string, number>,
-      byProvider: Object.fromEntries(
-        byProvider.map((p) => [p.aiProvider ?? "unknown", p._count])
-      ) as Record<string, number>,
+      byStatus: Object.fromEntries(byStatus.map((s) => [s.status, s._count])) as Record<string, number>,
+      byProvider: Object.fromEntries(byProvider.map((p) => [p.aiProvider ?? 'unknown', p._count])) as Record<
+        string,
+        number
+      >,
       last7Days,
       last30Days,
     };
@@ -677,33 +623,27 @@ export const adminRouter = createTRPCRouter({
 
   getRegistrationMode: adminProcedure.query(async ({ ctx }) => {
     const setting = await ctx.db.systemSetting.findUnique({
-      where: { key: "registrationMode" },
+      where: { key: 'registrationMode' },
     });
     return {
-      mode: (setting?.value ?? "open") as "open" | "invite-only" | "closed",
+      mode: (setting?.value ?? 'open') as 'open' | 'invite-only' | 'closed',
     };
   }),
 
   setRegistrationMode: adminProcedure
     .input(
       z.object({
-        mode: z.enum(["open", "invite-only", "closed"]),
-      })
+        mode: z.enum(['open', 'invite-only', 'closed']),
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       await ctx.db.systemSetting.upsert({
-        where: { key: "registrationMode" },
+        where: { key: 'registrationMode' },
         update: { value: input.mode },
-        create: { key: "registrationMode", value: input.mode },
+        create: { key: 'registrationMode', value: input.mode },
       });
 
-      await logAdminAction(
-        ctx.db,
-        ctx.user.id,
-        "REGISTRATION_MODE_CHANGED",
-        null,
-        { mode: input.mode }
-      );
+      await logAdminAction(ctx.db, ctx.user.id, 'REGISTRATION_MODE_CHANGED', null, { mode: input.mode });
 
       return { mode: input.mode };
     }),
@@ -713,12 +653,10 @@ export const adminRouter = createTRPCRouter({
       z.object({
         label: z.string().max(100).optional(),
         expiresInDays: z.number().min(1).max(365).optional(),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
-      const expiresAt = input.expiresInDays
-        ? new Date(Date.now() + input.expiresInDays * 24 * 60 * 60 * 1000)
-        : null;
+      const expiresAt = input.expiresInDays ? new Date(Date.now() + input.expiresInDays * 24 * 60 * 60 * 1000) : null;
 
       const invite = await ctx.db.systemInvite.create({
         data: {
@@ -727,13 +665,7 @@ export const adminRouter = createTRPCRouter({
         },
       });
 
-      await logAdminAction(
-        ctx.db,
-        ctx.user.id,
-        "INVITE_CREATED",
-        invite.id,
-        { code: invite.code, label: input.label }
-      );
+      await logAdminAction(ctx.db, ctx.user.id, 'INVITE_CREATED', invite.id, { code: invite.code, label: input.label });
 
       return {
         id: invite.id,
@@ -749,63 +681,50 @@ export const adminRouter = createTRPCRouter({
       include: {
         usedBy: { select: { id: true, name: true, email: true } },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
     });
 
     return invites.map((inv) => ({
       id: inv.id,
       code: inv.code,
       label: inv.label,
-      usedBy: inv.usedBy
-        ? { name: inv.usedBy.name, email: inv.usedBy.email }
-        : null,
+      usedBy: inv.usedBy ? { name: inv.usedBy.name, email: inv.usedBy.email } : null,
       usedAt: inv.usedAt,
       expiresAt: inv.expiresAt,
       revokedAt: inv.revokedAt,
-      isActive:
-        !inv.revokedAt &&
-        !inv.usedAt &&
-        (!inv.expiresAt || inv.expiresAt > new Date()),
+      isActive: !inv.revokedAt && !inv.usedAt && (!inv.expiresAt || inv.expiresAt > new Date()),
       createdAt: inv.createdAt,
     }));
   }),
 
-  revokeSystemInvite: adminProcedure
-    .input(z.object({ inviteId: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      const invite = await ctx.db.systemInvite.findUnique({
-        where: { id: input.inviteId },
+  revokeSystemInvite: adminProcedure.input(z.object({ inviteId: z.string() })).mutation(async ({ ctx, input }) => {
+    const invite = await ctx.db.systemInvite.findUnique({
+      where: { id: input.inviteId },
+    });
+
+    if (!invite) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Invite not found',
       });
+    }
 
-      if (!invite) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Invite not found",
-        });
-      }
-
-      if (invite.revokedAt) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Invite is already revoked",
-        });
-      }
-
-      await ctx.db.systemInvite.update({
-        where: { id: input.inviteId },
-        data: { revokedAt: new Date() },
+    if (invite.revokedAt) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'Invite is already revoked',
       });
+    }
 
-      await logAdminAction(
-        ctx.db,
-        ctx.user.id,
-        "INVITE_REVOKED",
-        input.inviteId,
-        { code: invite.code }
-      );
+    await ctx.db.systemInvite.update({
+      where: { id: input.inviteId },
+      data: { revokedAt: new Date() },
+    });
 
-      return { revoked: true };
-    }),
+    await logAdminAction(ctx.db, ctx.user.id, 'INVITE_REVOKED', input.inviteId, { code: invite.code });
+
+    return { revoked: true };
+  }),
 
   // ─── Global Activity Feed ────────────────────────────────
 
@@ -814,13 +733,13 @@ export const adminRouter = createTRPCRouter({
       z.object({
         cursor: z.string().optional(),
         limit: z.number().min(1).max(100).default(50),
-      })
+      }),
     )
     .query(async ({ ctx, input }) => {
       const items = await ctx.db.activityLog.findMany({
         take: input.limit + 1,
         ...(input.cursor ? { cursor: { id: input.cursor } } : {}),
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: 'desc' },
         include: {
           user: { select: { id: true, name: true, email: true } },
           group: { select: { id: true, name: true } },
@@ -839,7 +758,7 @@ export const adminRouter = createTRPCRouter({
           type: item.type,
           entityId: item.entityId,
           metadata: item.metadata as Record<string, unknown> | null,
-          userName: item.user?.name ?? item.user?.email ?? "Deleted user",
+          userName: item.user?.name ?? item.user?.email ?? 'Deleted user',
           userEmail: item.user?.email ?? null,
           groupName: item.group.name,
           groupId: item.group.id,
@@ -853,7 +772,7 @@ export const adminRouter = createTRPCRouter({
 
   getAnnouncement: publicProcedure.query(async ({ ctx }) => {
     const setting = await ctx.db.systemSetting.findUnique({
-      where: { key: "announcement" },
+      where: { key: 'announcement' },
     });
     return { message: setting?.value ?? null };
   }),
@@ -862,29 +781,23 @@ export const adminRouter = createTRPCRouter({
     .input(
       z.object({
         message: z.string().max(500).optional(),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
-      if (!input.message || input.message.trim() === "") {
+      if (!input.message || input.message.trim() === '') {
         // Clear announcement
         await ctx.db.systemSetting.deleteMany({
-          where: { key: "announcement" },
+          where: { key: 'announcement' },
         });
       } else {
         await ctx.db.systemSetting.upsert({
-          where: { key: "announcement" },
+          where: { key: 'announcement' },
           update: { value: input.message.trim() },
-          create: { key: "announcement", value: input.message.trim() },
+          create: { key: 'announcement', value: input.message.trim() },
         });
       }
 
-      await logAdminAction(
-        ctx.db,
-        ctx.user.id,
-        "ANNOUNCEMENT_SET",
-        null,
-        { message: input.message ?? null }
-      );
+      await logAdminAction(ctx.db, ctx.user.id, 'ANNOUNCEMENT_SET', null, { message: input.message ?? null });
 
       return { success: true };
     }),
@@ -893,30 +806,22 @@ export const adminRouter = createTRPCRouter({
 
   getVenmoEnabled: publicProcedure.query(async ({ ctx }) => {
     const setting = await ctx.db.systemSetting.findUnique({
-      where: { key: "venmoEnabled" },
+      where: { key: 'venmoEnabled' },
     });
-    return { enabled: setting?.value === "true" };
+    return { enabled: setting?.value === 'true' };
   }),
 
-  setVenmoEnabled: adminProcedure
-    .input(z.object({ enabled: z.boolean() }))
-    .mutation(async ({ ctx, input }) => {
-      await ctx.db.systemSetting.upsert({
-        where: { key: "venmoEnabled" },
-        update: { value: String(input.enabled) },
-        create: { key: "venmoEnabled", value: String(input.enabled) },
-      });
+  setVenmoEnabled: adminProcedure.input(z.object({ enabled: z.boolean() })).mutation(async ({ ctx, input }) => {
+    await ctx.db.systemSetting.upsert({
+      where: { key: 'venmoEnabled' },
+      update: { value: String(input.enabled) },
+      create: { key: 'venmoEnabled', value: String(input.enabled) },
+    });
 
-      await logAdminAction(
-        ctx.db,
-        ctx.user.id,
-        "VENMO_SETTING_CHANGED",
-        null,
-        { enabled: input.enabled }
-      );
+    await logAdminAction(ctx.db, ctx.user.id, 'VENMO_SETTING_CHANGED', null, { enabled: input.enabled });
 
-      return { success: true };
-    }),
+    return { success: true };
+  }),
 
   // ─── Email Test ──────────────────────────────────────────
 
@@ -924,31 +829,29 @@ export const adminRouter = createTRPCRouter({
     const host = process.env.EMAIL_SERVER_HOST;
     if (!host) {
       throw new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message:
-          "Email is not configured. Set EMAIL_SERVER_HOST environment variable.",
+        code: 'PRECONDITION_FAILED',
+        message: 'Email is not configured. Set EMAIL_SERVER_HOST environment variable.',
       });
     }
 
     const transport = nodemailer.createTransport({
       host,
-      port: parseInt(process.env.EMAIL_SERVER_PORT ?? "587"),
-      secure: parseInt(process.env.EMAIL_SERVER_PORT ?? "587") === 465,
+      port: parseInt(process.env.EMAIL_SERVER_PORT ?? '587'),
+      secure: parseInt(process.env.EMAIL_SERVER_PORT ?? '587') === 465,
       auth: {
         user: process.env.EMAIL_SERVER_USER,
         pass: process.env.EMAIL_SERVER_PASSWORD,
       },
     });
 
-    const from =
-      process.env.EMAIL_FROM ?? "ShareTab <noreply@sharetab.local>";
+    const from = process.env.EMAIL_FROM ?? 'ShareTab <noreply@sharetab.local>';
     const to = ctx.user.email!;
 
     try {
       await transport.sendMail({
         from,
         to,
-        subject: "ShareTab Test Email",
+        subject: 'ShareTab Test Email',
         text: `This is a test email from ShareTab admin dashboard.\n\nSent at: ${new Date().toISOString()}\nAdmin: ${ctx.user.email}`,
         html: `
           <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
@@ -962,15 +865,15 @@ export const adminRouter = createTRPCRouter({
         `,
       });
 
-      await logAdminAction(ctx.db, ctx.user.id, "TEST_EMAIL_SENT", null, {
+      await logAdminAction(ctx.db, ctx.user.id, 'TEST_EMAIL_SENT', null, {
         to,
       });
 
       return { success: true, sentTo: to };
     } catch (error) {
       throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: `Failed to send test email: ${error instanceof Error ? error.message : "Unknown error"}`,
+        code: 'INTERNAL_SERVER_ERROR',
+        message: `Failed to send test email: ${error instanceof Error ? error.message : 'Unknown error'}`,
       });
     }
   }),
@@ -988,10 +891,7 @@ export const adminRouter = createTRPCRouter({
     const dbPaths = new Set(receipts.map((r) => r.imagePath));
 
     // Scan uploads directory
-    const uploadDir = path.resolve(
-      process.cwd(),
-      process.env.UPLOAD_DIR ?? "./uploads"
-    );
+    const uploadDir = path.resolve(process.cwd(), process.env.UPLOAD_DIR ?? './uploads');
 
     let totalDiskUsage = 0;
     let orphanCount = 0;
@@ -1010,7 +910,7 @@ export const adminRouter = createTRPCRouter({
             const stat = await fsp.stat(fullPath);
             totalDiskUsage += stat.size;
 
-            const relativePath = path.relative(uploadDir, fullPath).replace(/\\/g, "/");
+            const relativePath = path.relative(uploadDir, fullPath).replace(/\\/g, '/');
             const isReferenced =
               dbPaths.has(relativePath) ||
               dbPaths.has(`uploads/${relativePath}`) ||
@@ -1044,10 +944,7 @@ export const adminRouter = createTRPCRouter({
     });
     const dbPaths = new Set(receipts.map((r) => r.imagePath));
 
-    const uploadDir = path.resolve(
-      process.cwd(),
-      process.env.UPLOAD_DIR ?? "./uploads"
-    );
+    const uploadDir = path.resolve(process.cwd(), process.env.UPLOAD_DIR ?? './uploads');
 
     let deletedCount = 0;
     let freedBytes = 0;
@@ -1068,7 +965,7 @@ export const adminRouter = createTRPCRouter({
               // ignore
             }
           } else {
-            const relativePath = path.relative(uploadDir, fullPath).replace(/\\/g, "/");
+            const relativePath = path.relative(uploadDir, fullPath).replace(/\\/g, '/');
             const isReferenced =
               dbPaths.has(relativePath) ||
               dbPaths.has(`uploads/${relativePath}`) ||
@@ -1088,7 +985,7 @@ export const adminRouter = createTRPCRouter({
     }
 
     if (deletedCount > 0) {
-      await logAdminAction(ctx.db, ctx.user.id, "ORPHANS_CLEANED", null, {
+      await logAdminAction(ctx.db, ctx.user.id, 'ORPHANS_CLEANED', null, {
         deletedCount,
         freedBytes,
       });
@@ -1116,13 +1013,7 @@ export const adminRouter = createTRPCRouter({
     });
 
     if (result.count > 0) {
-      await logAdminAction(
-        ctx.db,
-        ctx.user.id,
-        "EXPIRED_SPLITS_CLEANED",
-        null,
-        { deletedCount: result.count }
-      );
+      await logAdminAction(ctx.db, ctx.user.id, 'EXPIRED_SPLITS_CLEANED', null, { deletedCount: result.count });
     }
 
     return { deletedCount: result.count };
@@ -1133,11 +1024,11 @@ export const adminRouter = createTRPCRouter({
   getLogs: adminProcedure
     .input(
       z.object({
-        minLevel: z.enum(["debug", "info", "warn", "error"]).optional(),
+        minLevel: z.enum(['debug', 'info', 'warn', 'error']).optional(),
         search: z.string().max(200).optional(),
         limit: z.number().min(1).max(500).default(200),
         afterId: z.number().optional(),
-      })
+      }),
     )
     .query(({ input }) => {
       return getRecentLogs({
@@ -1151,8 +1042,8 @@ export const adminRouter = createTRPCRouter({
   // ─── Meridian Auth ──────────────────────────────────────────
 
   getMeridianAuthStatus: adminProcedure.query(async () => {
-    if (!isProviderConfigured("meridian")) {
-      return { status: "not_applicable" as const };
+    if (!isProviderConfigured('meridian')) {
+      return { status: 'not_applicable' as const };
     }
     const health = await checkMeridianHealth();
     return {
@@ -1162,10 +1053,10 @@ export const adminRouter = createTRPCRouter({
   }),
 
   startMeridianLogin: adminProcedure.mutation(async ({ ctx }) => {
-    if (!isProviderConfigured("meridian")) {
+    if (!isProviderConfigured('meridian')) {
       throw new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message: "Meridian is not configured in AI provider priority",
+        code: 'PRECONDITION_FAILED',
+        message: 'Meridian is not configured in AI provider priority',
       });
     }
 
@@ -1173,20 +1064,17 @@ export const adminRouter = createTRPCRouter({
       const url = await startLogin();
 
       // Send email with login URL
-      await sendAuthExpiryEmail(
-        "Re-authentication initiated from admin dashboard",
-        url
-      );
+      await sendAuthExpiryEmail('Re-authentication initiated from admin dashboard', url);
 
-      await logAdminAction(ctx.db, ctx.user.id, "MERIDIAN_LOGIN_STARTED", null, {
+      await logAdminAction(ctx.db, ctx.user.id, 'MERIDIAN_LOGIN_STARTED', null, {
         url,
       });
 
       return { url };
     } catch (err) {
       throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: err instanceof Error ? err.message : "Failed to start login",
+        code: 'INTERNAL_SERVER_ERROR',
+        message: err instanceof Error ? err.message : 'Failed to start login',
       });
     }
   }),
@@ -1205,81 +1093,77 @@ export const adminRouter = createTRPCRouter({
         await logAdminAction(
           ctx.db,
           ctx.user.id,
-          result.success ? "MERIDIAN_LOGIN_COMPLETED" : "MERIDIAN_LOGIN_FAILED",
+          result.success ? 'MERIDIAN_LOGIN_COMPLETED' : 'MERIDIAN_LOGIN_FAILED',
           null,
-          { success: result.success, error: result.error }
+          { success: result.success, error: result.error },
         );
 
         return result;
       } catch (err) {
         throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: err instanceof Error ? err.message : "Failed to submit code",
+          code: 'INTERNAL_SERVER_ERROR',
+          message: err instanceof Error ? err.message : 'Failed to submit code',
         });
       }
     }),
 
   cancelMeridianLogin: adminProcedure.mutation(async ({ ctx }) => {
     cancelLogin();
-    await logAdminAction(ctx.db, ctx.user.id, "MERIDIAN_LOGIN_FAILED", null, {
-      reason: "cancelled",
+    await logAdminAction(ctx.db, ctx.user.id, 'MERIDIAN_LOGIN_FAILED', null, {
+      reason: 'cancelled',
     });
     return { cancelled: true };
   }),
 
   logoutMeridian: adminProcedure.mutation(async ({ ctx }) => {
-    if (!isProviderConfigured("meridian")) {
+    if (!isProviderConfigured('meridian')) {
       throw new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message: "Meridian is not configured in AI provider priority",
+        code: 'PRECONDITION_FAILED',
+        message: 'Meridian is not configured in AI provider priority',
       });
     }
 
     const result = logoutMeridian();
     if (!result.success) {
       throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: result.error ?? "Failed to log out Meridian",
+        code: 'INTERNAL_SERVER_ERROR',
+        message: result.error ?? 'Failed to log out Meridian',
       });
     }
 
     clearProviderCache();
     invalidateMeridianHealthCache();
-    await logAdminAction(ctx.db, ctx.user.id, "MERIDIAN_LOGOUT", null, {
-      reason: "logged_out",
+    await logAdminAction(ctx.db, ctx.user.id, 'MERIDIAN_LOGOUT', null, {
+      reason: 'logged_out',
     });
     return { success: true };
   }),
 
   getMeridianNotifyPreference: adminProcedure.query(async ({ ctx }) => {
     const setting = await ctx.db.systemSetting.findUnique({
-      where: { key: "meridianNotifyInterval" },
+      where: { key: 'meridianNotifyInterval' },
     });
     return {
-      interval: (setting?.value ?? "once") as "once" | "1h" | "6h" | "24h",
+      interval: (setting?.value ?? 'once') as 'once' | '1h' | '6h' | '24h',
     };
   }),
 
   setMeridianNotifyPreference: adminProcedure
     .input(
       z.object({
-        interval: z.enum(["once", "1h", "6h", "24h"]),
-      })
+        interval: z.enum(['once', '1h', '6h', '24h']),
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       await ctx.db.systemSetting.upsert({
-        where: { key: "meridianNotifyInterval" },
+        where: { key: 'meridianNotifyInterval' },
         update: { value: input.interval },
-        create: { key: "meridianNotifyInterval", value: input.interval },
+        create: { key: 'meridianNotifyInterval', value: input.interval },
       });
 
-      await logAdminAction(
-        ctx.db,
-        ctx.user.id,
-        "MERIDIAN_NOTIFY_PREFERENCE_CHANGED",
-        null,
-        { interval: input.interval }
-      );
+      await logAdminAction(ctx.db, ctx.user.id, 'MERIDIAN_NOTIFY_PREFERENCE_CHANGED', null, {
+        interval: input.interval,
+      });
 
       return { interval: input.interval };
     }),
@@ -1287,8 +1171,8 @@ export const adminRouter = createTRPCRouter({
   // ─── OpenAI Codex Auth ─────────────────────────────────────
 
   getOpenAICodexAuthStatus: adminProcedure.query(async () => {
-    if (!isProviderConfigured("openai-codex")) {
-      return { status: "not_applicable" as const };
+    if (!isProviderConfigured('openai-codex')) {
+      return { status: 'not_applicable' as const };
     }
     const health = await checkOpenAICodexHealth();
     return {
@@ -1298,10 +1182,10 @@ export const adminRouter = createTRPCRouter({
   }),
 
   startOpenAICodexLogin: adminProcedure.mutation(async () => {
-    if (!isProviderConfigured("openai-codex")) {
+    if (!isProviderConfigured('openai-codex')) {
       throw new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message: "OpenAI Codex is not configured in AI provider priority",
+        code: 'PRECONDITION_FAILED',
+        message: 'OpenAI Codex is not configured in AI provider priority',
       });
     }
     return { url: await startOpenAICodexLogin() };
@@ -1324,18 +1208,18 @@ export const adminRouter = createTRPCRouter({
   }),
 
   logoutOpenAICodex: adminProcedure.mutation(async () => {
-    if (!isProviderConfigured("openai-codex")) {
+    if (!isProviderConfigured('openai-codex')) {
       throw new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message: "OpenAI Codex is not configured in AI provider priority",
+        code: 'PRECONDITION_FAILED',
+        message: 'OpenAI Codex is not configured in AI provider priority',
       });
     }
 
     const result = logoutOpenAICodex();
     if (!result.success) {
       throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: result.error ?? "Failed to log out OpenAI Codex",
+        code: 'INTERNAL_SERVER_ERROR',
+        message: result.error ?? 'Failed to log out OpenAI Codex',
       });
     }
 
@@ -1351,13 +1235,8 @@ export const adminRouter = createTRPCRouter({
       z.object({
         providerName: z.string(),
         imageBase64: z.string().max(10 * 1024 * 1024),
-        mimeType: z.enum([
-          "image/jpeg",
-          "image/png",
-          "image/webp",
-          "image/gif",
-        ]),
-      })
+        mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/gif']),
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       const start = Date.now();
@@ -1365,77 +1244,64 @@ export const adminRouter = createTRPCRouter({
       try {
         provider = await createProviderByName(input.providerName);
       } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Failed to create provider";
-        await logAdminAction(ctx.db, ctx.user.id, "AI_PROVIDER_TESTED", null, {
+        const message = err instanceof Error ? err.message : 'Failed to create provider';
+        await logAdminAction(ctx.db, ctx.user.id, 'AI_PROVIDER_TESTED', null, {
           provider: input.providerName,
           durationMs: Date.now() - start,
           success: false,
           error: message,
         });
-        throw new TRPCError({ code: "BAD_REQUEST", message });
+        throw new TRPCError({ code: 'BAD_REQUEST', message });
       }
 
       const available = await provider.isAvailable();
       if (!available) {
         const message = `Provider "${input.providerName}" is not available`;
-        await logAdminAction(ctx.db, ctx.user.id, "AI_PROVIDER_TESTED", null, {
+        await logAdminAction(ctx.db, ctx.user.id, 'AI_PROVIDER_TESTED', null, {
           provider: input.providerName,
           durationMs: Date.now() - start,
           success: false,
           error: message,
         });
-        throw new TRPCError({ code: "PRECONDITION_FAILED", message });
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message });
       }
 
-      const imageBuffer = Buffer.from(input.imageBase64, "base64");
+      const imageBuffer = Buffer.from(input.imageBase64, 'base64');
       if (imageBuffer.length > 5 * 1024 * 1024) {
-        const message = "Image exceeds 5 MB limit";
-        await logAdminAction(ctx.db, ctx.user.id, "AI_PROVIDER_TESTED", null, {
+        const message = 'Image exceeds 5 MB limit';
+        await logAdminAction(ctx.db, ctx.user.id, 'AI_PROVIDER_TESTED', null, {
           provider: input.providerName,
           durationMs: Date.now() - start,
           success: false,
           error: message,
         });
-        throw new TRPCError({ code: "BAD_REQUEST", message });
+        throw new TRPCError({ code: 'BAD_REQUEST', message });
       }
 
       try {
-        const result = await provider.extractReceipt(
-          imageBuffer,
-          input.mimeType
-        );
+        const result = await provider.extractReceipt(imageBuffer, input.mimeType);
         const durationMs = Date.now() - start;
 
-        await logAdminAction(
-          ctx.db,
-          ctx.user.id,
-          "AI_PROVIDER_TESTED",
-          null,
-          { provider: input.providerName, durationMs, success: true }
-        );
+        await logAdminAction(ctx.db, ctx.user.id, 'AI_PROVIDER_TESTED', null, {
+          provider: input.providerName,
+          durationMs,
+          success: true,
+        });
 
         return { result, durationMs };
       } catch (err) {
         const durationMs = Date.now() - start;
-        const message =
-          err instanceof Error ? err.message : "Extraction failed";
+        const message = err instanceof Error ? err.message : 'Extraction failed';
 
-        await logAdminAction(
-          ctx.db,
-          ctx.user.id,
-          "AI_PROVIDER_TESTED",
-          null,
-          {
-            provider: input.providerName,
-            durationMs,
-            success: false,
-            error: message,
-          }
-        );
+        await logAdminAction(ctx.db, ctx.user.id, 'AI_PROVIDER_TESTED', null, {
+          provider: input.providerName,
+          durationMs,
+          success: false,
+          error: message,
+        });
 
         throw new TRPCError({
-          code: "BAD_GATEWAY",
+          code: 'BAD_GATEWAY',
           message,
         });
       }
@@ -1443,9 +1309,9 @@ export const adminRouter = createTRPCRouter({
 });
 
 function formatBytes(bytes: number): string {
-  if (bytes === 0) return "0 B";
+  if (bytes === 0) return '0 B';
   const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB"];
+  const sizes = ['B', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }

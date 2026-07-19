@@ -1,54 +1,50 @@
-import { createTRPCRouter, groupMemberProcedure, protectedProcedure } from "../init";
-import { z } from "zod";
-import { simplifyDebts, computeBalances } from "../../lib/balance-calculator";
+import { createTRPCRouter, groupMemberProcedure, protectedProcedure } from '../init';
+import { z } from 'zod';
+import { simplifyDebts, computeBalances } from '../../lib/balance-calculator';
 
 export const balancesRouter = createTRPCRouter({
-  getGroupBalances: groupMemberProcedure
-    .input(z.object({ groupId: z.string() }))
-    .query(async ({ ctx, input }) => {
-      const [expenses, settlements] = await Promise.all([
-        ctx.db.expense.findMany({
-          where: { groupId: input.groupId },
-          select: {
-            paidById: true,
-            amount: true,
-            baseCurrencyAmount: true,
-            shares: { select: { userId: true, amount: true } },
-          },
-        }),
-        ctx.db.settlement.findMany({
-          where: { groupId: input.groupId },
-          select: { fromId: true, toId: true, amount: true, baseCurrencyAmount: true },
-        }),
-      ]);
+  getGroupBalances: groupMemberProcedure.input(z.object({ groupId: z.string() })).query(async ({ ctx, input }) => {
+    const [expenses, settlements] = await Promise.all([
+      ctx.db.expense.findMany({
+        where: { groupId: input.groupId },
+        select: {
+          paidById: true,
+          amount: true,
+          baseCurrencyAmount: true,
+          shares: { select: { userId: true, amount: true } },
+        },
+      }),
+      ctx.db.settlement.findMany({
+        where: { groupId: input.groupId },
+        select: { fromId: true, toId: true, amount: true, baseCurrencyAmount: true },
+      }),
+    ]);
 
-      const balances = computeBalances(expenses, settlements);
-      return { balances };
-    }),
+    const balances = computeBalances(expenses, settlements);
+    return { balances };
+  }),
 
-  getSimplifiedDebts: groupMemberProcedure
-    .input(z.object({ groupId: z.string() }))
-    .query(async ({ ctx, input }) => {
-      const [expenses, settlements] = await Promise.all([
-        ctx.db.expense.findMany({
-          where: { groupId: input.groupId },
-          select: {
-            paidById: true,
-            amount: true,
-            baseCurrencyAmount: true,
-            shares: { select: { userId: true, amount: true } },
-          },
-        }),
-        ctx.db.settlement.findMany({
-          where: { groupId: input.groupId },
-          select: { fromId: true, toId: true, amount: true, baseCurrencyAmount: true },
-        }),
-      ]);
+  getSimplifiedDebts: groupMemberProcedure.input(z.object({ groupId: z.string() })).query(async ({ ctx, input }) => {
+    const [expenses, settlements] = await Promise.all([
+      ctx.db.expense.findMany({
+        where: { groupId: input.groupId },
+        select: {
+          paidById: true,
+          amount: true,
+          baseCurrencyAmount: true,
+          shares: { select: { userId: true, amount: true } },
+        },
+      }),
+      ctx.db.settlement.findMany({
+        where: { groupId: input.groupId },
+        select: { fromId: true, toId: true, amount: true, baseCurrencyAmount: true },
+      }),
+    ]);
 
-      const balances = computeBalances(expenses, settlements);
-      const debts = simplifyDebts(balances);
-      return { debts };
-    }),
+    const balances = computeBalances(expenses, settlements);
+    const debts = simplifyDebts(balances);
+    return { debts };
+  }),
 
   getOverallDebts: protectedProcedure.query(async ({ ctx }) => {
     const groups = await ctx.db.group.findMany({
@@ -83,7 +79,7 @@ export const balancesRouter = createTRPCRouter({
       const userMap = new Map<string, { name: string; venmoUsername: string | null }>();
       for (const member of group.members) {
         userMap.set(member.user.id, {
-          name: member.user.name ?? "Unknown",
+          name: member.user.name ?? 'Unknown',
           venmoUsername: member.user.venmoUsername,
         });
       }
@@ -100,7 +96,7 @@ export const balancesRouter = createTRPCRouter({
             if (userInfo?.venmoUsername) existing.venmoUsername = userInfo.venmoUsername;
           } else {
             aggregated.set(debt.from, {
-              userName: userInfo?.name ?? "Unknown",
+              userName: userInfo?.name ?? 'Unknown',
               venmoUsername: userInfo?.venmoUsername ?? null,
               amount: debt.amount,
             });
@@ -114,7 +110,7 @@ export const balancesRouter = createTRPCRouter({
             if (userInfo?.venmoUsername) existing.venmoUsername = userInfo.venmoUsername;
           } else {
             aggregated.set(debt.to, {
-              userName: userInfo?.name ?? "Unknown",
+              userName: userInfo?.name ?? 'Unknown',
               venmoUsername: userInfo?.venmoUsername ?? null,
               amount: -debt.amount,
             });

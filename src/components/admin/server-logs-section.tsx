@@ -1,42 +1,35 @@
-"use client";
+'use client';
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import { useTranslations } from "next-intl";
-import { trpc } from "@/lib/trpc";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import {
-  ScrollText,
-  Loader2,
-  Pause,
-  Play,
-  ArrowDown,
-  Search,
-} from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslations } from 'next-intl';
+import { trpc } from '@/lib/trpc';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { ScrollText, Loader2, Pause, Play, ArrowDown, Search } from 'lucide-react';
 
 const LEVEL_COLORS: Record<string, string> = {
-  debug: "text-muted-foreground",
-  info: "text-blue-600 dark:text-blue-400",
-  warn: "text-yellow-600 dark:text-yellow-400",
-  error: "text-red-600 dark:text-red-400",
+  debug: 'text-muted-foreground',
+  info: 'text-blue-600 dark:text-blue-400',
+  warn: 'text-yellow-600 dark:text-yellow-400',
+  error: 'text-red-600 dark:text-red-400',
 };
 
 const LEVEL_BG: Record<string, string> = {
-  debug: "bg-muted",
-  info: "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300",
-  warn: "bg-yellow-100 dark:bg-yellow-950 text-yellow-700 dark:text-yellow-300",
-  error: "bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300",
+  debug: 'bg-muted',
+  info: 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300',
+  warn: 'bg-yellow-100 dark:bg-yellow-950 text-yellow-700 dark:text-yellow-300',
+  error: 'bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300',
 };
 
-type LogLevel = "debug" | "info" | "warn" | "error";
+type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 export function ServerLogsSection() {
-  const t = useTranslations("admin");
-  const [minLevel, setMinLevel] = useState<LogLevel>("debug");
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const t = useTranslations('admin');
+  const [minLevel, setMinLevel] = useState<LogLevel>('debug');
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [paused, setPaused] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -55,7 +48,7 @@ export function ServerLogsSection() {
     },
     {
       refetchInterval: paused ? false : 2000,
-    }
+    },
   );
 
   // Auto-scroll to bottom when new logs arrive
@@ -80,18 +73,14 @@ export function ServerLogsSection() {
     }
   }, []);
 
-  const levels: LogLevel[] = ["debug", "info", "warn", "error"];
+  const levels: LogLevel[] = ['debug', 'info', 'warn', 'error'];
 
   return (
     <section>
       <div className="mb-4 flex items-center gap-2">
         <ScrollText className="h-5 w-5 text-muted-foreground" />
-        <h2 className="text-lg font-semibold">{t("serverLogs.title")}</h2>
-        {logs.data && (
-          <Badge variant="secondary">
-            {t("serverLogs.entries", { count: logs.data.entries.length })}
-          </Badge>
-        )}
+        <h2 className="text-lg font-semibold">{t('serverLogs.title')}</h2>
+        {logs.data && <Badge variant="secondary">{t('serverLogs.entries', { count: logs.data.entries.length })}</Badge>}
       </div>
 
       <Card>
@@ -103,7 +92,7 @@ export function ServerLogsSection() {
                 <Button
                   key={level}
                   size="sm"
-                  variant={minLevel === level ? "default" : "outline"}
+                  variant={minLevel === level ? 'default' : 'outline'}
                   onClick={() => setMinLevel(level)}
                   className="h-7 px-2.5 text-xs capitalize"
                 >
@@ -116,7 +105,7 @@ export function ServerLogsSection() {
             <div className="relative flex-1 min-w-[180px]">
               <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder={t("serverLogs.filterPlaceholder")}
+                placeholder={t('serverLogs.filterPlaceholder')}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="h-7 pl-8 text-xs"
@@ -130,13 +119,9 @@ export function ServerLogsSection() {
                 variant="outline"
                 onClick={() => setPaused(!paused)}
                 className="h-7 px-2.5"
-                title={paused ? t("serverLogs.resumeAutoRefresh") : t("serverLogs.pauseAutoRefresh")}
+                title={paused ? t('serverLogs.resumeAutoRefresh') : t('serverLogs.pauseAutoRefresh')}
               >
-                {paused ? (
-                  <Play className="h-3.5 w-3.5" />
-                ) : (
-                  <Pause className="h-3.5 w-3.5" />
-                )}
+                {paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
               </Button>
               {!autoScroll && (
                 <Button
@@ -144,7 +129,7 @@ export function ServerLogsSection() {
                   variant="outline"
                   onClick={scrollToBottom}
                   className="h-7 px-2.5"
-                  title={t("serverLogs.scrollToBottom")}
+                  title={t('serverLogs.scrollToBottom')}
                 >
                   <ArrowDown className="h-3.5 w-3.5" />
                 </Button>
@@ -158,23 +143,16 @@ export function ServerLogsSection() {
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <div
-              ref={scrollRef}
-              onScroll={handleScroll}
-              className="h-[400px] overflow-auto font-mono text-xs"
-            >
+            <div ref={scrollRef} onScroll={handleScroll} className="h-[400px] overflow-auto font-mono text-xs">
               {logs.data?.entries.length === 0 ? (
                 <div className="flex items-center justify-center py-12 text-muted-foreground">
-                  {t("serverLogs.noEntries")}
+                  {t('serverLogs.noEntries')}
                 </div>
               ) : (
                 <table className="w-full table-fixed">
                   <tbody>
                     {logs.data?.entries.map((entry) => (
-                      <tr
-                        key={entry.id}
-                        className="border-b border-border/50 hover:bg-muted/50"
-                      >
+                      <tr key={entry.id} className="border-b border-border/50 hover:bg-muted/50">
                         <td className="whitespace-nowrap px-3 py-1.5 align-top text-muted-foreground">
                           {formatTime(entry.ts)}
                         </td>
@@ -185,14 +163,10 @@ export function ServerLogsSection() {
                             {entry.level}
                           </span>
                         </td>
-                        <td
-                          className={`w-full px-3 py-1.5 align-top break-words ${LEVEL_COLORS[entry.level]}`}
-                        >
+                        <td className={`w-full px-3 py-1.5 align-top break-words ${LEVEL_COLORS[entry.level]}`}>
                           <span className="font-medium">{entry.msg}</span>
                           {entry.data && Object.keys(entry.data).length > 0 && (
-                            <span className="ml-2 break-all text-muted-foreground">
-                              {formatData(entry.data)}
-                            </span>
+                            <span className="ml-2 break-all text-muted-foreground">{formatData(entry.data)}</span>
                           )}
                         </td>
                       </tr>
@@ -204,7 +178,7 @@ export function ServerLogsSection() {
           )}
           {paused && (
             <div className="border-t bg-yellow-50 px-3 py-1.5 text-center text-xs text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300">
-              {t("serverLogs.autoRefreshPaused")}
+              {t('serverLogs.autoRefreshPaused')}
             </div>
           )}
         </CardContent>
@@ -215,22 +189,22 @@ export function ServerLogsSection() {
 
 function formatTime(isoString: string): string {
   const d = new Date(isoString);
-  return d.toLocaleTimeString("en-US", {
+  return d.toLocaleTimeString('en-US', {
     hour12: false,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
   });
 }
 
 function formatData(data: Record<string, unknown>): string {
   const parts: string[] = [];
   for (const [key, value] of Object.entries(data)) {
-    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
       parts.push(`${key}=${value}`);
     } else if (value !== null && value !== undefined) {
       parts.push(`${key}=${JSON.stringify(value)}`);
     }
   }
-  return parts.join(" ");
+  return parts.join(' ');
 }

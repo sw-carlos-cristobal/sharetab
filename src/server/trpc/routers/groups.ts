@@ -1,8 +1,8 @@
-import { z } from "zod";
-import { TRPCError } from "@trpc/server";
-import type { PrismaClient } from "@/generated/prisma/client";
-import { createTRPCRouter, protectedProcedure, groupMemberProcedure } from "../init";
-import { stripUndefined } from "../../lib/strip-undefined";
+import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
+import type { PrismaClient } from '@/generated/prisma/client';
+import { createTRPCRouter, protectedProcedure, groupMemberProcedure } from '../init';
+import { stripUndefined } from '../../lib/strip-undefined';
 
 export const groupsRouter = createTRPCRouter({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -14,11 +14,15 @@ export const groupsRouter = createTRPCRouter({
       take: 200,
       include: {
         members: {
-          include: { user: { select: { id: true, name: true, email: true, image: true, isPlaceholder: true, placeholderName: true } } },
+          include: {
+            user: {
+              select: { id: true, name: true, email: true, image: true, isPlaceholder: true, placeholderName: true },
+            },
+          },
         },
         _count: { select: { expenses: true } },
       },
-      orderBy: { updatedAt: "desc" },
+      orderBy: { updatedAt: 'desc' },
     });
     return groups;
   }),
@@ -32,11 +36,15 @@ export const groupsRouter = createTRPCRouter({
       take: 200,
       include: {
         members: {
-          include: { user: { select: { id: true, name: true, email: true, image: true, isPlaceholder: true, placeholderName: true } } },
+          include: {
+            user: {
+              select: { id: true, name: true, email: true, image: true, isPlaceholder: true, placeholderName: true },
+            },
+          },
         },
         _count: { select: { expenses: true } },
       },
-      orderBy: { archivedAt: "desc" },
+      orderBy: { archivedAt: 'desc' },
     });
     return groups;
   }),
@@ -46,12 +54,24 @@ export const groupsRouter = createTRPCRouter({
       where: { id: input.groupId },
       include: {
         members: {
-          include: { user: { select: { id: true, name: true, email: true, image: true, isPlaceholder: true, placeholderName: true, venmoUsername: true } } },
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                image: true,
+                isPlaceholder: true,
+                placeholderName: true,
+                venmoUsername: true,
+              },
+            },
+          },
         },
       },
     });
     if (!group) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "Group not found" });
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Group not found' });
     }
     return group;
   }),
@@ -61,9 +81,14 @@ export const groupsRouter = createTRPCRouter({
       z.object({
         name: z.string().min(1).max(100),
         description: z.string().max(500).optional(),
-        currency: z.string().length(3).regex(/^[a-zA-Z]{3}$/).transform((c) => c.toUpperCase()).default("USD"),
+        currency: z
+          .string()
+          .length(3)
+          .regex(/^[a-zA-Z]{3}$/)
+          .transform((c) => c.toUpperCase())
+          .default('USD'),
         emoji: z.string().max(4).optional(),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       const group = await ctx.db.group.create({
@@ -72,7 +97,7 @@ export const groupsRouter = createTRPCRouter({
           members: {
             create: {
               userId: ctx.user.id,
-              role: "OWNER",
+              role: 'OWNER',
             },
           },
         },
@@ -86,14 +111,19 @@ export const groupsRouter = createTRPCRouter({
         groupId: z.string(),
         name: z.string().min(1).max(100).optional(),
         description: z.string().max(500).optional(),
-        currency: z.string().length(3).regex(/^[a-zA-Z]{3}$/).transform((c) => c.toUpperCase()).optional(),
+        currency: z
+          .string()
+          .length(3)
+          .regex(/^[a-zA-Z]{3}$/)
+          .transform((c) => c.toUpperCase())
+          .optional(),
         emoji: z.string().max(4).optional(),
         simplifyDebts: z.boolean().optional(),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
-      if (ctx.membership.role === "MEMBER") {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Only admins and owners can update groups" });
+      if (ctx.membership.role === 'MEMBER') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Only admins and owners can update groups' });
       }
       const { groupId, ...data } = input;
 
@@ -109,8 +139,9 @@ export const groupsRouter = createTRPCRouter({
           ]);
           if (expenseCount > 0 || settlementCount > 0) {
             throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: "Cannot change group currency after expenses or settlements have been recorded. Create a new group with the desired currency instead.",
+              code: 'BAD_REQUEST',
+              message:
+                'Cannot change group currency after expenses or settlements have been recorded. Create a new group with the desired currency instead.',
             });
           }
         }
@@ -123,57 +154,51 @@ export const groupsRouter = createTRPCRouter({
       return group;
     }),
 
-  delete: groupMemberProcedure
-    .input(z.object({ groupId: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      if (ctx.membership.role !== "OWNER") {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Only the owner can delete a group" });
-      }
-      await ctx.db.group.delete({ where: { id: input.groupId } });
-      return { success: true };
-    }),
+  delete: groupMemberProcedure.input(z.object({ groupId: z.string() })).mutation(async ({ ctx, input }) => {
+    if (ctx.membership.role !== 'OWNER') {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'Only the owner can delete a group' });
+    }
+    await ctx.db.group.delete({ where: { id: input.groupId } });
+    return { success: true };
+  }),
 
-  archive: groupMemberProcedure
-    .input(z.object({ groupId: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      if (ctx.membership.role === "MEMBER") {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Only admins and owners can archive groups" });
-      }
-      const group = await ctx.db.group.update({
-        where: { id: input.groupId },
-        data: { archivedAt: new Date() },
-      });
-      await ctx.db.activityLog.create({
-        data: {
-          groupId: input.groupId,
-          userId: ctx.user.id,
-          type: "GROUP_ARCHIVED",
-          metadata: { name: group.name },
-        },
-      });
-      return group;
-    }),
+  archive: groupMemberProcedure.input(z.object({ groupId: z.string() })).mutation(async ({ ctx, input }) => {
+    if (ctx.membership.role === 'MEMBER') {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'Only admins and owners can archive groups' });
+    }
+    const group = await ctx.db.group.update({
+      where: { id: input.groupId },
+      data: { archivedAt: new Date() },
+    });
+    await ctx.db.activityLog.create({
+      data: {
+        groupId: input.groupId,
+        userId: ctx.user.id,
+        type: 'GROUP_ARCHIVED',
+        metadata: { name: group.name },
+      },
+    });
+    return group;
+  }),
 
-  unarchive: groupMemberProcedure
-    .input(z.object({ groupId: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      if (ctx.membership.role === "MEMBER") {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Only admins and owners can unarchive groups" });
-      }
-      const group = await ctx.db.group.update({
-        where: { id: input.groupId },
-        data: { archivedAt: null },
-      });
-      await ctx.db.activityLog.create({
-        data: {
-          groupId: input.groupId,
-          userId: ctx.user.id,
-          type: "GROUP_UNARCHIVED",
-          metadata: { name: group.name },
-        },
-      });
-      return group;
-    }),
+  unarchive: groupMemberProcedure.input(z.object({ groupId: z.string() })).mutation(async ({ ctx, input }) => {
+    if (ctx.membership.role === 'MEMBER') {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'Only admins and owners can unarchive groups' });
+    }
+    const group = await ctx.db.group.update({
+      where: { id: input.groupId },
+      data: { archivedAt: null },
+    });
+    await ctx.db.activityLog.create({
+      data: {
+        groupId: input.groupId,
+        userId: ctx.user.id,
+        type: 'GROUP_UNARCHIVED',
+        metadata: { name: group.name },
+      },
+    });
+    return group;
+  }),
 
   createInvite: groupMemberProcedure
     .input(
@@ -181,17 +206,17 @@ export const groupsRouter = createTRPCRouter({
         groupId: z.string(),
         email: z.string().email().optional(),
         placeholderUserId: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       if (input.placeholderUserId) {
         // Linking an invite to a placeholder hands the redeemer that
         // placeholder's financial history, so gate it like the other
         // placeholder operations (create/rename/merge are owner/admin-only).
-        if (ctx.membership.role !== "OWNER" && ctx.membership.role !== "ADMIN") {
+        if (ctx.membership.role !== 'OWNER' && ctx.membership.role !== 'ADMIN') {
           throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "Only admins and owners can create placeholder-linked invites",
+            code: 'FORBIDDEN',
+            message: 'Only admins and owners can create placeholder-linked invites',
           });
         }
         const placeholder = await ctx.db.user.findUnique({
@@ -199,13 +224,13 @@ export const groupsRouter = createTRPCRouter({
           select: { isPlaceholder: true },
         });
         if (!placeholder?.isPlaceholder) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Not a placeholder user" });
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Not a placeholder user' });
         }
         const membership = await ctx.db.groupMember.findUnique({
           where: { userId_groupId: { userId: input.placeholderUserId, groupId: input.groupId } },
         });
         if (!membership) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Placeholder is not a member of this group" });
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Placeholder is not a member of this group' });
         }
       }
       const invite = await ctx.db.groupInvite.create({
@@ -219,86 +244,84 @@ export const groupsRouter = createTRPCRouter({
       return { token: invite.token };
     }),
 
-  joinByInvite: protectedProcedure
-    .input(z.object({ token: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      const invite = await ctx.db.groupInvite.findUnique({
-        where: { token: input.token },
-      });
-      if (!invite || invite.usedAt || invite.expiresAt < new Date()) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Invalid or expired invite" });
-      }
+  joinByInvite: protectedProcedure.input(z.object({ token: z.string() })).mutation(async ({ ctx, input }) => {
+    const invite = await ctx.db.groupInvite.findUnique({
+      where: { token: input.token },
+    });
+    if (!invite || invite.usedAt || invite.expiresAt < new Date()) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Invalid or expired invite' });
+    }
 
-      const existing = await ctx.db.groupMember.findUnique({
-        where: {
-          userId_groupId: { userId: ctx.user.id, groupId: invite.groupId },
+    const existing = await ctx.db.groupMember.findUnique({
+      where: {
+        userId_groupId: { userId: ctx.user.id, groupId: invite.groupId },
+      },
+    });
+    if (existing) {
+      // Intentional: invite links are reusable for navigation purposes.
+      // usedAt/usedById only track the first redemption that creates a membership.
+      // An already-member user can still use the link to navigate to the group.
+      return { groupId: invite.groupId, alreadyMember: true };
+    }
+
+    await ctx.db.$transaction([
+      ctx.db.groupMember.create({
+        data: { userId: ctx.user.id, groupId: invite.groupId },
+      }),
+      ctx.db.groupInvite.update({
+        where: { id: invite.id },
+        data: { usedAt: new Date(), usedById: ctx.user.id },
+      }),
+      ctx.db.activityLog.create({
+        data: {
+          groupId: invite.groupId,
+          userId: ctx.user.id,
+          type: 'MEMBER_JOINED',
         },
+      }),
+    ]);
+
+    // Auto-merge placeholder if invite was linked to one. Re-validate at
+    // redemption: the linked user must still be a placeholder member of this
+    // group (it may have been merged, removed, or never have been valid).
+    if (invite.placeholderUserId) {
+      const placeholder = await ctx.db.user.findUnique({
+        where: { id: invite.placeholderUserId },
+        select: { isPlaceholder: true },
       });
-      if (existing) {
-        // Intentional: invite links are reusable for navigation purposes.
-        // usedAt/usedById only track the first redemption that creates a membership.
-        // An already-member user can still use the link to navigate to the group.
-        return { groupId: invite.groupId, alreadyMember: true };
+      const placeholderMembership = placeholder?.isPlaceholder
+        ? await ctx.db.groupMember.findUnique({
+            where: {
+              userId_groupId: { userId: invite.placeholderUserId, groupId: invite.groupId },
+            },
+          })
+        : null;
+      if (placeholder?.isPlaceholder && placeholderMembership) {
+        await mergePlaceholderIntoUser(ctx.db, invite.placeholderUserId, ctx.user.id, invite.groupId);
       }
+    }
 
-      await ctx.db.$transaction([
-        ctx.db.groupMember.create({
-          data: { userId: ctx.user.id, groupId: invite.groupId },
-        }),
-        ctx.db.groupInvite.update({
-          where: { id: invite.id },
-          data: { usedAt: new Date(), usedById: ctx.user.id },
-        }),
-        ctx.db.activityLog.create({
-          data: {
-            groupId: invite.groupId,
-            userId: ctx.user.id,
-            type: "MEMBER_JOINED",
-          },
-        }),
-      ]);
-
-      // Auto-merge placeholder if invite was linked to one. Re-validate at
-      // redemption: the linked user must still be a placeholder member of this
-      // group (it may have been merged, removed, or never have been valid).
-      if (invite.placeholderUserId) {
-        const placeholder = await ctx.db.user.findUnique({
-          where: { id: invite.placeholderUserId },
-          select: { isPlaceholder: true },
-        });
-        const placeholderMembership = placeholder?.isPlaceholder
-          ? await ctx.db.groupMember.findUnique({
-              where: {
-                userId_groupId: { userId: invite.placeholderUserId, groupId: invite.groupId },
-              },
-            })
-          : null;
-        if (placeholder?.isPlaceholder && placeholderMembership) {
-          await mergePlaceholderIntoUser(ctx.db, invite.placeholderUserId, ctx.user.id, invite.groupId);
-        }
-      }
-
-      return { groupId: invite.groupId, alreadyMember: false };
-    }),
+    return { groupId: invite.groupId, alreadyMember: false };
+  }),
 
   removeMember: groupMemberProcedure
     .input(z.object({ groupId: z.string(), userId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const isSelf = input.userId === ctx.user.id;
-      const isAdmin = ctx.membership.role === "OWNER" || ctx.membership.role === "ADMIN";
+      const isAdmin = ctx.membership.role === 'OWNER' || ctx.membership.role === 'ADMIN';
 
       if (!isSelf && !isAdmin) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Cannot remove other members" });
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Cannot remove other members' });
       }
 
       const targetMember = await ctx.db.groupMember.findUnique({
         where: { userId_groupId: { userId: input.userId, groupId: input.groupId } },
       });
       if (!targetMember) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Member not found" });
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Member not found' });
       }
-      if (targetMember.role === "OWNER" && !isSelf) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Cannot remove the owner" });
+      if (targetMember.role === 'OWNER' && !isSelf) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Cannot remove the owner' });
       }
 
       const targetUser = await ctx.db.user.findUnique({
@@ -317,8 +340,7 @@ export const groupsRouter = createTRPCRouter({
 
           for (const share of shares) {
             // If the placeholder was the payer, redistribute to the acting admin
-            const payerId =
-              share.expense.paidById === input.userId ? ctx.user.id : share.expense.paidById;
+            const payerId = share.expense.paidById === input.userId ? ctx.user.id : share.expense.paidById;
 
             const existing = await tx.expenseShare.findUnique({
               where: { expenseId_userId: { expenseId: share.expenseId, userId: payerId } },
@@ -362,7 +384,7 @@ export const groupsRouter = createTRPCRouter({
             data: {
               groupId: input.groupId,
               userId: ctx.user.id,
-              type: "MEMBER_LEFT",
+              type: 'MEMBER_LEFT',
               metadata: { removedUserId: input.userId, wasPlaceholder: true },
             },
           });
@@ -378,7 +400,7 @@ export const groupsRouter = createTRPCRouter({
             data: {
               groupId: input.groupId,
               userId: ctx.user.id,
-              type: "MEMBER_LEFT",
+              type: 'MEMBER_LEFT',
               metadata: { removedUserId: input.userId },
             },
           }),
@@ -393,14 +415,14 @@ export const groupsRouter = createTRPCRouter({
       z.object({
         groupId: z.string(),
         name: z.string().min(1).max(100),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
-      if (ctx.membership.role === "MEMBER") {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Only admins and owners can add placeholder members" });
+      if (ctx.membership.role === 'MEMBER') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Only admins and owners can add placeholder members' });
       }
 
-      const { randomUUID } = await import("crypto");
+      const { randomUUID } = await import('crypto');
       const placeholderEmail = `placeholder-${randomUUID()}@placeholder.local`;
 
       const user = await ctx.db.user.create({
@@ -421,7 +443,7 @@ export const groupsRouter = createTRPCRouter({
         data: {
           groupId: input.groupId,
           userId: ctx.user.id,
-          type: "PLACEHOLDER_CREATED",
+          type: 'PLACEHOLDER_CREATED',
           metadata: { placeholderName: input.name, placeholderUserId: user.id },
         },
       });
@@ -432,18 +454,18 @@ export const groupsRouter = createTRPCRouter({
   renamePlaceholder: groupMemberProcedure
     .input(z.object({ groupId: z.string(), placeholderUserId: z.string(), name: z.string().min(1).max(100) }))
     .mutation(async ({ ctx, input }) => {
-      if (ctx.membership.role !== "OWNER" && ctx.membership.role !== "ADMIN") {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Only admins and owners can rename placeholder members" });
+      if (ctx.membership.role !== 'OWNER' && ctx.membership.role !== 'ADMIN') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Only admins and owners can rename placeholder members' });
       }
       const user = await ctx.db.user.findUnique({ where: { id: input.placeholderUserId } });
       if (!user?.isPlaceholder) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "User is not a placeholder" });
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'User is not a placeholder' });
       }
       const membership = await ctx.db.groupMember.findUnique({
         where: { userId_groupId: { userId: input.placeholderUserId, groupId: input.groupId } },
       });
       if (!membership) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Placeholder is not a member of this group" });
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Placeholder is not a member of this group' });
       }
       return ctx.db.user.update({
         where: { id: input.placeholderUserId },
@@ -457,25 +479,25 @@ export const groupsRouter = createTRPCRouter({
         groupId: z.string(),
         placeholderUserId: z.string(),
         realUserId: z.string(),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
-      if (ctx.membership.role !== "OWNER" && ctx.membership.role !== "ADMIN") {
-        throw new TRPCError({ code: "FORBIDDEN" });
+      if (ctx.membership.role !== 'OWNER' && ctx.membership.role !== 'ADMIN') {
+        throw new TRPCError({ code: 'FORBIDDEN' });
       }
 
       const placeholder = await ctx.db.user.findUnique({
         where: { id: input.placeholderUserId },
       });
       if (!placeholder?.isPlaceholder) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Not a placeholder user" });
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Not a placeholder user' });
       }
 
       const placeholderMember = await ctx.db.groupMember.findUnique({
         where: { userId_groupId: { userId: input.placeholderUserId, groupId: input.groupId } },
       });
       if (!placeholderMember) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Placeholder is not a member of this group" });
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Placeholder is not a member of this group' });
       }
 
       // Verify realUserId is a member of the same group
@@ -486,8 +508,8 @@ export const groupsRouter = createTRPCRouter({
       });
       if (!realUserMember) {
         throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Target user is not a member of this group",
+          code: 'BAD_REQUEST',
+          message: 'Target user is not a member of this group',
         });
       }
 
@@ -514,7 +536,7 @@ async function mergePlaceholderIntoUser(
       select: { isPlaceholder: true },
     });
     if (!placeholder?.isPlaceholder) {
-      throw new TRPCError({ code: "BAD_REQUEST", message: "Not a placeholder user" });
+      throw new TRPCError({ code: 'BAD_REQUEST', message: 'Not a placeholder user' });
     }
 
     const groupExpenseIds = (
@@ -549,10 +571,7 @@ async function mergePlaceholderIntoUser(
       await tx.receiptItem.findMany({
         where: {
           receipt: {
-            OR: [
-              { expense: { groupId } },
-              { groupId },
-            ],
+            OR: [{ expense: { groupId } }, { groupId }],
           },
         },
         select: { id: true },
@@ -608,7 +627,7 @@ async function mergePlaceholderIntoUser(
       data: {
         groupId,
         userId: realUserId,
-        type: "PLACEHOLDER_MERGED",
+        type: 'PLACEHOLDER_MERGED',
         metadata: { mergedPlaceholderId: placeholderUserId },
       },
     });

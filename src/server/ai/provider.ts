@@ -1,4 +1,4 @@
-import type { ReceiptExtractionResult } from "./schema";
+import type { ReceiptExtractionResult } from './schema';
 
 export interface AIProvider {
   readonly name: string;
@@ -9,11 +9,7 @@ export interface AIProvider {
    * @param mimeType - e.g., "image/jpeg", "image/png"
    * @returns Structured receipt data
    */
-  extractReceipt(
-    imageBuffer: Buffer,
-    mimeType: string,
-    correctionHint?: string
-  ): Promise<ReceiptExtractionResult>;
+  extractReceipt(imageBuffer: Buffer, mimeType: string, correctionHint?: string): Promise<ReceiptExtractionResult>;
 
   /**
    * Check if this provider is configured and available.

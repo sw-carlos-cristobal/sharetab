@@ -1,29 +1,29 @@
-"use client";
+'use client';
 
-import { use, useMemo, useState } from "react";
-import { useLocale, useTranslations } from "next-intl";
-import { Link, useRouter } from "@/i18n/navigation";
-import type { inferRouterOutputs } from "@trpc/server";
-import type { AppRouter } from "@/server/trpc/router";
-import { trpc } from "@/lib/trpc";
-import { parseToCents, centsToDecimal, formatCents } from "@/lib/money";
-import { COMMON_CURRENCIES } from "@/lib/currencies";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { ArrowLeft } from "lucide-react";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { EqualSplit } from "@/components/expenses/equal-split";
-import { ExactSplit } from "@/components/expenses/exact-split";
-import { PercentageSplit } from "@/components/expenses/percentage-split";
-import { SharesSplit } from "@/components/expenses/shares-split";
+import { use, useMemo, useState } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
+import { Link, useRouter } from '@/i18n/navigation';
+import type { inferRouterOutputs } from '@trpc/server';
+import type { AppRouter } from '@/server/trpc/router';
+import { trpc } from '@/lib/trpc';
+import { parseToCents, centsToDecimal, formatCents } from '@/lib/money';
+import { COMMON_CURRENCIES } from '@/lib/currencies';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { ArrowLeft } from 'lucide-react';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { EqualSplit } from '@/components/expenses/equal-split';
+import { ExactSplit } from '@/components/expenses/exact-split';
+import { PercentageSplit } from '@/components/expenses/percentage-split';
+import { SharesSplit } from '@/components/expenses/shares-split';
 
 type RouterOutputs = inferRouterOutputs<AppRouter>;
-type ExpenseData = RouterOutputs["expenses"]["get"];
-type GroupData = NonNullable<RouterOutputs["groups"]["get"]>;
+type ExpenseData = RouterOutputs['expenses']['get'];
+type GroupData = NonNullable<RouterOutputs['groups']['get']>;
 
-type SplitMode = "EQUAL" | "EXACT" | "PERCENTAGE" | "SHARES";
+type SplitMode = 'EQUAL' | 'EXACT' | 'PERCENTAGE' | 'SHARES';
 
 type MemberInfo = {
   id: string;
@@ -37,13 +37,9 @@ type ShareEntry = {
   percentage?: number;
 };
 
-export default function EditExpensePage({
-  params,
-}: {
-  params: Promise<{ groupId: string; expenseId: string }>;
-}) {
+export default function EditExpensePage({ params }: { params: Promise<{ groupId: string; expenseId: string }> }) {
   const { groupId, expenseId } = use(params);
-  const t = useTranslations("expenses");
+  const t = useTranslations('expenses');
   const group = trpc.groups.get.useQuery({ groupId });
   const expense = trpc.expenses.get.useQuery({ groupId, expenseId });
 
@@ -54,25 +50,16 @@ export default function EditExpensePage({
     return (
       <div className="mx-auto max-w-md py-16 text-center">
         <ArrowLeft className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-        <h2 className="mb-2 text-lg font-semibold">{t("detail.notFound")}</h2>
-        <p className="mb-4 text-sm text-muted-foreground">
-          {t("detail.notFoundDescription")}
-        </p>
+        <h2 className="mb-2 text-lg font-semibold">{t('detail.notFound')}</h2>
+        <p className="mb-4 text-sm text-muted-foreground">{t('detail.notFoundDescription')}</p>
         <Button nativeButton={false} render={<Link href={`/groups/${groupId}`} />}>
-          {t("detail.backToGroup")}
+          {t('detail.backToGroup')}
         </Button>
       </div>
     );
   }
 
-  return (
-    <EditExpenseForm
-      groupId={groupId}
-      expenseId={expenseId}
-      expense={expense.data}
-      group={group.data}
-    />
-  );
+  return <EditExpenseForm groupId={groupId} expenseId={expenseId} expense={expense.data} group={group.data} />;
 }
 
 // Rendered only once expense + group data is available, so all form state can
@@ -90,41 +77,41 @@ function EditExpenseForm({
 }) {
   const router = useRouter();
   const locale = useLocale();
-  const t = useTranslations("expenses");
+  const t = useTranslations('expenses');
 
-  const splitModes = useMemo(() => [
-    { value: "EQUAL" as SplitMode, label: t("new.splitEqual"), description: t("new.splitEqualDescription") },
-    { value: "EXACT" as SplitMode, label: t("new.splitExact"), description: t("new.splitExactDescription") },
-    { value: "PERCENTAGE" as SplitMode, label: t("new.splitPercentage"), description: t("new.splitPercentageDescription") },
-    { value: "SHARES" as SplitMode, label: t("new.splitShares"), description: t("new.splitSharesDescription") },
-  ], [t]);
+  const splitModes = useMemo(
+    () => [
+      { value: 'EQUAL' as SplitMode, label: t('new.splitEqual'), description: t('new.splitEqualDescription') },
+      { value: 'EXACT' as SplitMode, label: t('new.splitExact'), description: t('new.splitExactDescription') },
+      {
+        value: 'PERCENTAGE' as SplitMode,
+        label: t('new.splitPercentage'),
+        description: t('new.splitPercentageDescription'),
+      },
+      { value: 'SHARES' as SplitMode, label: t('new.splitShares'), description: t('new.splitSharesDescription') },
+    ],
+    [t],
+  );
 
-  const isItemSplit = expense.splitMode === "ITEM";
-  const initiallyDifferentCurrency =
-    expense.currency.toUpperCase() !== group.currency.toUpperCase();
+  const isItemSplit = expense.splitMode === 'ITEM';
+  const initiallyDifferentCurrency = expense.currency.toUpperCase() !== group.currency.toUpperCase();
 
   const [title, setTitle] = useState(expense.title);
   const [amountStr, setAmountStr] = useState(() => centsToDecimal(expense.amount));
-  const [category, setCategory] = useState(expense.category ?? "");
+  const [category, setCategory] = useState(expense.category ?? '');
   // The saved payer may have left the group (member removal preserves
   // financial history). Server-side membership validation would reject the
   // stale id, so start empty and force the user to pick a current member.
   const [paidById, setPaidById] = useState(() =>
-    group.members.some((m) => m.user.id === expense.paidById)
-      ? expense.paidById
-      : ""
+    group.members.some((m) => m.user.id === expense.paidById) ? expense.paidById : '',
   );
-  const [splitMode, setSplitMode] = useState<SplitMode>(
-    isItemSplit ? "EQUAL" : (expense.splitMode as SplitMode)
-  );
+  const [splitMode, setSplitMode] = useState<SplitMode>(isItemSplit ? 'EQUAL' : (expense.splitMode as SplitMode));
   const [shares, setShares] = useState<ShareEntry[]>([]);
   const [currency, setCurrency] = useState<string>(expense.currency);
   const [manualRate, setManualRate] = useState<string>(
-    initiallyDifferentCurrency && expense.exchangeRate ? String(expense.exchangeRate) : ""
+    initiallyDifferentCurrency && expense.exchangeRate ? String(expense.exchangeRate) : '',
   );
-  const [useManualRate, setUseManualRate] = useState(
-    initiallyDifferentCurrency && !!expense.exchangeRate
-  );
+  const [useManualRate, setUseManualRate] = useState(initiallyDifferentCurrency && !!expense.exchangeRate);
 
   // Seed the split editors with the saved shares so editing doesn't silently
   // rewrite the split. Only the saved mode is seeded; other modes keep their
@@ -140,15 +127,13 @@ function EditExpenseForm({
   // the expense saveable — and a warning banner tells the user to review it.
   const { savedShares, hasFormerMemberShares } = useMemo(() => {
     const currentMemberIds = new Set(group.members.map((m) => m.user.id));
-    const toSeed = (s: ExpenseData["shares"][number]): ShareEntry => ({
+    const toSeed = (s: ExpenseData['shares'][number]): ShareEntry => ({
       userId: s.userId,
       amount: s.amount,
       ...(s.percentage != null ? { percentage: s.percentage } : {}),
       ...(s.shares != null ? { shares: s.shares } : {}),
     });
-    const kept = expense.shares
-      .filter((s) => currentMemberIds.has(s.userId))
-      .map(toSeed);
+    const kept = expense.shares.filter((s) => currentMemberIds.has(s.userId)).map(toSeed);
     const dropped = expense.shares.filter((s) => !currentMemberIds.has(s.userId));
     if (dropped.length === 0) {
       return { savedShares: kept, hasFormerMemberShares: false };
@@ -158,7 +143,7 @@ function EditExpenseForm({
     const droppedUnits = dropped.reduce((sum, s) => sum + (s.shares ?? 0), 0);
     const targetId = currentMemberIds.has(expense.paidById)
       ? expense.paidById
-      : kept[0]?.userId ?? group.members[0]?.user.id;
+      : (kept[0]?.userId ?? group.members[0]?.user.id);
     if (!targetId) {
       return { savedShares: kept, hasFormerMemberShares: true };
     }
@@ -172,12 +157,8 @@ function EditExpenseForm({
             amount: droppedAmount,
             // Keyed on field presence (not summed value) so explicit zeros
             // survive, matching toSeed's != null convention.
-            ...(dropped.some((s) => s.percentage != null)
-              ? { percentage: droppedPct }
-              : {}),
-            ...(dropped.some((s) => s.shares != null)
-              ? { shares: droppedUnits }
-              : {}),
+            ...(dropped.some((s) => s.percentage != null) ? { percentage: droppedPct } : {}),
+            ...(dropped.some((s) => s.shares != null) ? { shares: droppedUnits } : {}),
           },
         ],
         hasFormerMemberShares: true,
@@ -189,58 +170,43 @@ function EditExpenseForm({
           ? {
               ...s,
               amount: s.amount + droppedAmount,
-              percentage:
-                s.percentage != null || droppedPct > 0
-                  ? (s.percentage ?? 0) + droppedPct
-                  : s.percentage,
+              percentage: s.percentage != null || droppedPct > 0 ? (s.percentage ?? 0) + droppedPct : s.percentage,
               // Keyed on field presence like toSeed and the new-entry
               // branch — don't invent shares for non-SHARES splits.
               shares:
-                s.shares != null || dropped.some((d) => d.shares != null)
-                  ? (s.shares ?? 1) + droppedUnits
-                  : s.shares,
+                s.shares != null || dropped.some((d) => d.shares != null) ? (s.shares ?? 1) + droppedUnits : s.shares,
             }
-          : s
+          : s,
       ),
       hasFormerMemberShares: true,
     };
   }, [expense, group]);
   const initialSelected = useMemo(
-    () =>
-      expense.splitMode === "EQUAL" && savedShares.length > 0
-        ? savedShares.map((s) => s.userId)
-        : undefined,
-    [expense, savedShares]
+    () => (expense.splitMode === 'EQUAL' && savedShares.length > 0 ? savedShares.map((s) => s.userId) : undefined),
+    [expense, savedShares],
   );
   const initialAmounts = useMemo(
     () =>
-      expense.splitMode === "EXACT" && savedShares.length > 0
-        ? Object.fromEntries(
-            savedShares.map((s) => [s.userId, centsToDecimal(s.amount)])
-          )
+      expense.splitMode === 'EXACT' && savedShares.length > 0
+        ? Object.fromEntries(savedShares.map((s) => [s.userId, centsToDecimal(s.amount)]))
         : undefined,
-    [expense, savedShares]
+    [expense, savedShares],
   );
   const initialPercentages = useMemo(
     () =>
-      expense.splitMode === "PERCENTAGE" && savedShares.length > 0
+      expense.splitMode === 'PERCENTAGE' && savedShares.length > 0
         ? Object.fromEntries(
-            savedShares.map((s) => [
-              s.userId,
-              s.percentage != null ? String(s.percentage / 100) : "0",
-            ])
+            savedShares.map((s) => [s.userId, s.percentage != null ? String(s.percentage / 100) : '0']),
           )
         : undefined,
-    [expense, savedShares]
+    [expense, savedShares],
   );
   const initialShareUnits = useMemo(
     () =>
-      expense.splitMode === "SHARES" && savedShares.length > 0
-        ? Object.fromEntries(
-            savedShares.map((s) => [s.userId, String(s.shares ?? 1)])
-          )
+      expense.splitMode === 'SHARES' && savedShares.length > 0
+        ? Object.fromEntries(savedShares.map((s) => [s.userId, String(s.shares ?? 1)]))
         : undefined,
-    [expense, savedShares]
+    [expense, savedShares],
   );
 
   const updateExpense = trpc.expenses.update.useMutation({
@@ -283,39 +249,41 @@ function EditExpenseForm({
   return (
     <div className="mx-auto max-w-lg space-y-6">
       <div className="flex items-center gap-2">
-        <Button variant="ghost" size="icon" aria-label={t("edit.backToExpense")} nativeButton={false} render={<Link href={`/groups/${groupId}/expenses/${expenseId}`} />}>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={t('edit.backToExpense')}
+          nativeButton={false}
+          render={<Link href={`/groups/${groupId}/expenses/${expenseId}`} />}
+        >
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h1 className="text-2xl font-bold">{t("edit.title")}</h1>
+        <h1 className="text-2xl font-bold">{t('edit.title')}</h1>
       </div>
 
       {isItemSplit && (
         <Card className="border-amber-300">
-          <CardContent className="py-4 text-sm text-amber-700">
-            {t("edit.itemSplitWarning")}
-          </CardContent>
+          <CardContent className="py-4 text-sm text-amber-700">{t('edit.itemSplitWarning')}</CardContent>
         </Card>
       )}
 
       {hasFormerMemberShares && (
         <Card className="border-amber-300">
-          <CardContent className="py-4 text-sm text-amber-700">
-            {t("edit.formerMemberSharesWarning")}
-          </CardContent>
+          <CardContent className="py-4 text-sm text-amber-700">{t('edit.formerMemberSharesWarning')}</CardContent>
         </Card>
       )}
 
       <Card>
         <CardHeader>
-          <CardTitle>{t("new.expenseDetails")}</CardTitle>
+          <CardTitle>{t('new.expenseDetails')}</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="title">{t("new.description")}</Label>
+              <Label htmlFor="title">{t('new.description')}</Label>
               <Input
                 id="title"
-                placeholder={t("new.descriptionPlaceholder")}
+                placeholder={t('new.descriptionPlaceholder')}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 required
@@ -324,26 +292,26 @@ function EditExpenseForm({
 
             <div className="grid grid-cols-[1fr_auto] gap-2">
               <div className="space-y-2">
-                <Label htmlFor="amount">{t("new.amount")}</Label>
+                <Label htmlFor="amount">{t('new.amount')}</Label>
                 <Input
                   id="amount"
                   type="number"
                   step="0.01"
                   min="0.01"
-                  placeholder={t("new.amountPlaceholder")}
+                  placeholder={t('new.amountPlaceholder')}
                   value={amountStr}
                   onChange={(e) => setAmountStr(e.target.value)}
                   required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="currency">{t("new.currency")}</Label>
+                <Label htmlFor="currency">{t('new.currency')}</Label>
                 <select
                   id="currency"
                   value={effectiveCurrency}
                   onChange={(e) => {
                     setCurrency(e.target.value);
-                    setManualRate("");
+                    setManualRate('');
                     setUseManualRate(false);
                   }}
                   className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
@@ -360,7 +328,7 @@ function EditExpenseForm({
             {isDifferentCurrency && (
               <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm dark:border-blue-800 dark:bg-blue-950/50">
                 <p className="text-blue-800 dark:text-blue-200">
-                  {t("new.differentCurrencyNote", {
+                  {t('new.differentCurrencyNote', {
                     expenseCurrency: effectiveCurrency,
                     groupCurrency,
                   })}
@@ -373,7 +341,7 @@ function EditExpenseForm({
                       onChange={(e) => setUseManualRate(e.target.checked)}
                       className="rounded"
                     />
-                    {t("new.manualRateOverride")}
+                    {t('new.manualRateOverride')}
                   </label>
                 </div>
                 {useManualRate && (
@@ -382,7 +350,7 @@ function EditExpenseForm({
                       type="number"
                       step="any"
                       min="0.000001"
-                      placeholder={t("new.exchangeRatePlaceholder", {
+                      placeholder={t('new.exchangeRatePlaceholder', {
                         from: effectiveCurrency,
                         to: groupCurrency,
                       })}
@@ -391,37 +359,31 @@ function EditExpenseForm({
                     />
                     {manualRateValid && amountCents > 0 && (
                       <p className="mt-1 text-xs text-blue-700 dark:text-blue-300">
-                        {t("new.convertedAmount", {
-                          amount: formatCents(
-                            Math.round(amountCents * parsedManualRate),
-                            groupCurrency,
-                            locale
-                          ),
+                        {t('new.convertedAmount', {
+                          amount: formatCents(Math.round(amountCents * parsedManualRate), groupCurrency, locale),
                         })}
                       </p>
                     )}
                   </div>
                 )}
                 {!useManualRate && (
-                  <p className="mt-1 text-xs text-blue-600 dark:text-blue-400">
-                    {t("new.autoRateNote")}
-                  </p>
+                  <p className="mt-1 text-xs text-blue-600 dark:text-blue-400">{t('new.autoRateNote')}</p>
                 )}
               </div>
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="category">{t("new.category")}</Label>
+              <Label htmlFor="category">{t('new.category')}</Label>
               <Input
                 id="category"
-                placeholder={t("new.categoryPlaceholder")}
+                placeholder={t('new.categoryPlaceholder')}
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="paidBy">{t("new.paidBy")}</Label>
+              <Label htmlFor="paidBy">{t('new.paidBy')}</Label>
               <select
                 id="paidBy"
                 value={paidById}
@@ -429,17 +391,17 @@ function EditExpenseForm({
                 required
                 className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
-                <option value="">{t("new.selectMember")}</option>
+                <option value="">{t('new.selectMember')}</option>
                 {members.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.name ?? t("new.unnamed")}
+                    {m.name ?? t('new.unnamed')}
                   </option>
                 ))}
               </select>
             </div>
 
             <div className="space-y-2">
-              <Label>{t("new.splitType")}</Label>
+              <Label>{t('new.splitType')}</Label>
               <div className="grid grid-cols-2 gap-2">
                 {splitModes.map((mode) => (
                   <button
@@ -447,23 +409,19 @@ function EditExpenseForm({
                     type="button"
                     onClick={() => setSplitMode(mode.value)}
                     className={`rounded-md border p-2 text-left text-sm transition-colors ${
-                      splitMode === mode.value
-                        ? "border-primary bg-primary/10"
-                        : "border-border hover:bg-muted"
+                      splitMode === mode.value ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted'
                     }`}
                   >
                     <div className="font-medium">{mode.label}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {mode.description}
-                    </div>
+                    <div className="text-xs text-muted-foreground">{mode.description}</div>
                   </button>
                 ))}
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label>{t("new.splitBetween")}</Label>
-              {splitMode === "EQUAL" && (
+              <Label>{t('new.splitBetween')}</Label>
+              {splitMode === 'EQUAL' && (
                 <EqualSplit
                   members={members}
                   totalCents={amountCents}
@@ -473,7 +431,7 @@ function EditExpenseForm({
                   {...(initialSelected !== undefined ? { initialSelected } : {})}
                 />
               )}
-              {splitMode === "EXACT" && (
+              {splitMode === 'EXACT' && (
                 <ExactSplit
                   members={members}
                   totalCents={amountCents}
@@ -483,7 +441,7 @@ function EditExpenseForm({
                   {...(initialAmounts !== undefined ? { initialAmounts } : {})}
                 />
               )}
-              {splitMode === "PERCENTAGE" && (
+              {splitMode === 'PERCENTAGE' && (
                 <PercentageSplit
                   members={members}
                   totalCents={amountCents}
@@ -493,7 +451,7 @@ function EditExpenseForm({
                   {...(initialPercentages !== undefined ? { initialPercentages } : {})}
                 />
               )}
-              {splitMode === "SHARES" && (
+              {splitMode === 'SHARES' && (
                 <SharesSplit
                   members={members}
                   totalCents={amountCents}
@@ -516,7 +474,7 @@ function EditExpenseForm({
               className="w-full"
               disabled={updateExpense.isPending || amountCents <= 0 || shares.length === 0}
             >
-              {updateExpense.isPending ? t("edit.submitting") : t("edit.submit")}
+              {updateExpense.isPending ? t('edit.submitting') : t('edit.submit')}
             </Button>
           </form>
         </CardContent>

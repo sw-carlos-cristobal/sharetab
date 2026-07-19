@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import { useTheme } from "next-themes";
-import { useSyncExternalStore } from "react";
-import { Moon, Sun } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useTheme } from 'next-themes';
+import { useSyncExternalStore } from 'react';
+import { Moon, Sun } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 const emptySubscribe = () => () => {};
 
@@ -13,7 +13,7 @@ function useMounted() {
   return useSyncExternalStore(
     emptySubscribe,
     () => true,
-    () => false
+    () => false,
   );
 }
 
@@ -33,14 +33,10 @@ export function ThemeToggle() {
     <Button
       variant="ghost"
       size="icon-sm"
-      onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+      onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
       aria-label="Toggle theme"
     >
-      {resolvedTheme === "dark" ? (
-        <Sun className="h-4 w-4" />
-      ) : (
-        <Moon className="h-4 w-4" />
-      )}
+      {resolvedTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
     </Button>
   );
 }

@@ -20,15 +20,10 @@ export function AnnouncementBanner() {
   const { data } = trpc.admin.getAnnouncement.useQuery(undefined, {
     staleTime: 60_000, // refetch at most every minute
   });
-  const dismissedMessage = useSyncExternalStore(
-    subscribeDismiss,
-    getDismissedMessage,
-    () => null
-  );
+  const dismissedMessage = useSyncExternalStore(subscribeDismiss, getDismissedMessage, () => null);
   const [localDismissed, setLocalDismissed] = useState(false);
 
-  const dismissed =
-    localDismissed || (!!data?.message && dismissedMessage === data.message);
+  const dismissed = localDismissed || (!!data?.message && dismissedMessage === data.message);
 
   if (!data?.message || dismissed) return null;
 

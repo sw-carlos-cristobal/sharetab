@@ -1,23 +1,21 @@
-import { randomUUID } from "crypto";
-import { z } from "zod";
-import { TRPCError } from "@trpc/server";
-import { Prisma, GuestSplitStatus } from "@/generated/prisma/client";
-import { createTRPCRouter, publicProcedure, protectedProcedure } from "../init";
-import { processReceiptImage } from "../../lib/receipt-processor";
-import { logger } from "../../lib/logger";
-import { checkRateLimit, refundRateLimit } from "../../lib/rate-limit";
-import { getClientIp } from "../../lib/client-ip";
-import { parseExtractedData, parseGuestItems, parseGuestPeople, parseGuestAssignments } from "../../lib/json-schemas";
-import { calculateSplitTotals } from "@/lib/split-calculator";
-import { normalizeGuestName } from "@/lib/guest-session";
-import {
-  getConfiguredProviderPriority,
-} from "@/server/ai/registry";
+import { randomUUID } from 'crypto';
+import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
+import { Prisma, GuestSplitStatus } from '@/generated/prisma/client';
+import { createTRPCRouter, publicProcedure, protectedProcedure } from '../init';
+import { processReceiptImage } from '../../lib/receipt-processor';
+import { logger } from '../../lib/logger';
+import { checkRateLimit, refundRateLimit } from '../../lib/rate-limit';
+import { getClientIp } from '../../lib/client-ip';
+import { parseExtractedData, parseGuestItems, parseGuestPeople, parseGuestAssignments } from '../../lib/json-schemas';
+import { calculateSplitTotals } from '@/lib/split-calculator';
+import { normalizeGuestName } from '@/lib/guest-session';
+import { getConfiguredProviderPriority } from '@/server/ai/registry';
 
 async function getCreatorPayerVenmoHandle(
-  db: typeof import("@/server/db").db,
+  db: typeof import('@/server/db').db,
   userId: string | undefined | null,
-  payerName: string | undefined
+  payerName: string | undefined,
 ): Promise<string | null> {
   if (!userId || !payerName) return null;
   const creator = await db.user.findUnique({
@@ -42,9 +40,7 @@ function toPublicPeople(people: GuestSessionPerson[]) {
   return people.map(({ name, groupSize }) => ({ name, groupSize: groupSize ?? 1 }));
 }
 
-function cloneAssignments(
-  assignments: { itemIndex: number; personIndices: number[] }[]
-) {
+function cloneAssignments(assignments: { itemIndex: number; personIndices: number[] }[]) {
   return assignments.map((assignment) => ({
     ...assignment,
     personIndices: [...assignment.personIndices],
@@ -52,12 +48,7 @@ function cloneAssignments(
 }
 
 function isTransactionConflict(error: unknown) {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    error.code === "P2034"
-  );
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2034';
 }
 
 async function withSerializableRetry<T>(run: () => Promise<T>): Promise<T> {
@@ -69,9 +60,7 @@ async function withSerializableRetry<T>(run: () => Promise<T>): Promise<T> {
       if (attempt >= GUEST_TRANSACTION_RETRY_ATTEMPTS - 1 || !isTransactionConflict(error)) {
         throw error;
       }
-      await new Promise((resolve) =>
-        setTimeout(resolve, Math.floor(Math.random() * 10) + 1)
-      );
+      await new Promise((resolve) => setTimeout(resolve, Math.floor(Math.random() * 10) + 1));
       attempt += 1;
     }
   }
@@ -85,7 +74,7 @@ const receiptDataSchema = z.object({
   tax: z.number().int(),
   tip: z.number().int(),
   total: z.number().int(),
-  currency: z.string().default("USD"),
+  currency: z.string().default('USD'),
 });
 
 const itemSchema = z.object({
@@ -104,10 +93,7 @@ function createExpiryDate(): Date {
 }
 
 /** Fire-and-forget cleanup of expired GuestSplit records. */
-function cleanupExpiredSplits(
-  db: typeof import("@/server/db").db,
-  logPrefix: string
-): void {
+function cleanupExpiredSplits(db: typeof import('@/server/db').db, logPrefix: string): void {
   db.guestSplit
     .deleteMany({ where: { expiresAt: { lt: new Date() } } })
     .then((result) => {
@@ -123,45 +109,43 @@ function cleanupExpiredSplits(
 }
 
 export const guestRouter = createTRPCRouter({
-  expireSession: protectedProcedure
-    .input(z.object({ token: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      const session = await ctx.db.guestSplit.findUnique({
-        where: { shareToken: input.token },
-        select: { id: true, userId: true },
-      });
-      if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
-      if (session.userId !== ctx.user.id) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
-      await ctx.db.guestSplit.update({
-        where: { id: session.id },
-        data: { expiresAt: new Date(0) },
-      });
-      return { success: true };
-    }),
+  expireSession: protectedProcedure.input(z.object({ token: z.string() })).mutation(async ({ ctx, input }) => {
+    const session = await ctx.db.guestSplit.findUnique({
+      where: { shareToken: input.token },
+      select: { id: true, userId: true },
+    });
+    if (!session) throw new TRPCError({ code: 'NOT_FOUND', message: 'Session not found' });
+    if (session.userId !== ctx.user.id) throw new TRPCError({ code: 'NOT_FOUND', message: 'Session not found' });
+    await ctx.db.guestSplit.update({
+      where: { id: session.id },
+      data: { expiresAt: new Date(0) },
+    });
+    return { success: true };
+  }),
 
-  deleteSplit: protectedProcedure
-    .input(z.object({ id: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      const split = await ctx.db.guestSplit.findUnique({
-        where: { id: input.id },
-        select: { userId: true },
-      });
-      if (!split || split.userId !== ctx.user.id) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Split not found" });
-      }
-      await ctx.db.guestSplit.delete({ where: { id: input.id } });
-      return { success: true };
-    }),
+  deleteSplit: protectedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    const split = await ctx.db.guestSplit.findUnique({
+      where: { id: input.id },
+      select: { userId: true },
+    });
+    if (!split || split.userId !== ctx.user.id) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Split not found' });
+    }
+    await ctx.db.guestSplit.delete({ where: { id: input.id } });
+    return { success: true };
+  }),
 
   mySplits: protectedProcedure
-    .input(z.object({
-      cursor: z.string().optional(),
-      limit: z.number().int().min(1).max(50).default(20),
-    }))
+    .input(
+      z.object({
+        cursor: z.string().optional(),
+        limit: z.number().int().min(1).max(50).default(20),
+      }),
+    )
     .query(async ({ ctx, input }) => {
       const splits = await ctx.db.guestSplit.findMany({
         where: { userId: ctx.user.id },
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: 'desc' },
         take: input.limit + 1,
         ...(input.cursor ? { cursor: { id: input.cursor } } : {}),
       });
@@ -175,7 +159,7 @@ export const guestRouter = createTRPCRouter({
       type PersonJson = Record<string, unknown>;
 
       return {
-        splits: splits.map(s => {
+        splits: splits.map((s) => {
           const receipt = s.receiptData as ReceiptJson | null;
           const people = s.people as PersonJson[] | null;
           const items = s.items as PersonJson[] | null;
@@ -185,7 +169,7 @@ export const guestRouter = createTRPCRouter({
             status: s.status,
             merchantName: receipt?.merchantName as string | undefined,
             total: receipt?.total as number | undefined,
-            currency: (receipt?.currency as string | undefined) ?? "USD",
+            currency: (receipt?.currency as string | undefined) ?? 'USD',
             peopleCount: people?.length ?? 0,
             itemCount: items?.length ?? 0,
             createdAt: s.createdAt,
@@ -217,10 +201,10 @@ export const guestRouter = createTRPCRouter({
         where: { id: input.receiptId },
       });
       if (!receipt) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Receipt not found" });
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Receipt not found' });
       }
       if (!receipt.isGuest) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Receipt not found" });
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Receipt not found' });
       }
 
       // Quotas, checked only AFTER the receipt is validated as a real guest
@@ -234,12 +218,12 @@ export const guestRouter = createTRPCRouter({
       // consumed attempts are refunded so retries against an in-flight
       // receipt don't drain any bucket.
       const ip = getClientIp(ctx.headers);
-      const globalMax = parseInt(process.env.GUEST_AI_GLOBAL_LIMIT ?? "100", 10) || 100;
+      const globalMax = parseInt(process.env.GUEST_AI_GLOBAL_LIMIT ?? '100', 10) || 100;
       const quotaWindow = 60 * 60 * 1000;
       const quotas: Array<{ key: string; max: number }> = [
         { key: `guest-process:${input.receiptId}`, max: 3 },
         { key: `guest-process-ip:${ip}`, max: 20 },
-        { key: "guest-process-global", max: globalMax },
+        { key: 'guest-process-global', max: globalMax },
       ];
       const consumed: string[] = [];
       const refundConsumed = () => {
@@ -251,8 +235,8 @@ export const guestRouter = createTRPCRouter({
         } else {
           refundConsumed();
           throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: "Too many processing attempts. Please try again later.",
+            code: 'TOO_MANY_REQUESTS',
+            message: 'Too many processing attempts. Please try again later.',
           });
         }
       }
@@ -266,18 +250,15 @@ export const guestRouter = createTRPCRouter({
       const claimed = await ctx.db.receipt.updateMany({
         where: {
           id: input.receiptId,
-          OR: [
-            { status: { not: "PROCESSING" } },
-            { updatedAt: { lt: new Date(Date.now() - 15 * 60 * 1000) } },
-          ],
+          OR: [{ status: { not: 'PROCESSING' } }, { updatedAt: { lt: new Date(Date.now() - 15 * 60 * 1000) } }],
         },
-        data: { status: "PROCESSING" },
+        data: { status: 'PROCESSING' },
       });
       if (claimed.count === 0) {
         refundConsumed();
         throw new TRPCError({
-          code: "CONFLICT",
-          message: "Receipt is already being processed",
+          code: 'CONFLICT',
+          message: 'Receipt is already being processed',
         });
       }
 
@@ -287,19 +268,19 @@ export const guestRouter = createTRPCRouter({
           receiptId: input.receiptId,
           receipt,
           ...(input.correctionHint !== undefined ? { correctionHint: input.correctionHint } : {}),
-          logPrefix: "guest.receipt",
+          logPrefix: 'guest.receipt',
         });
       } catch (error) {
-        logger.error("guest.receipt.failed", {
+        logger.error('guest.receipt.failed', {
           receiptId: input.receiptId,
-          error: error instanceof Error ? error.message : "Unknown",
+          error: error instanceof Error ? error.message : 'Unknown',
         });
         await ctx.db.receipt.update({
           where: { id: input.receiptId },
           data: {
-            status: "FAILED",
+            status: 'FAILED',
             rawResponse: {
-              error: error instanceof Error ? error.message : "Unknown error",
+              error: error instanceof Error ? error.message : 'Unknown error',
             } as unknown as Prisma.InputJsonValue,
           },
         });
@@ -307,96 +288,99 @@ export const guestRouter = createTRPCRouter({
         // Details are logged server-side; never echo raw provider errors
         // (model output, internal URLs) to unauthenticated guests.
         throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Receipt processing failed. Please try again.",
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Receipt processing failed. Please try again.',
         });
       }
     }),
 
-  getReceiptItems: publicProcedure
-    .input(z.object({ receiptId: z.string() }))
-    .query(async ({ ctx, input }) => {
-      // Rate limit: 10 lookups per receipt per hour to mitigate enumeration.
-      // Guest receipt IDs are CUIDs (25 chars of randomness) making brute force
-      // infeasible, but rate limiting adds defense-in-depth.
-      const { allowed } = checkRateLimit(
-        `guest-items:${input.receiptId}`,
-        10,
-        60 * 60 * 1000
-      );
-      if (!allowed) {
-        throw new TRPCError({
-          code: "TOO_MANY_REQUESTS",
-          message: "Too many requests. Please try again later.",
-        });
-      }
-
-      const receipt = await ctx.db.receipt.findUnique({
-        where: { id: input.receiptId },
-        include: {
-          items: { orderBy: { sortOrder: "asc" } },
-        },
+  getReceiptItems: publicProcedure.input(z.object({ receiptId: z.string() })).query(async ({ ctx, input }) => {
+    // Rate limit: 10 lookups per receipt per hour to mitigate enumeration.
+    // Guest receipt IDs are CUIDs (25 chars of randomness) making brute force
+    // infeasible, but rate limiting adds defense-in-depth.
+    const { allowed } = checkRateLimit(`guest-items:${input.receiptId}`, 10, 60 * 60 * 1000);
+    if (!allowed) {
+      throw new TRPCError({
+        code: 'TOO_MANY_REQUESTS',
+        message: 'Too many requests. Please try again later.',
       });
-      if (!receipt) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Receipt not found" });
-      }
-      if (!receipt.isGuest) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Receipt not found" });
-      }
+    }
 
-      return {
-        receipt: {
-          id: receipt.id,
-          status: receipt.status,
-          imagePath: receipt.imagePath,
-          extractedData: receipt.extractedData as {
-            merchantName?: string;
-            date?: string;
-            subtotal: number;
-            tax: number;
-            tip: number;
-            total: number;
-            currency: string;
-          } | null,
-        },
-        items: receipt.items,
-      };
-    }),
+    const receipt = await ctx.db.receipt.findUnique({
+      where: { id: input.receiptId },
+      include: {
+        items: { orderBy: { sortOrder: 'asc' } },
+      },
+    });
+    if (!receipt) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Receipt not found' });
+    }
+    if (!receipt.isGuest) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Receipt not found' });
+    }
+
+    return {
+      receipt: {
+        id: receipt.id,
+        status: receipt.status,
+        imagePath: receipt.imagePath,
+        extractedData: receipt.extractedData as {
+          merchantName?: string;
+          date?: string;
+          subtotal: number;
+          tax: number;
+          tip: number;
+          total: number;
+          currency: string;
+        } | null,
+      },
+      items: receipt.items,
+    };
+  }),
 
   createSplit: publicProcedure
-    .input(z.object({
-      receiptId: z.string().optional(),
-      receiptData: receiptDataSchema,
-      items: z.array(itemSchema).min(1).max(100),
-      people: z.array(z.object({ name: z.string() })).min(1).max(100),
-      assignments: z.array(z.object({
-        itemIndex: z.number().int(),
-        personIndices: z.array(z.number().int()),
-      })).max(1000),
-      paidByIndex: z.number().int().default(0),
-      tipOverride: z.number().int().min(0).optional(),
-    }))
+    .input(
+      z.object({
+        receiptId: z.string().optional(),
+        receiptData: receiptDataSchema,
+        items: z.array(itemSchema).min(1).max(100),
+        people: z
+          .array(z.object({ name: z.string() }))
+          .min(1)
+          .max(100),
+        assignments: z
+          .array(
+            z.object({
+              itemIndex: z.number().int(),
+              personIndices: z.array(z.number().int()),
+            }),
+          )
+          .max(1000),
+        paidByIndex: z.number().int().default(0),
+        tipOverride: z.number().int().min(0).optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const ip = getClientIp(ctx.headers);
-      const maxGuest = parseInt(process.env.GUEST_RATE_LIMIT_MAX ?? "10", 10) || 10;
+      const maxGuest = parseInt(process.env.GUEST_RATE_LIMIT_MAX ?? '10', 10) || 10;
       const { allowed } = checkRateLimit(`guest-create-split:${ip}`, maxGuest, 60 * 60 * 1000);
       if (!allowed) {
-        throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many splits created. Please try again later." });
+        throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'Too many splits created. Please try again later.' });
       }
 
       // Validate raw index bounds BEFORE filtering blank names
       for (const a of input.assignments) {
         if (a.itemIndex < 0 || a.itemIndex >= input.items.length) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: `Invalid itemIndex: ${a.itemIndex}` });
+          throw new TRPCError({ code: 'BAD_REQUEST', message: `Invalid itemIndex: ${a.itemIndex}` });
         }
         for (const pi of a.personIndices) {
           if (pi < 0 || pi >= input.people.length) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: `Invalid personIndex: ${pi}` });
+            throw new TRPCError({ code: 'BAD_REQUEST', message: `Invalid personIndex: ${pi}` });
           }
         }
       }
       if (input.paidByIndex < 0 || input.paidByIndex >= input.people.length) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: `Invalid paidByIndex: ${input.paidByIndex}` });
+        throw new TRPCError({ code: 'BAD_REQUEST', message: `Invalid paidByIndex: ${input.paidByIndex}` });
       }
 
       // Filter out blank-name people and remap indices
@@ -407,14 +391,12 @@ export const guestRouter = createTRPCRouter({
         return true;
       });
       if (filteredPeople.length === 0) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "At least one person with a name is required" });
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'At least one person with a name is required' });
       }
       const remappedAssignments = input.assignments
         .map((a) => ({
           itemIndex: a.itemIndex,
-          personIndices: a.personIndices
-            .filter((pi) => indexMap.has(pi))
-            .map((pi) => indexMap.get(pi)!),
+          personIndices: a.personIndices.filter((pi) => indexMap.has(pi)).map((pi) => indexMap.get(pi)!),
         }))
         .filter((a) => a.personIndices.length > 0);
       const remappedPaidBy = indexMap.get(input.paidByIndex) ?? 0;
@@ -438,7 +420,9 @@ export const guestRouter = createTRPCRouter({
       }));
 
       const payerVenmoHandle = await getCreatorPayerVenmoHandle(
-        ctx.db, ctx.session?.user?.id, filteredPeople[remappedPaidBy]?.name
+        ctx.db,
+        ctx.session?.user?.id,
+        filteredPeople[remappedPaidBy]?.name,
       );
 
       const guestSplit = await ctx.db.guestSplit.create({
@@ -460,11 +444,11 @@ export const guestRouter = createTRPCRouter({
         },
       });
 
-      cleanupExpiredSplits(ctx.db, "guest.split");
+      cleanupExpiredSplits(ctx.db, 'guest.split');
 
-      logger.info("guest.split.created", {
+      logger.info('guest.split.created', {
         splitId: guestSplit.id,
-        shareToken: guestSplit.shareToken.substring(0, 8) + "...",
+        shareToken: guestSplit.shareToken.substring(0, 8) + '...',
         peopleCount: input.people.length,
         itemCount: input.items.length,
       });
@@ -472,71 +456,81 @@ export const guestRouter = createTRPCRouter({
       return { shareToken: guestSplit.shareToken };
     }),
 
-  getSplit: publicProcedure
-    .input(z.object({ token: z.string() }))
-    .query(async ({ ctx, input }) => {
-      const split = await ctx.db.guestSplit.findUnique({
-        where: { shareToken: input.token },
+  getSplit: publicProcedure.input(z.object({ token: z.string() })).query(async ({ ctx, input }) => {
+    const split = await ctx.db.guestSplit.findUnique({
+      where: { shareToken: input.token },
+    });
+    if (!split) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Split not found' });
+    }
+    if (split.expiresAt < new Date()) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'This split has expired' });
+    }
+    if (split.status !== GuestSplitStatus.FINALIZED) {
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: 'This split is not yet finalized. Please wait for the split creator to finalize it.',
       });
-      if (!split) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Split not found" });
-      }
-      if (split.expiresAt < new Date()) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "This split has expired" });
-      }
-      if (split.status !== GuestSplitStatus.FINALIZED) {
-        throw new TRPCError({
-          code: "CONFLICT",
-          message: "This split is not yet finalized. Please wait for the split creator to finalize it.",
-        });
-      }
+    }
 
-      return {
-        id: split.id,
-        shareToken: split.shareToken,
-        receiptData: split.receiptData as {
-          merchantName?: string;
-          date?: string;
-          subtotal: number;
-          tax: number;
-          tip: number;
-          total: number;
-          currency: string;
-        },
-        items: split.items as { name: string; quantity: number; unitPrice: number; totalPrice: number }[],
-        people: toPublicPeople(split.people as GuestSessionPerson[]),
-        assignments: split.assignments as { itemIndex: number; personIndices: number[] }[],
-        summary: split.summary as { personIndex: number; name: string; itemTotal: number; tax: number; tip: number; total: number }[],
-        paidByIndex: split.paidByIndex,
-        payerVenmoHandle: split.payerVenmoHandle,
-        isCreator: !!split.userId && split.userId === ctx.session?.user?.id,
-        isPayer: (() => {
-          if (!ctx.session?.user?.name) return false;
-          const people = split.people as GuestSessionPerson[];
-          const payerName = people[split.paidByIndex]?.name;
-          return !!payerName && normalizeGuestName(ctx.session.user.name) === normalizeGuestName(payerName);
-        })(),
-        createdAt: split.createdAt,
-        expiresAt: split.expiresAt,
-      };
-    }),
+    return {
+      id: split.id,
+      shareToken: split.shareToken,
+      receiptData: split.receiptData as {
+        merchantName?: string;
+        date?: string;
+        subtotal: number;
+        tax: number;
+        tip: number;
+        total: number;
+        currency: string;
+      },
+      items: split.items as { name: string; quantity: number; unitPrice: number; totalPrice: number }[],
+      people: toPublicPeople(split.people as GuestSessionPerson[]),
+      assignments: split.assignments as { itemIndex: number; personIndices: number[] }[],
+      summary: split.summary as {
+        personIndex: number;
+        name: string;
+        itemTotal: number;
+        tax: number;
+        tip: number;
+        total: number;
+      }[],
+      paidByIndex: split.paidByIndex,
+      payerVenmoHandle: split.payerVenmoHandle,
+      isCreator: !!split.userId && split.userId === ctx.session?.user?.id,
+      isPayer: (() => {
+        if (!ctx.session?.user?.name) return false;
+        const people = split.people as GuestSessionPerson[];
+        const payerName = people[split.paidByIndex]?.name;
+        return !!payerName && normalizeGuestName(ctx.session.user.name) === normalizeGuestName(payerName);
+      })(),
+      createdAt: split.createdAt,
+      expiresAt: split.expiresAt,
+    };
+  }),
 
   // ─── CLAIMING SESSION ENDPOINTS ────────────────────────────
 
   createClaimSession: publicProcedure
-    .input(z.object({
-      receiptId: z.string().optional(),
-      receiptData: receiptDataSchema,
-      items: z.array(itemSchema).min(1).max(100),
-      creatorName: z.string().trim().min(1).max(100),
-      paidByName: z.string().trim().min(1).max(100),
-    }))
+    .input(
+      z.object({
+        receiptId: z.string().optional(),
+        receiptData: receiptDataSchema,
+        items: z.array(itemSchema).min(1).max(100),
+        creatorName: z.string().trim().min(1).max(100),
+        paidByName: z.string().trim().min(1).max(100),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const ip = getClientIp(ctx.headers);
-      const maxGuest = parseInt(process.env.GUEST_RATE_LIMIT_MAX ?? "10", 10) || 10;
+      const maxGuest = parseInt(process.env.GUEST_RATE_LIMIT_MAX ?? '10', 10) || 10;
       const { allowed } = checkRateLimit(`guest-create-claim:${ip}`, maxGuest, 60 * 60 * 1000);
       if (!allowed) {
-        throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many sessions created. Please try again later." });
+        throw new TRPCError({
+          code: 'TOO_MANY_REQUESTS',
+          message: 'Too many sessions created. Please try again later.',
+        });
       }
 
       const creatorName = input.creatorName.trim();
@@ -554,7 +548,10 @@ export const guestRouter = createTRPCRouter({
       const MAX_EXPANDED_ITEMS = 200;
       const totalExpanded = input.items.reduce((sum, item) => sum + Math.max(item.quantity, 1), 0);
       if (totalExpanded > MAX_EXPANDED_ITEMS) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: `Too many items after expansion (${totalExpanded} > ${MAX_EXPANDED_ITEMS})` });
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `Too many items after expansion (${totalExpanded} > ${MAX_EXPANDED_ITEMS})`,
+        });
       }
 
       const expandedItems: typeof input.items = [];
@@ -578,7 +575,9 @@ export const guestRouter = createTRPCRouter({
       }
 
       const claimPayerVenmoHandle = await getCreatorPayerVenmoHandle(
-        ctx.db, ctx.session?.user?.id, people[paidByIndex]?.name
+        ctx.db,
+        ctx.session?.user?.id,
+        people[paidByIndex]?.name,
       );
 
       const session = await ctx.db.guestSplit.create({
@@ -596,11 +595,11 @@ export const guestRouter = createTRPCRouter({
         },
       });
 
-      cleanupExpiredSplits(ctx.db, "guest.session");
+      cleanupExpiredSplits(ctx.db, 'guest.session');
 
-      logger.info("guest.session.created", {
+      logger.info('guest.session.created', {
         sessionId: session.id,
-        shareToken: session.shareToken.substring(0, 8) + "...",
+        shareToken: session.shareToken.substring(0, 8) + '...',
         itemCount: expandedItems.length,
       });
 
@@ -608,169 +607,198 @@ export const guestRouter = createTRPCRouter({
     }),
 
   joinSession: publicProcedure
-    .input(z.object({
-      token: z.string(),
-      name: z.string().trim().min(1).max(100),
-      groupSize: z.number().int().min(1).max(20).optional(),
-    }))
+    .input(
+      z.object({
+        token: z.string(),
+        name: z.string().trim().min(1).max(100),
+        groupSize: z.number().int().min(1).max(20).optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       return withSerializableRetry(() =>
-        ctx.db.$transaction(async (tx) => {
-          const session = await tx.guestSplit.findUnique({
-            where: { shareToken: input.token },
-          });
-          if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
-          if (session.expiresAt < new Date()) throw new TRPCError({ code: "NOT_FOUND", message: "Session expired" });
-          if (session.status !== GuestSplitStatus.CLAIMING) throw new TRPCError({ code: "BAD_REQUEST", message: "Session is no longer accepting claims" });
+        ctx.db.$transaction(
+          async (tx) => {
+            const session = await tx.guestSplit.findUnique({
+              where: { shareToken: input.token },
+            });
+            if (!session) throw new TRPCError({ code: 'NOT_FOUND', message: 'Session not found' });
+            if (session.expiresAt < new Date()) throw new TRPCError({ code: 'NOT_FOUND', message: 'Session expired' });
+            if (session.status !== GuestSplitStatus.CLAIMING)
+              throw new TRPCError({ code: 'BAD_REQUEST', message: 'Session is no longer accepting claims' });
 
-          const people = [...(session.people as GuestSessionPerson[])];
-          const normalizedName = normalizeGuestName(input.name);
+            const people = [...(session.people as GuestSessionPerson[])];
+            const normalizedName = normalizeGuestName(input.name);
 
-          // Check if name already exists (case-insensitive)
-          const existingIndex = people.findIndex(
-            (p) => normalizeGuestName(p.name) === normalizedName
-          );
-          if (existingIndex >= 0) {
-            const existingPerson = people[existingIndex]!;
-            if (!existingPerson.personToken) {
-              const personToken = randomUUID();
-              people[existingIndex] = { ...existingPerson, personToken, ...(input.groupSize != null ? { groupSize: input.groupSize } : {}) };
-              await tx.guestSplit.update({
-                where: { id: session.id },
-                data: { people: people as unknown as Prisma.InputJsonValue },
-              });
-              return { personIndex: existingIndex, personToken };
+            // Check if name already exists (case-insensitive)
+            const existingIndex = people.findIndex((p) => normalizeGuestName(p.name) === normalizedName);
+            if (existingIndex >= 0) {
+              const existingPerson = people[existingIndex]!;
+              if (!existingPerson.personToken) {
+                const personToken = randomUUID();
+                people[existingIndex] = {
+                  ...existingPerson,
+                  personToken,
+                  ...(input.groupSize != null ? { groupSize: input.groupSize } : {}),
+                };
+                await tx.guestSplit.update({
+                  where: { id: session.id },
+                  data: { people: people as unknown as Prisma.InputJsonValue },
+                });
+                return { personIndex: existingIndex, personToken };
+              }
+              // Update groupSize on rejoin only if explicitly provided and different
+              if (input.groupSize != null && input.groupSize !== (existingPerson.groupSize ?? 1)) {
+                people[existingIndex] = { ...existingPerson, groupSize: input.groupSize };
+                await tx.guestSplit.update({
+                  where: { id: session.id },
+                  data: { people: people as unknown as Prisma.InputJsonValue },
+                });
+              }
+              return { personIndex: existingIndex, personToken: existingPerson.personToken };
             }
-            // Update groupSize on rejoin only if explicitly provided and different
-            if (input.groupSize != null && input.groupSize !== (existingPerson.groupSize ?? 1)) {
-              people[existingIndex] = { ...existingPerson, groupSize: input.groupSize };
-              await tx.guestSplit.update({
-                where: { id: session.id },
-                data: { people: people as unknown as Prisma.InputJsonValue },
-              });
+
+            if (people.length >= 100) {
+              throw new TRPCError({ code: 'BAD_REQUEST', message: 'Maximum 100 people per session' });
             }
-            return { personIndex: existingIndex, personToken: existingPerson.personToken };
-          }
 
-          if (people.length >= 100) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: "Maximum 100 people per session" });
-          }
+            const personToken = randomUUID();
+            people.push({
+              name: input.name.trim(),
+              personToken,
+              ...(input.groupSize != null ? { groupSize: input.groupSize } : {}),
+            });
+            await tx.guestSplit.update({
+              where: { id: session.id },
+              data: { people: people as unknown as Prisma.InputJsonValue },
+            });
 
-          const personToken = randomUUID();
-          people.push({ name: input.name.trim(), personToken, ...(input.groupSize != null ? { groupSize: input.groupSize } : {}) });
-          await tx.guestSplit.update({
-            where: { id: session.id },
-            data: { people: people as unknown as Prisma.InputJsonValue },
-          });
-
-          return { personIndex: people.length - 1, personToken };
-        }, {
-          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-        })
+            return { personIndex: people.length - 1, personToken };
+          },
+          {
+            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+          },
+        ),
       );
     }),
 
   editPersonName: publicProcedure
-    .input(z.object({
-      token: z.string(),
-      personToken: z.string().uuid(),
-      targetIndex: z.number().int().min(0),
-      newName: z.string().trim().min(1).max(100),
-      groupSize: z.number().int().min(1).max(20).optional(),
-    }))
+    .input(
+      z.object({
+        token: z.string(),
+        personToken: z.string().uuid(),
+        targetIndex: z.number().int().min(0),
+        newName: z.string().trim().min(1).max(100),
+        groupSize: z.number().int().min(1).max(20).optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const { allowed } = checkRateLimit(`guest-edit-name:${input.token}`, 10, 60 * 1000);
       if (!allowed) {
-        throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many requests. Please try again shortly." });
+        throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'Too many requests. Please try again shortly.' });
       }
       return withSerializableRetry(() =>
-        ctx.db.$transaction(async (tx) => {
-          const session = await tx.guestSplit.findUnique({
-            where: { shareToken: input.token },
-          });
-          if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
-          if (session.expiresAt < new Date()) throw new TRPCError({ code: "NOT_FOUND", message: "Session expired" });
-          if (session.status !== GuestSplitStatus.CLAIMING) throw new TRPCError({ code: "BAD_REQUEST", message: "Session is finalized" });
+        ctx.db.$transaction(
+          async (tx) => {
+            const session = await tx.guestSplit.findUnique({
+              where: { shareToken: input.token },
+            });
+            if (!session) throw new TRPCError({ code: 'NOT_FOUND', message: 'Session not found' });
+            if (session.expiresAt < new Date()) throw new TRPCError({ code: 'NOT_FOUND', message: 'Session expired' });
+            if (session.status !== GuestSplitStatus.CLAIMING)
+              throw new TRPCError({ code: 'BAD_REQUEST', message: 'Session is finalized' });
 
-          const people = [...(session.people as GuestSessionPerson[])];
-          const isParticipant = people.some(p => p.personToken === input.personToken);
-          if (!isParticipant) throw new TRPCError({ code: "FORBIDDEN", message: "Not a participant" });
-          if (input.targetIndex >= people.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid person index" });
+            const people = [...(session.people as GuestSessionPerson[])];
+            const isParticipant = people.some((p) => p.personToken === input.personToken);
+            if (!isParticipant) throw new TRPCError({ code: 'FORBIDDEN', message: 'Not a participant' });
+            if (input.targetIndex >= people.length)
+              throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid person index' });
 
-          const normalizedNew = normalizeGuestName(input.newName);
-          const conflict = people.findIndex((p, i) => i !== input.targetIndex && normalizeGuestName(p.name) === normalizedNew);
-          if (conflict >= 0) throw new TRPCError({ code: "CONFLICT", message: "Name already taken" });
+            const normalizedNew = normalizeGuestName(input.newName);
+            const conflict = people.findIndex(
+              (p, i) => i !== input.targetIndex && normalizeGuestName(p.name) === normalizedNew,
+            );
+            if (conflict >= 0) throw new TRPCError({ code: 'CONFLICT', message: 'Name already taken' });
 
-          people[input.targetIndex] = {
-            ...people[input.targetIndex]!,
-            name: input.newName.trim(),
-            ...(input.groupSize != null ? { groupSize: input.groupSize } : {}),
-          };
-          await tx.guestSplit.update({
-            where: { id: session.id },
-            data: { people: people as unknown as Prisma.InputJsonValue },
-          });
-          return { success: true };
-        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+            people[input.targetIndex] = {
+              ...people[input.targetIndex]!,
+              name: input.newName.trim(),
+              ...(input.groupSize != null ? { groupSize: input.groupSize } : {}),
+            };
+            await tx.guestSplit.update({
+              where: { id: session.id },
+              data: { people: people as unknown as Prisma.InputJsonValue },
+            });
+            return { success: true };
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        ),
       );
     }),
 
   removePerson: publicProcedure
-    .input(z.object({
-      token: z.string(),
-      personToken: z.string().uuid(),
-      targetIndex: z.number().int().min(0),
-    }))
+    .input(
+      z.object({
+        token: z.string(),
+        personToken: z.string().uuid(),
+        targetIndex: z.number().int().min(0),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const { allowed } = checkRateLimit(`guest-remove-person:${input.token}`, 10, 60 * 1000);
       if (!allowed) {
-        throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many requests. Please try again shortly." });
+        throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'Too many requests. Please try again shortly.' });
       }
       return withSerializableRetry(() =>
-        ctx.db.$transaction(async (tx) => {
-          const session = await tx.guestSplit.findUnique({
-            where: { shareToken: input.token },
-          });
-          if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
-          if (session.expiresAt < new Date()) throw new TRPCError({ code: "NOT_FOUND", message: "Session expired" });
-          if (session.status !== GuestSplitStatus.CLAIMING) throw new TRPCError({ code: "BAD_REQUEST", message: "Session is finalized" });
+        ctx.db.$transaction(
+          async (tx) => {
+            const session = await tx.guestSplit.findUnique({
+              where: { shareToken: input.token },
+            });
+            if (!session) throw new TRPCError({ code: 'NOT_FOUND', message: 'Session not found' });
+            if (session.expiresAt < new Date()) throw new TRPCError({ code: 'NOT_FOUND', message: 'Session expired' });
+            if (session.status !== GuestSplitStatus.CLAIMING)
+              throw new TRPCError({ code: 'BAD_REQUEST', message: 'Session is finalized' });
 
-          const people = [...(session.people as GuestSessionPerson[])];
-          const isParticipant = people.some(p => p.personToken === input.personToken);
-          if (!isParticipant) throw new TRPCError({ code: "FORBIDDEN", message: "Not a participant" });
-          if (input.targetIndex >= people.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid person index" });
-          if (people.length <= 1) throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot remove the last person" });
+            const people = [...(session.people as GuestSessionPerson[])];
+            const isParticipant = people.some((p) => p.personToken === input.personToken);
+            if (!isParticipant) throw new TRPCError({ code: 'FORBIDDEN', message: 'Not a participant' });
+            if (input.targetIndex >= people.length)
+              throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid person index' });
+            if (people.length <= 1)
+              throw new TRPCError({ code: 'BAD_REQUEST', message: 'Cannot remove the last person' });
 
-          people.splice(input.targetIndex, 1);
+            people.splice(input.targetIndex, 1);
 
-          // Remap assignments: remove the person and shift indices down
-          const assignments = (session.assignments as { itemIndex: number; personIndices: number[] }[])
-            .map(a => ({
-              itemIndex: a.itemIndex,
-              personIndices: a.personIndices
-                .filter(pi => pi !== input.targetIndex)
-                .map(pi => pi > input.targetIndex ? pi - 1 : pi),
-            }))
-            .filter(a => a.personIndices.length > 0);
+            // Remap assignments: remove the person and shift indices down
+            const assignments = (session.assignments as { itemIndex: number; personIndices: number[] }[])
+              .map((a) => ({
+                itemIndex: a.itemIndex,
+                personIndices: a.personIndices
+                  .filter((pi) => pi !== input.targetIndex)
+                  .map((pi) => (pi > input.targetIndex ? pi - 1 : pi)),
+              }))
+              .filter((a) => a.personIndices.length > 0);
 
-          // Adjust paidByIndex
-          let paidByIndex = session.paidByIndex;
-          if (input.targetIndex === paidByIndex) {
-            paidByIndex = 0;
-          } else if (input.targetIndex < paidByIndex) {
-            paidByIndex--;
-          }
+            // Adjust paidByIndex
+            let paidByIndex = session.paidByIndex;
+            if (input.targetIndex === paidByIndex) {
+              paidByIndex = 0;
+            } else if (input.targetIndex < paidByIndex) {
+              paidByIndex--;
+            }
 
-          await tx.guestSplit.update({
-            where: { id: session.id },
-            data: {
-              people: people as unknown as Prisma.InputJsonValue,
-              assignments: assignments as unknown as Prisma.InputJsonValue,
-              paidByIndex,
-            },
-          });
-          return { success: true };
-        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+            await tx.guestSplit.update({
+              where: { id: session.id },
+              data: {
+                people: people as unknown as Prisma.InputJsonValue,
+                assignments: assignments as unknown as Prisma.InputJsonValue,
+                paidByIndex,
+              },
+            });
+            return { success: true };
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        ),
       );
     }),
 
@@ -779,326 +807,335 @@ export const guestRouter = createTRPCRouter({
   // remains useful for sessions where items were manually edited to have qty>1 after
   // creation, or if the auto-split logic changes in the future.
   splitClaimItem: publicProcedure
-    .input(z.object({
-      token: z.string(),
-      personToken: z.string().uuid(),
-      itemIndex: z.number().int().min(0),
-      splitQuantity: z.number().int().min(1),
-    }))
+    .input(
+      z.object({
+        token: z.string(),
+        personToken: z.string().uuid(),
+        itemIndex: z.number().int().min(0),
+        splitQuantity: z.number().int().min(1),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const { allowed } = checkRateLimit(`guest-split-item:${input.token}`, 10, 60 * 1000);
       if (!allowed) {
-        throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many requests. Please try again shortly." });
+        throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'Too many requests. Please try again shortly.' });
       }
       return withSerializableRetry(() =>
-        ctx.db.$transaction(async (tx) => {
-          const session = await tx.guestSplit.findUnique({
-            where: { shareToken: input.token },
-          });
-          if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
-          if (session.expiresAt < new Date()) throw new TRPCError({ code: "NOT_FOUND", message: "Session expired" });
-          if (session.status !== GuestSplitStatus.CLAIMING) throw new TRPCError({ code: "BAD_REQUEST", message: "Session is finalized" });
+        ctx.db.$transaction(
+          async (tx) => {
+            const session = await tx.guestSplit.findUnique({
+              where: { shareToken: input.token },
+            });
+            if (!session) throw new TRPCError({ code: 'NOT_FOUND', message: 'Session not found' });
+            if (session.expiresAt < new Date()) throw new TRPCError({ code: 'NOT_FOUND', message: 'Session expired' });
+            if (session.status !== GuestSplitStatus.CLAIMING)
+              throw new TRPCError({ code: 'BAD_REQUEST', message: 'Session is finalized' });
 
-          const people = session.people as GuestSessionPerson[];
-          const isParticipant = people.some(p => p.personToken === input.personToken);
-          if (!isParticipant) throw new TRPCError({ code: "FORBIDDEN", message: "Not a participant" });
+            const people = session.people as GuestSessionPerson[];
+            const isParticipant = people.some((p) => p.personToken === input.personToken);
+            if (!isParticipant) throw new TRPCError({ code: 'FORBIDDEN', message: 'Not a participant' });
 
-          const items = [...(session.items as { name: string; quantity: number; unitPrice: number; totalPrice: number }[])];
-          if (input.itemIndex >= items.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid item index" });
+            const items = [
+              ...(session.items as { name: string; quantity: number; unitPrice: number; totalPrice: number }[]),
+            ];
+            if (input.itemIndex >= items.length)
+              throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid item index' });
 
-          const item = items[input.itemIndex]!;
-          if (input.splitQuantity >= item.quantity) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: "Split quantity must be less than item quantity" });
-          }
+            const item = items[input.itemIndex]!;
+            if (input.splitQuantity >= item.quantity) {
+              throw new TRPCError({ code: 'BAD_REQUEST', message: 'Split quantity must be less than item quantity' });
+            }
 
-          const maxNewTotal = item.totalPrice - 1;
-          if (maxNewTotal <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Item price too low to split" });
+            const maxNewTotal = item.totalPrice - 1;
+            if (maxNewTotal <= 0) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Item price too low to split' });
 
-          const newTotalPrice = Math.min(item.unitPrice * input.splitQuantity, maxNewTotal);
-          const remainingQty = item.quantity - input.splitQuantity;
-          const remainingTotalPrice = item.totalPrice - newTotalPrice;
+            const newTotalPrice = Math.min(item.unitPrice * input.splitQuantity, maxNewTotal);
+            const remainingQty = item.quantity - input.splitQuantity;
+            const remainingTotalPrice = item.totalPrice - newTotalPrice;
 
-          items[input.itemIndex] = { ...item, quantity: remainingQty, totalPrice: remainingTotalPrice };
-          items.splice(input.itemIndex + 1, 0, {
-            name: item.name,
-            quantity: input.splitQuantity,
-            unitPrice: item.unitPrice,
-            totalPrice: newTotalPrice,
-          });
+            items[input.itemIndex] = { ...item, quantity: remainingQty, totalPrice: remainingTotalPrice };
+            items.splice(input.itemIndex + 1, 0, {
+              name: item.name,
+              quantity: input.splitQuantity,
+              unitPrice: item.unitPrice,
+              totalPrice: newTotalPrice,
+            });
 
-          // Remap assignments: shift indices after insertion point
-          const assignments = (session.assignments as { itemIndex: number; personIndices: number[] }[])
-            .map(a => ({
+            // Remap assignments: shift indices after insertion point
+            const assignments = (session.assignments as { itemIndex: number; personIndices: number[] }[]).map((a) => ({
               itemIndex: a.itemIndex > input.itemIndex ? a.itemIndex + 1 : a.itemIndex,
               personIndices: [...a.personIndices],
             }));
 
-          await tx.guestSplit.update({
-            where: { id: session.id },
-            data: {
-              items: items as unknown as Prisma.InputJsonValue,
-              assignments: assignments as unknown as Prisma.InputJsonValue,
-            },
-          });
-          return { success: true, itemCount: items.length };
-        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+            await tx.guestSplit.update({
+              where: { id: session.id },
+              data: {
+                items: items as unknown as Prisma.InputJsonValue,
+                assignments: assignments as unknown as Prisma.InputJsonValue,
+              },
+            });
+            return { success: true, itemCount: items.length };
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        ),
       );
     }),
 
   claimItems: publicProcedure
-    .input(z.object({
-      token: z.string(),
-      personIndex: z.number().int().min(0),
-      personToken: z.string().uuid(),
-      claimedItemIndices: z.array(z.number().int().min(0)).max(1000),
-    }))
+    .input(
+      z.object({
+        token: z.string(),
+        personIndex: z.number().int().min(0),
+        personToken: z.string().uuid(),
+        claimedItemIndices: z.array(z.number().int().min(0)).max(1000),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Rate limit: 10 claims per token per minute
-      const { allowed: claimAllowed } = checkRateLimit(
-        `guest-claim:${input.token}`,
-        10,
-        60 * 1000
-      );
+      const { allowed: claimAllowed } = checkRateLimit(`guest-claim:${input.token}`, 10, 60 * 1000);
       if (!claimAllowed) {
         throw new TRPCError({
-          code: "TOO_MANY_REQUESTS",
-          message: "Too many claim attempts. Please try again shortly.",
+          code: 'TOO_MANY_REQUESTS',
+          message: 'Too many claim attempts. Please try again shortly.',
         });
       }
 
       return withSerializableRetry(() =>
-        ctx.db.$transaction(async (tx) => {
-          const session = await tx.guestSplit.findUnique({
-            where: { shareToken: input.token },
-          });
-          if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
-          if (session.expiresAt < new Date()) throw new TRPCError({ code: "NOT_FOUND", message: "Session expired" });
-          if (session.status !== GuestSplitStatus.CLAIMING) throw new TRPCError({ code: "BAD_REQUEST", message: "Session is no longer accepting claims" });
+        ctx.db.$transaction(
+          async (tx) => {
+            const session = await tx.guestSplit.findUnique({
+              where: { shareToken: input.token },
+            });
+            if (!session) throw new TRPCError({ code: 'NOT_FOUND', message: 'Session not found' });
+            if (session.expiresAt < new Date()) throw new TRPCError({ code: 'NOT_FOUND', message: 'Session expired' });
+            if (session.status !== GuestSplitStatus.CLAIMING)
+              throw new TRPCError({ code: 'BAD_REQUEST', message: 'Session is no longer accepting claims' });
 
-          const people = session.people as GuestSessionPerson[];
-          const items = session.items as { name: string; quantity: number; unitPrice: number; totalPrice: number }[];
+            const people = session.people as GuestSessionPerson[];
+            const items = session.items as { name: string; quantity: number; unitPrice: number; totalPrice: number }[];
 
-          // Validate personToken belongs to ANY participant (allows claiming for others)
-          const isParticipant = people.some(p => p.personToken === input.personToken);
-          if (!isParticipant) {
-            throw new TRPCError({ code: "FORBIDDEN", message: "Invalid person token" });
-          }
-          if (input.personIndex >= people.length) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid person index" });
-          }
-
-          // Deduplicate claimed indices
-          const claimedSet = new Set(input.claimedItemIndices);
-
-          for (const idx of claimedSet) {
-            if (idx >= items.length) {
-              throw new TRPCError({ code: "BAD_REQUEST", message: `Invalid item index: ${idx}` });
+            // Validate personToken belongs to ANY participant (allows claiming for others)
+            const isParticipant = people.some((p) => p.personToken === input.personToken);
+            if (!isParticipant) {
+              throw new TRPCError({ code: 'FORBIDDEN', message: 'Invalid person token' });
             }
-          }
-
-          const assignments = cloneAssignments(
-            session.assignments as { itemIndex: number; personIndices: number[] }[]
-          );
-
-          // Remove this person from all current assignments
-          for (const a of assignments) {
-            a.personIndices = a.personIndices.filter((pi) => pi !== input.personIndex);
-          }
-
-          // Add this person to claimed items
-          for (const itemIdx of claimedSet) {
-            let assignment = assignments.find((a) => a.itemIndex === itemIdx);
-            if (!assignment) {
-              assignment = { itemIndex: itemIdx, personIndices: [] };
-              assignments.push(assignment);
+            if (input.personIndex >= people.length) {
+              throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid person index' });
             }
-            if (!assignment.personIndices.includes(input.personIndex)) {
-              assignment.personIndices.push(input.personIndex);
-            }
-          }
 
-          // Clean up empty assignments
-          const cleanedAssignments = assignments.filter((a) => a.personIndices.length > 0);
+            // Deduplicate claimed indices
+            const claimedSet = new Set(input.claimedItemIndices);
 
-          await tx.guestSplit.update({
-            where: { id: session.id },
-            data: { assignments: cleanedAssignments as unknown as Prisma.InputJsonValue },
-          });
-
-          // Check for conflicts: items in this person's claim set that are also claimed by others
-          const assignmentMap = new Map(cleanedAssignments.map(a => [a.itemIndex, a]));
-          const conflicts: { itemIndex: number; claimedBy: string[] }[] = [];
-          for (const claimedIdx of claimedSet) {
-            const assignment = assignmentMap.get(claimedIdx);
-            if (assignment && assignment.personIndices.length > 1) {
-              const otherNames = assignment.personIndices
-                .filter(pi => pi !== input.personIndex)
-                .map(pi => people[pi]?.name ?? "Someone");
-              if (otherNames.length > 0) {
-                conflicts.push({ itemIndex: claimedIdx, claimedBy: otherNames });
+            for (const idx of claimedSet) {
+              if (idx >= items.length) {
+                throw new TRPCError({ code: 'BAD_REQUEST', message: `Invalid item index: ${idx}` });
               }
             }
-          }
 
-          return { success: true, conflicts };
-        }, {
-          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-        })
+            const assignments = cloneAssignments(
+              session.assignments as { itemIndex: number; personIndices: number[] }[],
+            );
+
+            // Remove this person from all current assignments
+            for (const a of assignments) {
+              a.personIndices = a.personIndices.filter((pi) => pi !== input.personIndex);
+            }
+
+            // Add this person to claimed items
+            for (const itemIdx of claimedSet) {
+              let assignment = assignments.find((a) => a.itemIndex === itemIdx);
+              if (!assignment) {
+                assignment = { itemIndex: itemIdx, personIndices: [] };
+                assignments.push(assignment);
+              }
+              if (!assignment.personIndices.includes(input.personIndex)) {
+                assignment.personIndices.push(input.personIndex);
+              }
+            }
+
+            // Clean up empty assignments
+            const cleanedAssignments = assignments.filter((a) => a.personIndices.length > 0);
+
+            await tx.guestSplit.update({
+              where: { id: session.id },
+              data: { assignments: cleanedAssignments as unknown as Prisma.InputJsonValue },
+            });
+
+            // Check for conflicts: items in this person's claim set that are also claimed by others
+            const assignmentMap = new Map(cleanedAssignments.map((a) => [a.itemIndex, a]));
+            const conflicts: { itemIndex: number; claimedBy: string[] }[] = [];
+            for (const claimedIdx of claimedSet) {
+              const assignment = assignmentMap.get(claimedIdx);
+              if (assignment && assignment.personIndices.length > 1) {
+                const otherNames = assignment.personIndices
+                  .filter((pi) => pi !== input.personIndex)
+                  .map((pi) => people[pi]?.name ?? 'Someone');
+                if (otherNames.length > 0) {
+                  conflicts.push({ itemIndex: claimedIdx, claimedBy: otherNames });
+                }
+              }
+            }
+
+            return { success: true, conflicts };
+          },
+          {
+            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+          },
+        ),
       );
     }),
 
-  getSession: publicProcedure
-    .input(z.object({ token: z.string() }))
-    .query(async ({ ctx, input }) => {
-      // Rate limit: 120 reads per token per minute (polled every 3s = ~20/min)
-      const { allowed: readAllowed } = checkRateLimit(
-        `guest-session-read:${input.token}`,
-        120,
-        60 * 1000
-      );
-      if (!readAllowed) {
-        throw new TRPCError({
-          code: "TOO_MANY_REQUESTS",
-          message: "Too many requests. Please try again shortly.",
-        });
-      }
-
-      const session = await ctx.db.guestSplit.findUnique({
-        where: { shareToken: input.token },
+  getSession: publicProcedure.input(z.object({ token: z.string() })).query(async ({ ctx, input }) => {
+    // Rate limit: 120 reads per token per minute (polled every 3s = ~20/min)
+    const { allowed: readAllowed } = checkRateLimit(`guest-session-read:${input.token}`, 120, 60 * 1000);
+    if (!readAllowed) {
+      throw new TRPCError({
+        code: 'TOO_MANY_REQUESTS',
+        message: 'Too many requests. Please try again shortly.',
       });
-      if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
-      if (session.expiresAt < new Date()) throw new TRPCError({ code: "NOT_FOUND", message: "Session expired" });
+    }
 
-      let receiptImagePath: string | null = null;
-      if (session.receiptId) {
-        const receipt = await ctx.db.receipt.findUnique({
-          where: { id: session.receiptId },
-          select: { imagePath: true },
-        });
-        receiptImagePath = receipt?.imagePath ?? null;
-      }
+    const session = await ctx.db.guestSplit.findUnique({
+      where: { shareToken: input.token },
+    });
+    if (!session) throw new TRPCError({ code: 'NOT_FOUND', message: 'Session not found' });
+    if (session.expiresAt < new Date()) throw new TRPCError({ code: 'NOT_FOUND', message: 'Session expired' });
 
-      return {
-        id: session.id,
-        shareToken: session.shareToken,
-        status: session.status,
-        receiptData: session.receiptData as {
-          merchantName?: string;
-          date?: string;
-          subtotal: number;
-          tax: number;
-          tip: number;
-          total: number;
-          currency: string;
-        },
-        items: session.items as { name: string; quantity: number; unitPrice: number; totalPrice: number }[],
-        people: toPublicPeople(session.people as GuestSessionPerson[]),
-        assignments: session.assignments as { itemIndex: number; personIndices: number[] }[],
-        summary: session.summary as { personIndex: number; name: string; itemTotal: number; tax: number; tip: number; total: number }[] | null,
-        paidByIndex: session.paidByIndex,
-        payerVenmoHandle: session.payerVenmoHandle,
-        isCreator: !!session.userId && session.userId === ctx.session?.user?.id,
-        receiptImagePath,
-        createdAt: session.createdAt,
-        expiresAt: session.expiresAt,
-      };
-    }),
+    let receiptImagePath: string | null = null;
+    if (session.receiptId) {
+      const receipt = await ctx.db.receipt.findUnique({
+        where: { id: session.receiptId },
+        select: { imagePath: true },
+      });
+      receiptImagePath = receipt?.imagePath ?? null;
+    }
+
+    return {
+      id: session.id,
+      shareToken: session.shareToken,
+      status: session.status,
+      receiptData: session.receiptData as {
+        merchantName?: string;
+        date?: string;
+        subtotal: number;
+        tax: number;
+        tip: number;
+        total: number;
+        currency: string;
+      },
+      items: session.items as { name: string; quantity: number; unitPrice: number; totalPrice: number }[],
+      people: toPublicPeople(session.people as GuestSessionPerson[]),
+      assignments: session.assignments as { itemIndex: number; personIndices: number[] }[],
+      summary: session.summary as
+        { personIndex: number; name: string; itemTotal: number; tax: number; tip: number; total: number }[] | null,
+      paidByIndex: session.paidByIndex,
+      payerVenmoHandle: session.payerVenmoHandle,
+      isCreator: !!session.userId && session.userId === ctx.session?.user?.id,
+      receiptImagePath,
+      createdAt: session.createdAt,
+      expiresAt: session.expiresAt,
+    };
+  }),
 
   finalizeSession: publicProcedure
-    .input(z.object({
-      token: z.string(),
-      personIndex: z.number().int().min(0),
-      personToken: z.string().uuid(),
-      tipOverride: z.number().int().min(0).optional(),
-    }))
+    .input(
+      z.object({
+        token: z.string(),
+        personIndex: z.number().int().min(0),
+        personToken: z.string().uuid(),
+        tipOverride: z.number().int().min(0).optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       return withSerializableRetry(() =>
-        ctx.db.$transaction(async (tx) => {
-          const session = await tx.guestSplit.findUnique({
-            where: { shareToken: input.token },
-          });
-          if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
-          if (session.expiresAt < new Date()) throw new TRPCError({ code: "NOT_FOUND", message: "Session expired" });
-          if (session.status !== GuestSplitStatus.CLAIMING) throw new TRPCError({ code: "BAD_REQUEST", message: "Session already finalized" });
+        ctx.db.$transaction(
+          async (tx) => {
+            const session = await tx.guestSplit.findUnique({
+              where: { shareToken: input.token },
+            });
+            if (!session) throw new TRPCError({ code: 'NOT_FOUND', message: 'Session not found' });
+            if (session.expiresAt < new Date()) throw new TRPCError({ code: 'NOT_FOUND', message: 'Session expired' });
+            if (session.status !== GuestSplitStatus.CLAIMING)
+              throw new TRPCError({ code: 'BAD_REQUEST', message: 'Session already finalized' });
 
-          const items = parseGuestItems(session.items);
-          const people = parseGuestPeople(session.people);
-          const assignments = parseGuestAssignments(session.assignments);
-          const receiptData = parseExtractedData(session.receiptData);
+            const items = parseGuestItems(session.items);
+            const people = parseGuestPeople(session.people);
+            const assignments = parseGuestAssignments(session.assignments);
+            const receiptData = parseExtractedData(session.receiptData);
 
-          if (input.personIndex >= people.length) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid person index" });
-          }
+            if (input.personIndex >= people.length) {
+              throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid person index' });
+            }
 
-          const person = people[input.personIndex];
-          if (!person?.personToken || person.personToken !== input.personToken) {
-            throw new TRPCError({ code: "FORBIDDEN", message: "Invalid person token" });
-          }
+            const person = people[input.personIndex];
+            if (!person?.personToken || person.personToken !== input.personToken) {
+              throw new TRPCError({ code: 'FORBIDDEN', message: 'Invalid person token' });
+            }
 
-          const tip = input.tipOverride ?? receiptData.tip;
+            const tip = input.tipOverride ?? receiptData.tip;
 
-          // Build personWeights from each person's groupSize for proportional splitting
-          const personWeights = people.map((p) => p.groupSize ?? 1);
-          const hasWeights = personWeights.some((w) => w > 1);
+            // Build personWeights from each person's groupSize for proportional splitting
+            const personWeights = people.map((p) => p.groupSize ?? 1);
+            const hasWeights = personWeights.some((w) => w > 1);
 
-          const summary = calculateSplitTotals({
-            items,
-            assignments,
-            tax: receiptData.tax,
-            tip,
-            peopleCount: people.length,
-            ...(hasWeights ? { personWeights } : {}),
-          });
+            const summary = calculateSplitTotals({
+              items,
+              assignments,
+              tax: receiptData.tax,
+              tip,
+              peopleCount: people.length,
+              ...(hasWeights ? { personWeights } : {}),
+            });
 
-          const summaryWithNames = summary.map((s) => ({
-            ...s,
-            name: people[s.personIndex]?.name ?? `Person ${s.personIndex + 1}`,
-          }));
+            const summaryWithNames = summary.map((s) => ({
+              ...s,
+              name: people[s.personIndex]?.name ?? `Person ${s.personIndex + 1}`,
+            }));
 
-          await tx.guestSplit.update({
-            where: { id: session.id },
-            data: {
-              status: GuestSplitStatus.FINALIZED,
-              summary: summaryWithNames as unknown as Prisma.InputJsonValue,
-              assignments: assignments as unknown as Prisma.InputJsonValue,
-              ...(input.tipOverride !== undefined && {
-                receiptData: {
-                  ...receiptData,
-                  tip,
-                  total: receiptData.subtotal + receiptData.tax + tip,
-                } as unknown as Prisma.InputJsonValue,
-              }),
-            },
-          });
+            await tx.guestSplit.update({
+              where: { id: session.id },
+              data: {
+                status: GuestSplitStatus.FINALIZED,
+                summary: summaryWithNames as unknown as Prisma.InputJsonValue,
+                assignments: assignments as unknown as Prisma.InputJsonValue,
+                ...(input.tipOverride !== undefined && {
+                  receiptData: {
+                    ...receiptData,
+                    tip,
+                    total: receiptData.subtotal + receiptData.tax + tip,
+                  } as unknown as Prisma.InputJsonValue,
+                }),
+              },
+            });
 
-          logger.info("guest.session.finalized", {
-            sessionId: session.id,
-            peopleCount: people.length,
-            itemCount: items.length,
-          });
+            logger.info('guest.session.finalized', {
+              sessionId: session.id,
+              peopleCount: people.length,
+              itemCount: items.length,
+            });
 
-          return { shareToken: session.shareToken };
-        }, {
-          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-        })
+            return { shareToken: session.shareToken };
+          },
+          {
+            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+          },
+        ),
       );
     }),
 
   setPayerVenmoHandle: protectedProcedure
-    .input(z.object({
-      token: z.string(),
-      handle: z.string().max(50).nullable(),
-    }))
+    .input(
+      z.object({
+        token: z.string(),
+        handle: z.string().max(50).nullable(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
-      const { allowed } = checkRateLimit(
-        `venmo-handle:${ctx.user.id}:${input.token}`,
-        10,
-        60 * 1000
-      );
+      const { allowed } = checkRateLimit(`venmo-handle:${ctx.user.id}:${input.token}`, 10, 60 * 1000);
       if (!allowed) {
         throw new TRPCError({
-          code: "TOO_MANY_REQUESTS",
-          message: "Too many requests. Please try again shortly.",
+          code: 'TOO_MANY_REQUESTS',
+          message: 'Too many requests. Please try again shortly.',
         });
       }
 
@@ -1107,13 +1144,13 @@ export const guestRouter = createTRPCRouter({
         select: { id: true, userId: true, expiresAt: true },
       });
       if (!split) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Split not found" });
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Split not found' });
       }
       if (split.expiresAt < new Date()) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "This split has expired" });
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'This split has expired' });
       }
       if (split.userId !== ctx.user.id) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Only the split creator can update the Venmo handle" });
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Only the split creator can update the Venmo handle' });
       }
 
       await ctx.db.guestSplit.update({

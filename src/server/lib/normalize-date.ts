@@ -42,7 +42,7 @@ export function normalizeDate(date: string | undefined): string | undefined {
   } else {
     // Ambiguous: use separator to disambiguate
     // Dot/dash → European (day first), slash → US (month first)
-    if (separator === "/") {
+    if (separator === '/') {
       month = n1;
       day = n2;
     } else {
@@ -53,5 +53,5 @@ export function normalizeDate(date: string | undefined): string | undefined {
 
   if (month < 1 || month > 12 || day < 1 || day > 31) return undefined;
 
-  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }

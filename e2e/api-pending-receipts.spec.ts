@@ -1,126 +1,144 @@
-import { test, expect } from "@playwright/test";
-import { resolve } from "path";
-import { readFileSync } from "fs";
-import { users, authedContext, trpcMutation, trpcQuery, trpcResult, trpcError, createTestGroup , FAKE_JPEG } from "./helpers";
+import { test, expect } from '@playwright/test';
+import { resolve } from 'path';
+import { readFileSync } from 'fs';
+import {
+  users,
+  authedContext,
+  trpcMutation,
+  trpcQuery,
+  trpcResult,
+  trpcError,
+  createTestGroup,
+  FAKE_JPEG,
+} from './helpers';
 
-const BASE = process.env.BASE_URL || "http://localhost:3001";
+const BASE = process.env.BASE_URL || 'http://localhost:3001';
 
-test.describe("Pending Receipts", () => {
-  test("save receipt for later", async () => {
+test.describe('Pending Receipts', () => {
+  test('save receipt for later', async () => {
     const { owner, groupId, dispose } = await createTestGroup(
-      users.alice.email, users.alice.password, [],
-      "Pending Receipt Test"
+      users.alice.email,
+      users.alice.password,
+      [],
+      'Pending Receipt Test',
     );
 
     // Upload a receipt image
     const uploadRes = await owner.post(`${BASE}/api/upload`, {
       multipart: {
-        file: { name: "receipt.jpg", mimeType: "image/jpeg", buffer: FAKE_JPEG },
+        file: { name: 'receipt.jpg', mimeType: 'image/jpeg', buffer: FAKE_JPEG },
       },
     });
     const { receiptId } = await uploadRes.json();
 
     // saveForLater requires COMPLETED status — this receipt is still PENDING
-    const saveRes = await trpcMutation(owner, "receipts.saveForLater", {
-      groupId, receiptId,
+    const saveRes = await trpcMutation(owner, 'receipts.saveForLater', {
+      groupId,
+      receiptId,
     });
     const err = await trpcError(saveRes);
     // Should fail because receipt is PENDING, not COMPLETED
-    expect(err?.data?.code).toBe("BAD_REQUEST");
-    expect(err?.message).toContain("processed first");
+    expect(err?.data?.code).toBe('BAD_REQUEST');
+    expect(err?.message).toContain('processed first');
 
     await dispose();
   });
 
-  test("list pending receipts for group", async () => {
+  test('list pending receipts for group', async () => {
     const { owner, groupId, dispose } = await createTestGroup(
-      users.alice.email, users.alice.password, [],
-      "List Pending Test"
+      users.alice.email,
+      users.alice.password,
+      [],
+      'List Pending Test',
     );
 
     // List should be empty initially
-    const listRes = await trpcQuery(owner, "receipts.listPending", { groupId });
+    const listRes = await trpcQuery(owner, 'receipts.listPending', { groupId });
     const pending = await trpcResult(listRes);
     expect(pending.length).toBe(0);
 
     await dispose();
   });
 
-  test("delete pending receipt", async () => {
+  test('delete pending receipt', async () => {
     const { owner, dispose } = await createTestGroup(
-      users.alice.email, users.alice.password, [],
-      "Delete Pending Test"
+      users.alice.email,
+      users.alice.password,
+      [],
+      'Delete Pending Test',
     );
 
     // Upload a receipt
     const uploadRes = await owner.post(`${BASE}/api/upload`, {
       multipart: {
-        file: { name: "delete-me.jpg", mimeType: "image/jpeg", buffer: FAKE_JPEG },
+        file: { name: 'delete-me.jpg', mimeType: 'image/jpeg', buffer: FAKE_JPEG },
       },
     });
     const { receiptId } = await uploadRes.json();
 
     // Delete it
-    const deleteRes = await trpcMutation(owner, "receipts.deletePending", { receiptId });
+    const deleteRes = await trpcMutation(owner, 'receipts.deletePending', { receiptId });
     const body = await deleteRes.json();
     expect(body.result?.data?.json?.success).toBe(true);
 
     await dispose();
   });
 
-  test("cannot delete receipt that has expense", async () => {
+  test('cannot delete receipt that has expense', async () => {
     // This tests that deletePending fails for receipts linked to expenses
     // We'd need a fully processed receipt for this, so just test the API exists
     const ctx = await authedContext(users.alice.email, users.alice.password);
-    const res = await trpcMutation(ctx, "receipts.deletePending", {
-      receiptId: "nonexistent-id",
+    const res = await trpcMutation(ctx, 'receipts.deletePending', {
+      receiptId: 'nonexistent-id',
     });
     const err = await trpcError(res);
-    expect(err?.data?.code).toBe("NOT_FOUND");
+    expect(err?.data?.code).toBe('NOT_FOUND');
     await ctx.dispose();
   });
 });
 
-test.describe("Pending Receipts with AI", () => {
+test.describe('Pending Receipts with AI', () => {
   const hasAI = !!process.env.RUN_AI_TESTS;
   test.setTimeout(120000);
 
-  test("full pending receipt flow: process → save → resume → assign", async () => {
-    test.skip(!hasAI, "Set RUN_AI_TESTS=1 to enable");
+  test('full pending receipt flow: process → save → resume → assign', async () => {
+    test.skip(!hasAI, 'Set RUN_AI_TESTS=1 to enable');
 
     const { owner, groupId, memberIds, dispose } = await createTestGroup(
-      users.alice.email, users.alice.password,
+      users.alice.email,
+      users.alice.password,
       [{ email: users.bob.email, password: users.bob.password }],
-      "Full Pending Flow"
+      'Full Pending Flow',
     );
     const aliceId = memberIds[users.alice.email];
     const bobId = memberIds[users.bob.email];
 
     // Upload and process receipt
-    const receiptBuffer = readFileSync(resolve("e2e/test-receipt.png"));
+    const receiptBuffer = readFileSync(resolve('e2e/test-receipt.png'));
     const uploadRes = await owner.post(`${BASE}/api/upload`, {
       multipart: {
-        file: { name: "dinner.png", mimeType: "image/png", buffer: receiptBuffer },
+        file: { name: 'dinner.png', mimeType: 'image/png', buffer: receiptBuffer },
       },
     });
     const { receiptId } = await uploadRes.json();
 
-    await trpcMutation(owner, "receipts.processReceipt", { receiptId, groupId }, 120000);
+    await trpcMutation(owner, 'receipts.processReceipt', { receiptId, groupId }, 120000);
 
     // Save for later
-    const saveRes = await trpcMutation(owner, "receipts.saveForLater", {
-      groupId, receiptId,
+    const saveRes = await trpcMutation(owner, 'receipts.saveForLater', {
+      groupId,
+      receiptId,
     });
     expect((await saveRes.json()).result?.data?.json?.success).toBe(true);
 
     // Verify it shows in pending list
-    const listRes = await trpcQuery(owner, "receipts.listPending", { groupId });
+    const listRes = await trpcQuery(owner, 'receipts.listPending', { groupId });
     const pending = await trpcResult(listRes);
     expect(pending.length).toBeGreaterThanOrEqual(1);
     expect(pending.some((r: { id: string }) => r.id === receiptId)).toBe(true);
 
     // Resume: get items and assign
-    const itemsRes = await trpcQuery(owner, "receipts.getReceiptItems", { receiptId });
+    const itemsRes = await trpcQuery(owner, 'receipts.getReceiptItems', { receiptId });
     const { items } = await trpcResult(itemsRes);
     expect(items.length).toBeGreaterThanOrEqual(15);
 
@@ -130,15 +148,18 @@ test.describe("Pending Receipts with AI", () => {
       userIds: [aliceId, bobId],
     }));
 
-    const expRes = await trpcMutation(owner, "receipts.assignItemsAndCreateExpense", {
-      groupId, receiptId, title: "Resumed Receipt",
-      paidById: aliceId, assignments,
+    const expRes = await trpcMutation(owner, 'receipts.assignItemsAndCreateExpense', {
+      groupId,
+      receiptId,
+      title: 'Resumed Receipt',
+      paidById: aliceId,
+      assignments,
     });
     const expense = (await expRes.json()).result?.data?.json;
-    expect(expense.splitMode).toBe("ITEM");
+    expect(expense.splitMode).toBe('ITEM');
 
     // Should no longer be in pending list
-    const listAfter = await trpcQuery(owner, "receipts.listPending", { groupId });
+    const listAfter = await trpcQuery(owner, 'receipts.listPending', { groupId });
     const pendingAfter = await trpcResult(listAfter);
     expect(pendingAfter.some((r: { id: string }) => r.id === receiptId)).toBe(false);
 

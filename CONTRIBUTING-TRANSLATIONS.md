@@ -23,22 +23,25 @@ messages/
 ## Adding a New Language
 
 1. **Copy the English folder:**
+
    ```bash
    cp -r messages/en messages/YOUR_LOCALE
    ```
+
    Use a BCP 47 locale code (e.g., `fr`, `de`, `pt-BR`, `ja`, `zh-CN`).
 
 2. **Translate all values** in each JSON file. Never change the keys — only the values.
 
 3. **Register your locale** in `src/i18n/routing.ts`:
+
    ```ts
-   export const locales = ["en", "es", "YOUR_LOCALE"] as const;
+   export const locales = ['en', 'es', 'YOUR_LOCALE'] as const;
 
    export const languageConfig: Record<Locale, { flag: string; name: string }> = {
-     en: { flag: "🇺🇸", name: "English" },
-     es: { flag: "🇪🇸", name: "Español" },
+     en: { flag: '🇺🇸', name: 'English' },
+     es: { flag: '🇪🇸', name: 'Español' },
      // Add yours:
-     YOUR_LOCALE: { flag: "🇫🇷", name: "Français" },
+     YOUR_LOCALE: { flag: '🇫🇷', name: 'Français' },
    };
    ```
 

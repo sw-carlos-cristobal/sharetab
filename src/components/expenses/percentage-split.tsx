@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import { formatCents } from "@/lib/money";
-import { Input } from "@/components/ui/input";
+import { useEffect, useState } from 'react';
+import { formatCents } from '@/lib/money';
+import { Input } from '@/components/ui/input';
 
 type Member = { id: string; name: string | null };
 type ShareEntry = { userId: string; amount: number; percentage: number };
@@ -42,12 +42,7 @@ export function PercentageSplit({
     if (members.length === 0) return {};
     const per = Math.floor(10000 / members.length) / 100;
     const last = Math.round((100 - per * (members.length - 1)) * 100) / 100;
-    return Object.fromEntries(
-      members.map((m, i) => [
-        m.id,
-        String(i === members.length - 1 ? last : per),
-      ])
-    );
+    return Object.fromEntries(members.map((m, i) => [m.id, String(i === members.length - 1 ? last : per)]));
   });
 
   useEffect(() => {
@@ -57,7 +52,7 @@ export function PercentageSplit({
     const entries = members
       .map((m) => ({
         userId: m.id,
-        pct: parseFloat(percentages[m.id] ?? "0") || 0,
+        pct: parseFloat(percentages[m.id] ?? '0') || 0,
       }))
       .filter((e) => e.pct > 0);
 
@@ -102,23 +97,18 @@ export function PercentageSplit({
     setPercentages((prev) => ({ ...prev, [id]: value }));
   }
 
-  const totalPct = members.reduce(
-    (sum, m) => sum + (parseFloat(percentages[m.id] ?? "0") || 0),
-    0
-  );
+  const totalPct = members.reduce((sum, m) => sum + (parseFloat(percentages[m.id] ?? '0') || 0), 0);
   // Mirror the emit logic: only non-zero entries carry rounding drift.
-  const participatingCount = members.filter(
-    (m) => (parseFloat(percentages[m.id] ?? "0") || 0) > 0
-  ).length;
+  const participatingCount = members.filter((m) => (parseFloat(percentages[m.id] ?? '0') || 0) > 0).length;
 
   return (
     <div className="space-y-2">
       {members.map((m) => {
-        const pct = parseFloat(percentages[m.id] ?? "0") || 0;
+        const pct = parseFloat(percentages[m.id] ?? '0') || 0;
         const share = Math.round((totalCents * pct) / 100);
         return (
           <div key={m.id} className="flex items-center gap-3 rounded-md border p-3">
-            <span className="flex-1 text-sm">{m.name ?? "Unnamed"}</span>
+            <span className="flex-1 text-sm">{m.name ?? 'Unnamed'}</span>
             <div className="flex items-center gap-1">
               <Input
                 type="number"
@@ -127,7 +117,7 @@ export function PercentageSplit({
                 max="100"
                 placeholder="0"
                 className="w-20"
-                value={percentages[m.id] ?? ""}
+                value={percentages[m.id] ?? ''}
                 onChange={(e) => setPct(m.id, e.target.value)}
               />
               <span className="text-sm text-muted-foreground">%</span>
@@ -142,9 +132,7 @@ export function PercentageSplit({
       })}
       <p
         className={`text-xs ${
-          Math.abs(totalPct - 100) < percentTolerance(participatingCount)
-            ? "text-green-600"
-            : "text-amber-600"
+          Math.abs(totalPct - 100) < percentTolerance(participatingCount) ? 'text-green-600' : 'text-amber-600'
         }`}
       >
         Total: {totalPct.toFixed(1)}%

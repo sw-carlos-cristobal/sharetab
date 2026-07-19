@@ -1,17 +1,17 @@
-import { NextRequest } from "next/server";
-import { auth } from "@/server/auth";
-import { db } from "@/server/db";
-import { logger } from "@/server/lib/logger";
-import { writeFile, mkdir } from "fs/promises";
-import { join } from "path";
-import { getUploadDir } from "@/server/lib/upload-dir";
-import { getClientIp } from "@/server/lib/client-ip";
-import { randomUUID } from "crypto";
+import { NextRequest } from 'next/server';
+import { auth } from '@/server/auth';
+import { db } from '@/server/db';
+import { logger } from '@/server/lib/logger';
+import { writeFile, mkdir } from 'fs/promises';
+import { join } from 'path';
+import { getUploadDir } from '@/server/lib/upload-dir';
+import { getClientIp } from '@/server/lib/client-ip';
+import { randomUUID } from 'crypto';
 
-const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic"];
+const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic'];
 // Fall back to 10MB when the env var is unset or non-numeric — a NaN limit
 // would make every size comparison false and disable the check entirely.
-const parsedMaxMb = parseInt(process.env.MAX_UPLOAD_SIZE_MB ?? "10", 10);
+const parsedMaxMb = parseInt(process.env.MAX_UPLOAD_SIZE_MB ?? '10', 10);
 const MAX_SIZE_MB = parsedMaxMb > 0 ? parsedMaxMb : 10;
 const MAX_SIZE = MAX_SIZE_MB * 1024 * 1024;
 
@@ -23,27 +23,33 @@ function detectMimeType(buffer: Buffer): string | null {
 
   // JPEG: FF D8 FF
   if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
-    return "image/jpeg";
+    return 'image/jpeg';
   }
 
   // PNG: 89 50 4E 47
   if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) {
-    return "image/png";
+    return 'image/png';
   }
 
   // WebP: RIFF....WEBP
   if (
-    buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 &&
-    buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50
+    buffer[0] === 0x52 &&
+    buffer[1] === 0x49 &&
+    buffer[2] === 0x46 &&
+    buffer[3] === 0x46 &&
+    buffer[8] === 0x57 &&
+    buffer[9] === 0x45 &&
+    buffer[10] === 0x42 &&
+    buffer[11] === 0x50
   ) {
-    return "image/webp";
+    return 'image/webp';
   }
 
   // HEIC: check for ftyp box with heic/heix/mif1 brands
   if (buffer.length >= 12 && buffer[4] === 0x66 && buffer[5] === 0x74 && buffer[6] === 0x79 && buffer[7] === 0x70) {
-    const brand = buffer.toString("ascii", 8, 12);
-    if (["heic", "heix", "mif1"].includes(brand)) {
-      return "image/heic";
+    const brand = buffer.toString('ascii', 8, 12);
+    if (['heic', 'heix', 'mif1'].includes(brand)) {
+      return 'image/heic';
     }
   }
 
@@ -61,7 +67,7 @@ const GUEST_RATE_WINDOW = 60 * 60 * 1000; // 1 hour
 // unauthenticated disk usage regardless of source.
 const parsedGlobalLimit = Math.floor(Number(process.env.GUEST_UPLOAD_GLOBAL_LIMIT));
 const GUEST_GLOBAL_LIMIT = parsedGlobalLimit > 0 ? parsedGlobalLimit : 100;
-const GLOBAL_KEY = "__global__";
+const GLOBAL_KEY = '__global__';
 
 // Hard ceiling on tracked IP buckets. Pruning expired entries alone is not
 // enough: spoofed, rotating forwarded-IP headers can mint unlimited fresh
@@ -103,10 +109,7 @@ function increment(key: string, now: number): void {
 function hasGuestUploadBudget(ip: string): boolean {
   const now = Date.now();
   pruneExpiredEntries(now);
-  return (
-    hasCapacity(GLOBAL_KEY, GUEST_GLOBAL_LIMIT, now) &&
-    hasCapacity(ip, GUEST_RATE_LIMIT, now)
-  );
+  return hasCapacity(GLOBAL_KEY, GUEST_GLOBAL_LIMIT, now) && hasCapacity(ip, GUEST_RATE_LIMIT, now);
 }
 
 /**
@@ -117,10 +120,7 @@ function hasGuestUploadBudget(ip: string): boolean {
  */
 function consumeGuestUploadBudget(ip: string): boolean {
   const now = Date.now();
-  if (
-    !hasCapacity(ip, GUEST_RATE_LIMIT, now) ||
-    !hasCapacity(GLOBAL_KEY, GUEST_GLOBAL_LIMIT, now)
-  ) {
+  if (!hasCapacity(ip, GUEST_RATE_LIMIT, now) || !hasCapacity(GLOBAL_KEY, GUEST_GLOBAL_LIMIT, now)) {
     return false;
   }
   increment(ip, now);
@@ -129,7 +129,7 @@ function consumeGuestUploadBudget(ip: string): boolean {
 }
 
 export async function POST(req: NextRequest) {
-  const isGuest = req.nextUrl.searchParams.get("guest") === "true";
+  const isGuest = req.nextUrl.searchParams.get('guest') === 'true';
   let userId: string | undefined;
   let guestIp: string | null = null;
 
@@ -138,49 +138,43 @@ export async function POST(req: NextRequest) {
     // the upload passes validation so invalid requests can't burn it.
     guestIp = getClientIp(req.headers);
     if (!hasGuestUploadBudget(guestIp)) {
-      return Response.json({ error: "Too many uploads. Please try again later." }, { status: 429 });
+      return Response.json({ error: 'Too many uploads. Please try again later.' }, { status: 429 });
     }
   } else {
     // Authenticated upload
     const session = await auth();
     if (!session?.user?.id) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
     userId = session.user.id;
   }
 
   const formData = await req.formData();
-  const file = formData.get("file") as File | null;
+  const file = formData.get('file') as File | null;
 
   if (!file) {
-    return Response.json({ error: "No file provided" }, { status: 400 });
+    return Response.json({ error: 'No file provided' }, { status: 400 });
   }
 
   if (!ALLOWED_TYPES.includes(file.type)) {
-    return Response.json(
-      { error: `Invalid file type. Allowed: ${ALLOWED_TYPES.join(", ")}` },
-      { status: 400 }
-    );
+    return Response.json({ error: `Invalid file type. Allowed: ${ALLOWED_TYPES.join(', ')}` }, { status: 400 });
   }
 
   if (file.size > MAX_SIZE) {
-    return Response.json(
-      { error: `File too large. Max: ${MAX_SIZE_MB}MB` },
-      { status: 400 }
-    );
+    return Response.json({ error: `File too large. Max: ${MAX_SIZE_MB}MB` }, { status: 400 });
   }
 
   const uploadDir = getUploadDir();
-  const receiptsDir = join(uploadDir, "receipts");
+  const receiptsDir = join(uploadDir, 'receipts');
   await mkdir(receiptsDir, { recursive: true });
 
   const MIME_TO_EXT: Record<string, string> = {
-    "image/jpeg": "jpg",
-    "image/png": "png",
-    "image/webp": "webp",
-    "image/heic": "heic",
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/heic': 'heic',
   };
-  const ext = MIME_TO_EXT[file.type] ?? "jpg";
+  const ext = MIME_TO_EXT[file.type] ?? 'jpg';
   const filename = `${randomUUID()}.${ext}`;
   const filepath = join(receiptsDir, filename);
 
@@ -189,15 +183,12 @@ export async function POST(req: NextRequest) {
   // Validate magic bytes to prevent client MIME type spoofing
   const detectedMime = detectMimeType(buffer);
   if (!detectedMime || !ALLOWED_TYPES.includes(detectedMime)) {
-    return Response.json(
-      { error: "File content does not match an allowed image type" },
-      { status: 400 }
-    );
+    return Response.json({ error: 'File content does not match an allowed image type' }, { status: 400 });
   }
 
   // All validation passed — now consume guest budget (per-IP, then global)
   if (guestIp !== null && !consumeGuestUploadBudget(guestIp)) {
-    return Response.json({ error: "Too many uploads. Please try again later." }, { status: 429 });
+    return Response.json({ error: 'Too many uploads. Please try again later.' }, { status: 429 });
   }
 
   await writeFile(filepath, buffer);
@@ -210,7 +201,7 @@ export async function POST(req: NextRequest) {
         originalName: file.name,
         mimeType: file.type,
         fileSize: file.size,
-        status: "PENDING",
+        status: 'PENDING',
         uploadedById: userId ?? null,
         isGuest,
       },
@@ -218,21 +209,21 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     // Clean up the written file if DB record creation fails
     try {
-      const { unlink } = await import("fs/promises");
+      const { unlink } = await import('fs/promises');
       await unlink(filepath);
     } catch {
       // Best-effort cleanup
     }
-    logger.error("upload.dbFailed", {
-      error: error instanceof Error ? error.message : "Unknown",
+    logger.error('upload.dbFailed', {
+      error: error instanceof Error ? error.message : 'Unknown',
       filepath,
     });
-    return Response.json({ error: "Failed to create receipt record" }, { status: 500 });
+    return Response.json({ error: 'Failed to create receipt record' }, { status: 500 });
   }
 
-  logger.info("upload.receipt", {
+  logger.info('upload.receipt', {
     receiptId: receipt.id,
-    userId: userId ?? "guest",
+    userId: userId ?? 'guest',
     mimeType: file.type,
     fileSize: file.size,
     isGuest,

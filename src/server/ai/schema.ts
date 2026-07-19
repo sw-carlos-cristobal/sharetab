@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 // Cap individual extracted money fields well below the Int4 column limit so a
 // hallucinated or prompt-injected value can't overflow the DB or silently
@@ -27,8 +27,8 @@ export const receiptExtractionSchema = z.object({
   currency: z
     .string()
     .max(10)
-    .default("USD")
-    .transform((c) => (/^[a-zA-Z]{3}$/.test(c.trim()) ? c.trim().toUpperCase() : "USD")),
+    .default('USD')
+    .transform((c) => (/^[a-zA-Z]{3}$/.test(c.trim()) ? c.trim().toUpperCase() : 'USD')),
   confidence: z.number().min(0).max(1).optional(),
 });
 

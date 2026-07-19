@@ -1,4 +1,4 @@
-import { LanguageSwitcher } from "@/components/layout/language-switcher";
+import { LanguageSwitcher } from '@/components/layout/language-switcher';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -13,8 +13,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         className="pointer-events-none absolute inset-0"
         aria-hidden="true"
         style={{
-          background:
-            "radial-gradient(ellipse 60% 50% at 50% 40%, var(--primary) 0%, transparent 70%)",
+          background: 'radial-gradient(ellipse 60% 50% at 50% 40%, var(--primary) 0%, transparent 70%)',
           opacity: 0.07,
         }}
       />

@@ -1,4 +1,4 @@
-import { join, isAbsolute, resolve, sep } from "path";
+import { join, isAbsolute, resolve, sep } from 'path';
 
 /**
  * Returns the absolute path to the upload directory.
@@ -10,14 +10,14 @@ export function getUploadDir(): string {
   if (envDir) {
     return isAbsolute(envDir) ? envDir : resolve(process.cwd(), envDir);
   }
-  return join(process.cwd(), "uploads");
+  return join(process.cwd(), 'uploads');
 }
 
 export function resolveUploadPath(relativePath: string): string {
   const uploadDir = resolve(getUploadDir());
   const resolvedPath = resolve(uploadDir, relativePath);
   if (!resolvedPath.startsWith(uploadDir + sep) && resolvedPath !== uploadDir) {
-    throw new Error("Path traversal detected: path escapes upload directory");
+    throw new Error('Path traversal detected: path escapes upload directory');
   }
   return resolvedPath;
 }

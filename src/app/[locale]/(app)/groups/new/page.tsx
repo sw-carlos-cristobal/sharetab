@@ -1,24 +1,24 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { useTranslations } from "next-intl";
-import { useRouter } from "@/i18n/navigation";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { trpc } from "@/lib/trpc";
+import { useState } from 'react';
+import { useTranslations } from 'next-intl';
+import { useRouter } from '@/i18n/navigation';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { trpc } from '@/lib/trpc';
 
-const CURRENCY_OPTIONS = ["USD", "EUR", "GBP", "CAD", "AUD", "JPY", "INR", "BRL"];
-const EMOJI_OPTIONS = ["💰", "🏠", "✈️", "🍽️", "🎉", "🛒", "🚗", "💼"];
+const CURRENCY_OPTIONS = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'INR', 'BRL'];
+const EMOJI_OPTIONS = ['💰', '🏠', '✈️', '🍽️', '🎉', '🛒', '🚗', '💼'];
 
 export default function NewGroupPage() {
-  const t = useTranslations("groups.new");
+  const t = useTranslations('groups.new');
   const router = useRouter();
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [currency, setCurrency] = useState("USD");
-  const [emoji, setEmoji] = useState("💰");
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [currency, setCurrency] = useState('USD');
+  const [emoji, setEmoji] = useState('💰');
 
   const createGroup = trpc.groups.create.useMutation({
     onSuccess: (group) => {
@@ -38,18 +38,18 @@ export default function NewGroupPage() {
 
   return (
     <div className="mx-auto max-w-lg">
-      <h1 className="mb-6 text-2xl font-bold">{t("title")}</h1>
+      <h1 className="mb-6 text-2xl font-bold">{t('title')}</h1>
       <Card>
         <CardHeader>
-          <CardTitle>{t("details")}</CardTitle>
+          <CardTitle>{t('details')}</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name">{t("name")}</Label>
+              <Label htmlFor="name">{t('name')}</Label>
               <Input
                 id="name"
-                placeholder={t("namePlaceholder")}
+                placeholder={t('namePlaceholder')}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
@@ -58,10 +58,10 @@ export default function NewGroupPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="description">{t("description")}</Label>
+              <Label htmlFor="description">{t('description')}</Label>
               <Input
                 id="description"
-                placeholder={t("descriptionPlaceholder")}
+                placeholder={t('descriptionPlaceholder')}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 maxLength={500}
@@ -69,7 +69,7 @@ export default function NewGroupPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>{t("icon")}</Label>
+              <Label>{t('icon')}</Label>
               <div className="flex flex-wrap gap-2">
                 {EMOJI_OPTIONS.map((e) => (
                   <button
@@ -77,9 +77,7 @@ export default function NewGroupPage() {
                     type="button"
                     onClick={() => setEmoji(e)}
                     className={`flex h-10 w-10 items-center justify-center rounded-md border text-lg transition-colors ${
-                      emoji === e
-                        ? "border-primary bg-primary/10"
-                        : "border-border hover:bg-muted"
+                      emoji === e ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted'
                     }`}
                   >
                     {e}
@@ -89,7 +87,7 @@ export default function NewGroupPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="currency">{t("currency")}</Label>
+              <Label htmlFor="currency">{t('currency')}</Label>
               <select
                 id="currency"
                 value={currency}
@@ -111,7 +109,7 @@ export default function NewGroupPage() {
             )}
 
             <Button type="submit" className="w-full" disabled={createGroup.isPending}>
-              {createGroup.isPending ? t("submitting") : t("submit")}
+              {createGroup.isPending ? t('submitting') : t('submit')}
             </Button>
           </form>
         </CardContent>

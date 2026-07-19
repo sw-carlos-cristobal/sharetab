@@ -1,26 +1,37 @@
-"use client";
+'use client';
 
-import { use, useState, useMemo, useEffect, useRef } from "react";
-import { useSession } from "next-auth/react";
-import { useLocale, useTranslations } from "next-intl";
-import { trpc } from "@/lib/trpc";
-import { formatCents } from "@/lib/money";
-import { copyToClipboard } from "@/lib/clipboard";
-import { storedClaimIdentitySchema, type StoredClaimIdentity } from "@/lib/guest-session";
-import { calculateSplitTotals } from "@/lib/split-calculator";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { Check, Loader2, Users, Receipt, ArrowRight, Image as ImageIcon, Pencil, X, Link2, Scissors } from "lucide-react";
-import { toast } from "sonner";
-import { Link } from "@/i18n/navigation";
-import { buildVenmoPayUrl, isValidVenmoHandle } from "@/lib/venmo";
-import { getInitials, guestAvatarColor } from "@/lib/avatar";
+import { use, useState, useMemo, useEffect, useRef } from 'react';
+import { useSession } from 'next-auth/react';
+import { useLocale, useTranslations } from 'next-intl';
+import { trpc } from '@/lib/trpc';
+import { formatCents } from '@/lib/money';
+import { copyToClipboard } from '@/lib/clipboard';
+import { storedClaimIdentitySchema, type StoredClaimIdentity } from '@/lib/guest-session';
+import { calculateSplitTotals } from '@/lib/split-calculator';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import {
+  Check,
+  Loader2,
+  Users,
+  Receipt,
+  ArrowRight,
+  Image as ImageIcon,
+  Pencil,
+  X,
+  Link2,
+  Scissors,
+} from 'lucide-react';
+import { toast } from 'sonner';
+import { Link } from '@/i18n/navigation';
+import { buildVenmoPayUrl, isValidVenmoHandle } from '@/lib/venmo';
+import { getInitials, guestAvatarColor } from '@/lib/avatar';
 
 function getStoredClaimIdentity(token: string): StoredClaimIdentity | null {
-  if (typeof window === "undefined") return null;
+  if (typeof window === 'undefined') return null;
 
   try {
     const raw = window.localStorage.getItem(`sharetab-claim:${token}`);
@@ -34,7 +45,7 @@ function getStoredClaimIdentity(token: string): StoredClaimIdentity | null {
 }
 
 function setStoredClaimIdentity(token: string, identity: StoredClaimIdentity) {
-  if (typeof window === "undefined") return;
+  if (typeof window === 'undefined') return;
   try {
     window.localStorage.setItem(`sharetab-claim:${token}`, JSON.stringify(identity));
   } catch {
@@ -42,19 +53,15 @@ function setStoredClaimIdentity(token: string, identity: StoredClaimIdentity) {
   }
 }
 
-export default function ClaimPage({
-  params,
-}: {
-  params: Promise<{ token: string }>;
-}) {
+export default function ClaimPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params);
   const locale = useLocale();
-  const t = useTranslations("split.claim");
-  const tv = useTranslations("split.venmo");
-  const tc = useTranslations("common");
+  const t = useTranslations('split.claim');
+  const tv = useTranslations('split.venmo');
+  const tc = useTranslations('common');
 
   // --- State ---
-  const [name, setName] = useState("");
+  const [name, setName] = useState('');
   const [groupSize, setGroupSize] = useState(1);
   const [personIndex, setPersonIndex] = useState<number | null>(null);
   const [myPersonIndex, setMyPersonIndex] = useState<number | null>(null);
@@ -63,11 +70,11 @@ export default function ClaimPage({
   const [saving, setSaving] = useState(false);
   const [showImage, setShowImage] = useState(false);
   const [editingPersonIdx, setEditingPersonIdx] = useState<number | null>(null);
-  const [editingName, setEditingName] = useState("");
+  const [editingName, setEditingName] = useState('');
   const [editingGroupSize, setEditingGroupSize] = useState(1);
   const [splittingItemIdx, setSplittingItemIdx] = useState<number | null>(null);
-  const [splitQty, setSplitQty] = useState("");
-  const [venmoHandle, setVenmoHandle] = useState("");
+  const [splitQty, setSplitQty] = useState('');
+  const [venmoHandle, setVenmoHandle] = useState('');
   const venmoInitRef = useRef(false);
   const { data: authSession, status: authStatus } = useSession();
 
@@ -78,18 +85,20 @@ export default function ClaimPage({
   });
   const utils = trpc.useUtils();
   const setPayerVenmoHandle = trpc.guest.setPayerVenmoHandle.useMutation({
-    onSuccess: () => { utils.guest.getSession.invalidate({ token }); },
+    onSuccess: () => {
+      utils.guest.getSession.invalidate({ token });
+    },
   });
   const session = trpc.guest.getSession.useQuery(
     { token },
-    { refetchInterval: (query) => (query.state.data?.status === "FINALIZED" || query.state.error) ? false : 3000 }
+    { refetchInterval: (query) => (query.state.data?.status === 'FINALIZED' || query.state.error ? false : 3000) },
   );
 
   const editPersonName = trpc.guest.editPersonName.useMutation({
     onSuccess: () => {
       setEditingPersonIdx(null);
-      setEditingName("");
-      toast.success(t("nameUpdated"));
+      setEditingName('');
+      toast.success(t('nameUpdated'));
     },
     onError: (err) => toast.error(err.message),
   });
@@ -98,7 +107,7 @@ export default function ClaimPage({
     onSuccess: (_data, variables) => {
       const removedIdx = variables.targetIndex;
       if (removedIdx === myPersonIndex) {
-        if (typeof window !== "undefined") {
+        if (typeof window !== 'undefined') {
           window.localStorage.removeItem(`sharetab-claim:${token}`);
         }
         setClaimedItems(new Map());
@@ -124,7 +133,7 @@ export default function ClaimPage({
           return prev > removedIdx ? prev - 1 : prev;
         });
       }
-      toast.success(t("personRemoved"));
+      toast.success(t('personRemoved'));
     },
     onError: (err) => toast.error(err.message),
   });
@@ -132,7 +141,7 @@ export default function ClaimPage({
   const finalizeSession = trpc.guest.finalizeSession.useMutation({
     onSuccess: () => {
       session.refetch();
-      toast.success(t("splitFinalized"));
+      toast.success(t('splitFinalized'));
     },
     onError: (err) => toast.error(err.message),
   });
@@ -141,7 +150,7 @@ export default function ClaimPage({
     onSuccess: (_data, variables) => {
       const splitIdx = variables.itemIndex;
       setSplittingItemIdx(null);
-      setSplitQty("");
+      setSplitQty('');
       // Remap claimed item indices: items after the split point shift +1 (Finding #4).
       // Only invalidate the split item itself; preserve unsaved edits for other items.
       setClaimedItems((prev) => {
@@ -189,7 +198,7 @@ export default function ClaimPage({
       }
       setClaimedItems(map);
       if (!autoRejoinAttempted.current) {
-        toast.success(t("joinedSession"));
+        toast.success(t('joinedSession'));
       }
     },
     onError: (error) => {
@@ -208,7 +217,12 @@ export default function ClaimPage({
     } else if (session.data?.isCreator && profile.data?.venmoUsername) {
       setVenmoHandle(profile.data.venmoUsername);
       venmoInitRef.current = true;
-    } else if (session.data && !session.isLoading && authStatus !== "loading" && (profile.isFetched || !authSession?.user)) {
+    } else if (
+      session.data &&
+      !session.isLoading &&
+      authStatus !== 'loading' &&
+      (profile.isFetched || !authSession?.user)
+    ) {
       venmoInitRef.current = true;
     }
   }, [session.data, profile.data?.venmoUsername, profile.isFetched, session.isLoading, authSession?.user, authStatus]);
@@ -216,7 +230,7 @@ export default function ClaimPage({
   // Auto-rejoin from localStorage when session data loads
   useEffect(() => {
     if (autoRejoinAttempted.current || personIndex !== null || !session.data) return;
-    if (session.data.status !== "CLAIMING") return;
+    if (session.data.status !== 'CLAIMING') return;
 
     const stored = getStoredClaimIdentity(token);
     if (!stored) return;
@@ -233,10 +247,10 @@ export default function ClaimPage({
       // Sync local Map from server after save so hasAnyUnsavedChanges resets
       session.refetch();
       if (result.conflicts && result.conflicts.length > 0) {
-        const names = [...new Set(result.conflicts.flatMap(c => c.claimedBy))];
-        toast.warning(t("claimConflict", { names: names.join(", "), count: result.conflicts.length }));
+        const names = [...new Set(result.conflicts.flatMap((c) => c.claimedBy))];
+        toast.warning(t('claimConflict', { names: names.join(', '), count: result.conflicts.length }));
       } else {
-        toast.success(t("claimsSavedToast"));
+        toast.success(t('claimsSavedToast'));
       }
     },
     onError: (error) => {
@@ -287,24 +301,20 @@ export default function ClaimPage({
   const allItemsClaimed = useMemo(() => {
     if (!session.data) return false;
     return session.data.items.every((_, idx) =>
-      session.data!.assignments.some(a => a.itemIndex === idx && a.personIndices.length > 0)
+      session.data!.assignments.some((a) => a.itemIndex === idx && a.personIndices.length > 0),
     );
   }, [session.data]);
 
   // Which items are claimed by anyone (for sorting unclaimed first)
   const claimedByAnyone = useMemo(() => {
     if (!session.data) return new Set<number>();
-    return new Set(
-      session.data.assignments
-        .filter(a => a.personIndices.length > 0)
-        .map(a => a.itemIndex)
-    );
+    return new Set(session.data.assignments.filter((a) => a.personIndices.length > 0).map((a) => a.itemIndex));
   }, [session.data]);
 
   const sortedItemIndices = useMemo(() => {
     if (!session.data) return [];
-    const unclaimed = session.data.items.map((_, idx) => idx).filter(idx => !claimedByAnyone.has(idx));
-    const claimed = session.data.items.map((_, idx) => idx).filter(idx => claimedByAnyone.has(idx));
+    const unclaimed = session.data.items.map((_, idx) => idx).filter((idx) => !claimedByAnyone.has(idx));
+    const claimed = session.data.items.map((_, idx) => idx).filter((idx) => claimedByAnyone.has(idx));
     return [...unclaimed, ...claimed];
   }, [session.data, claimedByAnyone]);
 
@@ -370,7 +380,7 @@ export default function ClaimPage({
   function handleJoin() {
     const trimmed = name.trim();
     if (!trimmed) {
-      toast.error(t("pleaseEnterName"));
+      toast.error(t('pleaseEnterName'));
       return;
     }
     joinSession.mutate({ token, name: trimmed, ...(groupSize > 1 ? { groupSize } : {}) });
@@ -390,21 +400,21 @@ export default function ClaimPage({
 
   async function copyLink() {
     if (await copyToClipboard(window.location.href)) {
-      toast.success(t("linkCopied"));
+      toast.success(t('linkCopied'));
     } else {
-      toast.error(tc("actions.copyFailed"));
+      toast.error(tc('actions.copyFailed'));
     }
   }
 
   async function copyResultLink() {
     const url = new URL(window.location.href);
-    url.pathname = url.pathname.replace(/\/claim$/, "");
-    url.search = "";
-    url.hash = "";
+    url.pathname = url.pathname.replace(/\/claim$/, '');
+    url.search = '';
+    url.hash = '';
     if (await copyToClipboard(url.toString())) {
-      toast.success(t("linkCopied"));
+      toast.success(t('linkCopied'));
     } else {
-      toast.error(tc("actions.copyFailed"));
+      toast.error(tc('actions.copyFailed'));
     }
   }
 
@@ -429,7 +439,7 @@ export default function ClaimPage({
     return (
       <div className="flex flex-col items-center justify-center gap-4 py-20">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-muted-foreground">{t("loadingSession")}</p>
+        <p className="text-muted-foreground">{t('loadingSession')}</p>
       </div>
     );
   }
@@ -442,16 +452,14 @@ export default function ClaimPage({
           <Receipt className="h-8 w-8 text-muted-foreground" />
         </div>
         <div className="space-y-2">
-          <h2 className="text-xl font-bold">{t("sessionNotFound")}</h2>
+          <h2 className="text-xl font-bold">{t('sessionNotFound')}</h2>
           <p className="text-muted-foreground">
-            {session.error.message.includes("expired")
-              ? t("sessionExpired")
-              : t("sessionInvalid")}
+            {session.error.message.includes('expired') ? t('sessionExpired') : t('sessionInvalid')}
           </p>
         </div>
         <Button nativeButton={false} render={<Link href="/split" />}>
           <ArrowRight className="mr-2 h-4 w-4" />
-          {t("splitYourOwn")}
+          {t('splitYourOwn')}
         </Button>
       </div>
     );
@@ -461,22 +469,22 @@ export default function ClaimPage({
   const currency = data.receiptData.currency;
 
   // --- Finalized state ---
-  if (data.status === "FINALIZED") {
+  if (data.status === 'FINALIZED') {
     return (
       <div className="space-y-6 pb-8">
         <div className="text-center space-y-2 pt-4">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
             <Check className="h-8 w-8 text-primary" />
           </div>
-          <h2 className="text-xl font-bold">{t("sessionFinalized")}</h2>
-          <p className="text-muted-foreground">{t("sessionFinalizedDescription")}</p>
+          <h2 className="text-xl font-bold">{t('sessionFinalized')}</h2>
+          <p className="text-muted-foreground">{t('sessionFinalizedDescription')}</p>
         </div>
 
         {/* Total */}
         <Card className="bg-primary/5 border-primary/20">
           <CardContent className="py-4">
             <div className="flex justify-between items-center">
-              <span className="font-semibold text-lg">{t("totalBill")}</span>
+              <span className="font-semibold text-lg">{t('totalBill')}</span>
               <span className="text-2xl font-bold text-primary">
                 {formatCents(data.receiptData.total, currency, locale)}
               </span>
@@ -485,33 +493,35 @@ export default function ClaimPage({
         </Card>
 
         {/* Venmo handle */}
-        {venmoSetting.data?.enabled && currency === "USD" && (data.isCreator ? (
-          <div className="flex items-center justify-center gap-2">
-            <Input
-              placeholder={tv("handlePlaceholder")}
-              aria-label={tv("handle")}
-              value={venmoHandle}
-              onChange={(e) => setVenmoHandle(e.target.value)}
-              onBlur={() => {
-                const trimmed = venmoHandle.trim() || null;
-                if (trimmed !== (session.data?.payerVenmoHandle ?? null)) {
-                  setPayerVenmoHandle.mutate({ token, handle: trimmed });
-                }
-              }}
-              className="h-8 text-sm max-w-48"
-              data-testid="venmo-handle-input"
-            />
-          </div>
-        ) : venmoHandle ? (
-          <p className="text-sm text-muted-foreground text-center" data-testid="venmo-handle-display">
-            Venmo: @{venmoHandle.replace(/^@/, '')}
-          </p>
-        ) : null)}
+        {venmoSetting.data?.enabled &&
+          currency === 'USD' &&
+          (data.isCreator ? (
+            <div className="flex items-center justify-center gap-2">
+              <Input
+                placeholder={tv('handlePlaceholder')}
+                aria-label={tv('handle')}
+                value={venmoHandle}
+                onChange={(e) => setVenmoHandle(e.target.value)}
+                onBlur={() => {
+                  const trimmed = venmoHandle.trim() || null;
+                  if (trimmed !== (session.data?.payerVenmoHandle ?? null)) {
+                    setPayerVenmoHandle.mutate({ token, handle: trimmed });
+                  }
+                }}
+                className="h-8 text-sm max-w-48"
+                data-testid="venmo-handle-input"
+              />
+            </div>
+          ) : venmoHandle ? (
+            <p className="text-sm text-muted-foreground text-center" data-testid="venmo-handle-display">
+              Venmo: @{venmoHandle.replace(/^@/, '')}
+            </p>
+          ) : null)}
 
         {/* Per-person summary */}
         {data.summary && data.summary.length > 0 && (
           <div className="space-y-3">
-            <h3 className="font-semibold text-base">{t("perPersonTotals")}</h3>
+            <h3 className="font-semibold text-base">{t('perPersonTotals')}</h3>
             {data.summary.map((person: { name: string; total: number; personIndex: number }) => (
               <Card key={person.personIndex}>
                 <CardContent className="py-3">
@@ -528,17 +538,25 @@ export default function ClaimPage({
                       {formatCents(person.total, currency, locale)}
                     </span>
                   </div>
-                  {venmoSetting.data?.enabled && currency === "USD" && isValidVenmoHandle(venmoHandle) && myPersonIndex !== data.paidByIndex && person.personIndex !== data.paidByIndex && (
-                    <a
-                      href={buildVenmoPayUrl(venmoHandle, person.total, `ShareTab: ${data.receiptData.merchantName ?? 'Bill split'}`)!}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-3 flex items-center justify-center gap-2 rounded-lg bg-[#008CFF] px-4 py-2 text-sm font-medium text-white hover:bg-[#0070CC] transition-colors"
-                      data-testid={`venmo-pay-${person.personIndex}`}
-                    >
-                      {tv("payVia", { amount: formatCents(person.total, currency, locale) })}
-                    </a>
-                  )}
+                  {venmoSetting.data?.enabled &&
+                    currency === 'USD' &&
+                    isValidVenmoHandle(venmoHandle) &&
+                    myPersonIndex !== data.paidByIndex &&
+                    person.personIndex !== data.paidByIndex && (
+                      <a
+                        href={buildVenmoPayUrl(
+                          venmoHandle,
+                          person.total,
+                          `ShareTab: ${data.receiptData.merchantName ?? 'Bill split'}`,
+                        )!}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-3 flex items-center justify-center gap-2 rounded-lg bg-[#008CFF] px-4 py-2 text-sm font-medium text-white hover:bg-[#0070CC] transition-colors"
+                        data-testid={`venmo-pay-${person.personIndex}`}
+                      >
+                        {tv('payVia', { amount: formatCents(person.total, currency, locale) })}
+                      </a>
+                    )}
                 </CardContent>
               </Card>
             ))}
@@ -547,22 +565,13 @@ export default function ClaimPage({
 
         {/* Actions */}
         <div className="space-y-3">
-          <Button
-            className="w-full"
-            nativeButton={false}
-            render={<Link href={`/split/${token}`} />}
-          >
+          <Button className="w-full" nativeButton={false} render={<Link href={`/split/${token}`} />}>
             <ArrowRight className="mr-2 h-4 w-4" />
-            {t("viewSummary")}
+            {t('viewSummary')}
           </Button>
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={copyResultLink}
-            data-testid="copy-link-btn"
-          >
+          <Button variant="outline" className="w-full" onClick={copyResultLink} data-testid="copy-link-btn">
             <Link2 className="mr-2 h-4 w-4" />
-            {t("copyLink")}
+            {t('copyLink')}
           </Button>
         </div>
       </div>
@@ -575,21 +584,15 @@ export default function ClaimPage({
       <div className="space-y-6 pb-8">
         {/* Header */}
         <div className="text-center space-y-1 pt-4">
-          <h1 className="text-2xl font-bold">
-            {data.receiptData.merchantName ?? t("billSplit")}
-          </h1>
-          {data.receiptData.date && (
-            <p className="text-sm text-muted-foreground">
-              {data.receiptData.date}
-            </p>
-          )}
+          <h1 className="text-2xl font-bold">{data.receiptData.merchantName ?? t('billSplit')}</h1>
+          {data.receiptData.date && <p className="text-sm text-muted-foreground">{data.receiptData.date}</p>}
         </div>
 
         {/* Total */}
         <Card className="bg-primary/5 border-primary/20">
           <CardContent className="py-4">
             <div className="flex justify-between items-center">
-              <span className="font-semibold text-lg">{t("totalBill")}</span>
+              <span className="font-semibold text-lg">{t('totalBill')}</span>
               <span className="text-2xl font-bold text-primary">
                 {formatCents(data.receiptData.total, currency, locale)}
               </span>
@@ -598,15 +601,9 @@ export default function ClaimPage({
         </Card>
 
         {/* Copy link */}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={copyLink}
-          data-testid="copy-link-btn"
-        >
+        <Button type="button" variant="outline" size="sm" onClick={copyLink} data-testid="copy-link-btn">
           <Link2 className="mr-2 h-4 w-4" />
-          {t("copyLink")}
+          {t('copyLink')}
         </Button>
 
         {/* Receipt image viewer */}
@@ -620,7 +617,7 @@ export default function ClaimPage({
               data-testid="toggle-receipt-image"
             >
               <ImageIcon className="mr-2 h-4 w-4" />
-              {showImage ? t("hideReceipt") : t("viewReceipt")}
+              {showImage ? t('hideReceipt') : t('viewReceipt')}
             </Button>
             {showImage && (
               <Card>
@@ -631,7 +628,7 @@ export default function ClaimPage({
                       change, out of scope here */}
                   <img
                     src={`/api/uploads/${data.receiptImagePath}`}
-                    alt={t("receiptImage")}
+                    alt={t('receiptImage')}
                     className="w-full rounded-md"
                     data-testid="receipt-image"
                   />
@@ -647,20 +644,15 @@ export default function ClaimPage({
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
                 <Users className="h-4 w-4" />
-                {t("peopleInSession", { count: data.people.length })}
+                {t('peopleInSession', { count: data.people.length })}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-2">
                 {data.people.map((person, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center gap-2 rounded-full bg-muted px-3 py-1.5"
-                  >
+                  <div key={idx} className="flex items-center gap-2 rounded-full bg-muted px-3 py-1.5">
                     <Avatar className="h-6 w-6">
-                      <AvatarFallback
-                        className={`text-[10px] font-semibold ${guestAvatarColor(idx)}`}
-                      >
+                      <AvatarFallback className={`text-[10px] font-semibold ${guestAvatarColor(idx)}`}>
                         {getInitials(person.name)}
                       </AvatarFallback>
                     </Avatar>
@@ -678,27 +670,29 @@ export default function ClaimPage({
         {/* Join form */}
         <Card data-testid="claim-join-form">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">{t("joinSession")}</CardTitle>
+            <CardTitle className="text-base">{t('joinSession')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <label htmlFor="name-input" className="text-sm font-medium">
-                {t("yourName")}
+                {t('yourName')}
               </label>
               <Input
                 id="name-input"
-                placeholder={t("enterName")}
+                placeholder={t('enterName')}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") handleJoin();
+                  if (e.key === 'Enter') handleJoin();
                 }}
                 autoFocus
                 data-testid="claim-name-input"
               />
             </div>
             <div className="space-y-2">
-              <label htmlFor="group-size" className="text-sm font-medium">{t("groupSize")}</label>
+              <label htmlFor="group-size" className="text-sm font-medium">
+                {t('groupSize')}
+              </label>
               <div className="flex items-center gap-2">
                 <Input
                   id="group-size"
@@ -710,13 +704,13 @@ export default function ClaimPage({
                   className="w-20"
                   data-testid="group-size-input"
                 />
-                <span className="text-xs text-muted-foreground">{t("groupSizeHint")}</span>
+                <span className="text-xs text-muted-foreground">{t('groupSizeHint')}</span>
               </div>
             </div>
             {/* Rejoin as existing participant */}
             {data.people.length > 0 && (
               <div className="space-y-2">
-                <p className="text-xs text-muted-foreground">{t("orRejoinAs")}</p>
+                <p className="text-xs text-muted-foreground">{t('orRejoinAs')}</p>
                 <div className="flex flex-wrap gap-2">
                   {data.people.map((person, idx) => (
                     <button
@@ -732,9 +726,7 @@ export default function ClaimPage({
                       data-testid={`rejoin-person-${idx}`}
                     >
                       <Avatar className="h-6 w-6">
-                        <AvatarFallback
-                          className={`text-[10px] font-semibold ${guestAvatarColor(idx)}`}
-                        >
+                        <AvatarFallback className={`text-[10px] font-semibold ${guestAvatarColor(idx)}`}>
                           {getInitials(person.name)}
                         </AvatarFallback>
                       </Avatar>
@@ -753,12 +745,12 @@ export default function ClaimPage({
               {joinSession.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {t("joining")}
+                  {t('joining')}
                 </>
               ) : (
                 <>
                   <ArrowRight className="mr-2 h-4 w-4" />
-                  {t("join")}
+                  {t('join')}
                 </>
               )}
             </Button>
@@ -773,21 +765,15 @@ export default function ClaimPage({
     <div className="space-y-6 pb-24">
       {/* Header */}
       <div className="text-center space-y-1 pt-4">
-        <h1 className="text-2xl font-bold">
-          {data.receiptData.merchantName ?? t("billSplit")}
-        </h1>
-        {data.receiptData.date && (
-          <p className="text-sm text-muted-foreground">
-            {data.receiptData.date}
-          </p>
-        )}
+        <h1 className="text-2xl font-bold">{data.receiptData.merchantName ?? t('billSplit')}</h1>
+        {data.receiptData.date && <p className="text-sm text-muted-foreground">{data.receiptData.date}</p>}
       </div>
 
       {/* Total */}
       <Card className="bg-primary/5 border-primary/20">
         <CardContent className="py-4">
           <div className="flex justify-between items-center">
-            <span className="font-semibold text-lg">{t("totalBill")}</span>
+            <span className="font-semibold text-lg">{t('totalBill')}</span>
             <span className="text-2xl font-bold text-primary">
               {formatCents(data.receiptData.total, currency, locale)}
             </span>
@@ -796,15 +782,9 @@ export default function ClaimPage({
       </Card>
 
       {/* Copy link */}
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={copyLink}
-        data-testid="copy-link-btn"
-      >
+      <Button type="button" variant="outline" size="sm" onClick={copyLink} data-testid="copy-link-btn">
         <Link2 className="mr-2 h-4 w-4" />
-        {t("copyLink")}
+        {t('copyLink')}
       </Button>
 
       {/* Receipt image viewer */}
@@ -818,7 +798,7 @@ export default function ClaimPage({
             data-testid="toggle-receipt-image"
           >
             <ImageIcon className="mr-2 h-4 w-4" />
-            {showImage ? t("hideReceipt") : t("viewReceipt")}
+            {showImage ? t('hideReceipt') : t('viewReceipt')}
           </Button>
           {showImage && (
             <Card>
@@ -829,7 +809,7 @@ export default function ClaimPage({
                     change, out of scope here */}
                 <img
                   src={`/api/uploads/${data.receiptImagePath}`}
-                  alt={t("receiptImage")}
+                  alt={t('receiptImage')}
                   className="w-full rounded-md"
                   data-testid="receipt-image"
                 />
@@ -844,7 +824,7 @@ export default function ClaimPage({
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
             <Users className="h-4 w-4" />
-            {t("peopleInSession", { count: data.people.length })}
+            {t('peopleInSession', { count: data.people.length })}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -853,15 +833,11 @@ export default function ClaimPage({
               <div
                 key={idx}
                 className={`flex items-center gap-2 rounded-lg px-3 py-2 ${
-                  idx === myPersonIndex
-                    ? "bg-primary/10 ring-1 ring-primary"
-                    : "bg-muted"
+                  idx === myPersonIndex ? 'bg-primary/10 ring-1 ring-primary' : 'bg-muted'
                 }`}
               >
                 <Avatar className="h-6 w-6 shrink-0">
-                  <AvatarFallback
-                    className={`text-[10px] font-semibold ${guestAvatarColor(idx)}`}
-                  >
+                  <AvatarFallback className={`text-[10px] font-semibold ${guestAvatarColor(idx)}`}>
                     {getInitials(person.name)}
                   </AvatarFallback>
                 </Avatar>
@@ -885,7 +861,7 @@ export default function ClaimPage({
                       onChange={(e) => setEditingName(e.target.value)}
                       className="h-7 text-sm flex-1"
                       autoFocus
-                      aria-label={t("editName")}
+                      aria-label={t('editName')}
                       data-testid={`edit-name-input-${idx}`}
                     />
                     <Input
@@ -895,13 +871,25 @@ export default function ClaimPage({
                       value={editingGroupSize}
                       onChange={(e) => setEditingGroupSize(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
                       className="h-7 w-14 text-sm"
-                      aria-label={t("groupSize")}
+                      aria-label={t('groupSize')}
                       data-testid={`edit-group-size-${idx}`}
                     />
-                    <Button type="submit" size="sm" variant="ghost" className="h-7 px-2" disabled={editPersonName.isPending}>
+                    <Button
+                      type="submit"
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2"
+                      disabled={editPersonName.isPending}
+                    >
                       <Check className="h-3.5 w-3.5" />
                     </Button>
-                    <Button type="button" size="sm" variant="ghost" className="h-7 px-2" onClick={() => setEditingPersonIdx(null)}>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2"
+                      onClick={() => setEditingPersonIdx(null)}
+                    >
                       <X className="h-3.5 w-3.5" />
                     </Button>
                   </form>
@@ -909,8 +897,10 @@ export default function ClaimPage({
                   <>
                     <span className="flex-1 text-sm font-medium">
                       {person.name}
-                      {person.groupSize > 1 && <span data-testid={`group-badge-${idx}`}>{` (×${person.groupSize})`}</span>}
-                      {idx === myPersonIndex && ` ${t("you")}`}
+                      {person.groupSize > 1 && (
+                        <span data-testid={`group-badge-${idx}`}>{` (×${person.groupSize})`}</span>
+                      )}
+                      {idx === myPersonIndex && ` ${t('you')}`}
                     </span>
                     <button
                       type="button"
@@ -920,7 +910,7 @@ export default function ClaimPage({
                         setEditingGroupSize(person.groupSize ?? 1);
                       }}
                       className="text-muted-foreground hover:text-foreground p-1"
-                      aria-label={t("editName")}
+                      aria-label={t('editName')}
                       data-testid={`edit-person-${idx}`}
                     >
                       <Pencil className="h-3.5 w-3.5" />
@@ -929,7 +919,7 @@ export default function ClaimPage({
                       <button
                         type="button"
                         onClick={() => {
-                          if (confirm(t("removePersonConfirm", { name: person.name }))) {
+                          if (confirm(t('removePersonConfirm', { name: person.name }))) {
                             removePerson.mutate({
                               token,
                               personToken: personToken!,
@@ -938,7 +928,7 @@ export default function ClaimPage({
                           }
                         }}
                         className="text-muted-foreground hover:text-destructive p-1"
-                        aria-label={t("removePerson")}
+                        aria-label={t('removePerson')}
                         data-testid={`remove-person-${idx}`}
                       >
                         <X className="h-3.5 w-3.5" />
@@ -954,7 +944,7 @@ export default function ClaimPage({
 
       {/* Claim as selector */}
       <div className="space-y-2">
-        <p className="text-sm font-medium">{t("claimingFor")}</p>
+        <p className="text-sm font-medium">{t('claimingFor')}</p>
         <div className="flex flex-wrap gap-2">
           {data.people.map((person, idx) => (
             <button
@@ -975,13 +965,13 @@ export default function ClaimPage({
               data-testid={`switch-person-${idx}`}
               className={`flex items-center gap-2 rounded-full px-3 py-1.5 transition-colors ${
                 idx === personIndex
-                  ? "bg-primary text-primary-foreground ring-2 ring-primary"
-                  : "bg-muted hover:bg-muted/80"
+                  ? 'bg-primary text-primary-foreground ring-2 ring-primary'
+                  : 'bg-muted hover:bg-muted/80'
               }`}
             >
               <Avatar className="h-6 w-6">
                 <AvatarFallback
-                  className={`text-[10px] font-semibold ${idx === personIndex ? "bg-primary-foreground/20 text-primary-foreground" : guestAvatarColor(idx)}`}
+                  className={`text-[10px] font-semibold ${idx === personIndex ? 'bg-primary-foreground/20 text-primary-foreground' : guestAvatarColor(idx)}`}
                 >
                   {getInitials(person.name)}
                 </AvatarFallback>
@@ -989,7 +979,7 @@ export default function ClaimPage({
               <span className="text-sm font-medium">
                 {person.name}
                 {person.groupSize > 1 && ` (×${person.groupSize})`}
-                {idx === myPersonIndex && ` ${t("you")}`}
+                {idx === myPersonIndex && ` ${t('you')}`}
               </span>
             </button>
           ))}
@@ -999,10 +989,10 @@ export default function ClaimPage({
       {/* Items to claim */}
       <div className="space-y-3">
         <h3 className="font-semibold text-base">
-          {t("tapToClaim")}
+          {t('tapToClaim')}
           {hasUnsavedChanges && (
             <Badge variant="secondary" className="ml-2">
-              {t("unsavedChanges")}
+              {t('unsavedChanges')}
             </Badge>
           )}
         </h3>
@@ -1011,22 +1001,18 @@ export default function ClaimPage({
           const isClaimed = (claimedItems.get(personIndex!) ?? new Set()).has(idx);
           // Find other claimants from server state
           const otherClaimants =
-            data.assignments
-              .find((a) => a.itemIndex === idx)
-              ?.personIndices.filter((pi) => pi !== personIndex) ?? [];
+            data.assignments.find((a) => a.itemIndex === idx)?.personIndices.filter((pi) => pi !== personIndex) ?? [];
 
           // Show separator before the first claimed item
           const isFirstClaimed =
-            sortPosition > 0 &&
-            claimedByAnyone.has(idx) &&
-            !claimedByAnyone.has(sortedItemIndices[sortPosition - 1]!);
+            sortPosition > 0 && claimedByAnyone.has(idx) && !claimedByAnyone.has(sortedItemIndices[sortPosition - 1]!);
 
           return (
             <div key={idx}>
               {isFirstClaimed && (
                 <div className="flex items-center gap-2 py-1">
                   <div className="flex-1 h-px bg-border" />
-                  <span className="text-xs text-muted-foreground">{t("alreadyClaimed")}</span>
+                  <span className="text-xs text-muted-foreground">{t('alreadyClaimed')}</span>
                   <div className="flex-1 h-px bg-border" />
                 </div>
               )}
@@ -1036,15 +1022,13 @@ export default function ClaimPage({
                 tabIndex={0}
                 data-testid={`claim-item-${idx}`}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
+                  if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
                     toggleClaim(idx);
                   }
                 }}
                 className={`cursor-pointer transition-all ${
-                  isClaimed
-                    ? "ring-2 ring-primary bg-primary/5"
-                    : "hover:bg-muted/50"
+                  isClaimed ? 'ring-2 ring-primary bg-primary/5' : 'hover:bg-muted/50'
                 }`}
                 onClick={() => toggleClaim(idx)}
               >
@@ -1053,9 +1037,7 @@ export default function ClaimPage({
                     {/* Claim indicator */}
                     <div
                       className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors ${
-                        isClaimed
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-muted-foreground"
+                        isClaimed ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
                       }`}
                     >
                       {isClaimed && <Check className="h-4 w-4" />}
@@ -1065,16 +1047,10 @@ export default function ClaimPage({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
                         <span
-                          className={`font-medium truncate ${
-                            isClaimed ? "text-foreground" : "text-muted-foreground"
-                          }`}
+                          className={`font-medium truncate ${isClaimed ? 'text-foreground' : 'text-muted-foreground'}`}
                         >
                           {item.name}
-                          {item.quantity > 1 && (
-                            <span className="text-muted-foreground ml-1">
-                              x{item.quantity}
-                            </span>
-                          )}
+                          {item.quantity > 1 && <span className="text-muted-foreground ml-1">x{item.quantity}</span>}
                         </span>
                         <div className="flex items-center gap-1 shrink-0">
                           {item.quantity > 1 && (
@@ -1083,95 +1059,93 @@ export default function ClaimPage({
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setSplittingItemIdx(idx);
-                                setSplitQty("1");
+                                setSplitQty('1');
                               }}
                               className="text-muted-foreground hover:text-foreground p-1"
-                              aria-label={t("splitItem")}
+                              aria-label={t('splitItem')}
                               data-testid={`split-claim-item-${idx}`}
                             >
                               <Scissors className="h-3.5 w-3.5" />
                             </button>
                           )}
-                          <span className="font-semibold">
-                            {formatCents(item.totalPrice, currency, locale)}
-                          </span>
+                          <span className="font-semibold">{formatCents(item.totalPrice, currency, locale)}</span>
                         </div>
                       </div>
 
                       {/* Split form */}
-                      {splittingItemIdx === idx && (() => {
-                        const parsed = Number(splitQty);
-                        const validQty = Number.isSafeInteger(parsed) && parsed >= 1 && parsed < item.quantity;
-                        return (
-                          <div
-                            className="flex items-center gap-2 mt-2"
-                            onClick={(e) => e.stopPropagation()}
-                            onKeyDown={(e) => e.stopPropagation()}
-                          >
-                            <span className="text-xs text-muted-foreground">{t("splitOff")}</span>
-                            <Input
-                              type="number"
-                              min={1}
-                              max={item.quantity - 1}
-                              value={splitQty}
-                              onChange={(e) => setSplitQty(e.target.value)}
-                              className="w-16 h-7 text-xs"
-                              aria-label={t("splitOff")}
-                              data-testid={`split-qty-input-${idx}`}
-                            />
-                            <span className="text-xs text-muted-foreground">{t("splitOfTotal", { total: item.quantity })}</span>
-                            <Button
-                              type="button"
-                              size="sm"
-                              className="h-7 text-xs"
-                              disabled={splitClaimItem.isPending || !validQty}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (!validQty || !personToken) return;
-                                splitClaimItem.mutate({
-                                  token,
-                                  personToken,
-                                  itemIndex: idx,
-                                  splitQuantity: parsed,
-                                });
-                              }}
+                      {splittingItemIdx === idx &&
+                        (() => {
+                          const parsed = Number(splitQty);
+                          const validQty = Number.isSafeInteger(parsed) && parsed >= 1 && parsed < item.quantity;
+                          return (
+                            <div
+                              className="flex items-center gap-2 mt-2"
+                              onClick={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => e.stopPropagation()}
                             >
-                              {t("splitButton")}
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 text-xs"
-                              onClick={(e) => { e.stopPropagation(); setSplittingItemIdx(null); }}
-                            >
-                              {t("cancelButton")}
-                            </Button>
-                          </div>
-                        );
-                      })()}
+                              <span className="text-xs text-muted-foreground">{t('splitOff')}</span>
+                              <Input
+                                type="number"
+                                min={1}
+                                max={item.quantity - 1}
+                                value={splitQty}
+                                onChange={(e) => setSplitQty(e.target.value)}
+                                className="w-16 h-7 text-xs"
+                                aria-label={t('splitOff')}
+                                data-testid={`split-qty-input-${idx}`}
+                              />
+                              <span className="text-xs text-muted-foreground">
+                                {t('splitOfTotal', { total: item.quantity })}
+                              </span>
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="h-7 text-xs"
+                                disabled={splitClaimItem.isPending || !validQty}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (!validQty || !personToken) return;
+                                  splitClaimItem.mutate({
+                                    token,
+                                    personToken,
+                                    itemIndex: idx,
+                                    splitQuantity: parsed,
+                                  });
+                                }}
+                              >
+                                {t('splitButton')}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSplittingItemIdx(null);
+                                }}
+                              >
+                                {t('cancelButton')}
+                              </Button>
+                            </div>
+                          );
+                        })()}
 
                       {/* Other claimants */}
                       {otherClaimants.length > 0 && (
                         <div className="flex items-center gap-1 mt-1">
-                          <span className="text-xs text-muted-foreground">
-                            {t("alsoClaimedBy")}
-                          </span>
+                          <span className="text-xs text-muted-foreground">{t('alsoClaimedBy')}</span>
                           <div className="flex -space-x-1">
                             {otherClaimants.map((pi) => (
                               <Avatar key={pi} className="h-5 w-5 border-2 border-background">
-                                <AvatarFallback
-                                  className={`text-[8px] font-semibold ${guestAvatarColor(pi)}`}
-                                >
-                                  {getInitials(data.people[pi]?.name ?? "?")}
+                                <AvatarFallback className={`text-[8px] font-semibold ${guestAvatarColor(pi)}`}>
+                                  {getInitials(data.people[pi]?.name ?? '?')}
                                 </AvatarFallback>
                               </Avatar>
                             ))}
                           </div>
                           <span className="text-xs text-muted-foreground">
-                            {otherClaimants
-                              .map((pi) => data.people[pi]?.name ?? "?")
-                              .join(", ")}
+                            {otherClaimants.map((pi) => data.people[pi]?.name ?? '?').join(', ')}
                           </span>
                         </div>
                       )}
@@ -1187,32 +1161,26 @@ export default function ClaimPage({
       {/* Per-person totals */}
       {splitTotals.length > 0 && (
         <div className="space-y-3">
-          <h3 className="font-semibold text-base">{t("perPersonTotals")}</h3>
+          <h3 className="font-semibold text-base">{t('perPersonTotals')}</h3>
           {splitTotals.map((person) => {
             const personName =
-              data.people[person.personIndex]?.name ??
-              t("personFallback", { index: person.personIndex + 1 });
+              data.people[person.personIndex]?.name ?? t('personFallback', { index: person.personIndex + 1 });
             const isMe = person.personIndex === myPersonIndex;
             const isActive = person.personIndex === personIndex;
 
             return (
-              <Card
-                key={person.personIndex}
-                className={isActive ? "ring-2 ring-primary" : ""}
-              >
+              <Card key={person.personIndex} className={isActive ? 'ring-2 ring-primary' : ''}>
                 <CardContent className="py-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <Avatar className="h-8 w-8">
-                        <AvatarFallback
-                          className={`text-xs font-semibold ${guestAvatarColor(person.personIndex)}`}
-                        >
+                        <AvatarFallback className={`text-xs font-semibold ${guestAvatarColor(person.personIndex)}`}>
                           {getInitials(personName)}
                         </AvatarFallback>
                       </Avatar>
                       <span className="font-medium">
                         {personName}
-                        {isMe && ` ${t("you")}`}
+                        {isMe && ` ${t('you')}`}
                       </span>
                     </div>
                     <span className="text-lg font-bold text-primary">
@@ -1221,18 +1189,12 @@ export default function ClaimPage({
                   </div>
                   {(person.tax > 0 || person.tip > 0) && (
                     <div className="ml-11 mt-1 flex gap-3 text-xs text-muted-foreground">
-                      <span>
-                        {t("items", { amount: formatCents(person.itemTotal, currency, locale) })}
-                      </span>
+                      <span>{t('items', { amount: formatCents(person.itemTotal, currency, locale) })}</span>
                       {person.tax > 0 && (
-                        <span>
-                          {t("taxAmount", { amount: formatCents(person.tax, currency, locale) })}
-                        </span>
+                        <span>{t('taxAmount', { amount: formatCents(person.tax, currency, locale) })}</span>
                       )}
                       {person.tip > 0 && (
-                        <span>
-                          {t("tipAmount", { amount: formatCents(person.tip, currency, locale) })}
-                        </span>
+                        <span>{t('tipAmount', { amount: formatCents(person.tip, currency, locale) })}</span>
                       )}
                     </div>
                   )}
@@ -1245,18 +1207,12 @@ export default function ClaimPage({
 
       {/* CTA */}
       <div className="text-center">
-        <Link
-          href="/split"
-          className="text-sm font-medium text-primary hover:underline"
-        >
-          {t("splitYourOwn")}
+        <Link href="/split" className="text-sm font-medium text-primary hover:underline">
+          {t('splitYourOwn')}
         </Link>
-        <span className="text-muted-foreground mx-2">{t("or")}</span>
-        <Link
-          href="/register"
-          className="text-sm font-medium text-primary hover:underline"
-        >
-          {t("createAccount")}
+        <span className="text-muted-foreground mx-2">{t('or')}</span>
+        <Link href="/register" className="text-sm font-medium text-primary hover:underline">
+          {t('createAccount')}
         </Link>
       </div>
 
@@ -1264,29 +1220,33 @@ export default function ClaimPage({
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t">
         <div className="mx-auto max-w-lg">
           {/* Finalize button -- only when no unsaved changes and all items claimed */}
-          {!hasAnyUnsavedChanges && personToken && myPersonIndex !== null && !finalizeSession.isPending && allItemsClaimed && (
-            <Button
-              variant="outline"
-              className="w-full h-12 mb-2"
-              onClick={() => {
-                if (confirm(t("finalizeConfirm"))) {
-                  finalizeSession.mutate({
-                    token,
-                    personIndex: myPersonIndex,
-                    personToken,
-                  });
-                }
-              }}
-              disabled={finalizeSession.isPending}
-              data-testid="finalize-btn"
-            >
-              {t("finalizeSplit")}
-            </Button>
-          )}
+          {!hasAnyUnsavedChanges &&
+            personToken &&
+            myPersonIndex !== null &&
+            !finalizeSession.isPending &&
+            allItemsClaimed && (
+              <Button
+                variant="outline"
+                className="w-full h-12 mb-2"
+                onClick={() => {
+                  if (confirm(t('finalizeConfirm'))) {
+                    finalizeSession.mutate({
+                      token,
+                      personIndex: myPersonIndex,
+                      personToken,
+                    });
+                  }
+                }}
+                disabled={finalizeSession.isPending}
+                data-testid="finalize-btn"
+              >
+                {t('finalizeSplit')}
+              </Button>
+            )}
           {finalizeSession.isPending && (
             <Button variant="outline" className="w-full h-12 mb-2" disabled>
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-              {t("finalizing")}
+              {t('finalizing')}
             </Button>
           )}
           <Button
@@ -1298,17 +1258,17 @@ export default function ClaimPage({
             {saving ? (
               <>
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                {t("saving")}
+                {t('saving')}
               </>
             ) : hasUnsavedChanges ? (
               <>
                 <Check className="mr-2 h-5 w-5" />
-                {t("saveClaimsFor", { name: data.people[personIndex!]?.name ?? "" })}
+                {t('saveClaimsFor', { name: data.people[personIndex!]?.name ?? '' })}
               </>
             ) : (
               <>
                 <Check className="mr-2 h-5 w-5" />
-                {t("claimsSaved")}
+                {t('claimsSaved')}
               </>
             )}
           </Button>

@@ -1,16 +1,18 @@
-import { z } from "zod";
-import { TRPCError } from "@trpc/server";
-import { createTRPCRouter, groupMemberProcedure } from "../init";
-import { getExchangeRate, convertCents } from "../../lib/exchange-rates";
-import { MAX_MONEY_CENTS } from "@/lib/money";
+import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
+import { createTRPCRouter, groupMemberProcedure } from '../init';
+import { getExchangeRate, convertCents } from '../../lib/exchange-rates';
+import { MAX_MONEY_CENTS } from '@/lib/money';
 
 export const settlementsRouter = createTRPCRouter({
   list: groupMemberProcedure
-    .input(z.object({
-      groupId: z.string(),
-      cursor: z.string().optional(),
-      limit: z.number().int().min(1).max(200).default(100),
-    }))
+    .input(
+      z.object({
+        groupId: z.string(),
+        cursor: z.string().optional(),
+        limit: z.number().int().min(1).max(200).default(100),
+      }),
+    )
     .query(async ({ ctx, input }) => {
       const items = await ctx.db.settlement.findMany({
         where: { groupId: input.groupId },
@@ -20,7 +22,7 @@ export const settlementsRouter = createTRPCRouter({
           from: { select: { id: true, name: true, image: true } },
           to: { select: { id: true, name: true, image: true } },
         },
-        orderBy: [{ settledAt: "desc" }, { id: "desc" }],
+        orderBy: [{ settledAt: 'desc' }, { id: 'desc' }],
       });
 
       let nextCursor: string | undefined;
@@ -39,10 +41,15 @@ export const settlementsRouter = createTRPCRouter({
         fromId: z.string().optional(),
         toId: z.string(),
         amount: z.number().int().positive().max(MAX_MONEY_CENTS),
-        currency: z.string().length(3).regex(/^[a-zA-Z]{3}$/).transform((c) => c.toUpperCase()).default("USD"),
+        currency: z
+          .string()
+          .length(3)
+          .regex(/^[a-zA-Z]{3}$/)
+          .transform((c) => c.toUpperCase())
+          .default('USD'),
         exchangeRate: z.number().positive().finite().max(1_000_000).optional(), // manual override
         note: z.string().max(500).optional(),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       const effectiveFromId = input.fromId ?? ctx.user.id;
@@ -54,28 +61,24 @@ export const settlementsRouter = createTRPCRouter({
       });
       if (group?.archivedAt) {
         throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Cannot create settlements in an archived group",
+          code: 'BAD_REQUEST',
+          message: 'Cannot create settlements in an archived group',
         });
       }
 
       // Cannot settle with yourself
       if (effectiveFromId === input.toId) {
         throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Cannot settle a debt with yourself",
+          code: 'BAD_REQUEST',
+          message: 'Cannot settle a debt with yourself',
         });
       }
 
       // Security: non-admin members can only create settlements from themselves
-      if (
-        ctx.membership.role === "MEMBER" &&
-        input.fromId &&
-        input.fromId !== ctx.user.id
-      ) {
+      if (ctx.membership.role === 'MEMBER' && input.fromId && input.fromId !== ctx.user.id) {
         throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "You can only record payments from yourself",
+          code: 'FORBIDDEN',
+          message: 'You can only record payments from yourself',
         });
       }
 
@@ -88,13 +91,13 @@ export const settlementsRouter = createTRPCRouter({
       });
       if (memberCount < (effectiveFromId === input.toId ? 1 : 2)) {
         throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Both the payer and recipient must be members of this group",
+          code: 'BAD_REQUEST',
+          message: 'Both the payer and recipient must be members of this group',
         });
       }
 
       // Currency conversion: compute base currency amount if currencies differ
-      const groupCurrency = group?.currency ?? "USD";
+      const groupCurrency = group?.currency ?? 'USD';
       let exchangeRate: number | null = null;
       let baseCurrencyAmount: number | null = null;
 
@@ -107,8 +110,8 @@ export const settlementsRouter = createTRPCRouter({
 
         if (exchangeRate === null) {
           throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Could not fetch exchange rate. Please provide a manual rate or try again.",
+            code: 'BAD_REQUEST',
+            message: 'Could not fetch exchange rate. Please provide a manual rate or try again.',
           });
         }
 
@@ -133,7 +136,7 @@ export const settlementsRouter = createTRPCRouter({
           data: {
             groupId: input.groupId,
             userId: ctx.user.id,
-            type: "SETTLEMENT_CREATED",
+            type: 'SETTLEMENT_CREATED',
             entityId: created.id,
             metadata: { toId: input.toId, amount: input.amount },
           },

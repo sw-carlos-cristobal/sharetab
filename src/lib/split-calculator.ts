@@ -23,7 +23,7 @@ export function calculateSplitTotals(params: {
       // Weighted proportional splitting
       const totalWeight = Math.max(
         1,
-        assignment.personIndices.reduce((sum, pi) => sum + (personWeights[pi] ?? 1), 0)
+        assignment.personIndices.reduce((sum, pi) => sum + (personWeights[pi] ?? 1), 0),
       );
       let allocated = 0;
       for (const [i, personIdx] of assignment.personIndices.entries()) {
@@ -32,7 +32,7 @@ export function calculateSplitTotals(params: {
         if (i === assignment.personIndices.length - 1) {
           amount = item.totalPrice - allocated;
         } else {
-          amount = Math.floor(item.totalPrice * weight / totalWeight);
+          amount = Math.floor((item.totalPrice * weight) / totalWeight);
         }
         allocated += amount;
         personSubtotals.set(personIdx, (personSubtotals.get(personIdx) ?? 0) + amount);

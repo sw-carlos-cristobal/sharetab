@@ -1,48 +1,38 @@
-"use client";
+'use client';
 
-import { useSession } from "next-auth/react";
-import { useTranslations } from "next-intl";
-import { trpc } from "@/lib/trpc";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import {
-  Shield,
-  Database,
-  Package,
-  Clock,
-  FolderOpen,
-  HardDrive,
-  FileWarning,
-  Loader2,
-  RefreshCw,
-} from "lucide-react";
+import { useSession } from 'next-auth/react';
+import { useTranslations } from 'next-intl';
+import { trpc } from '@/lib/trpc';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { Shield, Database, Package, Clock, FolderOpen, HardDrive, FileWarning, Loader2, RefreshCw } from 'lucide-react';
 
-import { AuditLogSection } from "@/components/admin/audit-log-section";
-import { RegistrationControlSection } from "@/components/admin/registration-control-section";
-import { AnnouncementSection } from "@/components/admin/announcement-section";
-import { ActivityFeedSection } from "@/components/admin/activity-feed-section";
-import { AIStatsSection } from "@/components/admin/ai-stats-section";
-import { AIProviderTestSection } from "@/components/admin/ai-provider-test-section";
-import { ToolsSection } from "@/components/admin/tools-section";
-import { ServerLogsSection } from "@/components/admin/server-logs-section";
-import { AuthExpiryNotificationsSection } from "@/components/admin/auth-expiry-notifications-section";
-import { MeridianAuthSection } from "@/components/admin/meridian-auth-section";
-import { OpenAICodexAuthSection } from "@/components/admin/openai-codex-auth-section";
-import { UserManagementSection } from "@/components/admin/user-management-section";
-import { GroupOverviewSection } from "@/components/admin/group-overview-section";
-import { VenmoSettingsSection } from "@/components/admin/venmo-settings-section";
+import { AuditLogSection } from '@/components/admin/audit-log-section';
+import { RegistrationControlSection } from '@/components/admin/registration-control-section';
+import { AnnouncementSection } from '@/components/admin/announcement-section';
+import { ActivityFeedSection } from '@/components/admin/activity-feed-section';
+import { AIStatsSection } from '@/components/admin/ai-stats-section';
+import { AIProviderTestSection } from '@/components/admin/ai-provider-test-section';
+import { ToolsSection } from '@/components/admin/tools-section';
+import { ServerLogsSection } from '@/components/admin/server-logs-section';
+import { AuthExpiryNotificationsSection } from '@/components/admin/auth-expiry-notifications-section';
+import { MeridianAuthSection } from '@/components/admin/meridian-auth-section';
+import { OpenAICodexAuthSection } from '@/components/admin/openai-codex-auth-section';
+import { UserManagementSection } from '@/components/admin/user-management-section';
+import { GroupOverviewSection } from '@/components/admin/group-overview-section';
+import { VenmoSettingsSection } from '@/components/admin/venmo-settings-section';
 
 export default function AdminPage() {
   const { data: session } = useSession();
-  const t = useTranslations("admin");
+  const t = useTranslations('admin');
   const currentUserEmail = session?.user?.email;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Shield className="h-7 w-7 text-primary" />
-        <h1 className="text-2xl font-bold">{t("title")}</h1>
+        <h1 className="text-2xl font-bold">{t('title')}</h1>
       </div>
 
       <div className="grid gap-6 [&>*]:min-w-0">
@@ -80,38 +70,32 @@ export default function AdminPage() {
 // ─── System Health ─────────────────────────────────────────
 
 function SystemHealthSection() {
-  const t = useTranslations("admin");
+  const t = useTranslations('admin');
   const health = trpc.admin.getSystemHealth.useQuery(undefined, {
     refetchInterval: 30000,
   });
 
-  if (health.isLoading) return <SectionSkeleton title={t("systemHealth.title")} />;
+  if (health.isLoading) return <SectionSkeleton title={t('systemHealth.title')} />;
 
   const data = health.data;
 
   return (
     <section>
-      <h2 className="mb-4 text-lg font-semibold">{t("systemHealth.title")}</h2>
+      <h2 className="mb-4 text-lg font-semibold">{t('systemHealth.title')}</h2>
       <div className="grid gap-4 @2xl:grid-cols-2">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
               <Database className="h-4 w-4" />
-              {t("systemHealth.database")}
+              {t('systemHealth.database')}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
               <span
-                className={`h-2.5 w-2.5 rounded-full ${
-                  data?.dbStatus === "connected"
-                    ? "bg-green-500"
-                    : "bg-red-500"
-                }`}
+                className={`h-2.5 w-2.5 rounded-full ${data?.dbStatus === 'connected' ? 'bg-green-500' : 'bg-red-500'}`}
               />
-              <span className="text-sm font-medium capitalize">
-                {data?.dbStatus ?? "unknown"}
-              </span>
+              <span className="text-sm font-medium capitalize">{data?.dbStatus ?? 'unknown'}</span>
             </div>
           </CardContent>
         </Card>
@@ -120,12 +104,12 @@ function SystemHealthSection() {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
               <Package className="h-4 w-4" />
-              {t("systemHealth.version")}
+              {t('systemHealth.version')}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <span className="text-sm font-medium">v{data?.version}</span>
-            {data?.commitSha && data.commitSha !== "unknown" && (
+            {data?.commitSha && data.commitSha !== 'unknown' && (
               <span className="ml-2 text-xs text-muted-foreground font-mono">({data.commitSha})</span>
             )}
           </CardContent>
@@ -135,16 +119,14 @@ function SystemHealthSection() {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
               <Clock className="h-4 w-4" />
-              {t("systemHealth.uptime")}
+              {t('systemHealth.uptime')}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <span className="text-sm font-medium">
-              {data ? formatUptime(data.uptime) : "---"}
-            </span>
+            <span className="text-sm font-medium">{data ? formatUptime(data.uptime) : '---'}</span>
             {data?.serverStartTime && (
               <p className="mt-1 text-xs text-muted-foreground">
-                {t("systemHealth.started", { time: new Date(data.serverStartTime).toLocaleString() })}
+                {t('systemHealth.started', { time: new Date(data.serverStartTime).toLocaleString() })}
               </p>
             )}
           </CardContent>
@@ -157,7 +139,7 @@ function SystemHealthSection() {
 // ─── Storage Stats ─────────────────────────────────────────
 
 function StorageStatsSection() {
-  const t = useTranslations("admin");
+  const t = useTranslations('admin');
   const storage = trpc.admin.getStorageStats.useQuery();
   const utils = trpc.useUtils();
   const cleanup = trpc.admin.cleanupOrphans.useMutation({
@@ -167,26 +149,24 @@ function StorageStatsSection() {
     },
   });
 
-  if (storage.isLoading) return <SectionSkeleton title={t("storage.title")} />;
+  if (storage.isLoading) return <SectionSkeleton title={t('storage.title')} />;
 
   const data = storage.data;
 
   return (
     <section>
-      <h2 className="mb-4 text-lg font-semibold">{t("storage.title")}</h2>
+      <h2 className="mb-4 text-lg font-semibold">{t('storage.title')}</h2>
       <div className="grid gap-4 @2xl:grid-cols-2">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
               <FolderOpen className="h-4 w-4" />
-              {t("storage.receipts")}
+              {t('storage.receipts')}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold">{data?.receiptCount ?? 0}</p>
-            <p className="text-xs text-muted-foreground">
-              {t("storage.inDatabase")}
-            </p>
+            <p className="text-xs text-muted-foreground">{t('storage.inDatabase')}</p>
           </CardContent>
         </Card>
 
@@ -194,16 +174,12 @@ function StorageStatsSection() {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
               <HardDrive className="h-4 w-4" />
-              {t("storage.diskUsage")}
+              {t('storage.diskUsage')}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">
-              {data?.totalDiskUsageFormatted ?? "0 B"}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {t("storage.filesOnDisk", { count: data?.diskFiles ?? 0 })}
-            </p>
+            <p className="text-2xl font-bold">{data?.totalDiskUsageFormatted ?? '0 B'}</p>
+            <p className="text-xs text-muted-foreground">{t('storage.filesOnDisk', { count: data?.diskFiles ?? 0 })}</p>
           </CardContent>
         </Card>
 
@@ -212,33 +188,26 @@ function StorageStatsSection() {
             <CardTitle className="flex items-center justify-between">
               <span className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                 <FileWarning className="h-4 w-4" />
-                {t("storage.orphanedFiles")}
+                {t('storage.orphanedFiles')}
               </span>
               {(data?.orphanCount ?? 0) > 0 && (
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => cleanup.mutate()}
-                  disabled={cleanup.isPending}
-                >
+                <Button size="sm" variant="destructive" onClick={() => cleanup.mutate()} disabled={cleanup.isPending}>
                   {cleanup.isPending ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
                     <RefreshCw className="mr-2 h-4 w-4" />
                   )}
-                  {t("storage.cleanUp")}
+                  {t('storage.cleanUp')}
                 </Button>
               )}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold">{data?.orphanCount ?? 0}</p>
-            <p className="text-xs text-muted-foreground">
-              {t("storage.orphanDescription")}
-            </p>
+            <p className="text-xs text-muted-foreground">{t('storage.orphanDescription')}</p>
             {cleanup.isSuccess && (
               <p className="mt-2 text-sm text-green-600">
-                {t("storage.cleanedUp", { count: cleanup.data.deletedCount, size: cleanup.data.freedBytesFormatted })}
+                {t('storage.cleanedUp', { count: cleanup.data.deletedCount, size: cleanup.data.freedBytesFormatted })}
               </p>
             )}
           </CardContent>
@@ -273,5 +242,5 @@ function formatUptime(seconds: number): string {
   if (hours > 0) parts.push(`${hours}h`);
   parts.push(`${minutes}m`);
 
-  return parts.join(" ");
+  return parts.join(' ');
 }

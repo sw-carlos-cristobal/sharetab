@@ -5,21 +5,14 @@ import { useTranslations } from 'next-intl';
 import { trpc } from '@/lib/trpc';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Loader2,
-  FlaskConical,
-  Upload,
-  CheckCircle2,
-  AlertCircle,
-  X,
-} from 'lucide-react';
+import { Loader2, FlaskConical, Upload, CheckCircle2, AlertCircle, X } from 'lucide-react';
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const OAUTH_PROVIDERS = new Set(['meridian', 'openai-codex']);
 const KNOWN_PROVIDERS = new Set(['openai', 'openai-codex', 'claude', 'meridian', 'ollama']);
 
 export function AIProviderTestSection() {
-  const t = useTranslations("admin");
+  const t = useTranslations('admin');
   const health = trpc.admin.getSystemHealth.useQuery();
   const utils = trpc.useUtils();
   const testProvider = trpc.admin.testAIProvider.useMutation({
@@ -30,13 +23,9 @@ export function AIProviderTestSection() {
   const [file, setFile] = useState<{ name: string; base64: string; mimeType: string } | null>(null);
   const [activeProvider, setActiveProvider] = useState<string | null>(null);
 
-  const allProviders = health.data?.aiProvider
-    ?.split(' -> ')
-    .filter(Boolean) ?? [];
+  const allProviders = health.data?.aiProvider?.split(' -> ').filter(Boolean) ?? [];
 
-  const nonOAuthProviders = allProviders.filter(
-    (p) => KNOWN_PROVIDERS.has(p) && !OAUTH_PROVIDERS.has(p)
-  );
+  const nonOAuthProviders = allProviders.filter((p) => KNOWN_PROVIDERS.has(p) && !OAUTH_PROVIDERS.has(p));
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
@@ -68,7 +57,7 @@ export function AIProviderTestSection() {
     testProvider.mutate({
       providerName,
       imageBase64: file.base64,
-      mimeType: file.mimeType as "image/jpeg" | "image/png" | "image/webp" | "image/gif",
+      mimeType: file.mimeType as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
     });
   };
 
@@ -77,7 +66,7 @@ export function AIProviderTestSection() {
       <section>
         <div className="mb-4 flex items-center gap-2">
           <FlaskConical className="h-5 w-5 text-muted-foreground" />
-          <h2 className="text-lg font-semibold">{t("aiProviderTest.title")}</h2>
+          <h2 className="text-lg font-semibold">{t('aiProviderTest.title')}</h2>
         </div>
         <Card>
           <CardContent className="flex items-center justify-center py-12">
@@ -96,14 +85,12 @@ export function AIProviderTestSection() {
     <section data-testid="ai-provider-test-section">
       <div className="mb-4 flex items-center gap-2">
         <FlaskConical className="h-5 w-5 text-muted-foreground" />
-        <h2 className="text-lg font-semibold">{t("aiProviderTest.title")}</h2>
+        <h2 className="text-lg font-semibold">{t('aiProviderTest.title')}</h2>
       </div>
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            {t("aiProviderTest.description")}
-          </CardTitle>
+          <CardTitle className="text-sm font-medium text-muted-foreground">{t('aiProviderTest.description')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center gap-3">
@@ -122,12 +109,18 @@ export function AIProviderTestSection() {
               data-testid="ai-test-upload-btn"
             >
               <Upload className="mr-2 h-4 w-4" />
-              {file ? t("aiProviderTest.changeImage") : t("aiProviderTest.uploadImage")}
+              {file ? t('aiProviderTest.changeImage') : t('aiProviderTest.uploadImage')}
             </Button>
             {file && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground" data-testid="ai-test-file-info">
                 <span className="max-w-48 truncate">{file.name}</span>
-                <button type="button" onClick={clearFile} className="text-muted-foreground hover:text-foreground" data-testid="ai-test-clear-btn" aria-label={t("aiProviderTest.clearFile")}>
+                <button
+                  type="button"
+                  onClick={clearFile}
+                  className="text-muted-foreground hover:text-foreground"
+                  data-testid="ai-test-clear-btn"
+                  aria-label={t('aiProviderTest.clearFile')}
+                >
                   <X className="h-4 w-4" />
                 </button>
               </div>
@@ -149,14 +142,14 @@ export function AIProviderTestSection() {
                 ) : (
                   <FlaskConical className="mr-2 h-4 w-4" />
                 )}
-                {t("aiProviderTest.testProvider", { name })}
+                {t('aiProviderTest.testProvider', { name })}
               </Button>
             ))}
           </div>
 
           {!file && (
             <p className="text-sm text-muted-foreground" data-testid="ai-test-upload-hint">
-              {t("aiProviderTest.uploadHint")}
+              {t('aiProviderTest.uploadHint')}
             </p>
           )}
 
@@ -164,7 +157,10 @@ export function AIProviderTestSection() {
             <div className="space-y-2" data-testid="ai-test-success">
               <p className="flex items-center gap-1 text-sm text-green-600" data-testid="ai-test-success-msg">
                 <CheckCircle2 className="h-4 w-4" />
-                {t("aiProviderTest.success", { provider: activeProvider ?? "", duration: testProvider.data.durationMs })}
+                {t('aiProviderTest.success', {
+                  provider: activeProvider ?? '',
+                  duration: testProvider.data.durationMs,
+                })}
               </p>
               <pre className="max-h-96 overflow-auto rounded-md bg-muted p-3 text-xs" data-testid="ai-test-result-json">
                 {JSON.stringify(testProvider.data.result, null, 2)}
@@ -176,7 +172,7 @@ export function AIProviderTestSection() {
             <div className="space-y-2" data-testid="ai-test-error">
               <p className="flex items-center gap-1 text-sm text-destructive" data-testid="ai-test-error-msg">
                 <AlertCircle className="h-4 w-4" />
-                {t("aiProviderTest.failed", { provider: activeProvider ?? "", error: testProvider.error.message })}
+                {t('aiProviderTest.failed', { provider: activeProvider ?? '', error: testProvider.error.message })}
               </p>
             </div>
           )}

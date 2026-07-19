@@ -7,6 +7,7 @@ If you discover a security vulnerability in ShareTab, please report it responsib
 **sw.carlos.cristobal@gmail.com**
 
 Please include:
+
 - A description of the vulnerability
 - Steps to reproduce it
 - The potential impact

@@ -1,5 +1,5 @@
-import { z } from "zod";
-import { createTRPCRouter, groupMemberProcedure, protectedProcedure } from "../init";
+import { z } from 'zod';
+import { createTRPCRouter, groupMemberProcedure, protectedProcedure } from '../init';
 
 export const activityRouter = createTRPCRouter({
   getGroupActivity: groupMemberProcedure
@@ -8,14 +8,14 @@ export const activityRouter = createTRPCRouter({
         groupId: z.string(),
         cursor: z.string().optional(),
         limit: z.number().int().min(1).max(100).default(20),
-      })
+      }),
     )
     .query(async ({ ctx, input }) => {
       const items = await ctx.db.activityLog.findMany({
         where: { groupId: input.groupId },
         take: input.limit + 1,
         ...(input.cursor ? { cursor: { id: input.cursor } } : {}),
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: 'desc' },
         include: {
           user: { select: { id: true, name: true, image: true } },
         },
@@ -30,7 +30,7 @@ export const activityRouter = createTRPCRouter({
       return {
         items: items.map((item) => ({
           ...item,
-          user: item.user ?? { id: item.userId ?? "deleted", name: "Deleted user", image: null },
+          user: item.user ?? { id: item.userId ?? 'deleted', name: 'Deleted user', image: null },
         })),
         nextCursor,
       };
@@ -48,7 +48,7 @@ export const activityRouter = createTRPCRouter({
       const items = await ctx.db.activityLog.findMany({
         where: { groupId: { in: groupIds } },
         take: input.limit,
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: 'desc' },
         include: {
           user: { select: { id: true, name: true, image: true } },
           group: { select: { id: true, name: true } },
@@ -57,7 +57,7 @@ export const activityRouter = createTRPCRouter({
 
       return items.map((item) => ({
         ...item,
-        user: item.user ?? { id: item.userId ?? "deleted", name: "Deleted user", image: null },
+        user: item.user ?? { id: item.userId ?? 'deleted', name: 'Deleted user', image: null },
       }));
     }),
 });

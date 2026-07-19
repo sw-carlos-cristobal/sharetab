@@ -41,10 +41,10 @@ npm run db:seed
 
 This creates three demo users you can log in with:
 
-| Email | Password |
-|---|---|
-| alice@example.com | password123 |
-| bob@example.com | password123 |
+| Email               | Password    |
+| ------------------- | ----------- |
+| alice@example.com   | password123 |
+| bob@example.com     | password123 |
 | charlie@example.com | password123 |
 
 ## Running Tests

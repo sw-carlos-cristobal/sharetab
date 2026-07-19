@@ -1,18 +1,16 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
-import { getToken } from "next-auth/jwt";
-import createIntlMiddleware from "next-intl/middleware";
-import { routing } from "@/i18n/routing";
-import { isSupportedLocale, withLocalePrefix } from "@/lib/locale-paths";
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { getToken } from 'next-auth/jwt';
+import createIntlMiddleware from 'next-intl/middleware';
+import { routing } from '@/i18n/routing';
+import { isSupportedLocale, withLocalePrefix } from '@/lib/locale-paths';
 
 const intlMiddleware = createIntlMiddleware(routing);
 
-const publicPages = ["/login", "/register", "/verify-request", "/invite", "/split"];
+const publicPages = ['/login', '/register', '/verify-request', '/invite', '/split'];
 
 function isPublicPage(pathname: string): boolean {
-  return publicPages.some(
-    (page) => pathname === page || pathname.startsWith(page + "/")
-  );
+  return publicPages.some((page) => pathname === page || pathname.startsWith(page + '/'));
 }
 
 export async function middleware(request: NextRequest) {
@@ -20,16 +18,12 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const callbackUrl = `${pathname}${request.nextUrl.search}`;
   const localePrefix = routing.locales.find(
-    (locale) => pathname.startsWith(`/${locale}/`) || pathname === `/${locale}`
+    (locale) => pathname.startsWith(`/${locale}/`) || pathname === `/${locale}`,
   );
-  const strippedPathname = localePrefix
-    ? pathname.replace(`/${localePrefix}`, "") || "/"
-    : pathname;
+  const strippedPathname = localePrefix ? pathname.replace(`/${localePrefix}`, '') || '/' : pathname;
 
-  const isSecure = request.nextUrl.protocol === "https:";
-  const cookieName = isSecure
-    ? "__Secure-authjs.session-token"
-    : "authjs.session-token";
+  const isSecure = request.nextUrl.protocol === 'https:';
+  const cookieName = isSecure ? '__Secure-authjs.session-token' : 'authjs.session-token';
 
   let token;
   try {
@@ -42,18 +36,16 @@ export async function middleware(request: NextRequest) {
     // Malformed or forged JWT — treat as unauthenticated
   }
 
-  const cookieLocale = request.cookies.get("NEXT_LOCALE")?.value;
+  const cookieLocale = request.cookies.get('NEXT_LOCALE')?.value;
   const preferredLocale =
     (isSupportedLocale(cookieLocale) ? cookieLocale : null) ??
-    (typeof token?.locale === "string" && isSupportedLocale(token.locale)
-      ? token.locale
-      : null);
+    (typeof token?.locale === 'string' && isSupportedLocale(token.locale) ? token.locale : null);
 
   if (!localePrefix && preferredLocale) {
     return NextResponse.redirect(new URL(withLocalePrefix(callbackUrl, preferredLocale), request.url));
   }
 
-  if (isPublicPage(strippedPathname) || strippedPathname === "/") {
+  if (isPublicPage(strippedPathname) || strippedPathname === '/') {
     return intlResponse;
   }
 
@@ -66,7 +58,7 @@ export async function middleware(request: NextRequest) {
     }
     const locale = localePrefix ?? preferredLocale ?? routing.defaultLocale;
     const loginUrl = new URL(`/${locale}/login`, request.url);
-    loginUrl.searchParams.set("callbackUrl", callbackUrl);
+    loginUrl.searchParams.set('callbackUrl', callbackUrl);
     return NextResponse.redirect(loginUrl);
   }
 
@@ -74,7 +66,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    "/((?!api|_next|_vercel|favicon\\.png|icon\\.svg|icons|manifest\\.json|.*\\..*).*)",
-  ],
+  matcher: ['/((?!api|_next|_vercel|favicon\\.png|icon\\.svg|icons|manifest\\.json|.*\\..*).*)'],
 };

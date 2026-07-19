@@ -1,9 +1,9 @@
-import { redirect } from "next/navigation";
-import { auth } from "@/server/auth";
-import { AppSidebar } from "@/components/layout/sidebar";
-import { MobileHeader } from "@/components/layout/mobile-header";
-import { AnnouncementBanner } from "@/components/layout/announcement-banner";
-import { ImpersonationBanner } from "@/components/layout/impersonation-banner";
+import { redirect } from 'next/navigation';
+import { auth } from '@/server/auth';
+import { AppSidebar } from '@/components/layout/sidebar';
+import { MobileHeader } from '@/components/layout/mobile-header';
+import { AnnouncementBanner } from '@/components/layout/announcement-banner';
+import { ImpersonationBanner } from '@/components/layout/impersonation-banner';
 
 export default async function AppLayout({
   children,
@@ -18,9 +18,7 @@ export default async function AppLayout({
     redirect(`/${locale}/login`);
   }
 
-  const isAdmin =
-    !!process.env.ADMIN_EMAIL &&
-    session.user.email === process.env.ADMIN_EMAIL;
+  const isAdmin = !!process.env.ADMIN_EMAIL && session.user.email === process.env.ADMIN_EMAIL;
 
   return (
     <div className="min-h-dvh lg:flex lg:h-dvh lg:flex-row">

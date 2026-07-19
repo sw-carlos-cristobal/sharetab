@@ -1,34 +1,26 @@
-import type { AIProvider } from "./provider";
+import type { AIProvider } from './provider';
 
-const USER_SELECTABLE_PROVIDERS = [
-  "openai",
-  "openai-codex",
-  "claude",
-  "meridian",
-  "ollama",
-] as const;
+const USER_SELECTABLE_PROVIDERS = ['openai', 'openai-codex', 'claude', 'meridian', 'ollama'] as const;
 
-const ALL_PROVIDERS = [...USER_SELECTABLE_PROVIDERS, "mock"] as const;
+const ALL_PROVIDERS = [...USER_SELECTABLE_PROVIDERS, 'mock'] as const;
 
 type AIProviderName = (typeof ALL_PROVIDERS)[number];
-const DEFAULT_PROVIDER_PRIORITY = "openai";
+const DEFAULT_PROVIDER_PRIORITY = 'openai';
 
 function isAIProviderName(value: string): value is AIProviderName {
   return ALL_PROVIDERS.includes(value as AIProviderName);
 }
 
 function unknownProviderError(name: string): Error {
-  return new Error(
-    `Unknown AI provider: "${name}". Available: ${USER_SELECTABLE_PROVIDERS.join(", ")}, mock`
-  );
+  return new Error(`Unknown AI provider: "${name}". Available: ${USER_SELECTABLE_PROVIDERS.join(', ')}, mock`);
 }
 
 function parseProviderPriority(raw: string): AIProviderName[] {
   const parsed = raw
-    .split(",")
+    .split(',')
     .map((name) => name.trim().toLowerCase())
     .filter(Boolean)
-    .filter((name) => name !== "ocr");
+    .filter((name) => name !== 'ocr');
 
   const deduped: AIProviderName[] = [];
   for (const name of parsed) {
@@ -43,7 +35,7 @@ function parseProviderPriority(raw: string): AIProviderName[] {
   if (deduped.length === 0) {
     throw new Error(
       `AI_PROVIDER_PRIORITY resolved to an empty list after removing unsupported entries. ` +
-      `Configure at least one valid provider: ${USER_SELECTABLE_PROVIDERS.join(", ")}`
+        `Configure at least one valid provider: ${USER_SELECTABLE_PROVIDERS.join(', ')}`,
     );
   }
 
@@ -57,37 +49,37 @@ function getConfiguredProviderPriorityInternal(): AIProviderName[] {
 
 async function createProvider(name: AIProviderName): Promise<AIProvider> {
   switch (name) {
-    case "openai": {
+    case 'openai': {
       if (!process.env.OPENAI_API_KEY) {
-        throw new Error("OpenAI provider requires OPENAI_API_KEY");
+        throw new Error('OpenAI provider requires OPENAI_API_KEY');
       }
-      const { OpenAIProvider } = await import("./providers/openai");
+      const { OpenAIProvider } = await import('./providers/openai');
       return new OpenAIProvider(process.env.OPENAI_API_KEY, process.env.OPENAI_MODEL);
     }
-    case "openai-codex": {
-      const { OpenAICodexProvider } = await import("./providers/openai-codex");
+    case 'openai-codex': {
+      const { OpenAICodexProvider } = await import('./providers/openai-codex');
       return new OpenAICodexProvider(process.env.OPENAI_CODEX_MODEL);
     }
-    case "claude": {
-      const { ClaudeProvider } = await import("./providers/claude");
+    case 'claude': {
+      const { ClaudeProvider } = await import('./providers/claude');
       if (!process.env.ANTHROPIC_API_KEY) {
-        throw new Error("Claude provider requires ANTHROPIC_API_KEY");
+        throw new Error('Claude provider requires ANTHROPIC_API_KEY');
       }
       return new ClaudeProvider(process.env.ANTHROPIC_API_KEY);
     }
-    case "meridian": {
-      const { MeridianProvider } = await import("./providers/meridian");
+    case 'meridian': {
+      const { MeridianProvider } = await import('./providers/meridian');
       return new MeridianProvider();
     }
-    case "ollama": {
-      const { OllamaProvider } = await import("./providers/ollama");
+    case 'ollama': {
+      const { OllamaProvider } = await import('./providers/ollama');
       return new OllamaProvider(
-        process.env.OLLAMA_BASE_URL ?? "http://localhost:11434",
-        process.env.OLLAMA_MODEL ?? "llava"
+        process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434',
+        process.env.OLLAMA_MODEL ?? 'llava',
       );
     }
-    case "mock": {
-      const { MockProvider } = await import("./providers/mock");
+    case 'mock': {
+      const { MockProvider } = await import('./providers/mock');
       return new MockProvider();
     }
     default:
@@ -118,7 +110,7 @@ export async function getAIProvider(): Promise<AIProvider> {
   // parseProviderPriority() throws rather than returning an empty array, so
   // this is unreachable — guards the destructure for noUncheckedIndexedAccess.
   if (!first) {
-    throw new Error("AI_PROVIDER_PRIORITY resolved to an empty list");
+    throw new Error('AI_PROVIDER_PRIORITY resolved to an empty list');
   }
   return createProvider(first);
 }
@@ -159,7 +151,7 @@ export async function getAIProvidersWithFallback(): Promise<AIProvider[]> {
 export async function getAIProviderWithFallback(): Promise<AIProvider> {
   const [provider] = await getAIProvidersWithFallback();
   if (!provider) {
-    throw new Error("No AI providers available");
+    throw new Error('No AI providers available');
   }
   return provider;
 }

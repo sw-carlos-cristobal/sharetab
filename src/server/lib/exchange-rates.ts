@@ -3,10 +3,10 @@
  * Caches rates in memory with a configurable TTL.
  */
 
-import { TRPCError } from "@trpc/server";
-import { MAX_MONEY_CENTS } from "@/lib/money";
+import { TRPCError } from '@trpc/server';
+import { MAX_MONEY_CENTS } from '@/lib/money';
 
-const FRANKFURTER_BASE = "https://api.frankfurter.app";
+const FRANKFURTER_BASE = 'https://api.frankfurter.app';
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 type CacheEntry = {
@@ -18,7 +18,7 @@ type CacheEntry = {
 const rateCache = new Map<string, CacheEntry>();
 
 function cacheKey(from: string, to: string, date?: string): string {
-  return `${from}:${to}:${date ?? "latest"}`;
+  return `${from}:${to}:${date ?? 'latest'}`;
 }
 
 /**
@@ -29,11 +29,7 @@ function cacheKey(from: string, to: string, date?: string): string {
  * @param date - Optional YYYY-MM-DD date for historical rate. Omit for latest.
  * @returns The exchange rate (1 unit of `from` = rate units of `to`), or null if fetch fails.
  */
-export async function getExchangeRate(
-  from: string,
-  to: string,
-  date?: string
-): Promise<number | null> {
+export async function getExchangeRate(from: string, to: string, date?: string): Promise<number | null> {
   // Same currency = 1:1
   if (from.toUpperCase() === to.toUpperCase()) {
     return 1.0;
@@ -68,7 +64,7 @@ export async function getExchangeRate(
     };
 
     const rate = data.rates[to.toUpperCase()];
-    if (typeof rate !== "number" || !isFinite(rate) || rate <= 0) {
+    if (typeof rate !== 'number' || !isFinite(rate) || rate <= 0) {
       console.error(`[exchange-rates] Invalid rate for ${key}:`, data);
       return null;
     }
@@ -95,8 +91,8 @@ export function convertCents(amountCents: number, exchangeRate: number): number 
   const converted = Math.round(amountCents * exchangeRate);
   if (!Number.isFinite(converted) || Math.abs(converted) > MAX_MONEY_CENTS) {
     throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Converted amount is too large. Check the exchange rate.",
+      code: 'BAD_REQUEST',
+      message: 'Converted amount is too large. Check the exchange rate.',
     });
   }
   return converted;

@@ -1,31 +1,31 @@
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 const mockGetAIProvidersWithFallback = vi.fn();
 const mockClearProviderCache = vi.fn();
 
-vi.mock("../ai/registry", () => ({
+vi.mock('../ai/registry', () => ({
   getAIProvidersWithFallback: mockGetAIProvidersWithFallback,
   clearProviderCache: mockClearProviderCache,
 }));
 
-vi.mock("./logger", () => ({
+vi.mock('./logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock("./normalize-date", () => ({
+vi.mock('./normalize-date', () => ({
   normalizeDate: (value: string | undefined) => value,
 }));
 
-vi.mock("./upload-dir", () => ({
-  getUploadDir: () => "/tmp/uploads",
+vi.mock('./upload-dir', () => ({
+  getUploadDir: () => '/tmp/uploads',
   resolveUploadPath: (relativePath: string) => `/tmp/uploads/${relativePath}`,
 }));
 
-vi.mock("fs/promises", () => ({
-  readFile: vi.fn().mockResolvedValue(Buffer.from("fake-image")),
+vi.mock('fs/promises', () => ({
+  readFile: vi.fn().mockResolvedValue(Buffer.from('fake-image')),
 }));
 
-describe("processReceiptImage fallback behavior", () => {
+describe('processReceiptImage fallback behavior', () => {
   beforeEach(() => {
     vi.resetModules();
     mockGetAIProvidersWithFallback.mockReset();
@@ -42,77 +42,71 @@ describe("processReceiptImage fallback behavior", () => {
         update: vi.fn().mockResolvedValue(undefined),
       },
       // Interactive transaction: run the callback against the same mock
-      $transaction: vi.fn(
-        (fn: (tx: unknown) => Promise<unknown>) => fn(db)
-      ),
+      $transaction: vi.fn((fn: (tx: unknown) => Promise<unknown>) => fn(db)),
     };
     return db;
   }
 
   const successResult = {
-    merchantName: "Store",
-    date: "2026-04-13",
+    merchantName: 'Store',
+    date: '2026-04-13',
     subtotal: 1000,
     tax: 80,
     tip: 0,
     total: 1080,
-    currency: "USD",
-    items: [
-      { name: "Item", quantity: 1, unitPrice: 1080, totalPrice: 1080 },
-    ],
+    currency: 'USD',
+    items: [{ name: 'Item', quantity: 1, unitPrice: 1080, totalPrice: 1080 }],
   };
 
-  test("falls back to next provider when first extraction fails", async () => {
+  test('falls back to next provider when first extraction fails', async () => {
     const provider1 = {
-      name: "openai-codex",
-      extractReceipt: vi.fn().mockRejectedValue(new Error("expired")),
+      name: 'openai-codex',
+      extractReceipt: vi.fn().mockRejectedValue(new Error('expired')),
     };
     const provider2 = {
-      name: "openai",
+      name: 'openai',
       extractReceipt: vi.fn().mockResolvedValue(successResult),
     };
     mockGetAIProvidersWithFallback.mockResolvedValue([provider1, provider2]);
 
-    const { processReceiptImage } = await import("./receipt-processor");
+    const { processReceiptImage } = await import('./receipt-processor');
     const db = makeDbMock();
 
     await processReceiptImage({
       db: db as never,
-      receiptId: "r1",
-      receipt: { imagePath: "r1.jpg", mimeType: "image/jpeg" },
+      receiptId: 'r1',
+      receipt: { imagePath: 'r1.jpg', mimeType: 'image/jpeg' },
     });
 
     expect(provider1.extractReceipt).toHaveBeenCalledTimes(1);
     expect(provider2.extractReceipt).toHaveBeenCalledTimes(1);
     expect(db.receipt.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ aiProvider: "openai" }),
-      })
+        data: expect.objectContaining({ aiProvider: 'openai' }),
+      }),
     );
     expect(mockClearProviderCache).not.toHaveBeenCalled();
   });
 
-  test("clears provider cache and retries provider list on first full-pass failure", async () => {
+  test('clears provider cache and retries provider list on first full-pass failure', async () => {
     const badProvider = {
-      name: "openai-codex",
-      extractReceipt: vi.fn().mockRejectedValue(new Error("auth expired")),
+      name: 'openai-codex',
+      extractReceipt: vi.fn().mockRejectedValue(new Error('auth expired')),
     };
     const recoveredProvider = {
-      name: "openai-codex",
+      name: 'openai-codex',
       extractReceipt: vi.fn().mockResolvedValue(successResult),
     };
 
-    mockGetAIProvidersWithFallback
-      .mockResolvedValueOnce([badProvider])
-      .mockResolvedValueOnce([recoveredProvider]);
+    mockGetAIProvidersWithFallback.mockResolvedValueOnce([badProvider]).mockResolvedValueOnce([recoveredProvider]);
 
-    const { processReceiptImage } = await import("./receipt-processor");
+    const { processReceiptImage } = await import('./receipt-processor');
     const db = makeDbMock();
 
     await processReceiptImage({
       db: db as never,
-      receiptId: "r2",
-      receipt: { imagePath: "r2.jpg", mimeType: "image/jpeg" },
+      receiptId: 'r2',
+      receipt: { imagePath: 'r2.jpg', mimeType: 'image/jpeg' },
     });
 
     expect(mockGetAIProvidersWithFallback).toHaveBeenCalledTimes(2);
@@ -120,23 +114,23 @@ describe("processReceiptImage fallback behavior", () => {
     expect(recoveredProvider.extractReceipt).toHaveBeenCalledTimes(1);
   });
 
-  test("throws after both fallback passes fail", async () => {
+  test('throws after both fallback passes fail', async () => {
     const badProvider = {
-      name: "openai-codex",
-      extractReceipt: vi.fn().mockRejectedValue(new Error("still expired")),
+      name: 'openai-codex',
+      extractReceipt: vi.fn().mockRejectedValue(new Error('still expired')),
     };
     mockGetAIProvidersWithFallback.mockResolvedValue([badProvider]);
 
-    const { processReceiptImage } = await import("./receipt-processor");
+    const { processReceiptImage } = await import('./receipt-processor');
     const db = makeDbMock();
 
     await expect(
       processReceiptImage({
         db: db as never,
-        receiptId: "r3",
-        receipt: { imagePath: "r3.jpg", mimeType: "image/jpeg" },
-      })
-    ).rejects.toThrow("Receipt extraction failed across configured providers");
+        receiptId: 'r3',
+        receipt: { imagePath: 'r3.jpg', mimeType: 'image/jpeg' },
+      }),
+    ).rejects.toThrow('Receipt extraction failed across configured providers');
 
     expect(mockClearProviderCache).toHaveBeenCalledTimes(1);
   });

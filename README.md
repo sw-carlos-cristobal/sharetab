@@ -213,25 +213,25 @@ All configuration is done through environment variables. Copy `.env.example` to 
 
 ### Required
 
-| Variable | Description |
-|---|---|
+| Variable          | Description                                                      |
+| ----------------- | ---------------------------------------------------------------- |
 | `NEXTAUTH_SECRET` | Session encryption key. Generate with `openssl rand -base64 32`. |
-| `AUTH_SECRET` | Auth.js secret. Generate the same way. |
+| `AUTH_SECRET`     | Auth.js secret. Generate the same way.                           |
 
 ### AI Receipt Scanning
 
-| Variable | Description |
-|---|---|
-| `AI_PROVIDER_PRIORITY` | Comma-separated provider priority list (for example `openai-codex,meridian,openai`). ShareTab checks providers in order, uses the first available one, and falls through to the next provider if extraction fails. |
-| `OPENAI_API_KEY` | Required when `openai` is included in `AI_PROVIDER_PRIORITY`. |
-| `OPENAI_MODEL` | OpenAI model for receipt scanning. Defaults to `gpt-4o`. |
-| `OPENAI_CODEX_MODEL` | Model for ChatGPT OAuth / Codex backend receipt scanning. Defaults to `gpt-5.4`. |
-| `ANTHROPIC_API_KEY` | Required when `claude` is included in `AI_PROVIDER_PRIORITY`. |
-| `ANTHROPIC_MODEL` | Claude model for receipt scanning. Defaults to `claude-sonnet-4-6` (claude provider) or `claude-opus-4-6` (meridian provider). |
-| `ANTHROPIC_HEALTH_MODEL` | Model for health-check probes (auth verification). Defaults to `claude-haiku-4-5-20251001`. |
-| `MERIDIAN_PORT` | Port for the embedded Meridian proxy. Defaults to `3457`. |
-| `OLLAMA_BASE_URL` | Ollama server URL. Defaults to `http://localhost:11434`. |
-| `OLLAMA_MODEL` | Ollama model name. Defaults to `llava`. |
+| Variable                 | Description                                                                                                                                                                                                        |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `AI_PROVIDER_PRIORITY`   | Comma-separated provider priority list (for example `openai-codex,meridian,openai`). ShareTab checks providers in order, uses the first available one, and falls through to the next provider if extraction fails. |
+| `OPENAI_API_KEY`         | Required when `openai` is included in `AI_PROVIDER_PRIORITY`.                                                                                                                                                      |
+| `OPENAI_MODEL`           | OpenAI model for receipt scanning. Defaults to `gpt-4o`.                                                                                                                                                           |
+| `OPENAI_CODEX_MODEL`     | Model for ChatGPT OAuth / Codex backend receipt scanning. Defaults to `gpt-5.4`.                                                                                                                                   |
+| `ANTHROPIC_API_KEY`      | Required when `claude` is included in `AI_PROVIDER_PRIORITY`.                                                                                                                                                      |
+| `ANTHROPIC_MODEL`        | Claude model for receipt scanning. Defaults to `claude-sonnet-4-6` (claude provider) or `claude-opus-4-6` (meridian provider).                                                                                     |
+| `ANTHROPIC_HEALTH_MODEL` | Model for health-check probes (auth verification). Defaults to `claude-haiku-4-5-20251001`.                                                                                                                        |
+| `MERIDIAN_PORT`          | Port for the embedded Meridian proxy. Defaults to `3457`.                                                                                                                                                          |
+| `OLLAMA_BASE_URL`        | Ollama server URL. Defaults to `http://localhost:11434`.                                                                                                                                                           |
+| `OLLAMA_MODEL`           | Ollama model name. Defaults to `llava`.                                                                                                                                                                            |
 
 The `openai-codex` provider uses ChatGPT OAuth via the Codex backend instead of an API key. Auth data lives in `/app/chatgpt`, so if that path is on a persistent volume the login survives restarts and image updates.
 
@@ -261,12 +261,12 @@ The bundled Docker Compose setup persists `/app/claude` automatically. If you us
 
 Benchmarked on a set of receipt photos (grocery, coffee shop, restaurant). Results represent typical single-receipt extraction.
 
-| Provider | Speed | Item Accuracy | Cost | Notes |
-|---|---|---|---|---|
-| **OpenAI Codex** (ChatGPT OAuth) | ~6 s | 5/5 items | Free (uses ChatGPT subscription) | **Recommended.** Best balance of speed and accuracy. |
-| **Meridian** (Claude OAuth) | ~16 s | 5/5 items | Free (uses Claude Max subscription) | Same accuracy, but 2–3x slower. |
-| **OpenAI** (API key) | ~4 s | 5/5 items | Pay-per-token | Fastest, but requires an API key and costs money. |
-| **Ollama** (local LLM) | Varies | Varies | Free, fully local | Depends on model and hardware. Requires a running Ollama server. |
+| Provider                         | Speed  | Item Accuracy | Cost                                | Notes                                                            |
+| -------------------------------- | ------ | ------------- | ----------------------------------- | ---------------------------------------------------------------- |
+| **OpenAI Codex** (ChatGPT OAuth) | ~6 s   | 5/5 items     | Free (uses ChatGPT subscription)    | **Recommended.** Best balance of speed and accuracy.             |
+| **Meridian** (Claude OAuth)      | ~16 s  | 5/5 items     | Free (uses Claude Max subscription) | Same accuracy, but 2–3x slower.                                  |
+| **OpenAI** (API key)             | ~4 s   | 5/5 items     | Pay-per-token                       | Fastest, but requires an API key and costs money.                |
+| **Ollama** (local LLM)           | Varies | Varies        | Free, fully local                   | Depends on model and hardware. Requires a running Ollama server. |
 
 **Recommendation:** Use `openai-codex` as your primary provider. It delivers the same accuracy as API-key providers at no additional cost (it piggybacks on your existing ChatGPT Plus/Pro subscription). Set your priority to:
 
@@ -282,54 +282,54 @@ AI_PROVIDER_PRIORITY="openai-codex,meridian"
 
 ### OAuth (optional)
 
-| Variable | Description |
-|---|---|
-| `GOOGLE_CLIENT_ID` | Google OAuth client ID for "Sign in with Google". |
-| `GOOGLE_CLIENT_SECRET` | Corresponding client secret. |
+| Variable               | Description                                       |
+| ---------------------- | ------------------------------------------------- |
+| `GOOGLE_CLIENT_ID`     | Google OAuth client ID for "Sign in with Google". |
+| `GOOGLE_CLIENT_SECRET` | Corresponding client secret.                      |
 
 ### Magic Link Auth (optional)
 
-| Variable | Description |
-|---|---|
-| `EMAIL_SERVER_HOST` | SMTP host (e.g. `smtp.gmail.com`). Used for magic link sign-in and OAuth auth expiry alerts (Meridian / ChatGPT OAuth). |
-| `EMAIL_SERVER_PORT` | SMTP port. Use `465` for implicit TLS, `587` for STARTTLS. |
-| `EMAIL_SERVER_USER` | SMTP username / email address. |
-| `EMAIL_SERVER_PASSWORD` | SMTP password or app password. |
-| `EMAIL_FROM` | From address for sent emails. |
+| Variable                | Description                                                                                                             |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `EMAIL_SERVER_HOST`     | SMTP host (e.g. `smtp.gmail.com`). Used for magic link sign-in and OAuth auth expiry alerts (Meridian / ChatGPT OAuth). |
+| `EMAIL_SERVER_PORT`     | SMTP port. Use `465` for implicit TLS, `587` for STARTTLS.                                                              |
+| `EMAIL_SERVER_USER`     | SMTP username / email address.                                                                                          |
+| `EMAIL_SERVER_PASSWORD` | SMTP password or app password.                                                                                          |
+| `EMAIL_FROM`            | From address for sent emails.                                                                                           |
 
 ### Admin
 
-| Variable | Description |
-|---|---|
+| Variable      | Description                                                                                                                                                                            |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ADMIN_EMAIL` | Email of the admin user. Grants access to `/admin` dashboard for managing users, groups, storage, and system settings, and receives OAuth auth expiry alerts when email is configured. |
 
 ### Other
 
-| Variable | Default | Description |
-|---|---|---|
-| `NEXTAUTH_URL` | `http://localhost:3000` | Public URL of your instance. |
-| `AUTH_TRUST_HOST` | `false` | Set to `true` when running on a local network or behind a reverse proxy. |
-| `DB_USER` | `sharetab` | PostgreSQL username (Docker bundled DB). |
-| `DB_PASSWORD` | `sharetab` | PostgreSQL password (Docker bundled DB). |
-| `DB_NAME` | `sharetab` | PostgreSQL database name (Docker bundled DB). |
-| `UPLOAD_DIR` | `./uploads` | Directory for receipt image uploads. |
-| `MAX_UPLOAD_SIZE_MB` | `10` | Maximum upload file size. |
-| `AUTH_RATE_LIMIT_MAX` | `5` | Max login attempts per IP per hour. |
-| `REGISTER_RATE_LIMIT_MAX` | `10` | Max registration attempts per IP per hour. |
-| `GUEST_RATE_LIMIT_MAX` | `10` | Max guest split creations per IP per hour. |
-| `LOG_LEVEL` | `info` | Logging verbosity: `debug`, `info`, `warn`, or `error`. |
+| Variable                  | Default                 | Description                                                              |
+| ------------------------- | ----------------------- | ------------------------------------------------------------------------ |
+| `NEXTAUTH_URL`            | `http://localhost:3000` | Public URL of your instance.                                             |
+| `AUTH_TRUST_HOST`         | `false`                 | Set to `true` when running on a local network or behind a reverse proxy. |
+| `DB_USER`                 | `sharetab`              | PostgreSQL username (Docker bundled DB).                                 |
+| `DB_PASSWORD`             | `sharetab`              | PostgreSQL password (Docker bundled DB).                                 |
+| `DB_NAME`                 | `sharetab`              | PostgreSQL database name (Docker bundled DB).                            |
+| `UPLOAD_DIR`              | `./uploads`             | Directory for receipt image uploads.                                     |
+| `MAX_UPLOAD_SIZE_MB`      | `10`                    | Maximum upload file size.                                                |
+| `AUTH_RATE_LIMIT_MAX`     | `5`                     | Max login attempts per IP per hour.                                      |
+| `REGISTER_RATE_LIMIT_MAX` | `10`                    | Max registration attempts per IP per hour.                               |
+| `GUEST_RATE_LIMIT_MAX`    | `10`                    | Max guest split creations per IP per hour.                               |
+| `LOG_LEVEL`               | `info`                  | Logging verbosity: `debug`, `info`, `warn`, or `error`.                  |
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Framework | [Next.js 16](https://nextjs.org) (App Router) + TypeScript |
-| API | [tRPC v11](https://trpc.io) (end-to-end type-safe) |
-| Database | [Prisma 7](https://www.prisma.io) + PostgreSQL 16 |
-| Auth | [NextAuth v5](https://authjs.dev) (credentials + OAuth + magic link) |
-| UI | [TailwindCSS 4](https://tailwindcss.com) + [shadcn/ui](https://ui.shadcn.com) + [next-themes](https://github.com/pacocoursey/next-themes) |
-| AI | Pluggable providers: OpenAI, OpenAI-Codex, Claude, Meridian, Ollama |
-| Testing | [Vitest](https://vitest.dev) (unit) + [Playwright](https://playwright.dev) (e2e) |
+| Layer     | Technology                                                                                                                                |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Framework | [Next.js 16](https://nextjs.org) (App Router) + TypeScript                                                                                |
+| API       | [tRPC v11](https://trpc.io) (end-to-end type-safe)                                                                                        |
+| Database  | [Prisma 7](https://www.prisma.io) + PostgreSQL 16                                                                                         |
+| Auth      | [NextAuth v5](https://authjs.dev) (credentials + OAuth + magic link)                                                                      |
+| UI        | [TailwindCSS 4](https://tailwindcss.com) + [shadcn/ui](https://ui.shadcn.com) + [next-themes](https://github.com/pacocoursey/next-themes) |
+| AI        | Pluggable providers: OpenAI, OpenAI-Codex, Claude, Meridian, Ollama                                                                       |
+| Testing   | [Vitest](https://vitest.dev) (unit) + [Playwright](https://playwright.dev) (e2e)                                                          |
 
 ## Development
 

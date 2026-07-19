@@ -1,32 +1,49 @@
-import { test, expect } from "@playwright/test";
-import { users, trpcMutation, trpcQuery, trpcResult, createTestGroup } from "./helpers";
+import { test, expect } from '@playwright/test';
+import { users, trpcMutation, trpcQuery, trpcResult, createTestGroup } from './helpers';
 
-test.describe("Balance Calculation (4.1)", () => {
-  test("4.1.2 — multiple payers balance", async () => {
+test.describe('Balance Calculation (4.1)', () => {
+  test('4.1.2 — multiple payers balance', async () => {
     const { owner, memberContexts, groupId, memberIds, dispose } = await createTestGroup(
-      users.alice.email, users.alice.password,
+      users.alice.email,
+      users.alice.password,
       [
         { email: users.bob.email, password: users.bob.password },
         { email: users.charlie.email, password: users.charlie.password },
       ],
-      "Multi Payer Test"
+      'Multi Payer Test',
     );
     const a = memberIds[users.alice.email];
     const b = memberIds[users.bob.email];
     const c = memberIds[users.charlie.email];
 
     // Alice pays $30 split equally (each owes $10)
-    await trpcMutation(owner, "expenses.create", {
-      groupId, title: "Alice pays", amount: 3000, paidById: a, splitMode: "EQUAL",
-      shares: [{ userId: a, amount: 1000 }, { userId: b, amount: 1000 }, { userId: c, amount: 1000 }],
+    await trpcMutation(owner, 'expenses.create', {
+      groupId,
+      title: 'Alice pays',
+      amount: 3000,
+      paidById: a,
+      splitMode: 'EQUAL',
+      shares: [
+        { userId: a, amount: 1000 },
+        { userId: b, amount: 1000 },
+        { userId: c, amount: 1000 },
+      ],
     });
     // Bob pays $60 split equally (each owes $20)
-    await trpcMutation(memberContexts[0]!, "expenses.create", {
-      groupId, title: "Bob pays", amount: 6000, paidById: b, splitMode: "EQUAL",
-      shares: [{ userId: a, amount: 2000 }, { userId: b, amount: 2000 }, { userId: c, amount: 2000 }],
+    await trpcMutation(memberContexts[0]!, 'expenses.create', {
+      groupId,
+      title: 'Bob pays',
+      amount: 6000,
+      paidById: b,
+      splitMode: 'EQUAL',
+      shares: [
+        { userId: a, amount: 2000 },
+        { userId: b, amount: 2000 },
+        { userId: c, amount: 2000 },
+      ],
     });
 
-    const res = await trpcQuery(owner, "balances.getGroupBalances", { groupId });
+    const res = await trpcQuery(owner, 'balances.getGroupBalances', { groupId });
     const balances = (await trpcResult(res)).balances;
     const aliceBal = balances.find((x: { userId: string }) => x.userId === a);
     const bobBal = balances.find((x: { userId: string }) => x.userId === b);
@@ -58,52 +75,68 @@ test.describe("Balance Calculation (4.1)", () => {
     await dispose();
   });
 
-  test("4.1.3 — single member pays for self, net is zero", async () => {
+  test('4.1.3 — single member pays for self, net is zero', async () => {
     const { owner, groupId, memberIds, dispose } = await createTestGroup(
-      users.alice.email, users.alice.password, [],
-      "Zero Balance Test"
+      users.alice.email,
+      users.alice.password,
+      [],
+      'Zero Balance Test',
     );
     const a = memberIds[users.alice.email];
 
-    await trpcMutation(owner, "expenses.create", {
-      groupId, title: "Self", amount: 5000, paidById: a, splitMode: "EQUAL",
+    await trpcMutation(owner, 'expenses.create', {
+      groupId,
+      title: 'Self',
+      amount: 5000,
+      paidById: a,
+      splitMode: 'EQUAL',
       shares: [{ userId: a, amount: 5000 }],
     });
 
-    const res = await trpcQuery(owner, "balances.getGroupBalances", { groupId });
+    const res = await trpcQuery(owner, 'balances.getGroupBalances', { groupId });
     const balances = (await trpcResult(res)).balances;
     const aliceBal = balances.find((x: { userId: string }) => x.userId === a);
     expect(aliceBal.net).toBe(0);
     await dispose();
   });
 
-  test("4.1.4 — settlement affects balance", async () => {
+  test('4.1.4 — settlement affects balance', async () => {
     const { owner, memberContexts, groupId, memberIds, dispose } = await createTestGroup(
-      users.alice.email, users.alice.password,
+      users.alice.email,
+      users.alice.password,
       [{ email: users.bob.email, password: users.bob.password }],
-      "Settlement Balance Test"
+      'Settlement Balance Test',
     );
     const a = memberIds[users.alice.email];
     const b = memberIds[users.bob.email];
 
     // Alice pays $20 split equally
-    await trpcMutation(owner, "expenses.create", {
-      groupId, title: "Dinner", amount: 2000, paidById: a, splitMode: "EQUAL",
-      shares: [{ userId: a, amount: 1000 }, { userId: b, amount: 1000 }],
+    await trpcMutation(owner, 'expenses.create', {
+      groupId,
+      title: 'Dinner',
+      amount: 2000,
+      paidById: a,
+      splitMode: 'EQUAL',
+      shares: [
+        { userId: a, amount: 1000 },
+        { userId: b, amount: 1000 },
+      ],
     });
 
     // Before settlement: Alice net +1000, Bob net -1000
-    const before = await trpcQuery(owner, "balances.getGroupBalances", { groupId });
+    const before = await trpcQuery(owner, 'balances.getGroupBalances', { groupId });
     const balBefore = (await trpcResult(before)).balances;
     expect(balBefore.find((x: { userId: string }) => x.userId === a).net).toBe(1000);
 
     // Bob settles $10 to Alice
-    await trpcMutation(memberContexts[0]!, "settlements.create", {
-      groupId, toId: a, amount: 1000,
+    await trpcMutation(memberContexts[0]!, 'settlements.create', {
+      groupId,
+      toId: a,
+      amount: 1000,
     });
 
     // After settlement: should be zero
-    const after = await trpcQuery(owner, "balances.getGroupBalances", { groupId });
+    const after = await trpcQuery(owner, 'balances.getGroupBalances', { groupId });
     const balAfter = (await trpcResult(after)).balances;
     const aliceAfter = balAfter.find((x: { userId: string }) => x.userId === a);
     const bobAfter = balAfter.find((x: { userId: string }) => x.userId === b);
@@ -113,15 +146,16 @@ test.describe("Balance Calculation (4.1)", () => {
   });
 });
 
-test.describe("Debt Simplification (4.2)", () => {
-  test("4.2.2 — three-person chain", async () => {
+test.describe('Debt Simplification (4.2)', () => {
+  test('4.2.2 — three-person chain', async () => {
     const { owner, groupId, memberIds, dispose } = await createTestGroup(
-      users.alice.email, users.alice.password,
+      users.alice.email,
+      users.alice.password,
       [
         { email: users.bob.email, password: users.bob.password },
         { email: users.charlie.email, password: users.charlie.password },
       ],
-      "Three Person Chain"
+      'Three Person Chain',
     );
     const a = memberIds[users.alice.email];
     const b = memberIds[users.bob.email];
@@ -129,12 +163,20 @@ test.describe("Debt Simplification (4.2)", () => {
 
     // Alice pays $30 for all three → each owes $10
     // Alice net: +20, Bob net: -10, Charlie net: -10
-    await trpcMutation(owner, "expenses.create", {
-      groupId, title: "All", amount: 3000, paidById: a, splitMode: "EQUAL",
-      shares: [{ userId: a, amount: 1000 }, { userId: b, amount: 1000 }, { userId: c, amount: 1000 }],
+    await trpcMutation(owner, 'expenses.create', {
+      groupId,
+      title: 'All',
+      amount: 3000,
+      paidById: a,
+      splitMode: 'EQUAL',
+      shares: [
+        { userId: a, amount: 1000 },
+        { userId: b, amount: 1000 },
+        { userId: c, amount: 1000 },
+      ],
     });
 
-    const res = await trpcQuery(owner, "balances.getSimplifiedDebts", { groupId });
+    const res = await trpcQuery(owner, 'balances.getSimplifiedDebts', { groupId });
     const debts = (await trpcResult(res)).debts;
     expect(debts.length).toBe(2);
     // Both Bob and Charlie owe Alice
@@ -144,65 +186,95 @@ test.describe("Debt Simplification (4.2)", () => {
     await dispose();
   });
 
-  test("4.2.3 — circular debts cancel out", async () => {
+  test('4.2.3 — circular debts cancel out', async () => {
     const { owner, memberContexts, groupId, memberIds, dispose } = await createTestGroup(
-      users.alice.email, users.alice.password,
+      users.alice.email,
+      users.alice.password,
       [
         { email: users.bob.email, password: users.bob.password },
         { email: users.charlie.email, password: users.charlie.password },
       ],
-      "Circular Debts"
+      'Circular Debts',
     );
     const a = memberIds[users.alice.email];
     const b = memberIds[users.bob.email];
     const c = memberIds[users.charlie.email];
 
     // Alice pays $10 for Bob
-    await trpcMutation(owner, "expenses.create", {
-      groupId, title: "A→B", amount: 1000, paidById: a, splitMode: "EXACT",
+    await trpcMutation(owner, 'expenses.create', {
+      groupId,
+      title: 'A→B',
+      amount: 1000,
+      paidById: a,
+      splitMode: 'EXACT',
       shares: [{ userId: b, amount: 1000 }],
     });
     // Bob pays $10 for Charlie
-    await trpcMutation(memberContexts[0]!, "expenses.create", {
-      groupId, title: "B→C", amount: 1000, paidById: b, splitMode: "EXACT",
+    await trpcMutation(memberContexts[0]!, 'expenses.create', {
+      groupId,
+      title: 'B→C',
+      amount: 1000,
+      paidById: b,
+      splitMode: 'EXACT',
       shares: [{ userId: c, amount: 1000 }],
     });
     // Charlie pays $10 for Alice
-    await trpcMutation(memberContexts[1]!, "expenses.create", {
-      groupId, title: "C→A", amount: 1000, paidById: c, splitMode: "EXACT",
+    await trpcMutation(memberContexts[1]!, 'expenses.create', {
+      groupId,
+      title: 'C→A',
+      amount: 1000,
+      paidById: c,
+      splitMode: 'EXACT',
       shares: [{ userId: a, amount: 1000 }],
     });
 
-    const res = await trpcQuery(owner, "balances.getSimplifiedDebts", { groupId });
+    const res = await trpcQuery(owner, 'balances.getSimplifiedDebts', { groupId });
     const debts = (await trpcResult(res)).debts;
     expect(debts.length).toBe(0); // All cancel out
     await dispose();
   });
 
-  test("4.2.5 — greedy matching minimizes transactions", async () => {
+  test('4.2.5 — greedy matching minimizes transactions', async () => {
     const { owner, memberContexts, groupId, memberIds, dispose } = await createTestGroup(
-      users.alice.email, users.alice.password,
+      users.alice.email,
+      users.alice.password,
       [
         { email: users.bob.email, password: users.bob.password },
         { email: users.charlie.email, password: users.charlie.password },
       ],
-      "Greedy Test"
+      'Greedy Test',
     );
     const a = memberIds[users.alice.email];
     const b = memberIds[users.bob.email];
     const c = memberIds[users.charlie.email];
 
     // Create complex debts: A pays $50 for all, B pays $20 for all
-    await trpcMutation(owner, "expenses.create", {
-      groupId, title: "Big", amount: 5100, paidById: a, splitMode: "EQUAL",
-      shares: [{ userId: a, amount: 1700 }, { userId: b, amount: 1700 }, { userId: c, amount: 1700 }],
+    await trpcMutation(owner, 'expenses.create', {
+      groupId,
+      title: 'Big',
+      amount: 5100,
+      paidById: a,
+      splitMode: 'EQUAL',
+      shares: [
+        { userId: a, amount: 1700 },
+        { userId: b, amount: 1700 },
+        { userId: c, amount: 1700 },
+      ],
     });
-    await trpcMutation(memberContexts[0]!, "expenses.create", {
-      groupId, title: "Small", amount: 2100, paidById: b, splitMode: "EQUAL",
-      shares: [{ userId: a, amount: 700 }, { userId: b, amount: 700 }, { userId: c, amount: 700 }],
+    await trpcMutation(memberContexts[0]!, 'expenses.create', {
+      groupId,
+      title: 'Small',
+      amount: 2100,
+      paidById: b,
+      splitMode: 'EQUAL',
+      shares: [
+        { userId: a, amount: 700 },
+        { userId: b, amount: 700 },
+        { userId: c, amount: 700 },
+      ],
     });
 
-    const res = await trpcQuery(owner, "balances.getSimplifiedDebts", { groupId });
+    const res = await trpcQuery(owner, 'balances.getSimplifiedDebts', { groupId });
     const debts = (await trpcResult(res)).debts;
     // Should produce minimal transactions (≤ 2 for 3 people)
     expect(debts.length).toBeLessThanOrEqual(2);
@@ -210,66 +282,86 @@ test.describe("Debt Simplification (4.2)", () => {
   });
 });
 
-test.describe("Dashboard (4.3)", () => {
-  test("4.3.2 — per-group breakdown", async () => {
-    const alice = await (await import("./helpers")).authedContext(users.alice.email, users.alice.password);
-    const res = await trpcQuery(alice, "balances.getDashboard");
+test.describe('Dashboard (4.3)', () => {
+  test('4.3.2 — per-group breakdown', async () => {
+    const alice = await (await import('./helpers')).authedContext(users.alice.email, users.alice.password);
+    const res = await trpcQuery(alice, 'balances.getDashboard');
     const data = await trpcResult(res);
     expect(data.perGroup.length).toBeGreaterThanOrEqual(2);
     for (const g of data.perGroup) {
       expect(g.groupId).toBeDefined();
       expect(g.groupName).toBeDefined();
-      expect(typeof g.balance).toBe("number");
+      expect(typeof g.balance).toBe('number');
     }
     await alice.dispose();
   });
 });
 
-test.describe("Settlements (4.4)", () => {
-  test("4.4.2 — settlement updates balance", async () => {
+test.describe('Settlements (4.4)', () => {
+  test('4.4.2 — settlement updates balance', async () => {
     const { owner, memberContexts, groupId, memberIds, dispose } = await createTestGroup(
-      users.alice.email, users.alice.password,
+      users.alice.email,
+      users.alice.password,
       [{ email: users.bob.email, password: users.bob.password }],
-      "Settle Update Test"
+      'Settle Update Test',
     );
     const a = memberIds[users.alice.email];
     const b = memberIds[users.bob.email];
 
-    await trpcMutation(owner, "expenses.create", {
-      groupId, title: "Meal", amount: 4000, paidById: a, splitMode: "EQUAL",
-      shares: [{ userId: a, amount: 2000 }, { userId: b, amount: 2000 }],
+    await trpcMutation(owner, 'expenses.create', {
+      groupId,
+      title: 'Meal',
+      amount: 4000,
+      paidById: a,
+      splitMode: 'EQUAL',
+      shares: [
+        { userId: a, amount: 2000 },
+        { userId: b, amount: 2000 },
+      ],
     });
 
     // Bob settles $20
-    await trpcMutation(memberContexts[0]!, "settlements.create", {
-      groupId, toId: a, amount: 2000,
+    await trpcMutation(memberContexts[0]!, 'settlements.create', {
+      groupId,
+      toId: a,
+      amount: 2000,
     });
 
-    const debts = await trpcQuery(owner, "balances.getSimplifiedDebts", { groupId });
+    const debts = await trpcQuery(owner, 'balances.getSimplifiedDebts', { groupId });
     expect((await trpcResult(debts)).debts.length).toBe(0);
     await dispose();
   });
 
-  test("4.4.4 — partial settlement", async () => {
+  test('4.4.4 — partial settlement', async () => {
     const { owner, memberContexts, groupId, memberIds, dispose } = await createTestGroup(
-      users.alice.email, users.alice.password,
+      users.alice.email,
+      users.alice.password,
       [{ email: users.bob.email, password: users.bob.password }],
-      "Partial Settle Test"
+      'Partial Settle Test',
     );
     const a = memberIds[users.alice.email];
     const b = memberIds[users.bob.email];
 
-    await trpcMutation(owner, "expenses.create", {
-      groupId, title: "Dinner", amount: 4000, paidById: a, splitMode: "EQUAL",
-      shares: [{ userId: a, amount: 2000 }, { userId: b, amount: 2000 }],
+    await trpcMutation(owner, 'expenses.create', {
+      groupId,
+      title: 'Dinner',
+      amount: 4000,
+      paidById: a,
+      splitMode: 'EQUAL',
+      shares: [
+        { userId: a, amount: 2000 },
+        { userId: b, amount: 2000 },
+      ],
     });
 
     // Bob settles only $10 of the $20 owed
-    await trpcMutation(memberContexts[0]!, "settlements.create", {
-      groupId, toId: a, amount: 1000,
+    await trpcMutation(memberContexts[0]!, 'settlements.create', {
+      groupId,
+      toId: a,
+      amount: 1000,
     });
 
-    const debts = await trpcQuery(owner, "balances.getSimplifiedDebts", { groupId });
+    const debts = await trpcQuery(owner, 'balances.getSimplifiedDebts', { groupId });
     const debtList = (await trpcResult(debts)).debts;
     expect(debtList.length).toBe(1);
     expect(debtList[0].amount).toBe(1000); // $10 remaining

@@ -1,29 +1,29 @@
-import { type Page, request } from "@playwright/test";
+import { type Page, request } from '@playwright/test';
 
-const BASE = process.env.BASE_URL || "http://localhost:3001";
+const BASE = process.env.BASE_URL || 'http://localhost:3001';
 
 // Demo users from seed.ts
 export const users = {
-  alice: { email: "alice@example.com", password: "password123", name: "Alice Johnson" },
-  bob: { email: "bob@example.com", password: "password123", name: "Bob Smith" },
-  charlie: { email: "charlie@example.com", password: "password123", name: "Charlie Brown" },
+  alice: { email: 'alice@example.com', password: 'password123', name: 'Alice Johnson' },
+  bob: { email: 'bob@example.com', password: 'password123', name: 'Bob Smith' },
+  charlie: { email: 'charlie@example.com', password: 'password123', name: 'Charlie Brown' },
 };
 
 // Dedicated test users from seed.ts — use these instead of creating throwaway accounts
 export const testUsers = {
-  suspend: { email: "suspend-test@example.com", password: "password123", name: "Suspend Test User" },
-  delete: { email: "delete-test@example.com", password: "password123", name: "Delete Test User" },
-  password: { email: "pwtest@example.com", password: "password123", name: "Password Test User" },
+  suspend: { email: 'suspend-test@example.com', password: 'password123', name: 'Suspend Test User' },
+  delete: { email: 'delete-test@example.com', password: 'password123', name: 'Delete Test User' },
+  password: { email: 'pwtest@example.com', password: 'password123', name: 'Password Test User' },
 };
 
 /**
  * Login as a user via the UI.
  */
 export async function login(page: Page, email: string, password: string) {
-  await page.goto("/en/login");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.goto('/en/login');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.waitForURL(/\/en\/dashboard$/, { timeout: 15000 });
 }
 
@@ -31,18 +31,18 @@ export async function login(page: Page, email: string, password: string) {
  * Register a new user via the UI.
  */
 export async function register(page: Page, name: string, email: string, password: string) {
-  await page.goto("/en/register");
-  await page.getByLabel("Name").fill(name);
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
-  await page.getByRole("button", { name: "Create account" }).click();
+  await page.goto('/en/register');
+  await page.getByLabel('Name').fill(name);
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: 'Create account' }).click();
   await page.waitForURL(/\/en\/dashboard$/, { timeout: 15000 });
 }
 
 /**
  * Generate a unique email for test isolation.
  */
-export function uniqueEmail(prefix = "test") {
+export function uniqueEmail(prefix = 'test') {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}@test.com`;
 }
 
@@ -51,9 +51,9 @@ export function uniqueEmail(prefix = "test") {
  */
 export async function authedContext(email: string, password: string) {
   const ctx = await request.newContext({ baseURL: BASE });
-  const csrfRes = await ctx.get("/api/auth/csrf");
+  const csrfRes = await ctx.get('/api/auth/csrf');
   const { csrfToken } = await csrfRes.json();
-  await ctx.post("/api/auth/callback/credentials", {
+  await ctx.post('/api/auth/callback/credentials', {
     form: { email, password, csrfToken },
     maxRedirects: 0,
   });
@@ -67,7 +67,7 @@ export async function trpcMutation(
   ctx: Awaited<ReturnType<typeof request.newContext>>,
   proc: string,
   input: unknown,
-  timeoutMs?: number
+  timeoutMs?: number,
 ) {
   return ctx.post(`/api/trpc/${proc}`, {
     data: { json: input },
@@ -78,16 +78,10 @@ export async function trpcMutation(
 /**
  * Call a tRPC query (batched format).
  */
-export async function trpcQuery(
-  ctx: Awaited<ReturnType<typeof request.newContext>>,
-  proc: string,
-  input?: unknown
-) {
+export async function trpcQuery(ctx: Awaited<ReturnType<typeof request.newContext>>, proc: string, input?: unknown) {
   const inputStr = input
-    ? encodeURIComponent(JSON.stringify({ "0": { json: input } }))
-    : encodeURIComponent(
-        JSON.stringify({ "0": { json: null, meta: { values: ["undefined"], v: 1 } } })
-      );
+    ? encodeURIComponent(JSON.stringify({ '0': { json: input } }))
+    : encodeURIComponent(JSON.stringify({ '0': { json: null, meta: { values: ['undefined'], v: 1 } } }));
   return ctx.get(`/api/trpc/${proc}?batch=1&input=${inputStr}`);
 }
 
@@ -118,8 +112,8 @@ export async function trpcError(res: { json: () => Promise<any> }): Promise<any>
  * Handles pagination by using the search filter.
  */
 export async function navigateToGroup(page: Page, groupName: string) {
-  await page.goto("/en/groups");
-  await page.getByPlaceholder("Search groups...").fill(groupName);
+  await page.goto('/en/groups');
+  await page.getByPlaceholder('Search groups...').fill(groupName);
   await page.getByText(groupName).first().click();
   await page.waitForURL(/\/en\/groups\/\w+$/, { timeout: 15000 });
 }
@@ -131,10 +125,10 @@ export async function createTestGroup(
   ownerEmail: string,
   ownerPassword: string,
   memberEmails: { email: string; password: string }[],
-  groupName?: string
+  groupName?: string,
 ) {
   const owner = await authedContext(ownerEmail, ownerPassword);
-  const createRes = await trpcMutation(owner, "groups.create", {
+  const createRes = await trpcMutation(owner, 'groups.create', {
     name: groupName ?? `Test-${Date.now()}`,
   });
   const group = (await createRes.json()).result?.data?.json;
@@ -142,31 +136,37 @@ export async function createTestGroup(
 
   const memberContexts: Awaited<ReturnType<typeof authedContext>>[] = [];
   for (const m of memberEmails) {
-    const invRes = await trpcMutation(owner, "groups.createInvite", { groupId });
+    const invRes = await trpcMutation(owner, 'groups.createInvite', { groupId });
     const token = (await invRes.json()).result?.data?.json?.token;
     const mCtx = await authedContext(m.email, m.password);
-    await trpcMutation(mCtx, "groups.joinByInvite", { token });
+    await trpcMutation(mCtx, 'groups.joinByInvite', { token });
     memberContexts.push(mCtx);
   }
 
   // Get member IDs
-  const detailRes = await trpcQuery(owner, "groups.get", { groupId });
+  const detailRes = await trpcQuery(owner, 'groups.get', { groupId });
   const detail = await trpcResult(detailRes);
   const memberIds: Record<string, string> = {};
   for (const m of detail.members) {
     memberIds[m.user.email] = m.user.id;
   }
 
-  return { owner, memberContexts, groupId, memberIds, dispose: async () => {
-    // Clean up: delete the test group to avoid polluting the database
-    try {
-      await trpcMutation(owner, "groups.delete", { groupId });
-    } catch {
-      // Ignore — group may already be deleted by the test
-    }
-    await owner.dispose();
-    for (const c of memberContexts) await c.dispose();
-  }};
+  return {
+    owner,
+    memberContexts,
+    groupId,
+    memberIds,
+    dispose: async () => {
+      // Clean up: delete the test group to avoid polluting the database
+      try {
+        await trpcMutation(owner, 'groups.delete', { groupId });
+      } catch {
+        // Ignore — group may already be deleted by the test
+      }
+      await owner.dispose();
+      for (const c of memberContexts) await c.dispose();
+    },
+  };
 }
 
 /**
@@ -174,11 +174,11 @@ export async function createTestGroup(
  */
 export async function deleteTestUser(adminCtx: Awaited<ReturnType<typeof authedContext>>, email: string) {
   try {
-    const listRes = await trpcQuery(adminCtx, "admin.listUsers", { search: email, limit: 1 });
+    const listRes = await trpcQuery(adminCtx, 'admin.listUsers', { search: email, limit: 1 });
     const listData = await trpcResult(listRes);
     const user = listData?.users?.[0];
     if (user && user.email === email) {
-      await trpcMutation(adminCtx, "admin.deleteUser", { userId: user.id });
+      await trpcMutation(adminCtx, 'admin.deleteUser', { userId: user.id });
     }
   } catch {
     // Ignore — user may not exist or already deleted
@@ -190,7 +190,7 @@ export async function deleteTestUser(adminCtx: Awaited<ReturnType<typeof authedC
  */
 export async function deleteTestGroup(ctx: Awaited<ReturnType<typeof authedContext>>, groupId: string) {
   try {
-    await trpcMutation(ctx, "groups.delete", { groupId });
+    await trpcMutation(ctx, 'groups.delete', { groupId });
   } catch {
     // Ignore — group may not exist or already deleted
   }
@@ -201,8 +201,8 @@ export async function deleteTestGroup(ctx: Awaited<ReturnType<typeof authedConte
  * Contains proper magic bytes (FF D8 FF) so magic-byte validation passes.
  */
 export const FAKE_JPEG = Buffer.from([
-  0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01,
-  0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xFF, 0xD9,
+  0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00,
+  0x00, 0xff, 0xd9,
 ]);
 
 /**
@@ -210,8 +210,37 @@ export const FAKE_JPEG = Buffer.from([
  * Contains the 8-byte PNG signature plus a minimal IHDR chunk.
  */
 export const FAKE_PNG = Buffer.from([
-  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
-  0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, // IHDR chunk
-  0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, // 1x1 pixel
-  0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xDE, // bit depth, color type, CRC
+  0x89,
+  0x50,
+  0x4e,
+  0x47,
+  0x0d,
+  0x0a,
+  0x1a,
+  0x0a, // PNG signature
+  0x00,
+  0x00,
+  0x00,
+  0x0d,
+  0x49,
+  0x48,
+  0x44,
+  0x52, // IHDR chunk
+  0x00,
+  0x00,
+  0x00,
+  0x01,
+  0x00,
+  0x00,
+  0x00,
+  0x01, // 1x1 pixel
+  0x08,
+  0x02,
+  0x00,
+  0x00,
+  0x00,
+  0x90,
+  0x77,
+  0x53,
+  0xde, // bit depth, color type, CRC
 ]);

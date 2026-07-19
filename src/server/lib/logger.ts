@@ -1,4 +1,4 @@
-type LogLevel = "debug" | "info" | "warn" | "error";
+type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 const LEVEL_ORDER: Record<LogLevel, number> = {
   debug: 0,
@@ -7,7 +7,8 @@ const LEVEL_ORDER: Record<LogLevel, number> = {
   error: 3,
 };
 
-const MIN_LEVEL: LogLevel = (process.env.LOG_LEVEL as LogLevel) ?? (process.env.NODE_ENV === "production" ? "info" : "debug");
+const MIN_LEVEL: LogLevel =
+  (process.env.LOG_LEVEL as LogLevel) ?? (process.env.NODE_ENV === 'production' ? 'info' : 'debug');
 
 function shouldLog(level: LogLevel): boolean {
   return LEVEL_ORDER[level] >= LEVEL_ORDER[MIN_LEVEL];
@@ -46,12 +47,10 @@ function bufferLog(level: LogLevel, message: string, data?: Record<string, unkno
  * Get recent log entries from the in-memory buffer.
  * Supports filtering by level (minimum) and text search.
  */
-export function getRecentLogs(options?: {
-  minLevel?: LogLevel;
-  search?: string;
-  limit?: number;
-  afterId?: number;
-}): { entries: LogEntry[]; latestId: number } {
+export function getRecentLogs(options?: { minLevel?: LogLevel; search?: string; limit?: number; afterId?: number }): {
+  entries: LogEntry[];
+  latestId: number;
+} {
   const { minLevel, search, limit = 200, afterId } = options ?? {};
 
   let entries = logBuffer;
@@ -68,9 +67,7 @@ export function getRecentLogs(options?: {
   if (search) {
     const lower = search.toLowerCase();
     entries = entries.filter(
-      (e) =>
-        e.msg.toLowerCase().includes(lower) ||
-        (e.data && JSON.stringify(e.data).toLowerCase().includes(lower))
+      (e) => e.msg.toLowerCase().includes(lower) || (e.data && JSON.stringify(e.data).toLowerCase().includes(lower)),
     );
   }
 
@@ -100,9 +97,9 @@ function log(level: LogLevel, message: string, data?: Record<string, unknown>) {
 
   const line = JSON.stringify(entry);
 
-  if (level === "error") {
+  if (level === 'error') {
     console.error(line);
-  } else if (level === "warn") {
+  } else if (level === 'warn') {
     console.warn(line);
   } else {
     console.log(line);
@@ -110,8 +107,8 @@ function log(level: LogLevel, message: string, data?: Record<string, unknown>) {
 }
 
 export const logger = {
-  debug: (msg: string, data?: Record<string, unknown>) => log("debug", msg, data),
-  info: (msg: string, data?: Record<string, unknown>) => log("info", msg, data),
-  warn: (msg: string, data?: Record<string, unknown>) => log("warn", msg, data),
-  error: (msg: string, data?: Record<string, unknown>) => log("error", msg, data),
+  debug: (msg: string, data?: Record<string, unknown>) => log('debug', msg, data),
+  info: (msg: string, data?: Record<string, unknown>) => log('info', msg, data),
+  warn: (msg: string, data?: Record<string, unknown>) => log('warn', msg, data),
+  error: (msg: string, data?: Record<string, unknown>) => log('error', msg, data),
 };

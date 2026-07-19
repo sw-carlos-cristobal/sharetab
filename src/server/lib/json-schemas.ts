@@ -1,15 +1,17 @@
-import { z } from "zod";
-import { TRPCError } from "@trpc/server";
+import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
 
-export const extractedDataSchema = z.object({
-  merchantName: z.string().optional(),
-  date: z.string().optional(),
-  subtotal: z.number().int().min(0).default(0),
-  tax: z.number().int().min(0).default(0),
-  tip: z.number().int().min(0).default(0),
-  total: z.number().int().min(0).default(0),
-  currency: z.string().default("USD"),
-}).passthrough();
+export const extractedDataSchema = z
+  .object({
+    merchantName: z.string().optional(),
+    date: z.string().optional(),
+    subtotal: z.number().int().min(0).default(0),
+    tax: z.number().int().min(0).default(0),
+    tip: z.number().int().min(0).default(0),
+    total: z.number().int().min(0).default(0),
+    currency: z.string().default('USD'),
+  })
+  .passthrough();
 
 export type ExtractedData = z.infer<typeof extractedDataSchema>;
 
@@ -53,7 +55,7 @@ function wrapZodError(label: string, fn: () => unknown) {
     return fn();
   } catch (err) {
     throw new TRPCError({
-      code: "BAD_REQUEST",
+      code: 'BAD_REQUEST',
       message: `Invalid ${label} data`,
       cause: err,
     });
@@ -61,17 +63,17 @@ function wrapZodError(label: string, fn: () => unknown) {
 }
 
 export function parseExtractedData(data: unknown): ExtractedData {
-  return wrapZodError("receipt", () => extractedDataSchema.parse(data ?? {})) as ExtractedData;
+  return wrapZodError('receipt', () => extractedDataSchema.parse(data ?? {})) as ExtractedData;
 }
 
 export function parseGuestItems(data: unknown): GuestItem[] {
-  return wrapZodError("items", () => z.array(guestItemSchema).parse(data)) as GuestItem[];
+  return wrapZodError('items', () => z.array(guestItemSchema).parse(data)) as GuestItem[];
 }
 
 export function parseGuestPeople(data: unknown): GuestPerson[] {
-  return wrapZodError("people", () => z.array(guestPersonSchema).parse(data)) as GuestPerson[];
+  return wrapZodError('people', () => z.array(guestPersonSchema).parse(data)) as GuestPerson[];
 }
 
 export function parseGuestAssignments(data: unknown): GuestAssignment[] {
-  return wrapZodError("assignments", () => z.array(guestAssignmentSchema).parse(data)) as GuestAssignment[];
+  return wrapZodError('assignments', () => z.array(guestAssignmentSchema).parse(data)) as GuestAssignment[];
 }

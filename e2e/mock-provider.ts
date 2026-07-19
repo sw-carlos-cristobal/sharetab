@@ -16,12 +16,12 @@
  *   await mock.install();
  */
 
-import { type Page, type Route } from "@playwright/test";
+import { type Page, type Route } from '@playwright/test';
 
 // ─── Types ────────────────────────────────────────────────
 
 export interface SystemHealthOverride {
-  dbStatus?: "connected" | "disconnected";
+  dbStatus?: 'connected' | 'disconnected';
   aiProvider?: string;
   aiAvailable?: boolean;
   version?: string;
@@ -29,7 +29,7 @@ export interface SystemHealthOverride {
   uptime?: number;
 }
 
-export type MeridianStatus = "healthy" | "unhealthy" | "degraded" | "not_running" | "not_applicable";
+export type MeridianStatus = 'healthy' | 'unhealthy' | 'degraded' | 'not_running' | 'not_applicable';
 
 export interface MeridianAuthOverride {
   status: MeridianStatus;
@@ -39,7 +39,7 @@ export interface MeridianAuthOverride {
 }
 
 export interface MeridianNotifyOverride {
-  interval: "once" | "1h" | "6h" | "24h";
+  interval: 'once' | '1h' | '6h' | '24h';
 }
 
 export interface MeridianLoginResult {
@@ -57,85 +57,85 @@ export interface MeridianCompleteResult {
 export const providerPresets = {
   // ── OpenAI ─────────────────────────────
   openaiAvailable: {
-    systemHealth: { aiProvider: "openai", aiAvailable: true },
-    meridianAuth: { status: "not_applicable" as const },
+    systemHealth: { aiProvider: 'openai', aiAvailable: true },
+    meridianAuth: { status: 'not_applicable' as const },
   },
   openaiUnavailable: {
-    systemHealth: { aiProvider: "openai", aiAvailable: false },
-    meridianAuth: { status: "not_applicable" as const },
+    systemHealth: { aiProvider: 'openai', aiAvailable: false },
+    meridianAuth: { status: 'not_applicable' as const },
   },
 
   // ── Claude (API key) ───────────────────
   claudeAvailable: {
-    systemHealth: { aiProvider: "claude", aiAvailable: true },
-    meridianAuth: { status: "not_applicable" as const },
+    systemHealth: { aiProvider: 'claude', aiAvailable: true },
+    meridianAuth: { status: 'not_applicable' as const },
   },
   claudeUnavailable: {
-    systemHealth: { aiProvider: "claude", aiAvailable: false },
-    meridianAuth: { status: "not_applicable" as const },
+    systemHealth: { aiProvider: 'claude', aiAvailable: false },
+    meridianAuth: { status: 'not_applicable' as const },
   },
 
   // ── Meridian (Claude OAuth proxy) ──────
   meridianHealthy: {
-    systemHealth: { aiProvider: "meridian", aiAvailable: true },
+    systemHealth: { aiProvider: 'meridian', aiAvailable: true },
     meridianAuth: {
-      status: "healthy" as const,
-      email: "user@claude.ai",
+      status: 'healthy' as const,
+      email: 'user@claude.ai',
       loginInProgress: false,
     },
   },
   meridianUnhealthy: {
-    systemHealth: { aiProvider: "meridian", aiAvailable: false },
+    systemHealth: { aiProvider: 'meridian', aiAvailable: false },
     meridianAuth: {
-      status: "unhealthy" as const,
-      error: "Not logged in. Run: claude login",
+      status: 'unhealthy' as const,
+      error: 'Not logged in. Run: claude login',
       loginInProgress: false,
     },
   },
   meridianDegraded: {
-    systemHealth: { aiProvider: "meridian", aiAvailable: true },
+    systemHealth: { aiProvider: 'meridian', aiAvailable: true },
     meridianAuth: {
-      status: "degraded" as const,
-      error: "Could not verify auth status",
+      status: 'degraded' as const,
+      error: 'Could not verify auth status',
       loginInProgress: false,
     },
   },
   meridianNotRunning: {
-    systemHealth: { aiProvider: "meridian", aiAvailable: false },
+    systemHealth: { aiProvider: 'meridian', aiAvailable: false },
     meridianAuth: {
-      status: "not_running" as const,
+      status: 'not_running' as const,
       loginInProgress: false,
     },
   },
   meridianLoginInProgress: {
-    systemHealth: { aiProvider: "meridian", aiAvailable: false },
+    systemHealth: { aiProvider: 'meridian', aiAvailable: false },
     meridianAuth: {
-      status: "unhealthy" as const,
-      error: "Not logged in. Run: claude login",
+      status: 'unhealthy' as const,
+      error: 'Not logged in. Run: claude login',
       loginInProgress: true,
     },
   },
 
   // ── Ollama ─────────────────────────────
   ollamaAvailable: {
-    systemHealth: { aiProvider: "ollama (llava)", aiAvailable: true },
-    meridianAuth: { status: "not_applicable" as const },
+    systemHealth: { aiProvider: 'ollama (llava)', aiAvailable: true },
+    meridianAuth: { status: 'not_applicable' as const },
   },
   ollamaUnavailable: {
-    systemHealth: { aiProvider: "ollama (llava)", aiAvailable: false },
-    meridianAuth: { status: "not_applicable" as const },
+    systemHealth: { aiProvider: 'ollama (llava)', aiAvailable: false },
+    meridianAuth: { status: 'not_applicable' as const },
   },
 
   // ── Not configured ─────────────────────
   notConfigured: {
-    systemHealth: { aiProvider: "not configured", aiAvailable: false },
-    meridianAuth: { status: "not_applicable" as const },
+    systemHealth: { aiProvider: 'not configured', aiAvailable: false },
+    meridianAuth: { status: 'not_applicable' as const },
   },
 
   // ── Database down ──────────────────────
   dbDown: {
-    systemHealth: { dbStatus: "disconnected" as const, aiProvider: "openai", aiAvailable: true },
-    meridianAuth: { status: "not_applicable" as const },
+    systemHealth: { dbStatus: 'disconnected' as const, aiProvider: 'openai', aiAvailable: true },
+    meridianAuth: { status: 'not_applicable' as const },
   },
 } as const;
 
@@ -154,11 +154,11 @@ export class MockProvider {
 
   /** Override fields in admin.getSystemHealth response */
   setSystemHealth(overrides: SystemHealthOverride): this {
-    this.mocks["admin.getSystemHealth"] = {
-      dbStatus: "connected",
-      aiProvider: "mock",
+    this.mocks['admin.getSystemHealth'] = {
+      dbStatus: 'connected',
+      aiProvider: 'mock',
       aiAvailable: true,
-      version: "0.0.0-test",
+      version: '0.0.0-test',
       serverStartTime: new Date().toISOString(),
       uptime: 120,
       ...overrides,
@@ -168,10 +168,10 @@ export class MockProvider {
 
   /** Override admin.getMeridianAuthStatus response */
   setMeridianAuth(overrides: MeridianAuthOverride): this {
-    if (overrides.status === "not_applicable") {
-      this.mocks["admin.getMeridianAuthStatus"] = { status: "not_applicable" };
+    if (overrides.status === 'not_applicable') {
+      this.mocks['admin.getMeridianAuthStatus'] = { status: 'not_applicable' };
     } else {
-      this.mocks["admin.getMeridianAuthStatus"] = {
+      this.mocks['admin.getMeridianAuthStatus'] = {
         loginInProgress: false,
         ...overrides,
       };
@@ -181,25 +181,25 @@ export class MockProvider {
 
   /** Override admin.getMeridianNotifyPreference response */
   setMeridianNotifyPreference(overrides: MeridianNotifyOverride): this {
-    this.mocks["admin.getMeridianNotifyPreference"] = overrides;
+    this.mocks['admin.getMeridianNotifyPreference'] = overrides;
     return this;
   }
 
   /** Mock admin.startMeridianLogin mutation response */
   setMeridianLoginResult(result: MeridianLoginResult): this {
-    this.mocks["admin.startMeridianLogin"] = result;
+    this.mocks['admin.startMeridianLogin'] = result;
     return this;
   }
 
   /** Mock admin.completeMeridianLogin mutation response */
   setMeridianCompleteResult(result: MeridianCompleteResult): this {
-    this.mocks["admin.completeMeridianLogin"] = result;
+    this.mocks['admin.completeMeridianLogin'] = result;
     return this;
   }
 
   /** Mock admin.cancelMeridianLogin mutation response */
   setMeridianCancelResult(): this {
-    this.mocks["admin.cancelMeridianLogin"] = { cancelled: true };
+    this.mocks['admin.cancelMeridianLogin'] = { cancelled: true };
     return this;
   }
 
@@ -209,8 +209,8 @@ export class MockProvider {
     this.setSystemHealth(config.systemHealth);
     this.setMeridianAuth(config.meridianAuth);
     // Default notification preference
-    if (!this.mocks["admin.getMeridianNotifyPreference"]) {
-      this.setMeridianNotifyPreference({ interval: "once" });
+    if (!this.mocks['admin.getMeridianNotifyPreference']) {
+      this.setMeridianNotifyPreference({ interval: 'once' });
     }
     return this;
   }
@@ -227,7 +227,7 @@ export class MockProvider {
 
     const mocks = this.mocks;
 
-    await this.page.route("**/api/trpc/**", async (route: Route) => {
+    await this.page.route('**/api/trpc/**', async (route: Route) => {
       const url = route.request().url();
       const method = route.request().method();
 
@@ -238,7 +238,7 @@ export class MockProvider {
         return;
       }
 
-      const procedures = pathMatch[1].split(",");
+      const procedures = pathMatch[1].split(',');
       const hasMock = procedures.some((p) => p in mocks);
 
       if (!hasMock) {
@@ -254,12 +254,10 @@ export class MockProvider {
         const results = procedures.map((proc) => ({
           result: { data: { json: mocks[proc] } },
         }));
-        const body = url.includes("batch=")
-          ? results
-          : results[0];
+        const body = url.includes('batch=') ? results : results[0];
         await route.fulfill({
           status: 200,
-          contentType: "application/json",
+          contentType: 'application/json',
           body: JSON.stringify(body),
         });
         return;
@@ -268,7 +266,7 @@ export class MockProvider {
       // Mixed batch — some procedures mocked, some real. Fetch from server
       // and splice in mock responses. Only works for GET (POST mutations
       // should always be fully mocked).
-      if (method === "POST") {
+      if (method === 'POST') {
         await route.continue();
         return;
       }
@@ -281,10 +279,7 @@ export class MockProvider {
         // During teardown, in-flight intercepted requests can outlive the page.
         // Ignore those closure errors so they don't fail otherwise passing tests.
         const message = error instanceof Error ? error.message : String(error);
-        if (
-          message.includes("Target page, context or browser has been closed") ||
-          message.includes("route.fetch")
-        ) {
+        if (message.includes('Target page, context or browser has been closed') || message.includes('route.fetch')) {
           try {
             await route.continue();
           } catch {
@@ -304,7 +299,7 @@ export class MockProvider {
 
       await route.fulfill({
         status: 200,
-        contentType: "application/json",
+        contentType: 'application/json',
         body: JSON.stringify(modified),
       });
     });

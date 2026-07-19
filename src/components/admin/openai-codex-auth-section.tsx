@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import { useRef, useState } from "react";
-import { useTranslations } from "next-intl";
-import { trpc } from "@/lib/trpc";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
+import { trpc } from '@/lib/trpc';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import {
   Bot,
   KeyRound,
@@ -17,12 +17,12 @@ import {
   Upload,
   AlertCircle,
   X,
-} from "lucide-react";
+} from 'lucide-react';
 
-const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
 export function OpenAICodexAuthSection() {
-  const t = useTranslations("admin");
+  const t = useTranslations('admin');
   const utils = trpc.useUtils();
   const authStatus = trpc.admin.getOpenAICodexAuthStatus.useQuery(undefined, {
     refetchInterval: 15_000,
@@ -31,10 +31,10 @@ export function OpenAICodexAuthSection() {
   const startLogin = trpc.admin.startOpenAICodexLogin.useMutation({
     onSuccess: (data) => {
       setLoginUrl(data.url);
-      setLoginState("waiting_for_code");
+      setLoginState('waiting_for_code');
     },
     onError: (err) => {
-      setLoginState("error");
+      setLoginState('error');
       setLoginError(err.message);
     },
   });
@@ -42,16 +42,16 @@ export function OpenAICodexAuthSection() {
   const completeLogin = trpc.admin.completeOpenAICodexLogin.useMutation({
     onSuccess: (data) => {
       if (data.success) {
-        setLoginState("success");
+        setLoginState('success');
         utils.admin.getOpenAICodexAuthStatus.invalidate();
         utils.admin.getSystemHealth.invalidate();
       } else {
-        setLoginState("error");
-        setLoginError(data.error ?? "Login failed");
+        setLoginState('error');
+        setLoginError(data.error ?? 'Login failed');
       }
     },
     onError: (err) => {
-      setLoginState("error");
+      setLoginState('error');
       setLoginError(err.message);
     },
   });
@@ -73,10 +73,10 @@ export function OpenAICodexAuthSection() {
   });
 
   const [loginState, setLoginState] = useState<
-    "idle" | "starting" | "waiting_for_code" | "submitting" | "success" | "error"
-  >("idle");
+    'idle' | 'starting' | 'waiting_for_code' | 'submitting' | 'success' | 'error'
+  >('idle');
   const [loginUrl, setLoginUrl] = useState<string | null>(null);
-  const [loginCode, setLoginCode] = useState("");
+  const [loginCode, setLoginCode] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -88,9 +88,9 @@ export function OpenAICodexAuthSection() {
   } | null>(null);
 
   function resetLoginState() {
-    setLoginState("idle");
+    setLoginState('idle');
     setLoginUrl(null);
-    setLoginCode("");
+    setLoginCode('');
     setLoginError(null);
   }
 
@@ -102,7 +102,7 @@ export function OpenAICodexAuthSection() {
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = reader.result as string;
-      const base64 = dataUrl.split(",")[1];
+      const base64 = dataUrl.split(',')[1];
       if (!base64) return;
       setTestFile({ name: selected.name, base64, mimeType: selected.type });
       testProvider.reset();
@@ -113,83 +113,80 @@ export function OpenAICodexAuthSection() {
   const clearFile = () => {
     setTestFile(null);
     testProvider.reset();
-    if (fileRef.current) fileRef.current.value = "";
+    if (fileRef.current) fileRef.current.value = '';
   };
 
   const handleTest = () => {
     if (!testFile) return;
     testProvider.mutate({
-      providerName: "openai-codex",
+      providerName: 'openai-codex',
       imageBase64: testFile.base64,
-      mimeType: testFile.mimeType as "image/jpeg" | "image/png" | "image/webp" | "image/gif",
+      mimeType: testFile.mimeType as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
     });
   };
 
   const status = authStatus.data;
-  if (!status || "status" in status && status.status === "not_applicable") {
+  if (!status || ('status' in status && status.status === 'not_applicable')) {
     return null;
   }
 
-  const isHealthy = status.status === "healthy";
-  const isDegraded = status.status === "degraded";
-  const isWaitingForCode =
-    loginState === "waiting_for_code" || (loginState === "idle" && status.loginInProgress);
-  const statusColor = isHealthy ? "bg-green-500" : isDegraded ? "bg-yellow-500" : "bg-red-500";
+  const isHealthy = status.status === 'healthy';
+  const isDegraded = status.status === 'degraded';
+  const isWaitingForCode = loginState === 'waiting_for_code' || (loginState === 'idle' && status.loginInProgress);
+  const statusColor = isHealthy ? 'bg-green-500' : isDegraded ? 'bg-yellow-500' : 'bg-red-500';
   const statusLabel = isHealthy
-    ? t("codexAuth.authenticated")
+    ? t('codexAuth.authenticated')
     : isDegraded
-      ? t("codexAuth.serviceDegraded")
-      : t("codexAuth.authRequired");
+      ? t('codexAuth.serviceDegraded')
+      : t('codexAuth.authRequired');
 
   return (
     <section>
       <div className="mb-4 flex items-center gap-2">
         <KeyRound className="h-5 w-5 text-muted-foreground" />
-        <h2 className="text-lg font-semibold">{t("codexAuth.title")}</h2>
+        <h2 className="text-lg font-semibold">{t('codexAuth.title')}</h2>
       </div>
 
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
             <Bot className="h-4 w-4" />
-            {t("codexAuth.cardTitle")}
+            {t('codexAuth.cardTitle')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex items-center gap-2">
             <span className={`h-2.5 w-2.5 rounded-full ${statusColor}`} />
             <span className="text-sm font-medium">{statusLabel}</span>
-            {"email" in status && status.email && (
+            {'email' in status && status.email && (
               <Badge variant="outline" className="text-xs">
                 {status.email}
               </Badge>
             )}
-            {"planType" in status && status.planType && (
+            {'planType' in status && status.planType && (
               <Badge variant="outline" className="text-xs">
                 {status.planType}
               </Badge>
             )}
           </div>
 
-          {"error" in status && status.error && (
-            <p className="text-sm text-red-600 dark:text-red-400">
-              {status.error}
-            </p>
+          {'error' in status && status.error && (
+            <p className="text-sm text-red-600 dark:text-red-400">{status.error}</p>
           )}
 
-          {!isHealthy && loginState === "idle" && !status.loginInProgress && (
+          {!isHealthy && loginState === 'idle' && !status.loginInProgress && (
             <Button
               size="sm"
               onClick={() => {
-                setLoginState("starting");
+                setLoginState('starting');
                 startLogin.mutate();
               }}
             >
-              {t("codexAuth.authenticate")}
+              {t('codexAuth.authenticate')}
             </Button>
           )}
 
-          {isHealthy && loginState === "idle" && (
+          {isHealthy && loginState === 'idle' && (
             <Button
               size="sm"
               variant="outline"
@@ -199,28 +196,26 @@ export function OpenAICodexAuthSection() {
               {logoutMutation.isPending ? (
                 <>
                   <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                  {t("codexAuth.loggingOut")}
+                  {t('codexAuth.loggingOut')}
                 </>
               ) : (
-                t("codexAuth.logOut")
+                t('codexAuth.logOut')
               )}
             </Button>
           )}
 
-          {loginState === "starting" && (
+          {loginState === 'starting' && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-3 w-3 animate-spin" />
-              {t("codexAuth.startingLogin")}
+              {t('codexAuth.startingLogin')}
             </div>
           )}
 
           {isWaitingForCode && (
             <div className="space-y-3 rounded-md border p-3">
               <p className="text-sm">
-                <span className="font-semibold">{t("codexAuth.step1Label")}</span>{" "}
-                {loginUrl
-                  ? t("codexAuth.step1InstructionNew")
-                  : t("codexAuth.step1InstructionResume")}
+                <span className="font-semibold">{t('codexAuth.step1Label')}</span>{' '}
+                {loginUrl ? t('codexAuth.step1InstructionNew') : t('codexAuth.step1InstructionResume')}
               </p>
               {loginUrl ? (
                 <div className="flex items-center gap-2">
@@ -231,7 +226,7 @@ export function OpenAICodexAuthSection() {
                     className="flex items-center gap-1 text-sm text-primary underline break-all"
                   >
                     <ExternalLink className="h-3 w-3 shrink-0" />
-                    {t("codexAuth.openAuthPage")}
+                    {t('codexAuth.openAuthPage')}
                   </a>
                   <Button
                     variant="ghost"
@@ -243,26 +238,17 @@ export function OpenAICodexAuthSection() {
                       setTimeout(() => setCopied(false), 2000);
                     }}
                   >
-                    {copied ? (
-                      <CheckCircle2 className="h-3 w-3 text-green-500" />
-                    ) : (
-                      <Copy className="h-3 w-3" />
-                    )}
+                    {copied ? <CheckCircle2 className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
                   </Button>
                 </div>
               ) : (
-                <p className="text-xs text-muted-foreground">
-                  {t("codexAuth.inProgressWarning")}
-                </p>
+                <p className="text-xs text-muted-foreground">{t('codexAuth.inProgressWarning')}</p>
               )}
               <div className="space-y-1">
                 <p className="text-sm">
-                  <span className="font-semibold">{t("codexAuth.step2Label")}</span>{" "}
-                  {t("codexAuth.step2Instruction")}
+                  <span className="font-semibold">{t('codexAuth.step2Label')}</span> {t('codexAuth.step2Instruction')}
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  {t("codexAuth.step2Hint")}
-                </p>
+                <p className="text-xs text-muted-foreground">{t('codexAuth.step2Hint')}</p>
               </div>
               <div className="flex gap-2">
                 <input
@@ -276,15 +262,11 @@ export function OpenAICodexAuthSection() {
                   size="sm"
                   disabled={!loginCode.trim() || completeLogin.isPending}
                   onClick={() => {
-                    setLoginState("submitting");
+                    setLoginState('submitting');
                     completeLogin.mutate({ code: loginCode.trim() });
                   }}
                 >
-                  {completeLogin.isPending ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : (
-                    t("codexAuth.submit")
-                  )}
+                  {completeLogin.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : t('codexAuth.submit')}
                 </Button>
               </div>
               <Button
@@ -294,42 +276,38 @@ export function OpenAICodexAuthSection() {
                 onClick={() => cancelMutation.mutate()}
                 disabled={cancelMutation.isPending}
               >
-                {t("codexAuth.cancel")}
+                {t('codexAuth.cancel')}
               </Button>
             </div>
           )}
 
-          {loginState === "submitting" && (
+          {loginState === 'submitting' && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-3 w-3 animate-spin" />
-              {t("codexAuth.completingLogin")}
+              {t('codexAuth.completingLogin')}
             </div>
           )}
 
-          {loginState === "success" && (
-            <div className="text-sm text-green-600 dark:text-green-400">
-              {t("codexAuth.loginSuccess")}
-            </div>
+          {loginState === 'success' && (
+            <div className="text-sm text-green-600 dark:text-green-400">{t('codexAuth.loginSuccess')}</div>
           )}
 
-          {loginState === "error" && loginError && (
-            <div className="text-sm text-red-600 dark:text-red-400">
-              {loginError}
-            </div>
+          {loginState === 'error' && loginError && (
+            <div className="text-sm text-red-600 dark:text-red-400">{loginError}</div>
           )}
 
           {/* Test Receipt Extraction */}
-          {isHealthy && loginState === "idle" && (
+          {isHealthy && loginState === 'idle' && (
             <>
               <div className="border-t pt-3">
                 <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  {t("codexAuth.testExtraction")}
+                  {t('codexAuth.testExtraction')}
                 </p>
                 <div className="flex items-center gap-2">
                   <input
                     ref={fileRef}
                     type="file"
-                    accept={ACCEPTED_TYPES.join(",")}
+                    accept={ACCEPTED_TYPES.join(',')}
                     onChange={handleFileChange}
                     className="hidden"
                   />
@@ -340,30 +318,23 @@ export function OpenAICodexAuthSection() {
                     disabled={testProvider.isPending}
                   >
                     <Upload className="mr-1 h-3 w-3" />
-                    {testFile ? t("codexAuth.changeFile") : t("codexAuth.uploadFile")}
+                    {testFile ? t('codexAuth.changeFile') : t('codexAuth.uploadFile')}
                   </Button>
                   {testFile && (
                     <span className="flex items-center gap-1 text-xs text-muted-foreground">
                       <span className="max-w-32 truncate">{testFile.name}</span>
-                      <button
-                        onClick={clearFile}
-                        className="text-muted-foreground hover:text-foreground"
-                      >
+                      <button onClick={clearFile} className="text-muted-foreground hover:text-foreground">
                         <X className="h-3 w-3" />
                       </button>
                     </span>
                   )}
-                  <Button
-                    size="sm"
-                    disabled={!testFile || testProvider.isPending}
-                    onClick={handleTest}
-                  >
+                  <Button size="sm" disabled={!testFile || testProvider.isPending} onClick={handleTest}>
                     {testProvider.isPending ? (
                       <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                     ) : (
                       <FlaskConical className="mr-1 h-3 w-3" />
                     )}
-                    {t("codexAuth.test")}
+                    {t('codexAuth.test')}
                   </Button>
                 </div>
               </div>
@@ -372,7 +343,7 @@ export function OpenAICodexAuthSection() {
                 <div className="space-y-1">
                   <p className="flex items-center gap-1 text-xs text-green-600">
                     <CheckCircle2 className="h-3 w-3" />
-                    {t("codexAuth.testSuccess", { duration: testProvider.data.durationMs })}
+                    {t('codexAuth.testSuccess', { duration: testProvider.data.durationMs })}
                   </p>
                   <pre className="max-h-64 overflow-auto rounded-md bg-muted p-2 text-xs">
                     {JSON.stringify(testProvider.data.result, null, 2)}

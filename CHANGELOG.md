@@ -3,9 +3,11 @@
 ## [v0.6.2] - 2026-04-22
 
 ### Features
+
 - auto-refresh Meridian OAuth tokens in health poller (#82) (344a4d0)
 
 ### Other Changes
+
 - docs: fix stale claims, add i18n section, fix Docker env pass-through (d2490bb)
 - docs: refresh GIFs for i18n, add admin dashboard demo (c95e607)
 
@@ -14,6 +16,7 @@
 ## [v0.6.1] - 2026-04-21
 
 ### Features
+
 - add translations for 6 new languages (#79) (b27e4ee)
 - Add Swedish translation (#80) (fd8ef57)
 
@@ -22,9 +25,11 @@
 ## [v0.6.0] - 2026-04-21
 
 ### Features
+
 - add i18n multilingual support with next-intl (#77) (065eb0b)
 
 ### Other Changes
+
 - chore(deps): bump hono in the npm_and_yarn group across 1 directory (#75) (b46eee9)
 - Improve CI/CD release flow and add LLM-friendly repo commands (1b59885)
 
@@ -33,6 +38,7 @@
 ## [v0.5.12] - 2026-04-14
 
 ### Bug Fixes
+
 - resolve admin mobile overflow and version drift on main (f8800f0)
 - reduce Meridian and OpenAI Codex OAuth auth health check frequency (4e9f442)
 
@@ -41,6 +47,7 @@
 ## [v0.5.10] - 2026-04-13
 
 ### Features
+
 - add OpenAI Codex OAuth support (#73) (481aad7)
 
 **Full Changelog**: https://github.com/sw-carlos-cristobal/sharetab/compare/v0.4.3...v0.5.10
@@ -48,39 +55,42 @@
 ## [v0.4.3] - 2026-04-06
 
 ### Other Changes
+
 - docs: expand startup config summary with provider and auth readiness details
 
 **Full Changelog**: https://github.com/sw-carlos-cristobal/sharetab/compare/v0.4.2...v0.4.3
 
-
 ## [v0.4.2] - 2026-04-06
 
 ### Bug Fixes
+
 - add claude wrapper and persistent meridian auth (2a0aacc)
 
 ### Other Changes
+
 - docs: add LOG_LEVEL and rate limit env vars to Unraid template (72a7a32)
 
 **Full Changelog**: https://github.com/sw-carlos-cristobal/sharetab/compare/v0.4.1...v0.4.2
 
-
 ## [v0.4.1] - 2026-04-06
 
 ### Bug Fixes
+
 - wrap expense+assignments+activity in single transaction for atomicity (#47) (c6e7213)
 - invalidate AI provider cache on extraction failure and retry (#46) (8e5fc3a)
 
 ### Other Changes
+
 - test: cleanup e2e tests, add guest remapping regression, and retry dedup test (#50, #53, #54, #55, #56, #59) (35c0e4e)
 - test: make registry fallback test deterministic and add cache transition tests (#48, #52, #57) (99bd537)
 - docs: update AI provider docs, add OPENAI_MODEL/MERIDIAN_PORT, and v0.4.0 changelog (#60, #61, #62, #63, #64, #65, #66) (390e47e)
 
 **Full Changelog**: https://github.com/sw-carlos-cristobal/sharetab/compare/v0.4.0...v0.4.1
 
-
 ## [v0.4.0] - 2026-04-05
 
 ### Features
+
 - add OCR receipt scanning fallback via Tesseract.js — no API key needed (24febc7)
 - comprehensive OCR parser improvements and 50 unit tests (a0ad840)
 - OCR image preprocessing and distorted receipt tests (26596c2)
@@ -88,6 +98,7 @@
 - add mock AI provider and SMTP server for CI testing (7e02ec5)
 
 ### Bug Fixes
+
 - separator-aware date disambiguation and undefined for unparseable dates (#45, #49) (37c75ed)
 - invalidate AI provider cache on extraction failure and retry (#46) (8e5fc3a)
 - wrap expense+assignments+activity in single transaction for atomicity (#47) (c6e7213)
@@ -105,16 +116,19 @@
 - data integrity — dedup items, preserve on failure, fix tax split, reject negative prices (7f0354d)
 
 ### Security
+
 - fix 6 vulnerabilities in upload, AI, and guest flows (35613f7)
 - address CI audit and secret-handling review feedback (eed32fd)
 
 ### Tests
+
 - add guest API security tests and OCR regression tests (#43, #20) (584c7e0)
 - add 10 photorealistic receipt OCR tests (dbb8bc0)
 - add 22 real-world receipt images for OCR testing (384af46)
 - add fallback test for isAvailable() returning false (#35) (093de26)
 
 ### Other Changes
+
 - refactor: extract normalizeDate to its own module for testability (1526138)
 - perf: cache AI provider with 60s TTL to avoid repeated isAvailable() calls (#31) (ff6258f)
 
@@ -123,14 +137,15 @@
 ## [v0.3.0] - 2026-04-01
 
 ### Features
+
 - add server logs viewer to admin dashboard (1f9f84f)
 
 **Full Changelog**: https://github.com/sw-carlos-cristobal/sharetab/compare/v0.2.0...v0.3.0
 
-
 ## [v0.2.0] - 2026-04-01
 
 ### Features
+
 - add release workflow with semver and changelog (b9fb31d)
 - print config summary on container startup (6ecfa16)
 - add ADMIN_EMAIL to Unraid template (ae4ec66)
@@ -164,6 +179,7 @@
 - implement Phase 1 (foundation) and Phase 2 (groups & expenses UI) (361c2ed)
 
 ### Bug Fixes
+
 - stabilize admin and receipt-ui e2e tests (e84df7b)
 - admin e2e test CI compatibility (19e5cfc)
 - resolve build type error in getReceiptItems return type (811d2a7)
@@ -220,6 +236,7 @@
 - upgrade OAuth model to claude-haiku-4-5 (494c1ed)
 
 ### Other Changes
+
 - ci: add ADMIN_EMAIL to test workflow for admin page tests (4931adb)
 - docs: add screenshots and visual demo to README (fca6012)
 - docs: update CLAUDE.md and README.md with current state (4d6e339)
@@ -250,7 +267,6 @@
 - test: add Playwright e2e tests covering functional test cases (d43f1f0)
 
 **Full Changelog**: https://github.com/sw-carlos-cristobal/sharetab/compare/92b5f884079ffdf8ecf776d36364cce52e434216...v0.2.0
-
 
 All notable changes to ShareTab will be documented in this file.
 

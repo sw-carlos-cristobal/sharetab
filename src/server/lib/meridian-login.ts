@@ -1,22 +1,21 @@
-import { randomBytes, createHash } from "crypto";
-import { readFileSync, writeFileSync, unlinkSync } from "fs";
-import { join } from "path";
-import { logger } from "./logger";
+import { randomBytes, createHash } from 'crypto';
+import { readFileSync, writeFileSync, unlinkSync } from 'fs';
+import { join } from 'path';
+import { logger } from './logger';
 
 // ─── Constants ───────────────────────────────────────────
 
-const CLIENT_ID =
-  process.env.MERIDIAN_CLIENT_ID ?? "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
-const TOKEN_ENDPOINT = "https://platform.claude.com/v1/oauth/token";
-const AUTHORIZE_ENDPOINT = "https://claude.com/cai/oauth/authorize";
-const REDIRECT_URI = "https://platform.claude.com/oauth/code/callback";
+const CLIENT_ID = process.env.MERIDIAN_CLIENT_ID ?? '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
+const TOKEN_ENDPOINT = 'https://platform.claude.com/v1/oauth/token';
+const AUTHORIZE_ENDPOINT = 'https://claude.com/cai/oauth/authorize';
+const REDIRECT_URI = 'https://platform.claude.com/oauth/code/callback';
 const SCOPES = [
-  "user:profile",
-  "user:inference",
-  "user:sessions:claude_code",
-  "user:mcp_servers",
-  "user:file_upload",
-].join(" ");
+  'user:profile',
+  'user:inference',
+  'user:sessions:claude_code',
+  'user:mcp_servers',
+  'user:file_upload',
+].join(' ');
 
 const LOGIN_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -33,37 +32,33 @@ let pendingLogin: PendingLogin | null = null;
 // ─── PKCE helpers ────────────────────────────────────────
 
 function generateCodeVerifier(): string {
-  return randomBytes(32).toString("base64url");
+  return randomBytes(32).toString('base64url');
 }
 
 function generateCodeChallenge(verifier: string): string {
-  return createHash("sha256").update(verifier).digest("base64url");
+  return createHash('sha256').update(verifier).digest('base64url');
 }
 
 // ─── Credential path ────────────────────────────────────
 
 function getCredentialPath(): string {
-  const claudeHome =
-    process.env.CLAUDE_DIR ??
-    join(process.env.HOME ?? "/home/nextjs", ".claude");
-  return join(claudeHome, ".credentials.json");
+  const claudeHome = process.env.CLAUDE_DIR ?? join(process.env.HOME ?? '/home/nextjs', '.claude');
+  return join(claudeHome, '.credentials.json');
 }
 
-function readStoredOauthCredentials():
-  | {
-      accessToken?: string;
-      refreshToken?: string;
-      expiresAt?: number;
-      scopes?: string[];
-      subscriptionType?: string;
-      rateLimitTier?: string;
-    }
-  | null {
+function readStoredOauthCredentials(): {
+  accessToken?: string;
+  refreshToken?: string;
+  expiresAt?: number;
+  scopes?: string[];
+  subscriptionType?: string;
+  rateLimitTier?: string;
+} | null {
   const credPath = getCredentialPath();
 
   let raw: string;
   try {
-    raw = readFileSync(credPath, "utf8");
+    raw = readFileSync(credPath, 'utf8');
   } catch {
     return null;
   }
@@ -81,7 +76,7 @@ function readStoredOauthCredentials():
     };
     return creds.claudeAiOauth ?? null;
   } catch {
-    logger.warn("meridian.credentials.invalidJson");
+    logger.warn('meridian.credentials.invalidJson');
     return null;
   }
 }
@@ -102,42 +97,42 @@ export function isLoginInProgress(): boolean {
  */
 export function startLogin(): Promise<string> {
   if (pendingLogin) {
-    throw new Error("A login is already in progress");
+    throw new Error('A login is already in progress');
   }
 
   // Clear stale credentials so the proxy picks up fresh ones after login
   const credPath = getCredentialPath();
   try {
     unlinkSync(credPath);
-    logger.info("meridian.login.clearedStaleCredentials", { path: credPath });
+    logger.info('meridian.login.clearedStaleCredentials', { path: credPath });
   } catch {
     // File doesn't exist — that's fine
   }
 
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
-  const state = randomBytes(32).toString("base64url");
+  const state = randomBytes(32).toString('base64url');
 
   const params = new URLSearchParams({
     client_id: CLIENT_ID,
-    response_type: "code",
+    response_type: 'code',
     redirect_uri: REDIRECT_URI,
     scope: SCOPES,
     code_challenge: codeChallenge,
-    code_challenge_method: "S256",
+    code_challenge_method: 'S256',
     state,
   });
 
   const url = `${AUTHORIZE_ENDPOINT}?${params.toString()}`;
 
   const timeout = setTimeout(() => {
-    logger.warn("meridian.login.timeout");
+    logger.warn('meridian.login.timeout');
     cancelLogin();
   }, LOGIN_TIMEOUT_MS);
 
   pendingLogin = { codeVerifier, state, timeout };
 
-  logger.info("meridian.login.started");
+  logger.info('meridian.login.started');
   return Promise.resolve(url);
 }
 
@@ -150,8 +145,8 @@ function extractCodeAndState(input: string): { code: string; state: string | nul
   try {
     const url = new URL(trimmed);
     return {
-      code: url.searchParams.get("code") ?? trimmed,
-      state: url.searchParams.get("state"),
+      code: url.searchParams.get('code') ?? trimmed,
+      state: url.searchParams.get('state'),
     };
   } catch {
     // Not a URL — treat the whole string as the code
@@ -163,11 +158,9 @@ function extractCodeAndState(input: string): { code: string; state: string | nul
  * Exchange the authorization code for tokens and write credentials.
  * Accepts either a raw authorization code or the full callback URL.
  */
-export async function submitCode(
-  codeOrUrl: string
-): Promise<{ success: boolean; error?: string }> {
+export async function submitCode(codeOrUrl: string): Promise<{ success: boolean; error?: string }> {
   if (!pendingLogin) {
-    throw new Error("No login in progress");
+    throw new Error('No login in progress');
   }
 
   const { code, state } = extractCodeAndState(codeOrUrl);
@@ -175,22 +168,22 @@ export async function submitCode(
 
   if (state && state !== expectedState) {
     cleanup();
-    return { success: false, error: "OAuth state mismatch" };
+    return { success: false, error: 'OAuth state mismatch' };
   }
 
   try {
-    logger.info("meridian.login.exchangingCode", {
+    logger.info('meridian.login.exchangingCode', {
       codeLength: code.length,
-      codePreview: code.substring(0, 10) + "...",
+      codePreview: code.substring(0, 10) + '...',
       redirectUri: REDIRECT_URI,
       clientId: CLIENT_ID,
     });
 
     const res = await fetch(TOKEN_ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        grant_type: "authorization_code",
+        grant_type: 'authorization_code',
         client_id: CLIENT_ID,
         code,
         code_verifier: codeVerifier,
@@ -202,7 +195,7 @@ export async function submitCode(
 
     if (!res.ok) {
       const body = await res.text();
-      logger.error("meridian.login.tokenExchangeFailed", {
+      logger.error('meridian.login.tokenExchangeFailed', {
         status: res.status,
         body,
       });
@@ -222,26 +215,25 @@ export async function submitCode(
         accessToken: tokens.access_token,
         refreshToken: tokens.refresh_token,
         expiresAt: Date.now() + tokens.expires_in * 1000,
-        scopes: SCOPES.split(" "),
-        subscriptionType: tokens.subscription_type ?? "max",
-        rateLimitTier:
-          tokens.rate_limit_tier ?? "default_claude_max_5x",
+        scopes: SCOPES.split(' '),
+        subscriptionType: tokens.subscription_type ?? 'max',
+        rateLimitTier: tokens.rate_limit_tier ?? 'default_claude_max_5x',
       },
     };
 
     writeFileSync(credPath, JSON.stringify(credentials), { mode: 0o600 });
-    logger.info("meridian.login.credentialsSaved", { path: credPath });
+    logger.info('meridian.login.credentialsSaved', { path: credPath });
 
     cleanup();
     return { success: true };
   } catch (err) {
-    logger.error("meridian.login.error", {
+    logger.error('meridian.login.error', {
       error: err instanceof Error ? err.message : String(err),
     });
     cleanup();
     return {
       success: false,
-      error: err instanceof Error ? err.message : "Token exchange failed",
+      error: err instanceof Error ? err.message : 'Token exchange failed',
     };
   }
 }
@@ -266,27 +258,27 @@ export async function refreshIfNeeded(options?: { force?: boolean }): Promise<bo
   }
 
   if (!oauth?.refreshToken) {
-    logger.warn("meridian.refresh.noRefreshToken");
+    logger.warn('meridian.refresh.noRefreshToken');
     return false;
   }
 
   // Still fresh — no refresh needed (unless forced)
   if (!options?.force && oauth.expiresAt && oauth.expiresAt - EXPIRY_BUFFER_MS > Date.now()) {
-    logger.info("meridian.refresh.tokenStillValid", {
-      expiresIn: Math.round((oauth.expiresAt - Date.now()) / 1000) + "s",
+    logger.info('meridian.refresh.tokenStillValid', {
+      expiresIn: Math.round((oauth.expiresAt - Date.now()) / 1000) + 's',
     });
     return true;
   }
 
   // Token expired or about to expire — refresh it
-  logger.info("meridian.refresh.refreshing");
+  logger.info('meridian.refresh.refreshing');
 
   try {
     const res = await fetch(TOKEN_ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        grant_type: "refresh_token",
+        grant_type: 'refresh_token',
         client_id: CLIENT_ID,
         refresh_token: oauth.refreshToken,
       }),
@@ -295,7 +287,7 @@ export async function refreshIfNeeded(options?: { force?: boolean }): Promise<bo
 
     if (!res.ok) {
       const body = await res.text();
-      logger.error("meridian.refresh.failed", {
+      logger.error('meridian.refresh.failed', {
         status: res.status,
         body,
       });
@@ -313,12 +305,12 @@ export async function refreshIfNeeded(options?: { force?: boolean }): Promise<bo
     };
 
     writeFileSync(credPath, JSON.stringify(updated), { mode: 0o600 });
-    logger.info("meridian.refresh.success", {
-      expiresIn: tokens.expires_in + "s",
+    logger.info('meridian.refresh.success', {
+      expiresIn: tokens.expires_in + 's',
     });
     return true;
   } catch (err) {
-    logger.error("meridian.refresh.error", {
+    logger.error('meridian.refresh.error', {
       error: err instanceof Error ? err.message : String(err),
     });
     return false;
@@ -328,9 +320,7 @@ export async function refreshIfNeeded(options?: { force?: boolean }): Promise<bo
 // ─── URL parsing (kept for test compatibility) ───────────
 
 export function parseOAuthUrl(text: string): string | null {
-  const match = text.match(
-    /(https:\/\/(?:claude\.ai|claude\.com|platform\.claude\.com)\/[^\s]+)/
-  );
+  const match = text.match(/(https:\/\/(?:claude\.ai|claude\.com|platform\.claude\.com)\/[^\s]+)/);
   return match?.[1] ?? null;
 }
 
@@ -345,15 +335,15 @@ export function logout(): { success: boolean; error?: string } {
   const credPath = getCredentialPath();
   try {
     unlinkSync(credPath);
-    logger.info("meridian.logout.success", { path: credPath });
+    logger.info('meridian.logout.success', { path: credPath });
     return { success: true };
   } catch (err) {
     const error = err as NodeJS.ErrnoException;
-    if (error.code === "ENOENT") {
-      logger.info("meridian.logout.noCredentials", { path: credPath });
+    if (error.code === 'ENOENT') {
+      logger.info('meridian.logout.noCredentials', { path: credPath });
       return { success: true };
     }
-    logger.error("meridian.logout.error", {
+    logger.error('meridian.logout.error', {
       path: credPath,
       error: error.message,
     });

@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { createTRPCReact } from "@trpc/react-query";
-import type { AppRouter } from "@/server/trpc/router";
+import { createTRPCReact } from '@trpc/react-query';
+import type { AppRouter } from '@/server/trpc/router';
 
 export const trpc = createTRPCReact<AppRouter>();

@@ -1,23 +1,16 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { useLocale, useTranslations } from "next-intl";
-import { trpc } from "@/lib/trpc";
-import { formatCents } from "@/lib/money";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import {
-  ArrowUpRight,
-  ArrowDownLeft,
-  Plus,
-  ChevronRight,
-  TrendingUp,
-  TrendingDown,
-} from "lucide-react";
-import Image from "next/image";
-import { Link } from "@/i18n/navigation";
-import { getInitials, avatarColor } from "@/lib/avatar";
+import { useState } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
+import { trpc } from '@/lib/trpc';
+import { formatCents } from '@/lib/money';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import { ArrowUpRight, ArrowDownLeft, Plus, ChevronRight, TrendingUp, TrendingDown } from 'lucide-react';
+import Image from 'next/image';
+import { Link } from '@/i18n/navigation';
+import { getInitials, avatarColor } from '@/lib/avatar';
 
 const GROUPS_PER_PAGE = 6;
 
@@ -59,10 +52,7 @@ function GroupCardSkeleton() {
         <div className="flex items-center justify-between">
           <div className="flex -space-x-2">
             {[0, 1, 2].map((i) => (
-              <div
-                key={i}
-                className="h-7 w-7 animate-pulse rounded-full bg-muted ring-2 ring-card"
-              />
+              <div key={i} className="h-7 w-7 animate-pulse rounded-full bg-muted ring-2 ring-card" />
             ))}
           </div>
           <div className="h-4 w-16 animate-pulse rounded bg-muted" />
@@ -77,7 +67,7 @@ function GroupCardSkeleton() {
 /* ------------------------------------------------------------------ */
 
 export default function DashboardPage() {
-  const t = useTranslations("dashboard");
+  const t = useTranslations('dashboard');
   const locale = useLocale();
   const dashboard = trpc.balances.getDashboard.useQuery();
   const overallDebts = trpc.balances.getOverallDebts.useQuery();
@@ -85,9 +75,7 @@ export default function DashboardPage() {
   const archivedGroups = trpc.groups.listArchived.useQuery();
   const [showAllGroups, setShowAllGroups] = useState(false);
 
-  const visibleGroups = showAllGroups
-    ? groups.data
-    : groups.data?.slice(0, GROUPS_PER_PAGE);
+  const visibleGroups = showAllGroups ? groups.data : groups.data?.slice(0, GROUPS_PER_PAGE);
   const hasMoreGroups = (groups.data?.length ?? 0) > GROUPS_PER_PAGE;
 
   // Aggregate totals span all groups. When every contributing group uses
@@ -98,28 +86,22 @@ export default function DashboardPage() {
   // the totals, and per-person debts can't involve a net-zero member
   // (simplifyDebts gives them no edges), so an empty or settled group in
   // another currency must not suppress otherwise-valid aggregates.
-  const groupCurrencies = new Set(
-    dashboard.data?.perGroup
-      .filter((g) => g.balance !== 0)
-      .map((g) => g.currency) ?? []
-  );
+  const groupCurrencies = new Set(dashboard.data?.perGroup.filter((g) => g.balance !== 0).map((g) => g.currency) ?? []);
   const hasMixedCurrencies = groupCurrencies.size > 1;
   // All-settled fallback uses the ordered groups list (updatedAt desc) so
   // the zero totals show the first *displayed* group's currency; perGroup
   // comes from an unordered query and its index 0 is arbitrary.
   const aggregateCurrency =
-    groupCurrencies.size === 1
-      ? [...groupCurrencies][0]!
-      : groups.data?.[0]?.currency ?? "USD";
+    groupCurrencies.size === 1 ? [...groupCurrencies][0]! : (groups.data?.[0]?.currency ?? 'USD');
 
   return (
     <div className="space-y-8">
       {/* ---- Header ---- */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-bold">{t("title")}</h1>
+        <h1 className="text-2xl font-bold">{t('title')}</h1>
         <Button nativeButton={false} render={<Link href="/groups/new" />}>
           <Plus className="mr-2 h-4 w-4" />
-          {t("createGroup")}
+          {t('createGroup')}
         </Button>
       </div>
 
@@ -129,9 +111,7 @@ export default function DashboardPage() {
         <Card className="relative overflow-hidden border-green-200/40 bg-gradient-to-br from-green-50/60 to-card dark:border-green-900/30 dark:from-green-950/30 dark:to-card">
           <div className="pointer-events-none absolute -right-4 -top-4 h-24 w-24 rounded-full bg-green-500/5 dark:bg-green-400/5" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              {t("youAreOwed")}
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">{t('youAreOwed')}</CardTitle>
             <div className="hidden h-8 w-8 items-center justify-center rounded-full bg-green-100 sm:flex dark:bg-green-900/40">
               <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400" />
             </div>
@@ -139,9 +119,7 @@ export default function DashboardPage() {
           <CardContent>
             {dashboard.data ? (
               hasMixedCurrencies ? (
-                <span className="text-lg font-medium text-muted-foreground">
-                  {t("mixedCurrencies")}
-                </span>
+                <span className="text-lg font-medium text-muted-foreground">{t('mixedCurrencies')}</span>
               ) : (
                 <span className="text-3xl font-bold tracking-tight tabular-nums text-green-600 dark:text-green-400">
                   {formatCents(dashboard.data.totalOwed, aggregateCurrency, locale)}
@@ -157,9 +135,7 @@ export default function DashboardPage() {
         <Card className="relative overflow-hidden border-red-200/40 bg-gradient-to-br from-red-50/60 to-card dark:border-red-900/30 dark:from-red-950/30 dark:to-card">
           <div className="pointer-events-none absolute -right-4 -top-4 h-24 w-24 rounded-full bg-red-500/5 dark:bg-red-400/5" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              {t("youOwe")}
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">{t('youOwe')}</CardTitle>
             <div className="hidden h-8 w-8 items-center justify-center rounded-full bg-red-100 sm:flex dark:bg-red-900/40">
               <TrendingDown className="h-4 w-4 text-red-600 dark:text-red-400" />
             </div>
@@ -167,9 +143,7 @@ export default function DashboardPage() {
           <CardContent>
             {dashboard.data ? (
               hasMixedCurrencies ? (
-                <span className="text-lg font-medium text-muted-foreground">
-                  {t("mixedCurrencies")}
-                </span>
+                <span className="text-lg font-medium text-muted-foreground">{t('mixedCurrencies')}</span>
               ) : (
                 <span className="text-3xl font-bold tracking-tight tabular-nums text-red-600 dark:text-red-400">
                   {formatCents(dashboard.data.totalOwing, aggregateCurrency, locale)}
@@ -189,7 +163,7 @@ export default function DashboardPage() {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium">
               <ArrowDownLeft className="h-4 w-4 text-green-600 dark:text-green-400" />
-              {t("owedToYouTitle")}
+              {t('owedToYouTitle')}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -197,9 +171,7 @@ export default function DashboardPage() {
                 classification can be wrong — so suppress the rows entirely
                 and point at per-group balances instead. */}
             {hasMixedCurrencies ? (
-              <p className="py-3 text-center text-sm text-muted-foreground">
-                {t("mixedCurrenciesDebts")}
-              </p>
+              <p className="py-3 text-center text-sm text-muted-foreground">{t('mixedCurrenciesDebts')}</p>
             ) : (
               <>
                 {overallDebts.isLoading && (
@@ -210,9 +182,7 @@ export default function DashboardPage() {
                   </div>
                 )}
                 {overallDebts.data?.owedToYou.length === 0 && (
-                  <p className="py-3 text-center text-sm text-muted-foreground">
-                    {t("settledUp")}
-                  </p>
+                  <p className="py-3 text-center text-sm text-muted-foreground">{t('settledUp')}</p>
                 )}
                 <div className="divide-y divide-border/60">
                   {overallDebts.data?.owedToYou.map((person) => (
@@ -244,14 +214,12 @@ export default function DashboardPage() {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium">
               <ArrowUpRight className="h-4 w-4 text-red-600 dark:text-red-400" />
-              {t("youOweTitle")}
+              {t('youOweTitle')}
             </CardTitle>
           </CardHeader>
           <CardContent>
             {hasMixedCurrencies ? (
-              <p className="py-3 text-center text-sm text-muted-foreground">
-                {t("mixedCurrenciesDebts")}
-              </p>
+              <p className="py-3 text-center text-sm text-muted-foreground">{t('mixedCurrenciesDebts')}</p>
             ) : (
               <>
                 {overallDebts.isLoading && (
@@ -262,9 +230,7 @@ export default function DashboardPage() {
                   </div>
                 )}
                 {overallDebts.data?.youOwe.length === 0 && (
-                  <p className="py-3 text-center text-sm text-muted-foreground">
-                    {t("settledUp")}
-                  </p>
+                  <p className="py-3 text-center text-sm text-muted-foreground">{t('settledUp')}</p>
                 )}
                 <div className="divide-y divide-border/60">
                   {overallDebts.data?.youOwe.map((person) => (
@@ -296,7 +262,7 @@ export default function DashboardPage() {
 
       {/* ---- Your Groups ---- */}
       <div>
-        <h2 className="mb-4 text-lg font-semibold">{t("groups")}</h2>
+        <h2 className="mb-4 text-lg font-semibold">{t('groups')}</h2>
 
         {groups.isLoading && (
           <div className="grid gap-4 @2xl:grid-cols-2">
@@ -309,16 +275,10 @@ export default function DashboardPage() {
         {groups.data?.length === 0 && (
           <Card>
             <CardContent className="py-8 text-center">
-              <p className="text-muted-foreground">
-                {t("noGroupsDescription")}
-              </p>
-              <Button
-                nativeButton={false}
-                className="mt-4"
-                render={<Link href="/groups/new" />}
-              >
+              <p className="text-muted-foreground">{t('noGroupsDescription')}</p>
+              <Button nativeButton={false} className="mt-4" render={<Link href="/groups/new" />}>
                 <Plus className="mr-2 h-4 w-4" />
-                {t("createGroup")}
+                {t('createGroup')}
               </Button>
             </CardContent>
           </Card>
@@ -326,9 +286,7 @@ export default function DashboardPage() {
 
         <div className="grid gap-4 @2xl:grid-cols-2">
           {visibleGroups?.map((group) => {
-            const balance = dashboard.data?.perGroup.find(
-              (g) => g.groupId === group.id
-            );
+            const balance = dashboard.data?.perGroup.find((g) => g.groupId === group.id);
             // Limit displayed avatars to 5
             const visibleMembers = group.members.slice(0, 5);
             const overflowCount = group.members.length - visibleMembers.length;
@@ -349,11 +307,7 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-2">
                         <div className="flex -space-x-2">
                           {visibleMembers.map((member) => {
-                            const name =
-                              member.user.name ??
-                              member.user.placeholderName ??
-                              member.user.email ??
-                              "?";
+                            const name = member.user.name ?? member.user.placeholderName ?? member.user.email ?? '?';
                             return member.user.image ? (
                               <Image
                                 key={member.user.id}
@@ -373,11 +327,7 @@ export default function DashboardPage() {
                             );
                           })}
                         </div>
-                        {overflowCount > 0 && (
-                          <span className="text-xs text-muted-foreground">
-                            +{overflowCount}
-                          </span>
-                        )}
+                        {overflowCount > 0 && <span className="text-xs text-muted-foreground">+{overflowCount}</span>}
                       </div>
 
                       {/* Balance */}
@@ -385,16 +335,16 @@ export default function DashboardPage() {
                         <span
                           className={`font-semibold tabular-nums ${
                             balance.balance > 0
-                              ? "text-green-600 dark:text-green-400"
-                              : "text-red-600 dark:text-red-400"
+                              ? 'text-green-600 dark:text-green-400'
+                              : 'text-red-600 dark:text-red-400'
                           }`}
                         >
-                          {balance.balance > 0 ? "+" : ""}
+                          {balance.balance > 0 ? '+' : ''}
                           {formatCents(balance.balance, balance.currency, locale)}
                         </span>
                       )}
                       {balance && balance.balance === 0 && (
-                        <span className="text-muted-foreground">{t("settledUp")}</span>
+                        <span className="text-muted-foreground">{t('settledUp')}</span>
                       )}
                     </div>
                   </CardContent>
@@ -406,12 +356,8 @@ export default function DashboardPage() {
 
         {hasMoreGroups && !showAllGroups && (
           <div className="mt-4 text-center">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowAllGroups(true)}
-            >
-              {t("showMore")}
+            <Button variant="outline" size="sm" onClick={() => setShowAllGroups(true)}>
+              {t('showMore')}
             </Button>
           </div>
         )}
@@ -422,7 +368,7 @@ export default function DashboardPage() {
               href="/groups?archived=1"
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
-              {t("archivedGroups", { count: archivedGroups.data?.length ?? 0 })}
+              {t('archivedGroups', { count: archivedGroups.data?.length ?? 0 })}
             </Link>
           </div>
         )}

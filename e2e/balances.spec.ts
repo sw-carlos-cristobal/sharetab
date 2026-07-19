@@ -1,122 +1,134 @@
-import { test, expect } from "@playwright/test";
-import { users, login, navigateToGroup } from "./helpers";
+import { test, expect } from '@playwright/test';
+import { users, login, navigateToGroup } from './helpers';
 
-test.describe("Balances & Settlements", () => {
+test.describe('Balances & Settlements', () => {
   // ── Dashboard Balances ────────────────────────────────────
 
-  test.describe("Dashboard", () => {
-    test("7.2.1 — shows balance cards", async ({ page }) => {
+  test.describe('Dashboard', () => {
+    test('7.2.1 — shows balance cards', async ({ page }) => {
       await login(page, users.alice.email, users.alice.password);
-      await expect(page.getByText("You are owed").first()).toBeVisible();
-      await expect(page.getByText("You owe", { exact: true }).first()).toBeVisible();
+      await expect(page.getByText('You are owed').first()).toBeVisible();
+      await expect(page.getByText('You owe', { exact: true }).first()).toBeVisible();
       // Alice is owed money from seed data
-      const owedText = page.locator("text=$").first();
+      const owedText = page.locator('text=$').first();
       await expect(owedText).toBeVisible();
     });
 
-    test("7.2.2 — shows group cards with balances", async ({ page }) => {
+    test('7.2.2 — shows group cards with balances', async ({ page }) => {
       await login(page, users.alice.email, users.alice.password);
       // Dashboard paginates groups — click "Show all" to reveal seed groups
-      const showMore = page.getByRole("button", { name: /Show more/ });
+      const showMore = page.getByRole('button', { name: /Show more/ });
       await showMore.click({ timeout: 3000 }).catch(() => {});
-      await expect(page.getByRole("link", { name: /Japan Trip/ }).first()).toBeVisible();
-      await expect(page.getByRole("link", { name: /Apartment/ }).first()).toBeVisible();
+      await expect(page.getByRole('link', { name: /Japan Trip/ }).first()).toBeVisible();
+      await expect(page.getByRole('link', { name: /Apartment/ }).first()).toBeVisible();
     });
 
-    test("4.3.3 — new user sees empty dashboard", async ({ page }) => {
+    test('4.3.3 — new user sees empty dashboard', async ({ page }) => {
       // Register fresh user
       const email = `empty-${Date.now()}@test.com`;
-      await page.goto("/en/register");
-      await page.getByLabel("Name").fill("Empty User");
-      await page.getByLabel("Email").fill(email);
-      await page.getByLabel("Password").fill("testpass123");
-      await page.getByRole("button", { name: "Create account" }).click();
-      await page.waitForURL("**/dashboard", { timeout: 15000 });
+      await page.goto('/en/register');
+      await page.getByLabel('Name').fill('Empty User');
+      await page.getByLabel('Email').fill(email);
+      await page.getByLabel('Password').fill('testpass123');
+      await page.getByRole('button', { name: 'Create account' }).click();
+      await page.waitForURL('**/dashboard', { timeout: 15000 });
 
-      await expect(page.getByText("$0.00").first()).toBeVisible();
-      await expect(page.getByText("Create a group to start splitting expenses")).toBeVisible();
+      await expect(page.getByText('$0.00').first()).toBeVisible();
+      await expect(page.getByText('Create a group to start splitting expenses')).toBeVisible();
     });
   });
 
   // ── Group Balances ────────────────────────────────────────
 
-  test.describe("Group Balances", () => {
-    test("7.3.2 — simplified debts displayed", async ({ page }) => {
+  test.describe('Group Balances', () => {
+    test('7.3.2 — simplified debts displayed', async ({ page }) => {
       await login(page, users.alice.email, users.alice.password);
-      await navigateToGroup(page, "Apartment");
+      await navigateToGroup(page, 'Apartment');
 
       // Bob and Charlie owe Alice
-      await expect(page.getByRole("button", { name: /Bob Smith.*Alice Johnson.*\$/ }).first()).toBeVisible();
-      await expect(page.getByRole("button", { name: /Charlie Brown.*Alice Johnson.*\$/ }).first()).toBeVisible();
+      await expect(page.getByRole('button', { name: /Bob Smith.*Alice Johnson.*\$/ }).first()).toBeVisible();
+      await expect(page.getByRole('button', { name: /Charlie Brown.*Alice Johnson.*\$/ }).first()).toBeVisible();
     });
 
-    test("7.3.3 — settled group shows all settled", async ({ page }) => {
+    test('7.3.3 — settled group shows all settled', async ({ page }) => {
       await login(page, users.alice.email, users.alice.password);
       // Create a new group with no expenses
-      await page.goto("/en/groups/new");
-      await page.getByLabel("Group name").fill("Empty Balance Group");
-      await page.getByRole("button", { name: "Create Group" }).click();
+      await page.goto('/en/groups/new');
+      await page.getByLabel('Group name').fill('Empty Balance Group');
+      await page.getByRole('button', { name: 'Create Group' }).click();
       await page.waitForURL(/\/groups\/\w+$/, { timeout: 10000 });
 
-      await expect(page.getByText("All settled up!")).toBeVisible();
+      await expect(page.getByText('All settled up!')).toBeVisible();
     });
   });
 
   // ── Settlements ───────────────────────────────────────────
 
-  test.describe("Settlements", () => {
-    test("7.3.5 — settle up button opens dialog", async ({ page }) => {
+  test.describe('Settlements', () => {
+    test('7.3.5 — settle up button opens dialog', async ({ page }) => {
       await login(page, users.alice.email, users.alice.password);
-      await navigateToGroup(page, "Apartment");
+      await navigateToGroup(page, 'Apartment');
 
-      await page.getByRole("button", { name: "Settle up" }).click();
-      await expect(page.getByRole("dialog")).toBeVisible();
-      await expect(page.getByRole("heading", { name: "Record a payment" })).toBeVisible();
-      await expect(page.getByLabel("To", { exact: true })).toBeVisible();
-      await expect(page.getByLabel("Amount")).toBeVisible();
+      await page.getByRole('button', { name: 'Settle up' }).click();
+      await expect(page.getByRole('dialog')).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Record a payment' })).toBeVisible();
+      await expect(page.getByLabel('To', { exact: true })).toBeVisible();
+      await expect(page.getByLabel('Amount')).toBeVisible();
     });
 
-    test("settle dialog pre-fills from debt click", async ({ page }) => {
+    test('settle dialog pre-fills from debt click', async ({ page }) => {
       await login(page, users.alice.email, users.alice.password);
-      await navigateToGroup(page, "Apartment");
+      await navigateToGroup(page, 'Apartment');
 
-      await page.getByRole("button", { name: /Bob Smith.*Alice Johnson.*\$/ }).first().click();
-      await expect(page.getByRole("dialog")).toBeVisible();
+      await page
+        .getByRole('button', { name: /Bob Smith.*Alice Johnson.*\$/ })
+        .first()
+        .click();
+      await expect(page.getByRole('dialog')).toBeVisible();
       await expect(page.getByText(/Use suggested: \$/)).toBeVisible();
     });
 
-    test("settle dialog pre-populates From, To, and Amount from debt row", async ({ page }) => {
+    test('settle dialog pre-populates From, To, and Amount from debt row', async ({ page }) => {
       await login(page, users.alice.email, users.alice.password);
-      await navigateToGroup(page, "Apartment");
+      await navigateToGroup(page, 'Apartment');
 
-      await page.getByRole("button", { name: /Bob Smith.*Alice Johnson.*\$/ }).first().click();
-      await expect(page.getByRole("dialog")).toBeVisible();
+      await page
+        .getByRole('button', { name: /Bob Smith.*Alice Johnson.*\$/ })
+        .first()
+        .click();
+      await expect(page.getByRole('dialog')).toBeVisible();
 
-      const fromText = await page.getByLabel("From").locator("option:checked").textContent();
-      expect(fromText).toBe("Bob Smith");
+      const fromText = await page.getByLabel('From').locator('option:checked').textContent();
+      expect(fromText).toBe('Bob Smith');
 
-      const toText = await page.getByLabel("To").locator("option:checked").textContent();
-      expect(toText).toBe("Alice Johnson");
+      const toText = await page.getByLabel('To').locator('option:checked').textContent();
+      expect(toText).toBe('Alice Johnson');
 
-      await expect(page.getByLabel("Amount")).not.toHaveValue("");
+      await expect(page.getByLabel('Amount')).not.toHaveValue('');
     });
 
-    test("settle dialog resets fields when opened with different debt", async ({ page }) => {
+    test('settle dialog resets fields when opened with different debt', async ({ page }) => {
       await login(page, users.alice.email, users.alice.password);
-      await navigateToGroup(page, "Apartment");
+      await navigateToGroup(page, 'Apartment');
 
-      await page.getByRole("button", { name: /Bob Smith.*Alice Johnson.*\$/ }).first().click();
-      await expect(page.getByRole("dialog")).toBeVisible();
-      let fromText = await page.getByLabel("From").locator("option:checked").textContent();
-      expect(fromText).toBe("Bob Smith");
+      await page
+        .getByRole('button', { name: /Bob Smith.*Alice Johnson.*\$/ })
+        .first()
+        .click();
+      await expect(page.getByRole('dialog')).toBeVisible();
+      let fromText = await page.getByLabel('From').locator('option:checked').textContent();
+      expect(fromText).toBe('Bob Smith');
 
-      await page.getByRole("button", { name: "Close" }).click();
-      await expect(page.getByRole("dialog")).not.toBeVisible();
-      await page.getByRole("button", { name: /Charlie Brown.*Alice Johnson.*\$/ }).first().click();
-      await expect(page.getByRole("dialog")).toBeVisible();
+      await page.getByRole('button', { name: 'Close' }).click();
+      await expect(page.getByRole('dialog')).not.toBeVisible();
+      await page
+        .getByRole('button', { name: /Charlie Brown.*Alice Johnson.*\$/ })
+        .first()
+        .click();
+      await expect(page.getByRole('dialog')).toBeVisible();
 
-      fromText = await page.getByLabel("From").locator("option:checked").textContent();
-      expect(fromText).toBe("Charlie Brown");
+      fromText = await page.getByLabel('From').locator('option:checked').textContent();
+      expect(fromText).toBe('Charlie Brown');
     });
   });
 });
