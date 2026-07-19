@@ -57,7 +57,7 @@ describe("parseGuestItems", () => {
       { name: "Soda", quantity: 2, unitPrice: 300, totalPrice: 600 },
     ]);
     expect(items).toHaveLength(2);
-    expect(items[0].name).toBe("Pizza");
+    expect(items[0]!.name).toBe("Pizza");
   });
 
   it("rejects item with missing name", () => {
@@ -80,7 +80,7 @@ describe("parseGuestPeople", () => {
       { name: "Bob", personToken: "abc-123", groupSize: 2 },
     ]);
     expect(people).toHaveLength(2);
-    expect(people[1].groupSize).toBe(2);
+    expect(people[1]!.groupSize).toBe(2);
   });
 
   it("rejects person without name", () => {
@@ -95,7 +95,7 @@ describe("parseGuestAssignments", () => {
       { itemIndex: 1, personIndices: [0] },
     ]);
     expect(assignments).toHaveLength(2);
-    expect(assignments[0].personIndices).toEqual([0, 1]);
+    expect(assignments[0]!.personIndices).toEqual([0, 1]);
   });
 
   it("rejects assignment with missing fields", () => {

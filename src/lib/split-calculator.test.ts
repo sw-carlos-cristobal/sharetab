@@ -12,10 +12,10 @@ describe("calculateSplitTotals", () => {
     });
 
     expect(results).toHaveLength(2);
-    expect(results[0].itemTotal).toBe(500);
-    expect(results[1].itemTotal).toBe(500);
-    expect(results[0].total).toBe(500);
-    expect(results[1].total).toBe(500);
+    expect(results[0]!.itemTotal).toBe(500);
+    expect(results[1]!.itemTotal).toBe(500);
+    expect(results[0]!.total).toBe(500);
+    expect(results[1]!.total).toBe(500);
   });
 
   test("handles odd-cent splits with remainder going to first person", () => {
@@ -29,8 +29,8 @@ describe("calculateSplitTotals", () => {
 
     expect(results).toHaveLength(2);
     // First person gets the extra cent
-    expect(results[0].itemTotal + results[1].itemTotal).toBe(1001);
-    expect(Math.abs(results[0].itemTotal - results[1].itemTotal)).toBe(1);
+    expect(results[0]!.itemTotal + results[1]!.itemTotal).toBe(1001);
+    expect(Math.abs(results[0]!.itemTotal - results[1]!.itemTotal)).toBe(1);
   });
 
   test("distributes tax proportionally", () => {
@@ -98,8 +98,8 @@ describe("calculateSplitTotals", () => {
 
     // Only person 0 should appear in results
     expect(results).toHaveLength(1);
-    expect(results[0].personIndex).toBe(0);
-    expect(results[0].total).toBe(1200);
+    expect(results[0]!.personIndex).toBe(0);
+    expect(results[0]!.total).toBe(1200);
   });
 
   test("handles empty assignments", () => {
@@ -125,8 +125,8 @@ describe("calculateSplitTotals", () => {
 
     // Both get 0
     expect(results).toHaveLength(2);
-    expect(results[0].total).toBe(0);
-    expect(results[1].total).toBe(0);
+    expect(results[0]!.total).toBe(0);
+    expect(results[1]!.total).toBe(0);
   });
 
   test("three-way split with tax and tip totals correctly", () => {

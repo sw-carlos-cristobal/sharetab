@@ -279,7 +279,7 @@ describe("MeridianHealthPoller", () => {
     await sendAuthExpiryEmail("Not logged in. Run: claude login");
 
     expect(mockSendMail).toHaveBeenCalledTimes(1);
-    const call = mockSendMail.mock.calls[0][0];
+    const call = mockSendMail.mock.calls[0]![0];
     expect(call.to).toBe("admin@test.com");
     expect(call.subject).toContain("Claude AI authentication expired");
   });
@@ -329,7 +329,7 @@ describe("MeridianHealthPoller", () => {
     const { sendAuthExpiryEmail } = await import("./auth-health-poller");
     await sendAuthExpiryEmail("Auth expired", "https://claude.ai/oauth/authorize?code=true");
 
-    const call = mockSendMail.mock.calls[0][0];
+    const call = mockSendMail.mock.calls[0]![0];
     expect(call.text).toContain("https://claude.ai/oauth/authorize?code=true");
     expect(call.html).toContain("https://claude.ai/oauth/authorize?code=true");
   });
@@ -446,7 +446,7 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
     await _pollTick();
 
     expect(mockSendMail).toHaveBeenCalledTimes(1);
-    expect(mockSendMail.mock.calls[0][0].subject).toContain("Claude AI authentication expired");
+    expect(mockSendMail.mock.calls[0]![0].subject).toContain("Claude AI authentication expired");
   });
 
   test("does not send email on first not_running (startup grace period)", async () => {
@@ -475,7 +475,7 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
     mockUnhealthy(); // re-check after refresh attempt
     await _pollTick();
     expect(mockSendMail).toHaveBeenCalledTimes(1);
-    expect(mockSendMail.mock.calls[0][0].subject).toContain("Claude AI authentication expired");
+    expect(mockSendMail.mock.calls[0]![0].subject).toContain("Claude AI authentication expired");
   });
 
   test("does not send duplicate email with 'once' interval", async () => {
@@ -558,7 +558,7 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
     mockUnhealthy("Token revoked"); // re-check
     await _pollTick();
     expect(mockSendMail).toHaveBeenCalledTimes(2);
-    expect(mockSendMail.mock.calls[1][0].text).toContain("Token revoked");
+    expect(mockSendMail.mock.calls[1]![0].text).toContain("Token revoked");
   });
 
   test("does not send email when Meridian is not_running after healthy", async () => {
@@ -648,7 +648,7 @@ describe("MeridianHealthPoller - poll lifecycle", () => {
     await _pollTick();
 
     expect(mockSendMail).toHaveBeenCalledTimes(1);
-    const call = mockSendMail.mock.calls[0][0];
+    const call = mockSendMail.mock.calls[0]![0];
     expect(call.subject).toContain("ChatGPT OAuth (OpenAI Codex) authentication expired");
   });
 

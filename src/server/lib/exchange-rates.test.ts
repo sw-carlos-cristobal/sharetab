@@ -67,7 +67,7 @@ describe("getExchangeRate", () => {
     const rate = await getExchangeRate("USD", "EUR");
     expect(rate).toBe(0.92);
     expect(mockFetch).toHaveBeenCalledTimes(1);
-    expect(mockFetch.mock.calls[0][0]).toContain("from=USD&to=EUR");
+    expect(mockFetch.mock.calls[0]![0]).toContain("from=USD&to=EUR");
   });
 
   test("uses cached rate on second call", async () => {
@@ -94,7 +94,7 @@ describe("getExchangeRate", () => {
 
     const rate = await getExchangeRate("USD", "GBP", "2025-01-15");
     expect(rate).toBe(0.78);
-    expect(mockFetch.mock.calls[0][0]).toContain("2025-01-15");
+    expect(mockFetch.mock.calls[0]![0]).toContain("2025-01-15");
   });
 
   test("returns null on API error", async () => {

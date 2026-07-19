@@ -74,7 +74,7 @@ describe("MeridianLoginManager", () => {
     expect(result.success).toBe(true);
     expect(fetch).toHaveBeenCalledTimes(1);
 
-    const [url, opts] = vi.mocked(fetch).mock.calls[0];
+    const [url, opts] = vi.mocked(fetch).mock.calls[0]!;
     expect(url).toBe("https://platform.claude.com/v1/oauth/token");
     expect(opts?.method).toBe("POST");
     expect(opts?.headers).toEqual({ "Content-Type": "application/json" });
@@ -84,7 +84,7 @@ describe("MeridianLoginManager", () => {
     expect(body.code_verifier).toBeDefined();
 
     expect(mockWriteFileSync).toHaveBeenCalledTimes(1);
-    const written = JSON.parse(mockWriteFileSync.mock.calls[0][1]);
+    const written = JSON.parse(mockWriteFileSync.mock.calls[0]![1]);
     expect(written.claudeAiOauth.accessToken).toBe("sk-ant-oat01-test-access");
     expect(written.claudeAiOauth.refreshToken).toBe("sk-ant-ort01-test-refresh");
   });
@@ -177,13 +177,13 @@ describe("MeridianLoginManager", () => {
     const result = await refreshIfNeeded();
     expect(result).toBe(true);
 
-    const [url, opts] = vi.mocked(fetch).mock.calls[0];
+    const [url, opts] = vi.mocked(fetch).mock.calls[0]!;
     expect(url).toBe("https://platform.claude.com/v1/oauth/token");
     const body = JSON.parse(opts?.body as string);
     expect(body.grant_type).toBe("refresh_token");
     expect(body.refresh_token).toBe("test-refresh-token");
 
-    const written = JSON.parse(mockWriteFileSync.mock.calls[0][1]);
+    const written = JSON.parse(mockWriteFileSync.mock.calls[0]![1]);
     expect(written.claudeAiOauth.accessToken).toBe("new-access");
     expect(written.claudeAiOauth.refreshToken).toBe("new-refresh");
   });

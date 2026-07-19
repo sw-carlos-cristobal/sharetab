@@ -67,7 +67,7 @@ describe("OpenAICodexLogin", () => {
     const result = await submitCode("abc");
     expect(result.success).toBe(true);
     expect(mockWriteFileSync).toHaveBeenCalledTimes(1);
-    const saved = JSON.parse(mockWriteFileSync.mock.calls[0][1]);
+    const saved = JSON.parse(mockWriteFileSync.mock.calls[0]![1]);
     expect(saved.auth_mode).toBe("Chatgpt");
     expect(saved.tokens.account_id).toBe("acct_123");
   });

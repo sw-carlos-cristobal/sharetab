@@ -248,7 +248,7 @@ describe("listUsers input schema", () => {
     process.env = { ...originalEnv, ADMIN_EMAIL: "admin@example.com" };
     const { adminRouter } = await import("./admin");
     const inputs = (adminRouter._def.procedures.listUsers as { _def: { inputs: { parse: (v: unknown) => unknown }[] } })._def.inputs;
-    inputSchema = inputs[0];
+    inputSchema = inputs[0]!;
   });
 
   afterEach(() => {
@@ -300,7 +300,7 @@ describe("listGroups input schema", () => {
     process.env = { ...originalEnv, ADMIN_EMAIL: "admin@example.com" };
     const { adminRouter } = await import("./admin");
     const inputs = (adminRouter._def.procedures.listGroups as { _def: { inputs: { parse: (v: unknown) => unknown }[] } })._def.inputs;
-    inputSchema = inputs[0];
+    inputSchema = inputs[0]!;
   });
 
   afterEach(() => {
