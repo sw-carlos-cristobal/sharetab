@@ -55,7 +55,7 @@ This creates three demo users you can log in with:
 npm test
 ```
 
-Runs ~222 fast Vitest tests (under 1 second). These cover money utilities, split calculations, balance computation, AI providers, admin routes, and more.
+Runs ~278 fast Vitest tests (under 1 second). These cover money utilities, split calculations, balance computation, AI providers, admin routes, and more.
 
 ### E2E tests
 
@@ -70,6 +70,19 @@ Tip: set `AUTH_RATE_LIMIT_MAX=9999` and `GUEST_RATE_LIMIT_MAX=9999` in `.env` to
 
 ```bash
 npm run lint
+```
+
+### Formatting
+
+```bash
+npm run format         # auto-fix formatting
+npm run format:check   # check only (what CI runs)
+```
+
+### Type checking
+
+```bash
+npx tsc --noEmit
 ```
 
 ## Making Changes
@@ -94,7 +107,7 @@ Routers live in `src/server/trpc/routers/`. Add your procedure there and wire it
 - **One concern per PR** — bug fixes, features, and refactors should be separate PRs.
 - **Describe what and why** — the PR description should explain the motivation, not just restate the diff.
 - **Add tests** — new logic should have unit tests where possible; new user flows should have e2e coverage.
-- **Pass CI** — make sure `npm run lint`, `npm test`, and `npm run build` all pass before opening a PR.
+- **Pass CI** — make sure `npm run format:check`, `npm run lint`, `npx tsc --noEmit`, `npm test`, and `npm run build` all pass before opening a PR.
 - **Conventional commits** — use prefixes like `feat:`, `fix:`, `chore:`, `docs:`, `refactor:` in commit messages.
 
 ## Project Structure

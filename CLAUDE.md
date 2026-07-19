@@ -24,6 +24,9 @@ npm run dev:full     # Start embedded PostgreSQL + dev server (all-in-one)
 npm run build        # Production build
 npm run start        # Start production server
 npm run lint         # ESLint
+npm run format       # Prettier (auto-fix)
+npm run format:check # Prettier (check only)
+npx tsc --noEmit     # Type check
 npm test             # Run unit tests (Vitest)
 npm run test:watch   # Unit tests in watch mode
 npm run test:e2e     # Run Playwright e2e tests
@@ -89,7 +92,7 @@ npx prisma db push   # Push schema without migration (dev only)
 
 ### Unit Tests (Vitest)
 
-- `npm test` — run all unit tests (~222 tests, <1s)
+- `npm test` — run all unit tests (~278 tests, <1s)
 - Tests live co-located with source: `src/**/*.test.ts`
 - Covers: `money.ts`, `split-calculator.ts`, `rate-limit.ts`, `upload-dir.ts`, `balance-calculator.ts`, `ai/registry.ts`, `ai/providers/openai-codex.ts`, `lib/normalize-date.ts`, `lib/meridian-login.ts`, `lib/receipt-processor.ts`, `lib/auth-health-poller.ts`, `lib/openai-codex-login.ts`, `trpc/routers/admin.ts`
 
