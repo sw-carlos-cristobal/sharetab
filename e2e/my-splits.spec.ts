@@ -1,8 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { login, users, authedContext, trpcMutation, trpcResult, trpcQuery } from "./helpers";
-import { request } from "@playwright/test";
-
-const BASE = process.env.BASE_URL || "http://localhost:3001";
+import { login, users, authedContext, trpcMutation } from "./helpers";
 
 test.describe("My Splits page", () => {
   test("shows empty state when user has no splits", async ({ page }) => {

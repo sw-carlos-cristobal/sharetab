@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { login, users, authedContext, trpcMutation, createTestGroup } from "./helpers";
+import { login, users, trpcMutation, createTestGroup } from "./helpers";
 
 test.describe("Back button navigation", () => {
   test("back button on expense edit page navigates to expense detail", async ({ page }) => {

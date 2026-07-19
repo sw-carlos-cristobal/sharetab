@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { users, authedContext, trpcMutation, trpcQuery, trpcResult, deleteTestGroup } from "./helpers";
+import { users, authedContext, trpcMutation, trpcQuery, deleteTestGroup } from "./helpers";
 
 const createdGroupIds: string[] = [];
 

@@ -175,7 +175,7 @@ test.describe("Split line item", () => {
     // Scenario: 5x Beer at $5 each = $25 total
     // Alice had 2, Bob had 2, Charlie had 1
     // Split into: 2x Beer ($10) + 2x Beer ($10) + 1x Beer ($5)
-    const { owner, groupId, memberIds, dispose } = await createTestGroup(
+    const { owner, dispose } = await createTestGroup(
       users.alice.email, users.alice.password,
       [
         { email: users.bob.email, password: users.bob.password },
@@ -244,11 +244,6 @@ test.describe("Split line item", () => {
 
       // Find Charlie's beer (qty 1)
       const charlieBeer = items.find((i: { quantity: number }) => i.quantity === 1);
-
-      // Verify each split row can be assigned to a different person
-      const aliceId = memberIds[users.alice.email];
-      const bobId = memberIds[users.bob.email];
-      const charlieId = memberIds[users.charlie.email];
 
       // Alice's 2x beer
       expect(aliceBeer.quantity).toBe(2);

@@ -1,5 +1,5 @@
 import { test, expect, request } from "@playwright/test";
-import { users, authedContext, trpcMutation, trpcQuery, trpcResult, deleteTestGroup } from "./helpers";
+import { users, authedContext, trpcMutation, trpcQuery, deleteTestGroup } from "./helpers";
 
 const BASE = process.env.BASE_URL || "http://localhost:3001";
 const createdGroupIds: string[] = [];

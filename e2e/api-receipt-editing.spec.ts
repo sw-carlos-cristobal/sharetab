@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { resolve } from "path";
 import { readFileSync } from "fs";
-import { users, authedContext, trpcMutation, trpcQuery, trpcResult, trpcError , FAKE_JPEG } from "./helpers";
+import { users, authedContext, trpcMutation, trpcQuery, trpcResult, FAKE_JPEG } from "./helpers";
 
 const BASE = process.env.BASE_URL || "http://localhost:3001";
 

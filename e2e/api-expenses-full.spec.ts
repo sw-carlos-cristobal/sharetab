@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { users, authedContext, trpcMutation, trpcQuery, trpcResult, trpcError, createTestGroup } from "./helpers";
+import { users, trpcMutation, trpcQuery, trpcResult, createTestGroup } from "./helpers";
 
 test.describe("Expense Creation API (3.1)", () => {
   test("3.1.1 — create equal split (3 members, $30)", async () => {

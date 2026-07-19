@@ -115,7 +115,7 @@ test.describe("Balance Calculation (4.1)", () => {
 
 test.describe("Debt Simplification (4.2)", () => {
   test("4.2.2 — three-person chain", async () => {
-    const { owner, memberContexts, groupId, memberIds, dispose } = await createTestGroup(
+    const { owner, groupId, memberIds, dispose } = await createTestGroup(
       users.alice.email, users.alice.password,
       [
         { email: users.bob.email, password: users.bob.password },

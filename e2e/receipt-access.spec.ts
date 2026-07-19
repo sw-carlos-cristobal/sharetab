@@ -6,7 +6,6 @@ import {
   trpcQuery,
   trpcError,
   FAKE_JPEG,
-  trpcResult,
 } from "./helpers";
 
 const createdReceiptIds: string[] = [];

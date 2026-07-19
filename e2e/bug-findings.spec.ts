@@ -1,5 +1,5 @@
 import { test, expect, request } from "@playwright/test";
-import { trpcMutation, trpcResult, trpcQuery, trpcError } from "./helpers";
+import { trpcMutation, trpcResult, trpcQuery } from "./helpers";
 
 const BASE = process.env.BASE_URL || "http://localhost:3001";
 

@@ -12,7 +12,6 @@ test.describe("Placeholder Members UI", () => {
     await page.getByLabel("Group name").fill("Placeholder UI Test");
     await page.getByRole("button", { name: "Create Group" }).click();
     await expect(page.getByRole("heading", { name: "Placeholder UI Test" })).toBeVisible({ timeout: 15000 });
-    const groupUrl = page.url();
 
     // Go to settings via the settings link on the group detail page
     await page.locator('a[href*="/groups/"][href$="/settings"]').click();

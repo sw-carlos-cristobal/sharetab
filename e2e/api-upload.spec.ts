@@ -1,6 +1,4 @@
 import { test, expect, request } from "@playwright/test";
-import { createReadStream } from "fs";
-import { join } from "path";
 import { FAKE_JPEG, FAKE_PNG } from "./helpers";
 
 const BASE = process.env.BASE_URL || "http://localhost:3001";

@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { login, users, createTestGroup, trpcMutation, trpcError, authedContext } from "./helpers";
+import { login, users, createTestGroup, trpcMutation, trpcError } from "./helpers";
 
 test.describe("Group Archiving", () => {
   // ── API-level tests ──────────────────────────────────────
@@ -120,7 +120,7 @@ test.describe("Group Archiving", () => {
     });
 
     test("cannot create settlement on archived group", async () => {
-      const { owner, groupId, memberIds, memberContexts, dispose } = await createTestGroup(
+      const { owner, groupId, memberIds, dispose } = await createTestGroup(
         users.alice.email, users.alice.password,
         [{ email: users.bob.email, password: users.bob.password }],
         "Archive Settle Block"

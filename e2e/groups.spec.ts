@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { users, login, uniqueEmail, register, navigateToGroup, authedContext, deleteTestGroup } from "./helpers";
+import { users, login, navigateToGroup, authedContext, deleteTestGroup } from "./helpers";
 
 const createdGroupIds: string[] = [];
 

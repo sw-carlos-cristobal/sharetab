@@ -109,7 +109,6 @@ test.describe("Split Item UI", () => {
     const options = paidBySelect.locator("option");
     const secondOption = options.nth(1);
     const selectedValue = await secondOption.getAttribute("value");
-    const selectedText = await secondOption.textContent();
     expect(selectedValue).toBeTruthy();
     await paidBySelect.selectOption(selectedValue!);
 

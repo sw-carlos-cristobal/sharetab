@@ -1,5 +1,5 @@
 import { test, expect, request } from "@playwright/test";
-import { login, uniqueEmail, users, createTestGroup, trpcError } from "./helpers";
+import { login, users, createTestGroup, trpcError } from "./helpers";
 
 const BASE = process.env.BASE_URL || "http://localhost:3001";
 

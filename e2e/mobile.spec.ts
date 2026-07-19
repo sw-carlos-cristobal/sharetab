@@ -1,4 +1,4 @@
-import { test, expect, devices } from "@playwright/test";
+import { test, expect } from "@playwright/test";
 import { users, login, createTestGroup } from "./helpers";
 
 test.use({ viewport: { width: 390, height: 844 } });
