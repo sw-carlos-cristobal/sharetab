@@ -103,6 +103,7 @@ export function OpenAICodexAuthSection() {
     reader.onload = () => {
       const dataUrl = reader.result as string;
       const base64 = dataUrl.split(",")[1];
+      if (!base64) return;
       setTestFile({ name: selected.name, base64, mimeType: selected.type });
       testProvider.reset();
     };

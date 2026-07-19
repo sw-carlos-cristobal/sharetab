@@ -259,7 +259,7 @@ function ScanReceiptContent({
                 {" · "}{t("chain")} <span className="font-medium text-foreground">{configuredProviderChain}</span>
               </p>
               <p className="text-sm text-muted-foreground">
-                {tc(loadingMessageKeys[loadingMsgIdx])}
+                {tc(loadingMessageKeys[loadingMsgIdx] ?? loadingMessageKeys[0])}
               </p>
             </div>
           </CardContent>

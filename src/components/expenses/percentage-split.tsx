@@ -77,8 +77,7 @@ export function PercentageSplit({
       return;
     }
 
-    for (let i = 0; i < entries.length; i++) {
-      const entry = entries[i];
+    for (const [i, entry] of entries.entries()) {
       const basisPoints = Math.round(entry.pct * 100); // 50.00% = 5000
       let amount: number;
 

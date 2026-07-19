@@ -501,8 +501,7 @@ export const receiptsRouter = createTRPCRouter({
         const perPerson = Math.floor(item.totalPrice / assignment.userIds.length);
         const remainder = item.totalPrice - perPerson * assignment.userIds.length;
 
-        for (let i = 0; i < assignment.userIds.length; i++) {
-          const userId = assignment.userIds[i];
+        for (const [i, userId] of assignment.userIds.entries()) {
           const amount = perPerson + (i < remainder ? 1 : 0);
           userSubtotals.set(userId, (userSubtotals.get(userId) ?? 0) + amount);
         }
@@ -522,8 +521,7 @@ export const receiptsRouter = createTRPCRouter({
       let allocatedTotal = 0;
       const userEntries = Array.from(userSubtotals.entries());
 
-      for (let i = 0; i < userEntries.length; i++) {
-        const [userId, itemTotal] = userEntries[i];
+      for (const [i, [userId, itemTotal]] of userEntries.entries()) {
         const proportion = receiptSubtotal > 0 ? itemTotal / receiptSubtotal : 0;
 
         let userTax: number;

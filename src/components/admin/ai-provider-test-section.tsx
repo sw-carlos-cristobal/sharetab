@@ -48,6 +48,7 @@ export function AIProviderTestSection() {
     reader.onload = () => {
       const dataUrl = reader.result as string;
       const base64 = dataUrl.split(',')[1];
+      if (!base64) return;
       setFile({ name: selected.name, base64, mimeType: selected.type });
       testProvider.reset();
     };
