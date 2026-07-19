@@ -14,7 +14,9 @@ export function avatarColor(userId: string): string {
   for (let i = 0; i < userId.length; i++) {
     hash = (hash * 31 + userId.charCodeAt(i)) | 0;
   }
-  return avatarColors[Math.abs(hash) % avatarColors.length];
+  // Modulo always lands in bounds; fallback is unreachable but keeps the
+  // return type `string` instead of `string | undefined`.
+  return avatarColors[Math.abs(hash) % avatarColors.length] ?? "bg-blue-500";
 }
 
 const guestColors = [
@@ -29,7 +31,9 @@ const guestColors = [
 ];
 
 export function guestAvatarColor(index: number): string {
-  return guestColors[Math.abs(Math.floor(index)) % guestColors.length];
+  // Modulo always lands in bounds; fallback is unreachable but keeps the
+  // return type `string` instead of `string | undefined`.
+  return guestColors[Math.abs(Math.floor(index)) % guestColors.length] ?? "bg-red-100 text-red-700";
 }
 
 export function getInitials(name?: string | null, email?: string | null): string {

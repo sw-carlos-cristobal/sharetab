@@ -115,6 +115,11 @@ export function isProviderConfigured(name: string): boolean {
 
 export async function getAIProvider(): Promise<AIProvider> {
   const [first] = getConfiguredProviderPriorityInternal();
+  // parseProviderPriority() throws rather than returning an empty array, so
+  // this is unreachable — guards the destructure for noUncheckedIndexedAccess.
+  if (!first) {
+    throw new Error("AI_PROVIDER_PRIORITY resolved to an empty list");
+  }
   return createProvider(first);
 }
 

@@ -20,6 +20,11 @@ export function normalizeDate(date: string | undefined): string | undefined {
   if (!match) return undefined;
 
   const [, a, separator, b, yearStr] = match;
+  // The regex above has exactly 4 unconditional capture groups, so all four
+  // are always present when `match` succeeds — this just narrows the type.
+  if (a === undefined || separator === undefined || b === undefined || yearStr === undefined) {
+    return undefined;
+  }
   let year = parseInt(yearStr, 10);
   if (year < 100) year += year < 50 ? 2000 : 1900;
   const n1 = parseInt(a, 10);

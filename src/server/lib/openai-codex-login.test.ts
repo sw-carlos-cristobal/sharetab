@@ -118,7 +118,7 @@ describe("OpenAICodexLogin", () => {
     expect(await refreshIfNeeded()).toBe(true);
     expect(mockWriteFileSync).toHaveBeenCalledTimes(1);
     expect(fetch).toHaveBeenCalledTimes(1);
-    const [, init] = vi.mocked(fetch).mock.calls[0];
+    const [, init] = vi.mocked(fetch).mock.calls[0]!;
     expect(init?.headers).toMatchObject({
       "Content-Type": "application/x-www-form-urlencoded",
       originator: "codex_cli_rs",
