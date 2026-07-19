@@ -1,0 +1,9 @@
+node_modules
+.next
+src/generated
+package-lock.json
+messages/
+
+# CI/deploy infra — out of scope for this pass, left byte-for-byte as-is
+.github/workflows/
+docker/

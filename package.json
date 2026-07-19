@@ -26,6 +26,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "pr:create": "node scripts/pr-create.mjs",
     "git:push-main": "node scripts/git-push-main.mjs",
     "push:main": "npm run git:push-main --",
