@@ -179,7 +179,6 @@ export default function GroupSettingsPage({
   if (!group.data) return <p className="text-destructive">{t("settings.notFound")}</p>;
 
   const placeholders = group.data.members.filter((m) => m.user.isPlaceholder);
-  const realMembers = group.data.members.filter((m) => !m.user.isPlaceholder);
 
   return (
     <div className="mx-auto max-w-lg space-y-6">

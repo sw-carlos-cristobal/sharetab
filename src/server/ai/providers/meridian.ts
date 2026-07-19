@@ -20,7 +20,7 @@ async function ensureMeridian(): Promise<number> {
 
     const { startProxyServer } = await import("@rynfar/meridian");
     const port = parseInt(process.env.MERIDIAN_PORT ?? "3457", 10);
-    const instance = await startProxyServer({
+    await startProxyServer({
       port,
       host: "127.0.0.1",
       silent: true,

@@ -46,7 +46,7 @@ async function main() {
     create: { name: "Delete Test User", email: "delete-test@example.com", passwordHash },
   });
 
-  const pwUser = await prisma.user.upsert({
+  await prisma.user.upsert({
     where: { email: "pwtest@example.com" },
     update: {},
     create: { name: "Password Test User", email: "pwtest@example.com", passwordHash },
