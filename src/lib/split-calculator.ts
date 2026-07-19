@@ -26,8 +26,7 @@ export function calculateSplitTotals(params: {
         assignment.personIndices.reduce((sum, pi) => sum + (personWeights[pi] ?? 1), 0)
       );
       let allocated = 0;
-      for (let i = 0; i < assignment.personIndices.length; i++) {
-        const personIdx = assignment.personIndices[i];
+      for (const [i, personIdx] of assignment.personIndices.entries()) {
         const weight = personWeights[personIdx] ?? 1;
         let amount: number;
         if (i === assignment.personIndices.length - 1) {
@@ -43,8 +42,7 @@ export function calculateSplitTotals(params: {
       const perPerson = Math.floor(item.totalPrice / assignment.personIndices.length);
       const remainder = item.totalPrice - perPerson * assignment.personIndices.length;
 
-      for (let i = 0; i < assignment.personIndices.length; i++) {
-        const personIdx = assignment.personIndices[i];
+      for (const [i, personIdx] of assignment.personIndices.entries()) {
         const amount = perPerson + (i < remainder ? 1 : 0);
         personSubtotals.set(personIdx, (personSubtotals.get(personIdx) ?? 0) + amount);
       }
@@ -58,9 +56,7 @@ export function calculateSplitTotals(params: {
   let allocated = 0;
   const entries = Array.from(personSubtotals.entries());
 
-  for (let i = 0; i < entries.length; i++) {
-    const [personIdx, itemTotal] = entries[i];
-
+  for (const [i, [personIdx, itemTotal]] of entries.entries()) {
     if (i === entries.length - 1) {
       // Last person gets remainder to prevent off-by-one
       const total = totalAmount - allocated;

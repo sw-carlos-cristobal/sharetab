@@ -11,6 +11,7 @@
     "noUnusedParameters": true,
     "noUnusedLocals": true,
     "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
     "noEmit": true,
     "esModuleInterop": true,
     "module": "esnext",
