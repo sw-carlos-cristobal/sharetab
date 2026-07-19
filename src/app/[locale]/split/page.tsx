@@ -154,8 +154,8 @@ export default function GuestSplitPage() {
       // Start AI processing
       const result = await processReceipt.mutateAsync({ receiptId: data.receiptId });
       setExtracted({
-        merchantName: result.merchantName,
-        date: result.date,
+        ...(result.merchantName !== undefined ? { merchantName: result.merchantName } : {}),
+        ...(result.date !== undefined ? { date: result.date } : {}),
         subtotal: result.subtotal,
         tax: result.tax,
         tip: result.tip,
@@ -632,8 +632,8 @@ export default function GuestSplitPage() {
                                 utils.guest.getReceiptItems.reset({ receiptId });
                                 setItems([]); // will be refetched
                                 setExtracted({
-                                  merchantName: data.merchantName ?? undefined,
-                                  date: data.date ?? undefined,
+                                  ...(data.merchantName !== undefined ? { merchantName: data.merchantName } : {}),
+                                  ...(data.date !== undefined ? { date: data.date } : {}),
                                   subtotal: data.subtotal,
                                   tax: data.tax,
                                   tip: data.tip,

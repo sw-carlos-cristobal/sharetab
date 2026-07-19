@@ -470,7 +470,7 @@ function EditExpenseForm({
                   onChange={setShares}
                   locale={locale}
                   currency={effectiveCurrency}
-                  initialSelected={initialSelected}
+                  {...(initialSelected !== undefined ? { initialSelected } : {})}
                 />
               )}
               {splitMode === "EXACT" && (
@@ -480,7 +480,7 @@ function EditExpenseForm({
                   onChange={setShares}
                   locale={locale}
                   currency={effectiveCurrency}
-                  initialAmounts={initialAmounts}
+                  {...(initialAmounts !== undefined ? { initialAmounts } : {})}
                 />
               )}
               {splitMode === "PERCENTAGE" && (
@@ -490,7 +490,7 @@ function EditExpenseForm({
                   onChange={setShares}
                   locale={locale}
                   currency={effectiveCurrency}
-                  initialPercentages={initialPercentages}
+                  {...(initialPercentages !== undefined ? { initialPercentages } : {})}
                 />
               )}
               {splitMode === "SHARES" && (
@@ -500,7 +500,7 @@ function EditExpenseForm({
                   onChange={setShares}
                   locale={locale}
                   currency={effectiveCurrency}
-                  initialShareUnits={initialShareUnits}
+                  {...(initialShareUnits !== undefined ? { initialShareUnits } : {})}
                 />
               )}
             </div>

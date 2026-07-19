@@ -84,6 +84,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return { id: user.id, name: user.name, email: user.email, image: user.image, locale: user.locale };
       },
     }),
+    // @ts-expect-error -- upstream next-auth type bug (not fixable from the call
+    // site): NodemailerConfig["server"] is declared `server?: AllTransportOptions`,
+    // but the base EmailConfig re-derives it via an indexed-access type
+    // (`server?: NodemailerConfig["server"]`), which flattens the optional-property
+    // bit into an explicit `AllTransportOptions | undefined` value type. Under
+    // exactOptionalPropertyTypes that reads as "may be present-as-undefined", which
+    // NodemailerConfig's own (correctly) optional `server?:` field does not accept.
+    // TS attributes the diagnostic to this first spread element in the providers
+    // array literal; see also the (related but not identical) upstream discussion
+    // in nextauthjs/next-auth#9883 / #9890.
     ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
       ? [
           Google({
@@ -92,6 +102,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }),
         ]
       : []),
+    // @ts-expect-error -- same upstream NodemailerConfig["server"] typing issue as above.
     ...(process.env.EMAIL_SERVER_HOST
       ? [
           Nodemailer({
@@ -100,8 +111,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               port: parseInt(process.env.EMAIL_SERVER_PORT ?? "587"),
               secure: parseInt(process.env.EMAIL_SERVER_PORT ?? "587") === 465,
               auth: {
-                user: process.env.EMAIL_SERVER_USER,
-                pass: process.env.EMAIL_SERVER_PASSWORD,
+                ...(process.env.EMAIL_SERVER_USER !== undefined ? { user: process.env.EMAIL_SERVER_USER } : {}),
+                ...(process.env.EMAIL_SERVER_PASSWORD !== undefined
+                  ? { pass: process.env.EMAIL_SERVER_PASSWORD }
+                  : {}),
               },
             },
             from: process.env.EMAIL_FROM ?? "ShareTab <noreply@sharetab.local>",
@@ -113,8 +126,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, user }) {
       if (user?.id) {
         token.id = user.id;
-        token.name = user.name;
-        token.locale = user.locale;
+        if (user.name !== undefined) token.name = user.name;
+        if (user.locale !== undefined) token.locale = user.locale;
       }
       // Always refresh profile fields from DB to pick up profile changes.
       if (token.id) {
@@ -130,8 +143,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
-        session.user.name = (token.name as string | null | undefined) ?? session.user.name;
-        session.user.locale = typeof token.locale === "string" ? token.locale : session.user.locale;
+        session.user.name = (token.name as string | null | undefined) ?? session.user.name ?? null;
+        if (typeof token.locale === "string") {
+          session.user.locale = token.locale;
+        }
       }
       return session;
     },

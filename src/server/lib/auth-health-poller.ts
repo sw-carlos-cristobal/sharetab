@@ -107,8 +107,8 @@ async function runMeridianHealthCheck(): Promise<MeridianHealthResult> {
   if (healthData.status !== "healthy" && healthData.status !== "degraded") {
     return {
       status: "unhealthy",
-      email: healthData.auth?.email,
-      error: healthData.error,
+      ...(healthData.auth?.email !== undefined ? { email: healthData.auth.email } : {}),
+      ...(healthData.error !== undefined ? { error: healthData.error } : {}),
     };
   }
 
@@ -120,7 +120,7 @@ async function runMeridianHealthCheck(): Promise<MeridianHealthResult> {
   if (storedExpiry && storedExpiry - Date.now() > 2 * 60 * 60 * 1000) {
     return {
       status: healthData.status === "degraded" ? "degraded" : "healthy",
-      email: healthData.auth?.email,
+      ...(healthData.auth?.email !== undefined ? { email: healthData.auth.email } : {}),
     };
   }
 
@@ -145,7 +145,7 @@ async function runMeridianHealthCheck(): Promise<MeridianHealthResult> {
       try { await probeRes.text(); } catch { /* ignore */ }
       return {
         status: "healthy",
-        email: healthData.auth?.email,
+        ...(healthData.auth?.email !== undefined ? { email: healthData.auth.email } : {}),
       };
     }
 
@@ -155,7 +155,7 @@ async function runMeridianHealthCheck(): Promise<MeridianHealthResult> {
     if (errorType === "authentication_error") {
       return {
         status: "unhealthy",
-        email: healthData.auth?.email,
+        ...(healthData.auth?.email !== undefined ? { email: healthData.auth.email } : {}),
         error: probeBody?.error?.message ?? "Authentication expired",
       };
     }
@@ -163,13 +163,13 @@ async function runMeridianHealthCheck(): Promise<MeridianHealthResult> {
     // Other API errors (rate limit, overloaded, etc.) — proxy and auth are fine
     return {
       status: healthData.status === "degraded" ? "degraded" : "healthy",
-      email: healthData.auth?.email,
+      ...(healthData.auth?.email !== undefined ? { email: healthData.auth.email } : {}),
     };
   } catch {
     // Probe timed out or failed — proxy is up but something is wrong
     return {
       status: "degraded",
-      email: healthData.auth?.email,
+      ...(healthData.auth?.email !== undefined ? { email: healthData.auth.email } : {}),
       error: "Auth verification probe timed out",
     };
   }

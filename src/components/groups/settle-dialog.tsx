@@ -54,9 +54,9 @@ export function SettleDialog({
           <SettleForm
             groupId={groupId}
             members={members}
-            suggestedFrom={suggestedFrom}
-            suggestedTo={suggestedTo}
-            suggestedAmount={suggestedAmount}
+            {...(suggestedFrom !== undefined ? { suggestedFrom } : {})}
+            {...(suggestedTo !== undefined ? { suggestedTo } : {})}
+            {...(suggestedAmount !== undefined ? { suggestedAmount } : {})}
             currency={currency}
             onOpenChange={onOpenChange}
           />

@@ -414,9 +414,9 @@ export default function GroupDetailPage({
       <SettleDialog
         groupId={groupId}
         members={g.members.map((m) => ({ id: m.user.id, name: m.user.name ?? m.user.email }))}
-        suggestedFrom={settleState.from}
-        suggestedTo={settleState.to}
-        suggestedAmount={settleState.amount}
+        {...(settleState.from !== undefined ? { suggestedFrom: settleState.from } : {})}
+        {...(settleState.to !== undefined ? { suggestedTo: settleState.to } : {})}
+        {...(settleState.amount !== undefined ? { suggestedAmount: settleState.amount } : {})}
         currency={g.currency}
         open={settleState.open}
         onOpenChange={(open) => setSettleState((s) => ({ ...s, open }))}

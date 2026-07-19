@@ -35,8 +35,8 @@ export async function middleware(request: NextRequest) {
   try {
     token = await getToken({
       req: request,
-      secret: process.env.AUTH_SECRET,
       cookieName,
+      ...(process.env.AUTH_SECRET !== undefined ? { secret: process.env.AUTH_SECRET } : {}),
     });
   } catch {
     // Malformed or forged JWT — treat as unauthenticated

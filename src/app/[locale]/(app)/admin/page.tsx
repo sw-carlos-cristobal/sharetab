@@ -36,6 +36,7 @@ import { VenmoSettingsSection } from "@/components/admin/venmo-settings-section"
 export default function AdminPage() {
   const { data: session } = useSession();
   const t = useTranslations("admin");
+  const currentUserEmail = session?.user?.email;
 
   return (
     <div className="space-y-6">
@@ -50,7 +51,7 @@ export default function AdminPage() {
         <OpenAICodexAuthSection />
         <AuthExpiryNotificationsSection />
         <Separator />
-        <UserManagementSection currentUserEmail={session?.user?.email} />
+        <UserManagementSection {...(currentUserEmail !== undefined ? { currentUserEmail } : {})} />
         <Separator />
         <GroupOverviewSection />
         <Separator />
