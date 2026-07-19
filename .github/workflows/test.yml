@@ -63,6 +63,18 @@ jobs:
       - name: Generate Prisma client
         run: npx prisma generate
 
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        run: npm test
+
       - name: Push schema to database
         env:
           DATABASE_URL: postgresql://sharetab:sharetab@localhost:5432/sharetab
