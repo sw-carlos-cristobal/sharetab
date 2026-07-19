@@ -260,17 +260,16 @@ export default function ClaimPage({
     return map;
   }, [session.data]);
 
-  const currentClaims = claimedItems.get(personIndex ?? -1) ?? new Set<number>();
-  const currentServerClaims = serverClaimsMap.get(personIndex ?? -1) ?? new Set<number>();
-
   const hasUnsavedChanges = useMemo(() => {
     if (personIndex === null) return false;
+    const currentClaims = claimedItems.get(personIndex ?? -1) ?? new Set<number>();
+    const currentServerClaims = serverClaimsMap.get(personIndex ?? -1) ?? new Set<number>();
     if (currentClaims.size !== currentServerClaims.size) return true;
     for (const idx of currentClaims) {
       if (!currentServerClaims.has(idx)) return true;
     }
     return false;
-  }, [currentClaims, currentServerClaims, personIndex]);
+  }, [claimedItems, serverClaimsMap, personIndex]);
 
   // Check if ANY person has unsaved local edits (not just the currently selected one)
   const hasAnyUnsavedChanges = useMemo(() => {
@@ -626,6 +625,10 @@ export default function ClaimPage({
             {showImage && (
               <Card>
                 <CardContent className="p-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- user-uploaded
+                      receipt photo with unknown natural dimensions; next/image would need
+                      either server-side dimension probing or a fill+aspect-ratio layout
+                      change, out of scope here */}
                   <img
                     src={`/api/uploads/${data.receiptImagePath}`}
                     alt={t("receiptImage")}
@@ -820,6 +823,10 @@ export default function ClaimPage({
           {showImage && (
             <Card>
               <CardContent className="p-2">
+                {/* eslint-disable-next-line @next/next/no-img-element -- user-uploaded
+                    receipt photo with unknown natural dimensions; next/image would need
+                    either server-side dimension probing or a fill+aspect-ratio layout
+                    change, out of scope here */}
                 <img
                   src={`/api/uploads/${data.receiptImagePath}`}
                   alt={t("receiptImage")}

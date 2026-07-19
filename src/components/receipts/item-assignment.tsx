@@ -142,7 +142,7 @@ export function ItemAssignment({
       }
       hasRestoredRef.current = true;
     }
-  }, [receiptData.data]);
+  }, [receiptData.data, title]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const { receipt, items } = receiptData.data ?? { receipt: null, items: [] };
@@ -391,6 +391,11 @@ export function ItemAssignment({
               }}
               onTouchEnd={() => { lastTouchDist.current = null; dragStart.current = null; }}
             >
+              {/* eslint-disable-next-line @next/next/no-img-element -- user-uploaded
+                  receipt photo with unknown natural dimensions, rendered inside a
+                  pinch-zoom/pan viewport; next/image would need either server-side
+                  dimension probing or a fill+aspect-ratio layout change, out of scope
+                  here */}
               <img
                 src={`/api/uploads/${safeReceipt.imagePath}`}
                 alt={t("receiptImageAlt")}

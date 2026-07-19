@@ -2,7 +2,6 @@ import EmbeddedPostgres from "embedded-postgres";
 import { spawn, execSync } from "child_process";
 import { rmSync, readFileSync } from "fs";
 import { join } from "path";
-import { createConnection } from "net";
 
 // Kill any process using a port
 function killPort(port) {
