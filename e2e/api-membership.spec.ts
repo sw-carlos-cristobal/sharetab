@@ -24,7 +24,7 @@ test.describe("Group Membership API (2.2)", () => {
     );
 
     const bobId = memberIds[users.bob.email];
-    const res = await trpcMutation(memberContexts[0], "groups.removeMember", {
+    const res = await trpcMutation(memberContexts[0]!, "groups.removeMember", {
       groupId, userId: bobId,
     });
     const body = await res.json();
@@ -65,7 +65,7 @@ test.describe("Group Membership API (2.2)", () => {
 
     const charlieId = memberIds[users.charlie.email];
     // Bob (MEMBER) tries to remove Charlie (MEMBER)
-    const res = await trpcMutation(memberContexts[0], "groups.removeMember", {
+    const res = await trpcMutation(memberContexts[0]!, "groups.removeMember", {
       groupId, userId: charlieId,
     });
     const err = await trpcError(res);
@@ -82,7 +82,7 @@ test.describe("Group Membership API (2.2)", () => {
 
     const aliceId = memberIds[users.alice.email];
     // Bob tries to remove Alice (OWNER) — even if Bob were admin this should fail
-    const res = await trpcMutation(memberContexts[0], "groups.removeMember", {
+    const res = await trpcMutation(memberContexts[0]!, "groups.removeMember", {
       groupId, userId: aliceId,
     });
     const err = await trpcError(res);
@@ -126,7 +126,7 @@ test.describe("Invites API (2.4)", () => {
     const invRes = await trpcMutation(owner, "groups.createInvite", { groupId });
     const token = (await invRes.json()).result?.data?.json?.token;
 
-    const joinRes = await trpcMutation(memberContexts[0], "groups.joinByInvite", { token });
+    const joinRes = await trpcMutation(memberContexts[0]!, "groups.joinByInvite", { token });
     const body = await joinRes.json();
     expect(body.result?.data?.json?.alreadyMember).toBe(true);
     await dispose();

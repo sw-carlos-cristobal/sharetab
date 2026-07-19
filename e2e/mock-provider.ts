@@ -233,7 +233,7 @@ export class MockProvider {
 
       // Extract procedure names from URL: /api/trpc/proc1,proc2,...?params
       const pathMatch = url.match(/\/api\/trpc\/([^?]+)/);
-      if (!pathMatch) {
+      if (!pathMatch || !pathMatch[1]) {
         await route.continue();
         return;
       }

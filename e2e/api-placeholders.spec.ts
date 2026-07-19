@@ -75,7 +75,7 @@ test.describe("Placeholder Members", () => {
     );
 
     // Bob (MEMBER) tries to add placeholder
-    const res = await trpcMutation(memberContexts[0], "groups.addPlaceholder", {
+    const res = await trpcMutation(memberContexts[0]!, "groups.addPlaceholder", {
       groupId, name: "Nope",
     });
     const err = await trpcError(res);

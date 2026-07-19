@@ -21,7 +21,7 @@ test.describe("Balance Calculation (4.1)", () => {
       shares: [{ userId: a, amount: 1000 }, { userId: b, amount: 1000 }, { userId: c, amount: 1000 }],
     });
     // Bob pays $60 split equally (each owes $20)
-    await trpcMutation(memberContexts[0], "expenses.create", {
+    await trpcMutation(memberContexts[0]!, "expenses.create", {
       groupId, title: "Bob pays", amount: 6000, paidById: b, splitMode: "EQUAL",
       shares: [{ userId: a, amount: 2000 }, { userId: b, amount: 2000 }, { userId: c, amount: 2000 }],
     });
@@ -98,7 +98,7 @@ test.describe("Balance Calculation (4.1)", () => {
     expect(balBefore.find((x: { userId: string }) => x.userId === a).net).toBe(1000);
 
     // Bob settles $10 to Alice
-    await trpcMutation(memberContexts[0], "settlements.create", {
+    await trpcMutation(memberContexts[0]!, "settlements.create", {
       groupId, toId: a, amount: 1000,
     });
 
@@ -163,12 +163,12 @@ test.describe("Debt Simplification (4.2)", () => {
       shares: [{ userId: b, amount: 1000 }],
     });
     // Bob pays $10 for Charlie
-    await trpcMutation(memberContexts[0], "expenses.create", {
+    await trpcMutation(memberContexts[0]!, "expenses.create", {
       groupId, title: "B→C", amount: 1000, paidById: b, splitMode: "EXACT",
       shares: [{ userId: c, amount: 1000 }],
     });
     // Charlie pays $10 for Alice
-    await trpcMutation(memberContexts[1], "expenses.create", {
+    await trpcMutation(memberContexts[1]!, "expenses.create", {
       groupId, title: "C→A", amount: 1000, paidById: c, splitMode: "EXACT",
       shares: [{ userId: a, amount: 1000 }],
     });
@@ -197,7 +197,7 @@ test.describe("Debt Simplification (4.2)", () => {
       groupId, title: "Big", amount: 5100, paidById: a, splitMode: "EQUAL",
       shares: [{ userId: a, amount: 1700 }, { userId: b, amount: 1700 }, { userId: c, amount: 1700 }],
     });
-    await trpcMutation(memberContexts[0], "expenses.create", {
+    await trpcMutation(memberContexts[0]!, "expenses.create", {
       groupId, title: "Small", amount: 2100, paidById: b, splitMode: "EQUAL",
       shares: [{ userId: a, amount: 700 }, { userId: b, amount: 700 }, { userId: c, amount: 700 }],
     });
@@ -241,7 +241,7 @@ test.describe("Settlements (4.4)", () => {
     });
 
     // Bob settles $20
-    await trpcMutation(memberContexts[0], "settlements.create", {
+    await trpcMutation(memberContexts[0]!, "settlements.create", {
       groupId, toId: a, amount: 2000,
     });
 
@@ -265,7 +265,7 @@ test.describe("Settlements (4.4)", () => {
     });
 
     // Bob settles only $10 of the $20 owed
-    await trpcMutation(memberContexts[0], "settlements.create", {
+    await trpcMutation(memberContexts[0]!, "settlements.create", {
       groupId, toId: a, amount: 1000,
     });
 

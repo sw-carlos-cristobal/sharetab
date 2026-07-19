@@ -24,7 +24,7 @@ test.describe("Group Archiving", () => {
         "Archive Forbidden Test"
       );
 
-      const res = await trpcMutation(memberContexts[0], "groups.archive", { groupId });
+      const res = await trpcMutation(memberContexts[0]!, "groups.archive", { groupId });
       const body = await res.json();
       expect(body.error).toBeDefined();
 
@@ -90,7 +90,7 @@ test.describe("Group Archiving", () => {
 
       await trpcMutation(owner, "groups.archive", { groupId });
 
-      const res = await trpcMutation(memberContexts[0], "groups.unarchive", { groupId });
+      const res = await trpcMutation(memberContexts[0]!, "groups.unarchive", { groupId });
       const body = await res.json();
       expect(body.error).toBeDefined();
 

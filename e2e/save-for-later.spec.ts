@@ -77,8 +77,8 @@ test.describe("Save for later persistence", () => {
 
       const aliceId = memberIds[users.alice.email];
       const bobId = memberIds[users.bob.email];
-      const item1Id = result!.items[0].id;
-      const item2Id = result!.items[1].id;
+      const item1Id = result!.items[0]!.id;
+      const item2Id = result!.items[1]!.id;
 
       const saveRes = await trpcMutation(owner, "receipts.saveForLater", {
         groupId,
@@ -152,7 +152,7 @@ test.describe("Save for later persistence", () => {
       test.skip(result!.items.length < 1, "Need at least 1 item");
 
       const aliceId = memberIds[users.alice.email];
-      const item1Id = result!.items[0].id;
+      const item1Id = result!.items[0]!.id;
 
       await trpcMutation(owner, "receipts.saveForLater", {
         groupId,

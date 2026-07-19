@@ -25,7 +25,7 @@ test.describe("Expense Authorization", () => {
     const expense = (await createRes.json()).result?.data?.json;
     expect(expense?.id).toBeDefined();
 
-    const bobCtx = memberContexts[0];
+    const bobCtx = memberContexts[0]!;
     const updateRes = await trpcMutation(bobCtx, "expenses.update", {
       groupId,
       expenseId: expense.id,
@@ -60,7 +60,7 @@ test.describe("Expense Authorization", () => {
     const expense = (await createRes.json()).result?.data?.json;
     expect(expense?.id).toBeDefined();
 
-    const bobCtx = memberContexts[0];
+    const bobCtx = memberContexts[0]!;
     const deleteRes = await trpcMutation(bobCtx, "expenses.delete", {
       groupId,
       expenseId: expense.id,
@@ -131,7 +131,7 @@ test.describe("Expense Authorization", () => {
     expect(expense?.id).toBeDefined();
 
     // Bob (MEMBER, payer) should be able to update
-    const bobCtx = memberContexts[0];
+    const bobCtx = memberContexts[0]!;
     const updateRes = await trpcMutation(bobCtx, "expenses.update", {
       groupId,
       expenseId: expense.id,
@@ -167,7 +167,7 @@ test.describe("Expense Authorization", () => {
     const expense = (await createRes.json()).result?.data?.json;
     expect(expense?.id).toBeDefined();
 
-    const bobCtx = memberContexts[0];
+    const bobCtx = memberContexts[0]!;
     const deleteRes = await trpcMutation(bobCtx, "expenses.delete", {
       groupId,
       expenseId: expense.id,
