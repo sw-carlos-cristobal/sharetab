@@ -15,7 +15,7 @@ export class OllamaProvider implements AIProvider {
 
   async extractReceipt(
     imageBuffer: Buffer,
-    mimeType: string,
+    _mimeType: string,
     correctionHint?: string
   ): Promise<ReceiptExtractionResult> {
     const base64 = imageBuffer.toString("base64");
