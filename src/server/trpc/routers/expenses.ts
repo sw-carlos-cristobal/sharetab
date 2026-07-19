@@ -4,6 +4,7 @@ import { createTRPCRouter, groupMemberProcedure } from "../init";
 import { SplitMode } from "@/generated/prisma/client";
 import { getExchangeRate, convertCents } from "../../lib/exchange-rates";
 import { MAX_MONEY_CENTS } from "@/lib/money";
+import { stripUndefined } from "../../lib/strip-undefined";
 
 const expenseShareSchema = z.object({
   userId: z.string(),
@@ -165,23 +166,23 @@ export const expensesRouter = createTRPCRouter({
           data: {
             groupId: input.groupId,
             title: input.title,
-            description: input.description,
+            ...(input.description !== undefined ? { description: input.description } : {}),
             amount: input.amount,
             currency: input.currency,
             exchangeRate: exchangeRate ?? 1.0,
             baseCurrencyAmount,
-            category: input.category,
+            ...(input.category !== undefined ? { category: input.category } : {}),
             expenseDate: input.expenseDate ? new Date(input.expenseDate) : new Date(),
             paidById: input.paidById,
             addedById: ctx.user.id,
             splitMode: input.splitMode,
-            receiptId: input.receiptId,
+            ...(input.receiptId !== undefined ? { receiptId: input.receiptId } : {}),
             shares: {
               create: input.shares.map((s) => ({
                 userId: s.userId,
                 amount: s.amount,
                 shares: s.shares ?? 1,
-                percentage: s.percentage,
+                ...(s.percentage !== undefined ? { percentage: s.percentage } : {}),
               })),
             },
           },
@@ -332,7 +333,7 @@ export const expensesRouter = createTRPCRouter({
               userId: s.userId,
               amount: s.amount,
               shares: s.shares ?? 1,
-              percentage: s.percentage,
+              ...(s.percentage !== undefined ? { percentage: s.percentage } : {}),
             })),
           });
         }
@@ -340,7 +341,7 @@ export const expensesRouter = createTRPCRouter({
         const updated = await tx.expense.update({
           where: { id: expenseId },
           data: {
-            ...data,
+            ...stripUndefined(data),
             ...(inputCurrency ? { currency: inputCurrency } : {}),
             exchangeRate: newExchangeRate ?? 1.0,
             baseCurrencyAmount: newBaseCurrencyAmount,

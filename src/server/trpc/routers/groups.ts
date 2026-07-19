@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import type { PrismaClient } from "@/generated/prisma/client";
 import { createTRPCRouter, protectedProcedure, groupMemberProcedure } from "../init";
+import { stripUndefined } from "../../lib/strip-undefined";
 
 export const groupsRouter = createTRPCRouter({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -67,7 +68,7 @@ export const groupsRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const group = await ctx.db.group.create({
         data: {
-          ...input,
+          ...stripUndefined(input),
           members: {
             create: {
               userId: ctx.user.id,
@@ -117,7 +118,7 @@ export const groupsRouter = createTRPCRouter({
 
       const group = await ctx.db.group.update({
         where: { id: groupId },
-        data,
+        data: stripUndefined(data),
       });
       return group;
     }),
@@ -210,8 +211,8 @@ export const groupsRouter = createTRPCRouter({
       const invite = await ctx.db.groupInvite.create({
         data: {
           groupId: input.groupId,
-          email: input.email,
-          placeholderUserId: input.placeholderUserId,
+          ...(input.email !== undefined ? { email: input.email } : {}),
+          ...(input.placeholderUserId !== undefined ? { placeholderUserId: input.placeholderUserId } : {}),
           expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
         },
       });

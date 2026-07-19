@@ -286,7 +286,7 @@ export const guestRouter = createTRPCRouter({
           db: ctx.db,
           receiptId: input.receiptId,
           receipt,
-          correctionHint: input.correctionHint,
+          ...(input.correctionHint !== undefined ? { correctionHint: input.correctionHint } : {}),
           logPrefix: "guest.receipt",
         });
       } catch (error) {
@@ -443,7 +443,7 @@ export const guestRouter = createTRPCRouter({
 
       const guestSplit = await ctx.db.guestSplit.create({
         data: {
-          receiptId: input.receiptId,
+          ...(input.receiptId !== undefined ? { receiptId: input.receiptId } : {}),
           receiptData: {
             ...input.receiptData,
             tip,
@@ -583,7 +583,7 @@ export const guestRouter = createTRPCRouter({
 
       const session = await ctx.db.guestSplit.create({
         data: {
-          receiptId: input.receiptId,
+          ...(input.receiptId !== undefined ? { receiptId: input.receiptId } : {}),
           receiptData: input.receiptData as unknown as Prisma.InputJsonValue,
           items: expandedItems as unknown as Prisma.InputJsonValue,
           people: people as unknown as Prisma.InputJsonValue,

@@ -87,11 +87,8 @@ export async function logAdminAction(
     data: {
       adminId,
       action,
-      targetId: targetId ?? undefined,
-      metadata:
-        metadata !== null && metadata !== undefined
-          ? (metadata as Prisma.InputJsonValue)
-          : undefined,
+      ...(targetId != null ? { targetId } : {}),
+      ...(metadata !== null && metadata !== undefined ? { metadata: metadata as Prisma.InputJsonValue } : {}),
     },
   });
 }
@@ -725,7 +722,7 @@ export const adminRouter = createTRPCRouter({
 
       const invite = await ctx.db.systemInvite.create({
         data: {
-          label: input.label,
+          ...(input.label !== undefined ? { label: input.label } : {}),
           expiresAt,
         },
       });
@@ -1144,10 +1141,10 @@ export const adminRouter = createTRPCRouter({
     )
     .query(({ input }) => {
       return getRecentLogs({
-        minLevel: input.minLevel,
-        search: input.search || undefined,
+        ...(input.minLevel !== undefined ? { minLevel: input.minLevel } : {}),
+        ...(input.search ? { search: input.search } : {}),
         limit: input.limit,
-        afterId: input.afterId,
+        ...(input.afterId !== undefined ? { afterId: input.afterId } : {}),
       });
     }),
 

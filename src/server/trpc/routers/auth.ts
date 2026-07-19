@@ -5,6 +5,7 @@ import { createTRPCRouter, publicProcedure, protectedProcedure } from "../init";
 import { checkRateLimit, parsePositiveInt } from "../../lib/rate-limit";
 import { getClientIp } from "../../lib/client-ip";
 import { locales } from "@/i18n/routing";
+import { stripUndefined } from "../../lib/strip-undefined";
 
 export const authRouter = createTRPCRouter({
   getSession: publicProcedure.query(({ ctx }) => {
@@ -177,7 +178,7 @@ export const authRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       const data = {
-        ...input,
+        ...stripUndefined(input),
         ...(input.venmoUsername !== undefined
           ? { venmoUsername: input.venmoUsername?.trim() || null }
           : {}),

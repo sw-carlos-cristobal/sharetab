@@ -11,6 +11,7 @@ import {
   getConfiguredProviderPriority,
 } from "@/server/ai/registry";
 import { getExchangeRate, convertCents } from "../../lib/exchange-rates";
+import { stripUndefined } from "../../lib/strip-undefined";
 
 /**
  * Verify that a receipt exists and the user has access to it (via group membership).
@@ -119,7 +120,7 @@ export const receiptsRouter = createTRPCRouter({
           db: ctx.db,
           receiptId: input.receiptId,
           receipt,
-          correctionHint: input.correctionHint,
+          ...(input.correctionHint !== undefined ? { correctionHint: input.correctionHint } : {}),
           logPrefix: "receipt",
         });
       } catch (error) {
@@ -213,7 +214,7 @@ export const receiptsRouter = createTRPCRouter({
       const { itemId, ...data } = input;
       return ctx.db.receiptItem.update({
         where: { id: itemId },
-        data,
+        data: stripUndefined(data),
       });
     }),
 
@@ -681,7 +682,7 @@ export const receiptsRouter = createTRPCRouter({
           data: {
             groupId: input.groupId,
             savedById: ctx.user.id,
-            paidById: input.paidById,
+            ...(input.paidById !== undefined ? { paidById: input.paidById } : {}),
           },
         });
 
