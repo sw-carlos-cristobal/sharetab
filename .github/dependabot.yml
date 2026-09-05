@@ -1,0 +1,53 @@
+# Dependency + Actions update automation. Until now Dependabot only opened
+# security-update PRs here (the "npm_and_yarn group" bumps); this config adds
+# routine version updates, grouped so they arrive as one PR per ecosystem per
+# week instead of a cascade of conflicting singles.
+#
+# Ecosystems:
+#   npm            root package.json + package-lock.json
+#   github-actions .github/workflows/*.yml
+#   docker         docker/Dockerfile base image
+#
+# CI runs on GitHub-hosted runners (public repo), so bot PRs need no runner
+# variable. auto-release.yml runs on every push to main and cuts a build tag,
+# so a merged dependency bump gets one like any other merge; promote-stable.yml
+# is manual (workflow_dispatch) and is not triggered by these merges.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      # All npm deps (runtime and dev alike): one PR per week for minor/patch
+      # bumps; majors still arrive individually.
+      npm-minor-patch:
+        patterns:
+          - '*'
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      ci-actions:
+        patterns:
+          - '*'
+
+  - package-ecosystem: docker
+    directory: /docker
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+      include: scope
