@@ -9,8 +9,9 @@
 #   docker         docker/Dockerfile base image
 #
 # CI runs on GitHub-hosted runners (public repo), so bot PRs need no runner
-# variable. Release automation (auto-release.yml -> promote-stable.yml) keys
-# off merges to main; a merged dependency bump is a normal merge to it.
+# variable. auto-release.yml runs on every push to main and cuts a build tag,
+# so a merged dependency bump gets one like any other merge; promote-stable.yml
+# is manual (workflow_dispatch) and is not triggered by these merges.
 version: 2
 updates:
   - package-ecosystem: npm
@@ -22,7 +23,9 @@ updates:
       prefix: chore
       include: scope
     groups:
-      dev-tooling:
+      # All npm deps (runtime and dev alike): one PR per week for minor/patch
+      # bumps; majors still arrive individually.
+      npm-minor-patch:
         patterns:
           - '*'
         update-types:
