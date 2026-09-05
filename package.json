@@ -100,7 +100,7 @@
     "shadcn": "^4.1.1",
     "tailwindcss": "^4",
     "tsx": "^4.22.4",
-    "typescript": "^5",
+    "typescript": "^7",
     "vitest": "^4.1.2"
   }
 }
