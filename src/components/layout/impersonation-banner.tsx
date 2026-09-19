@@ -21,8 +21,8 @@ export function ImpersonationBanner() {
     setStopping(true);
     try {
       await fetch('/api/admin/impersonate', { method: 'DELETE' });
+      router.push('/admin');
       router.refresh();
-      window.location.href = '/admin';
     } catch {
       setStopping(false);
     }
