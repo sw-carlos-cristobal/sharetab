@@ -9,6 +9,7 @@ import { UserCheck } from 'lucide-react';
 export function ImpersonationBanner() {
   const t = useTranslations('admin.impersonation');
   const router = useRouter();
+  const utils = trpc.useUtils();
   const { data } = trpc.admin.getImpersonationStatus.useQuery(undefined, {
     staleTime: 0,
     refetchOnWindowFocus: true,
@@ -21,6 +22,7 @@ export function ImpersonationBanner() {
     setStopping(true);
     try {
       await fetch('/api/admin/impersonate', { method: 'DELETE' });
+      await utils.admin.getImpersonationStatus.invalidate();
       router.push('/admin');
       router.refresh();
     } catch {
