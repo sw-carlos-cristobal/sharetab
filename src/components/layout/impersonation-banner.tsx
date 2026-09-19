@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/navigation';
 import { trpc } from '@/lib/trpc';
@@ -9,7 +10,7 @@ import { UserCheck } from 'lucide-react';
 export function ImpersonationBanner() {
   const t = useTranslations('admin.impersonation');
   const router = useRouter();
-  const utils = trpc.useUtils();
+  const queryClient = useQueryClient();
   const { data } = trpc.admin.getImpersonationStatus.useQuery(undefined, {
     staleTime: 0,
     refetchOnWindowFocus: true,
@@ -22,14 +23,11 @@ export function ImpersonationBanner() {
     setStopping(true);
     try {
       const res = await fetch('/api/admin/impersonate', { method: 'DELETE' });
-      if (!res.ok) {
-        setStopping(false);
-        return;
-      }
-      await utils.invalidate();
+      if (!res.ok) return;
+      queryClient.clear();
       router.push('/admin');
       router.refresh();
-    } catch {
+    } finally {
       setStopping(false);
     }
   };
