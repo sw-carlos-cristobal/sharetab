@@ -27,6 +27,8 @@ export function ImpersonationBanner() {
       queryClient.clear();
       router.push('/admin');
       router.refresh();
+    } catch {
+      // network error — button re-enables via finally
     } finally {
       setStopping(false);
     }
