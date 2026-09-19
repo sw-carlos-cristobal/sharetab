@@ -26,7 +26,7 @@ export function ImpersonationBanner() {
         setStopping(false);
         return;
       }
-      await utils.admin.getImpersonationStatus.invalidate();
+      await utils.invalidate();
       router.push('/admin');
       router.refresh();
     } catch {
