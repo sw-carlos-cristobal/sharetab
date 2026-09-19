@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { useRouter } from '@/i18n/navigation';
 import { trpc } from '@/lib/trpc';
 import { UserCheck } from 'lucide-react';
 
@@ -21,7 +21,11 @@ export function ImpersonationBanner() {
   const handleStop = async () => {
     setStopping(true);
     try {
-      await fetch('/api/admin/impersonate', { method: 'DELETE' });
+      const res = await fetch('/api/admin/impersonate', { method: 'DELETE' });
+      if (!res.ok) {
+        setStopping(false);
+        return;
+      }
       await utils.admin.getImpersonationStatus.invalidate();
       router.push('/admin');
       router.refresh();
