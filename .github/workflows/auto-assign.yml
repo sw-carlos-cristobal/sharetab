@@ -9,6 +9,8 @@ permissions:
 
 jobs:
   assign:
+    # Issues can only be assigned to users; an org-owned fork or transfer skips this job
+    if: github.event.repository.owner.type == 'User'
     runs-on: ubuntu-latest
     steps:
       - name: Assign new issue to repo owner
