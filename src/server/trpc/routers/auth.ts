@@ -6,13 +6,32 @@ import { checkRateLimit, parsePositiveInt } from '../../lib/rate-limit';
 import { getClientIp } from '../../lib/client-ip';
 import { locales } from '@/i18n/routing';
 import { stripUndefined } from '../../lib/strip-undefined';
+import { parseAuthConfig } from '../../lib/auth-config';
+
+const REGISTRATION_CLOSED = 'Registration is currently closed.';
 
 export const authRouter = createTRPCRouter({
   getSession: publicProcedure.query(({ ctx }) => {
     return ctx.session;
   }),
 
+  // Which sign-in methods the login page should offer. Never includes the
+  // OIDC issuer or secrets — only what the UI renders.
+  getLoginOptions: publicProcedure.query(() => {
+    const config = parseAuthConfig(process.env);
+    return {
+      passwordLogin: config.passwordLogin,
+      magicLink: config.magicLink,
+      oidc: config.oidc ? { name: config.oidc.displayName } : null,
+    };
+  }),
+
   getRegistrationMode: publicProcedure.query(async ({ ctx }) => {
+    // The register form creates password accounts; with password login
+    // disabled it is closed whatever the admin setting says.
+    if (!parseAuthConfig(process.env).passwordLogin) {
+      return { mode: 'closed' as const };
+    }
     const setting = await ctx.db.systemSetting.findUnique({
       where: { key: 'registrationMode' },
     });
@@ -29,6 +48,10 @@ export const authRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      if (!parseAuthConfig(process.env).passwordLogin) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: REGISTRATION_CLOSED });
+      }
+
       // Rate limit: 10 registrations per hour per IP (fall back to global key)
       const ip = getClientIp(ctx.headers);
       const maxRegAttempts = parsePositiveInt(process.env.REGISTER_RATE_LIMIT_MAX, 10);
@@ -49,7 +72,7 @@ export const authRouter = createTRPCRouter({
       if (mode === 'closed') {
         throw new TRPCError({
           code: 'FORBIDDEN',
-          message: 'Registration is currently closed.',
+          message: REGISTRATION_CLOSED,
         });
       }
 
@@ -154,12 +177,13 @@ export const authRouter = createTRPCRouter({
   getProfile: protectedProcedure.query(async ({ ctx }) => {
     const user = await ctx.db.user.findUnique({
       where: { id: ctx.user.id },
-      select: { name: true, email: true, venmoUsername: true, locale: true, defaultCurrency: true },
+      select: { name: true, email: true, venmoUsername: true, locale: true, defaultCurrency: true, passwordHash: true },
     });
     if (!user) {
       throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found' });
     }
-    return user;
+    const { passwordHash, ...profile } = user;
+    return { ...profile, hasPassword: passwordHash !== null };
   }),
 
   updateProfile: protectedProcedure
