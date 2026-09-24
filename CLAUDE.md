@@ -42,6 +42,7 @@ npx prisma db push   # Push schema without migration (dev only)
 - `src/server/auth.ts` — NextAuth v5 config (Credentials unless `DISABLE_PASSWORD_LOGIN` + optional Google OAuth + optional Nodemailer magic link + optional generic OIDC); wraps the Prisma adapter so `getUserByEmail` is case-insensitive
 - `src/server/lib/auth-config.ts` — Parses sign-in env vars (`OIDC_*`, `DISABLE_PASSWORD_LOGIN`) into `AuthConfig`; invalid values fall back to defaults with a logged warning
 - `src/server/lib/oidc-sign-in.ts` — OIDC sign-in policy: `decideOidcSignIn` (pure allow/deny) + `gatherOidcFacts` (DB lookups); denials redirect to `/login?error=<code>` (mapped to messages by `src/lib/sign-in-errors.ts`)
+- `src/server/lib/password-login.ts` — Credentials `authorize` (rate limits, case-insensitive lookup, bcrypt check)
 - `src/server/lib/user-email.ts` — Case-insensitive user lookup by email (`findUsersByEmail` / `findUserByEmail`), shared by the Auth.js adapter, password login, `auth.register`, and the OIDC policy
 - `src/server/trpc/init.ts` — tRPC context, `publicProcedure`, `protectedProcedure`, `groupMemberProcedure`
 - `src/server/trpc/router.ts` — Root app router (exports `AppRouter` type)
@@ -97,7 +98,7 @@ npx prisma db push   # Push schema without migration (dev only)
 
 - `npm test` — run all unit tests (~360 tests, <2s)
 - Tests live co-located with source: `src/**/*.test.ts`
-- Covers: `money.ts`, `split-calculator.ts`, `rate-limit.ts`, `upload-dir.ts`, `balance-calculator.ts`, `ai/registry.ts`, `ai/providers/openai-codex.ts`, `lib/normalize-date.ts`, `lib/meridian-login.ts`, `lib/receipt-processor.ts`, `lib/auth-health-poller.ts`, `lib/openai-codex-login.ts`, `lib/auth-config.ts`, `lib/oidc-sign-in.ts`, `lib/user-email.ts`, `trpc/routers/admin.ts`, `trpc/routers/auth.ts`, `src/lib/sign-in-errors.ts`
+- Covers: `money.ts`, `split-calculator.ts`, `rate-limit.ts`, `upload-dir.ts`, `balance-calculator.ts`, `ai/registry.ts`, `ai/providers/openai-codex.ts`, `lib/normalize-date.ts`, `lib/meridian-login.ts`, `lib/receipt-processor.ts`, `lib/auth-health-poller.ts`, `lib/openai-codex-login.ts`, `lib/auth-config.ts`, `lib/oidc-sign-in.ts`, `lib/user-email.ts`, `lib/password-login.ts`, `trpc/routers/admin.ts`, `trpc/routers/auth.ts`, `src/lib/sign-in-errors.ts`
 
 ### E2E Tests (Playwright)
 

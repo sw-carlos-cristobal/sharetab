@@ -314,13 +314,19 @@ Sign in through your own identity provider (IdP): Authentik, Authelia, Keycloak,
 **Moving existing users to SSO**
 
 1. Make sure each person's email at the IdP matches their ShareTab email (case doesn't matter).
-2. In the admin dashboard, set Registration Mode to _Closed_ or _Invite Only_ (linking is refused while anyone can sign up with a password), and check that each ShareTab account whose email matches an IdP user really belongs to that person: linking hands the account to the IdP user, and its existing password keeps working.
+2. In the admin dashboard, set Registration Mode to _Closed_ (linking is refused while anyone can sign up with a password; _Invite Only_ is accepted too, but anyone holding an unused invite code could still register someone else's address, so revoke unused invites first). Then check that each ShareTab account whose email matches an IdP user really belongs to that person: linking hands the account to the IdP user, and its existing password keeps working.
 3. Set `OIDC_ALLOW_EMAIL_LINKING=true` and have everyone sign in once with the SSO button; this links their IdP identity to their existing account.
 4. Turn `OIDC_ALLOW_EMAIL_LINKING` back off, and optionally set `DISABLE_PASSWORD_LOGIN=true`.
 
 **Troubleshooting:** "Sign-in failed" after clicking the SSO button or returning from the IdP usually means an issuer mismatch (check the trailing slash) or `invalid_client` (switch `OIDC_TOKEN_AUTH_METHOD`). Landing back on the login page with no message means ShareTab couldn't map the IdP's profile (the log shows `OAuthProfileParseError`). In both cases the container log shows the exact Auth.js error.
 
-"An account with this email already exists…" for someone who should be able to sign in: either their account is already linked to a different IdP identity (for example, the IdP user was recreated; delete their row with `provider = 'oidc'` in the `Account` table, then link again as in _Moving existing users to SSO_), or several ShareTab accounts share their email in different letter cases (merge or delete the extra account). The log line `auth.oidc_denied` names the reason.
+"An account with this email already exists…" means a ShareTab account has that email but the IdP identity isn't linked to it. The `reason` in the `auth.oidc_denied` log line says why:
+
+- `linking_disabled`: `OIDC_ALLOW_EMAIL_LINKING` is off; link as in _Moving existing users to SSO_.
+- `password_registration_open`: linking is on but Registration Mode is _Open_; close it (step 2 above).
+- `already_linked`: the account is linked to a different IdP identity. If the IdP user was recreated, confirm at the IdP that the old identity (the row's `providerAccountId`) no longer exists before deleting that account's `provider = 'oidc'` row in the `Account` table, then link again.
+- `ambiguous_email`: several ShareTab accounts share the email in different letter cases; merge or delete the extra account.
+- `placeholder`: the email belongs to a placeholder or deleted user, which can't be signed in to.
 
 <a id="oidc-security-notes"></a>**Security notes**
 
