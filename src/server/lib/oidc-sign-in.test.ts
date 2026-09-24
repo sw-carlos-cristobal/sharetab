@@ -2,10 +2,10 @@ import { describe, expect, test, vi } from 'vitest';
 import type { PrismaClient } from '@/generated/prisma/client';
 import {
   decideOidcSignIn,
-  findUserByEmail,
+  findUsersByEmail,
   gatherOidcFacts,
   mapOidcProfile,
-  matchUserByEmail,
+  pickUserByEmail,
   type OidcSignInFacts,
 } from './oidc-sign-in';
 
@@ -18,7 +18,7 @@ const NEW_IDENTITY: OidcSignInFacts = {
   allowEmailLinking: false,
 };
 
-const EXISTING_USER = { id: 'user-1', isPlaceholder: false };
+const EXISTING_USER = { id: 'user-1', isPlaceholder: false, hasOidcAccount: false };
 
 describe('decideOidcSignIn', () => {
   test('allows an identity that is already linked', () => {
@@ -44,7 +44,7 @@ describe('decideOidcSignIn', () => {
         linkedUserId: 'user-1',
         sessionUserId: null,
         email: null,
-        userByEmail: { id: 'user-3', isPlaceholder: true },
+        userByEmail: { id: 'user-3', isPlaceholder: true, hasOidcAccount: false },
         autoRegister: false,
         allowEmailLinking: false,
       }),
@@ -73,7 +73,7 @@ describe('decideOidcSignIn', () => {
     expect(
       decideOidcSignIn({
         ...NEW_IDENTITY,
-        userByEmail: { id: 'placeholder-1', isPlaceholder: true },
+        userByEmail: { id: 'placeholder-1', isPlaceholder: true, hasOidcAccount: false },
         allowEmailLinking: true,
       }),
     ).toEqual({ allow: false, error: 'OidcAccountNotLinked' });
@@ -84,6 +84,16 @@ describe('decideOidcSignIn', () => {
       allow: false,
       error: 'OidcAccountNotLinked',
     });
+  });
+
+  test('never links a second IdP identity to an account that already has one', () => {
+    expect(
+      decideOidcSignIn({
+        ...NEW_IDENTITY,
+        userByEmail: { ...EXISTING_USER, hasOidcAccount: true },
+        allowEmailLinking: true,
+      }),
+    ).toEqual({ allow: false, error: 'OidcAccountNotLinked' });
   });
 
   test('denies an existing email when linking is off', () => {
@@ -156,72 +166,93 @@ describe('mapOidcProfile', () => {
     expect(mapOidcProfile({ sub: 's', picture: { url: 'x' } }).image).toBeNull();
   });
 
+  test('keeps only http(s) picture URLs', () => {
+    expect(mapOidcProfile({ sub: 's', picture: 'http://idp.lan/a.png' }).image).toBe('http://idp.lan/a.png');
+    expect(mapOidcProfile({ sub: 's', picture: 'javascript:alert(1)' }).image).toBeNull();
+    expect(mapOidcProfile({ sub: 's', picture: 'data:image/png;base64,AAAA' }).image).toBeNull();
+    expect(mapOidcProfile({ sub: 's', picture: 'not a url' }).image).toBeNull();
+  });
+
+  test('caps the name at 100 characters, like the register form', () => {
+    expect(mapOidcProfile({ sub: 's', name: 'x'.repeat(150) }).name).toHaveLength(100);
+  });
+
   test('throws when sub is missing or blank', () => {
     expect(() => mapOidcProfile({ email: 'alice@example.com' })).toThrow(/sub/);
     expect(() => mapOidcProfile({ sub: ' ' })).toThrow(/sub/);
   });
 });
 
-describe('matchUserByEmail', () => {
+describe('pickUserByEmail', () => {
   const user = (id: string, email: string) => ({ id, email });
 
-  test('no candidates means no match', () => {
-    expect(matchUserByEmail('alice@example.com', [])).toBeNull();
+  test('no matches means no user', () => {
+    expect(pickUserByEmail('alice@example.com', [])).toBeNull();
   });
 
-  test('matches a single user regardless of case', () => {
-    expect(matchUserByEmail('alice@example.com', [user('u1', 'Alice@Example.com')])).toEqual(
+  test('returns the single match regardless of case', () => {
+    expect(pickUserByEmail('alice@example.com', [user('u1', 'Alice@Example.com')])).toEqual(
       user('u1', 'Alice@Example.com'),
     );
   });
 
   test('prefers the exact match when several casings exist', () => {
     expect(
-      matchUserByEmail('alice@example.com', [user('u1', 'Alice@example.com'), user('u2', 'alice@example.com')]),
+      pickUserByEmail('alice@example.com', [user('u1', 'Alice@example.com'), user('u2', 'alice@example.com')]),
     ).toEqual(user('u2', 'alice@example.com'));
   });
 
-  test('several other-case matches are ambiguous', () => {
-    expect(
-      matchUserByEmail('alice@example.com', [user('u1', 'Alice@example.com'), user('u2', 'ALICE@example.com')]),
-    ).toBe('ambiguous');
-  });
-
-  test('ignores candidates that only match as a SQL pattern', () => {
-    // `_` and `%` are LIKE wildcards; the DB query may over-match.
-    expect(matchUserByEmail('a_ice@example.com', [user('u1', 'alice@example.com')])).toBeNull();
-    expect(matchUserByEmail('%@example.com', [user('u1', 'alice@example.com')])).toBeNull();
+  test('throws instead of guessing when several other casings exist', () => {
+    expect(() =>
+      pickUserByEmail('alice@example.com', [user('u1', 'Alice@example.com'), user('u2', 'ALICE@example.com')]),
+    ).toThrow(/several/i);
   });
 });
 
+type MatchRow = { id: string; email: string; isPlaceholder: boolean };
+
 function mockDb(overrides: {
   account?: { userId: string } | null;
-  usersByEmail?: { id: string; email: string; isPlaceholder: boolean }[];
+  usersByEmail?: MatchRow[];
   sessionUser?: { id: string } | null;
+  oidcAccountOf?: string[];
 }) {
+  const rows = overrides.usersByEmail ?? [];
   const db = {
-    account: { findUnique: vi.fn().mockResolvedValue(overrides.account ?? null) },
+    $queryRaw: vi.fn().mockResolvedValue(rows.map(({ id }) => ({ id }))),
+    account: {
+      findUnique: vi.fn().mockResolvedValue(overrides.account ?? null),
+      findFirst: vi.fn(async ({ where }: { where: { userId: string } }) =>
+        overrides.oidcAccountOf?.includes(where.userId) ? { id: `acc-${where.userId}` } : null,
+      ),
+    },
     user: {
-      findMany: vi.fn().mockResolvedValue(overrides.usersByEmail ?? []),
+      findMany: vi.fn().mockResolvedValue(rows),
       findUnique: vi.fn().mockResolvedValue(overrides.sessionUser ?? null),
     },
   };
   return { db, client: db as unknown as PrismaClient };
 }
 
-describe('findUserByEmail', () => {
-  test('queries case-insensitively and returns the matching row', async () => {
+describe('findUsersByEmail', () => {
+  test('matches with lower() = lower() in SQL, not a LIKE pattern, then loads the rows oldest first', async () => {
     const { db, client } = mockDb({
       usersByEmail: [{ id: 'u1', email: 'Alice@example.com', isPlaceholder: false }],
     });
-    await expect(findUserByEmail(client, 'alice@example.com')).resolves.toEqual({
-      id: 'u1',
-      email: 'Alice@example.com',
-      isPlaceholder: false,
-    });
-    expect(db.user.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { email: { equals: 'alice@example.com', mode: 'insensitive' } } }),
-    );
+    await expect(findUsersByEmail(client, 'a_ice@example.com')).resolves.toEqual([
+      { id: 'u1', email: 'Alice@example.com', isPlaceholder: false },
+    ]);
+    const [strings, ...values] = db.$queryRaw.mock.calls[0] as [TemplateStringsArray, ...unknown[]];
+    expect(strings.join('?')).toMatch(/lower\(email\)\s*=\s*lower\(\?\)/i);
+    expect(strings.join('?')).not.toMatch(/like/i);
+    expect(values).toEqual(['a_ice@example.com']);
+    expect(db.user.findMany).toHaveBeenCalledWith({ where: { id: { in: ['u1'] } }, orderBy: { createdAt: 'asc' } });
+  });
+
+  test('skips the row load when nothing matches', async () => {
+    const { db, client } = mockDb({});
+    await expect(findUsersByEmail(client, 'nobody@example.com')).resolves.toEqual([]);
+    expect(db.user.findMany).not.toHaveBeenCalled();
   });
 });
 
@@ -250,7 +281,29 @@ describe('gatherOidcFacts', () => {
       usersByEmail: [{ id: 'u1', email: 'Alice@example.com', isPlaceholder: false }],
     });
     const facts = await gatherOidcFacts(client, INPUT);
-    expect(facts.userByEmail).toEqual({ id: 'u1', isPlaceholder: false });
+    expect(facts.userByEmail).toEqual({ id: 'u1', isPlaceholder: false, hasOidcAccount: false });
+  });
+
+  test('reports whether the matched user already has an IdP identity linked', async () => {
+    const { client } = mockDb({
+      usersByEmail: [{ id: 'u1', email: 'alice@example.com', isPlaceholder: false }],
+      oidcAccountOf: ['u1'],
+    });
+    expect((await gatherOidcFacts(client, INPUT)).userByEmail).toEqual({
+      id: 'u1',
+      isPlaceholder: false,
+      hasOidcAccount: true,
+    });
+  });
+
+  test('several case variants are ambiguous even when one matches exactly', async () => {
+    const { client } = mockDb({
+      usersByEmail: [
+        { id: 'u1', email: 'alice@example.com', isPlaceholder: false },
+        { id: 'u2', email: 'Alice@example.com', isPlaceholder: false },
+      ],
+    });
+    expect((await gatherOidcFacts(client, INPUT)).userByEmail).toBe('ambiguous');
   });
 
   test('reports ambiguous email matches', async () => {
@@ -267,7 +320,7 @@ describe('gatherOidcFacts', () => {
     const { db, client } = mockDb({});
     const facts = await gatherOidcFacts(client, { ...INPUT, email: null });
     expect(facts.userByEmail).toBeNull();
-    expect(db.user.findMany).not.toHaveBeenCalled();
+    expect(db.$queryRaw).not.toHaveBeenCalled();
   });
 
   test('keeps a session whose user still exists', async () => {
@@ -275,7 +328,7 @@ describe('gatherOidcFacts', () => {
     expect((await gatherOidcFacts(client, { ...INPUT, sessionUserId: 'u9' })).sessionUserId).toBe('u9');
   });
 
-  test('ignores a session whose user was deleted', async () => {
+  test('ignores a session whose user row no longer exists', async () => {
     const { client } = mockDb({ sessionUser: null });
     expect((await gatherOidcFacts(client, { ...INPUT, sessionUserId: 'gone' })).sessionUserId).toBeNull();
   });

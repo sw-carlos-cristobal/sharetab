@@ -11,8 +11,9 @@ vi.mock('bcryptjs', () => ({
 const mockDb = {
   systemSetting: { findUnique: vi.fn() },
   systemInvite: { findUnique: vi.fn() },
-  user: { findUnique: vi.fn(), create: vi.fn() },
+  user: { findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn() },
   $transaction: vi.fn(),
+  $queryRaw: vi.fn(),
 };
 vi.mock('@/server/db', () => ({ db: mockDb }));
 vi.mock('@/server/lib/logger', () => ({
@@ -89,6 +90,19 @@ describe('password login disabled', () => {
     mockDb.systemSetting.findUnique.mockResolvedValue({ key: 'registrationMode', value: 'open' });
     const api = await caller();
     expect(await api.getRegistrationMode()).toEqual({ mode: 'closed' });
+  });
+});
+
+describe('auth.register duplicate check', () => {
+  test('refuses an email that differs from an existing one only by case', async () => {
+    mockDb.systemSetting.findUnique.mockResolvedValue(null);
+    mockDb.$queryRaw.mockResolvedValue([{ id: 'bob' }]);
+    mockDb.user.findMany.mockResolvedValue([{ id: 'bob', email: 'Bob@example.com' }]);
+    const api = await caller();
+    await expect(
+      api.register({ name: 'Mallory', email: 'bob@example.com', password: 'password123' }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(mockDb.$transaction).not.toHaveBeenCalled();
   });
 });
 

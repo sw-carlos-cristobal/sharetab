@@ -2,8 +2,8 @@
  * Sign-in configuration parsed from environment variables.
  *
  * Parsing never throws: an invalid value falls back to its safe default and
- * adds a human-readable warning (logged once at startup), so a typo in an
- * optional auth setting can't take the whole app down.
+ * adds a human-readable warning (logged when the auth module first loads),
+ * so a typo in an optional auth setting can't take the whole app down.
  */
 
 export type OidcTokenAuthMethod = 'client_secret_basic' | 'client_secret_post';
@@ -44,7 +44,7 @@ function parseBoolean(env: Env, name: string, fallback: boolean, warnings: strin
   return fallback;
 }
 
-function isHttpUrl(value: string): boolean {
+export function isHttpUrl(value: string): boolean {
   try {
     const url = new URL(value);
     return url.protocol === 'https:' || url.protocol === 'http:';
@@ -82,8 +82,9 @@ function parseOidc(env: Env, warnings: string[]): OidcConfig | null {
   }
 
   return {
-    // Kept exactly as given: Auth.js compares it to the IdP's `issuer` claim
-    // byte for byte, and some IdPs (Authentik) include a trailing slash.
+    // Kept exactly as given: discovery requires it to equal (as a URL) the
+    // `issuer` the IdP publishes, and whether a path ends in a slash matters
+    // (Authentik's does).
     issuer,
     clientId,
     clientSecret,

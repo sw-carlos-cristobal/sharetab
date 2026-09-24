@@ -15,9 +15,10 @@ import { parseAuthConfig } from './lib/auth-config';
 import {
   OIDC_PROVIDER_ID,
   decideOidcSignIn,
-  findUserByEmail,
+  findUsersByEmail,
   gatherOidcFacts,
   mapOidcProfile,
+  pickUserByEmail,
 } from './lib/oidc-sign-in';
 
 const loginSchema = z.object({
@@ -36,8 +37,7 @@ for (const warning of authConfig.warnings) {
 const adapter: Adapter = {
   ...PrismaAdapter(db),
   async getUserByEmail(email) {
-    const match = await findUserByEmail(db, email);
-    return match === 'ambiguous' ? null : match;
+    return pickUserByEmail(email, await findUsersByEmail(db, email));
   },
 };
 

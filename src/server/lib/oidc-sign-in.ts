@@ -5,9 +5,13 @@
  */
 
 import type { PrismaClient } from '@/generated/prisma/client';
+import { isHttpUrl } from './auth-config';
 
 /** Provider id of the generic OIDC provider (callback path `/api/auth/callback/oidc`). */
 export const OIDC_PROVIDER_ID = 'oidc';
+
+/** Same limit as the register form's name field. */
+const MAX_NAME_LENGTH = 100;
 
 export type OidcSignInError =
   'OidcSessionActive' | 'OidcEmailMissing' | 'OidcAccountNotLinked' | 'OidcRegistrationDisabled';
@@ -17,10 +21,10 @@ export interface OidcSignInFacts {
   linkedUserId: string | null;
   /** User signed in in this browser when the callback ran, if any. */
   sessionUserId: string | null;
-  /** Email from the IdP (Auth.js lowercases it). */
+  /** Email Auth.js passes to the callback: the IdP's, lowercased (only irrelevant for linked identities). */
   email: string | null;
-  /** Existing user with that email, compared case-insensitively. */
-  userByEmail: { id: string; isPlaceholder: boolean } | 'ambiguous' | null;
+  /** The user with that email ignoring case, or 'ambiguous' when several case variants exist. */
+  userByEmail: { id: string; isPlaceholder: boolean; hasOidcAccount: boolean } | 'ambiguous' | null;
   autoRegister: boolean;
   allowEmailLinking: boolean;
 }
@@ -41,9 +45,17 @@ export function decideOidcSignIn(facts: OidcSignInFacts): OidcSignInDecision {
   if (!facts.email) return { allow: false, error: 'OidcEmailMissing' };
 
   if (facts.userByEmail) {
-    // Placeholder and deleted-user records must never gain a login, and
-    // with several case-variants there's no safe way to pick one.
-    if (facts.userByEmail === 'ambiguous' || facts.userByEmail.isPlaceholder || !facts.allowEmailLinking) {
+    // Never link when there's no single safe target: placeholder and
+    // deleted-user records must not gain a login, several case variants
+    // leave no way to pick one, and an account that already has an IdP
+    // identity only signs in with that one (otherwise anyone who can claim
+    // the email at the IdP could attach a second identity to it).
+    if (
+      facts.userByEmail === 'ambiguous' ||
+      facts.userByEmail.isPlaceholder ||
+      facts.userByEmail.hasOidcAccount ||
+      !facts.allowEmailLinking
+    ) {
       return { allow: false, error: 'OidcAccountNotLinked' };
     }
     return { allow: true };
@@ -72,42 +84,42 @@ export function mapOidcProfile(claims: Record<string, unknown>): OidcUserProfile
   if (!id) throw new Error('OIDC profile is missing the "sub" claim');
 
   const fullName = [claim(claims, 'given_name'), claim(claims, 'family_name')].filter(Boolean).join(' ');
+  const name =
+    claim(claims, 'name') ?? (fullName || null) ?? claim(claims, 'preferred_username') ?? claim(claims, 'nickname');
+  const picture = claim(claims, 'picture');
   return {
     id,
-    name:
-      claim(claims, 'name') ?? (fullName || null) ?? claim(claims, 'preferred_username') ?? claim(claims, 'nickname'),
+    name: name?.slice(0, MAX_NAME_LENGTH) ?? null,
     email: claim(claims, 'email'),
-    image: claim(claims, 'picture'),
+    // Rendered as <img src> for other group members: only plain web URLs.
+    image: picture && isHttpUrl(picture) ? picture : null,
   };
 }
 
 /**
- * Picks the user an email refers to, ignoring case: the exact match if there
- * is one, else the only case-insensitive match, else `'ambiguous'`.
- *
- * Candidates are re-checked here because the database query may over-match
- * (a case-insensitive SQL comparison can treat `_` and `%` as wildcards).
+ * Users whose email equals `email` ignoring case, oldest first. Auth.js
+ * lowercases OAuth and magic-link emails, while password sign-ups store the
+ * casing the user typed, so an exact lookup would miss existing users.
  */
-export function matchUserByEmail<T extends { email: string }>(email: string, candidates: T[]): T | 'ambiguous' | null {
-  const exact = candidates.find((c) => c.email === email);
-  if (exact) return exact;
-  const lower = email.toLowerCase();
-  const [only, ...rest] = candidates.filter((c) => c.email.toLowerCase() === lower);
-  if (!only) return null;
-  return rest.length === 0 ? only : 'ambiguous';
+export async function findUsersByEmail(db: PrismaClient, email: string) {
+  // lower() = lower() rather than Prisma's `mode: 'insensitive'`, which
+  // compiles to ILIKE and treats `_` and `%` in the address as wildcards.
+  const rows = await db.$queryRaw<{ id: string }[]>`SELECT id FROM "User" WHERE lower(email) = lower(${email})`;
+  if (rows.length === 0) return [];
+  return db.user.findMany({ where: { id: { in: rows.map((r) => r.id) } }, orderBy: { createdAt: 'asc' } });
 }
 
 /**
- * Case-insensitive user lookup by email. Auth.js lowercases OAuth and
- * magic-link emails, while password sign-ups store the casing the user
- * typed, so an exact lookup would miss existing users.
+ * The user Auth.js' `getUserByEmail` should return: the exact match if there
+ * is one (what the stock adapter returns), else the only case-insensitive
+ * match. Several other-case matches throw, so Auth.js fails the sign-in
+ * instead of treating the address as unused and creating yet another account.
  */
-export async function findUserByEmail(db: PrismaClient, email: string) {
-  const candidates = await db.user.findMany({
-    where: { email: { equals: email, mode: 'insensitive' } },
-    take: 10,
-  });
-  return matchUserByEmail(email, candidates);
+export function pickUserByEmail<T extends { email: string }>(email: string, matches: T[]): T | null {
+  const exact = matches.find((m) => m.email === email);
+  if (exact) return exact;
+  if (matches.length > 1) throw new Error('Several accounts match this email ignoring case');
+  return matches[0] ?? null;
 }
 
 export interface OidcFactsInput {
@@ -118,17 +130,31 @@ export interface OidcFactsInput {
   allowEmailLinking: boolean;
 }
 
+async function describeEmailMatch(db: PrismaClient, email: string): Promise<OidcSignInFacts['userByEmail']> {
+  const matches = await findUsersByEmail(db, email);
+  // Stricter than pickUserByEmail: linking needs exactly one candidate.
+  if (matches.length > 1) return 'ambiguous';
+  const [user] = matches;
+  if (!user) return null;
+  const oidcAccount = await db.account.findFirst({
+    where: { userId: user.id, provider: OIDC_PROVIDER_ID },
+    select: { id: true },
+  });
+  return { id: user.id, isPlaceholder: user.isPlaceholder, hasOidcAccount: oidcAccount !== null };
+}
+
 export async function gatherOidcFacts(db: PrismaClient, input: OidcFactsInput): Promise<OidcSignInFacts> {
-  const [account, match, sessionUser] = await Promise.all([
+  const [account, userByEmail, sessionUser] = await Promise.all([
     db.account.findUnique({
       where: {
         provider_providerAccountId: { provider: OIDC_PROVIDER_ID, providerAccountId: input.providerAccountId },
       },
       select: { userId: true },
     }),
-    input.email ? findUserByEmail(db, input.email) : null,
-    // A session cookie can outlive its user (deleted account); Auth.js
-    // ignores such a session, so we must too.
+    input.email ? describeEmailMatch(db, input.email) : null,
+    // Auth.js ignores a session whose user row is gone, so we do too. Deleted
+    // users that ShareTab keeps as placeholder rows still count as signed in,
+    // which also stops Auth.js linking a new identity to that row.
     input.sessionUserId ? db.user.findUnique({ where: { id: input.sessionUserId }, select: { id: true } }) : null,
   ]);
 
@@ -136,7 +162,7 @@ export async function gatherOidcFacts(db: PrismaClient, input: OidcFactsInput): 
     linkedUserId: account?.userId ?? null,
     sessionUserId: sessionUser?.id ?? null,
     email: input.email,
-    userByEmail: match && match !== 'ambiguous' ? { id: match.id, isPlaceholder: match.isPlaceholder } : match,
+    userByEmail,
     autoRegister: input.autoRegister,
     allowEmailLinking: input.allowEmailLinking,
   };
