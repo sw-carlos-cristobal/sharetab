@@ -114,66 +114,68 @@ function RegisterForm() {
         <CardDescription className="mt-1">{t('subtitle')}</CardDescription>
       </CardHeader>
       <CardContent className="pt-4">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {error && <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
-          <div className="space-y-2">
-            <Label htmlFor="name">{t('name')}</Label>
-            <Input
-              id="name"
-              type="text"
-              placeholder={t('namePlaceholder')}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
+        {mode === 'closed' ? (
+          // Also the state when DISABLE_PASSWORD_LOGIN is set: don't show a
+          // form that can never be submitted.
+          <div className="rounded-md bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">
+            {t('error.closed')}
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="email">{t('email')}</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder={t('emailPlaceholder')}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">{t('password')}</Label>
-            <Input
-              id="password"
-              type="password"
-              placeholder={t('passwordPlaceholder')}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={8}
-            />
-          </div>
-          {mode === 'invite-only' && (
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {error && <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
             <div className="space-y-2">
-              <Label htmlFor="inviteCode">{t('inviteCode')}</Label>
+              <Label htmlFor="name">{t('name')}</Label>
               <Input
-                id="inviteCode"
+                id="name"
                 type="text"
-                placeholder={t('inviteCodePlaceholder')}
-                value={inviteCode}
-                onChange={(e) => setInviteCode(e.target.value)}
+                placeholder={t('namePlaceholder')}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
                 required
               />
-              <p className="text-xs text-muted-foreground">{t('error.inviteRequired')}</p>
             </div>
-          )}
-          {mode === 'closed' ? (
-            <div className="rounded-md bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">
-              {t('error.closed')}
+            <div className="space-y-2">
+              <Label htmlFor="email">{t('email')}</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder={t('emailPlaceholder')}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
             </div>
-          ) : (
+            <div className="space-y-2">
+              <Label htmlFor="password">{t('password')}</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder={t('passwordPlaceholder')}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={8}
+              />
+            </div>
+            {mode === 'invite-only' && (
+              <div className="space-y-2">
+                <Label htmlFor="inviteCode">{t('inviteCode')}</Label>
+                <Input
+                  id="inviteCode"
+                  type="text"
+                  placeholder={t('inviteCodePlaceholder')}
+                  value={inviteCode}
+                  onChange={(e) => setInviteCode(e.target.value)}
+                  required
+                />
+                <p className="text-xs text-muted-foreground">{t('error.inviteRequired')}</p>
+              </div>
+            )}
             <Button type="submit" className="w-full rounded-full h-10 text-sm font-medium mt-2" disabled={loading}>
               {loading ? t('submitting') : t('submit')}
             </Button>
-          )}
-        </form>
+          </form>
+        )}
 
         <div className="relative my-8">
           <Separator />

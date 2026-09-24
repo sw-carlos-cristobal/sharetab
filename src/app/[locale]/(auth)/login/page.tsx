@@ -111,8 +111,8 @@ function LoginForm() {
     setError('');
     setOidcRedirecting(true);
     try {
-      // Full-page redirect to the identity provider; errors come back as
-      // `/login?error=...`.
+      // Full-page redirect to the identity provider; failures normally come
+      // back as `/login?error=...`.
       await signIn('oidc', { redirectTo: callbackPath });
     } catch {
       setOidcRedirecting(false);
