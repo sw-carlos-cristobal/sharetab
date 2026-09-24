@@ -359,7 +359,7 @@
     Name="OIDC Allow Email Linking"
     Target="OIDC_ALLOW_EMAIL_LINKING"
     Default="false"
-    Description="Link a first-time IdP login to an existing ShareTab user with the same email (true/false). Only enable if your IdP doesn't let users set arbitrary, unverified emails."
+    Description="Link a first-time IdP login to an existing ShareTab user with the same email (true/false). Only enable if your IdP doesn't let users set arbitrary, unverified emails. Refused while anyone can sign up with a password (Registration Mode: Open)."
     Type="Variable"
     Display="advanced"
     Required="false"
