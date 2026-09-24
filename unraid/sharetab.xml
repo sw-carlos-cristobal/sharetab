@@ -377,7 +377,7 @@
     Name="Disable Password Login"
     Target="DISABLE_PASSWORD_LOGIN"
     Default="false"
-    Description="Hide the email/password form and close registration (true/false). Ignored unless OIDC or magic link sign-in is configured."
+    Description="Hide the email/password form and close registration (true/false). Ignored unless OIDC or magic link sign-in is configured. With SSO only, link existing accounts first or their owners cannot sign in."
     Type="Variable"
     Display="advanced"
     Required="false"

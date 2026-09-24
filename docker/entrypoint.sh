@@ -188,7 +188,7 @@ else
   echo "  Google OAuth:   disabled"
 fi
 if [ -n "$OIDC_ISSUER" ] && [ -n "$OIDC_CLIENT_ID" ] && [ -n "$OIDC_CLIENT_SECRET" ]; then
-  echo "  OIDC SSO:       enabled (${OIDC_ISSUER})"
+  echo "  OIDC SSO:       configured (${OIDC_ISSUER})"
 else
   echo "  OIDC SSO:       disabled"
 fi

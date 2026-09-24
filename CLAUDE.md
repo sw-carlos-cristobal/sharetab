@@ -41,7 +41,7 @@ npx prisma db push   # Push schema without migration (dev only)
 - `src/server/db.ts` — Prisma client singleton (uses `@prisma/adapter-pg` with `PrismaPg`)
 - `src/server/auth.ts` — NextAuth v5 config (Credentials unless `DISABLE_PASSWORD_LOGIN` + optional Google OAuth + optional Nodemailer magic link + optional generic OIDC); wraps the Prisma adapter so `getUserByEmail` is case-insensitive
 - `src/server/lib/auth-config.ts` — Parses sign-in env vars (`OIDC_*`, `DISABLE_PASSWORD_LOGIN`) into `AuthConfig`; invalid values fall back to defaults with a logged warning
-- `src/server/lib/oidc-sign-in.ts` — OIDC sign-in policy: `decideOidcSignIn` (pure allow/deny) + `gatherOidcFacts` (DB lookups); denials redirect to `/login?error=<code>` (mapped to messages by `src/lib/sign-in-errors.ts`)
+- `src/server/lib/oidc-sign-in.ts` — OIDC sign-in policy: `decideOidcSignIn` (pure allow/deny) + `gatherOidcFacts` (DB lookups); denials redirect to `/login?error=<code>` (mapped to messages by `src/lib/sign-in-errors.ts`). Also `findUsersByEmail`, the case-insensitive email lookup shared by the adapter and `auth.register`
 - `src/server/trpc/init.ts` — tRPC context, `publicProcedure`, `protectedProcedure`, `groupMemberProcedure`
 - `src/server/trpc/router.ts` — Root app router (exports `AppRouter` type)
 - `src/server/trpc/routers/` — Individual routers: auth, groups, expenses, balances, settlements, activity, receipts, guest, admin
