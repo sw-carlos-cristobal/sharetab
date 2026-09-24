@@ -1,13 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
 import type { PrismaClient } from '@/generated/prisma/client';
-import {
-  decideOidcSignIn,
-  findUsersByEmail,
-  gatherOidcFacts,
-  mapOidcProfile,
-  pickUserByEmail,
-  type OidcSignInFacts,
-} from './oidc-sign-in';
+import { decideOidcSignIn, gatherOidcFacts, mapOidcProfile, type OidcSignInFacts } from './oidc-sign-in';
 
 const NEW_IDENTITY: OidcSignInFacts = {
   linkedUserId: null,
@@ -16,6 +9,7 @@ const NEW_IDENTITY: OidcSignInFacts = {
   userByEmail: null,
   autoRegister: true,
   allowEmailLinking: false,
+  passwordRegistrationOpen: false,
 };
 
 const EXISTING_USER = { id: 'user-1', isPlaceholder: false, hasOidcAccount: false };
@@ -47,6 +41,7 @@ describe('decideOidcSignIn', () => {
         userByEmail: { id: 'user-3', isPlaceholder: true, hasOidcAccount: false },
         autoRegister: false,
         allowEmailLinking: false,
+        passwordRegistrationOpen: true,
       }),
     ).toEqual({ allow: true });
   });
@@ -107,6 +102,23 @@ describe('decideOidcSignIn', () => {
     expect(decideOidcSignIn({ ...NEW_IDENTITY, userByEmail: EXISTING_USER, allowEmailLinking: true })).toEqual({
       allow: true,
     });
+  });
+
+  test('refuses linking while anyone can register a password account', () => {
+    // Otherwise someone could register another person's address in advance
+    // and receive their IdP identity on first SSO sign-in.
+    expect(
+      decideOidcSignIn({
+        ...NEW_IDENTITY,
+        userByEmail: EXISTING_USER,
+        allowEmailLinking: true,
+        passwordRegistrationOpen: true,
+      }),
+    ).toEqual({ allow: false, error: 'OidcAccountNotLinked', reason: 'password_registration_open' });
+  });
+
+  test('open password registration does not affect brand-new identities', () => {
+    expect(decideOidcSignIn({ ...NEW_IDENTITY, passwordRegistrationOpen: true })).toEqual({ allow: true });
   });
 
   test('linking an existing user is allowed even with auto-register off', () => {
@@ -183,32 +195,6 @@ describe('mapOidcProfile', () => {
   });
 });
 
-describe('pickUserByEmail', () => {
-  const user = (id: string, email: string) => ({ id, email });
-
-  test('no matches means no user', () => {
-    expect(pickUserByEmail('alice@example.com', [])).toBeNull();
-  });
-
-  test('returns the single match regardless of case', () => {
-    expect(pickUserByEmail('alice@example.com', [user('u1', 'Alice@Example.com')])).toEqual(
-      user('u1', 'Alice@Example.com'),
-    );
-  });
-
-  test('prefers the exact match when several casings exist', () => {
-    expect(
-      pickUserByEmail('alice@example.com', [user('u1', 'Alice@example.com'), user('u2', 'alice@example.com')]),
-    ).toEqual(user('u2', 'alice@example.com'));
-  });
-
-  test('throws instead of guessing when several other casings exist', () => {
-    expect(() =>
-      pickUserByEmail('alice@example.com', [user('u1', 'Alice@example.com'), user('u2', 'ALICE@example.com')]),
-    ).toThrow(/several/i);
-  });
-});
-
 type MatchRow = { id: string; email: string; isPlaceholder: boolean };
 
 function mockDb(overrides: {
@@ -216,6 +202,7 @@ function mockDb(overrides: {
   usersByEmail?: MatchRow[];
   sessionUser?: { id: string } | null;
   oidcAccountOf?: string[];
+  registrationMode?: string | null;
 }) {
   const rows = overrides.usersByEmail ?? [];
   const db = {
@@ -230,31 +217,12 @@ function mockDb(overrides: {
       findMany: vi.fn().mockResolvedValue(rows),
       findUnique: vi.fn().mockResolvedValue(overrides.sessionUser ?? null),
     },
+    systemSetting: {
+      findUnique: vi.fn().mockResolvedValue(overrides.registrationMode ? { value: overrides.registrationMode } : null),
+    },
   };
   return { db, client: db as unknown as PrismaClient };
 }
-
-describe('findUsersByEmail', () => {
-  test('matches with lower() = lower() in SQL, not a LIKE pattern, then loads the rows oldest first', async () => {
-    const { db, client } = mockDb({
-      usersByEmail: [{ id: 'u1', email: 'Alice@example.com', isPlaceholder: false }],
-    });
-    await expect(findUsersByEmail(client, 'a_ice@example.com')).resolves.toEqual([
-      { id: 'u1', email: 'Alice@example.com', isPlaceholder: false },
-    ]);
-    const [strings, ...values] = db.$queryRaw.mock.calls[0] as [TemplateStringsArray, ...unknown[]];
-    expect(strings.join('?')).toMatch(/lower\(email\)\s*=\s*lower\(\?\)/i);
-    expect(strings.join('?')).not.toMatch(/like/i);
-    expect(values).toEqual(['a_ice@example.com']);
-    expect(db.user.findMany).toHaveBeenCalledWith({ where: { id: { in: ['u1'] } }, orderBy: { createdAt: 'asc' } });
-  });
-
-  test('skips the row load when nothing matches', async () => {
-    const { db, client } = mockDb({});
-    await expect(findUsersByEmail(client, 'nobody@example.com')).resolves.toEqual([]);
-    expect(db.user.findMany).not.toHaveBeenCalled();
-  });
-});
 
 describe('gatherOidcFacts', () => {
   const INPUT = {
@@ -263,6 +231,7 @@ describe('gatherOidcFacts', () => {
     sessionUserId: null,
     autoRegister: true,
     allowEmailLinking: false,
+    passwordLogin: true,
   };
 
   test('reports the linked user for a known (provider, sub)', async () => {
@@ -331,6 +300,33 @@ describe('gatherOidcFacts', () => {
   test('ignores a session whose user row no longer exists', async () => {
     const { client } = mockDb({ sessionUser: null });
     expect((await gatherOidcFacts(client, { ...INPUT, sessionUserId: 'gone' })).sessionUserId).toBeNull();
+  });
+
+  test('password registration counts as open when the setting is missing or open', async () => {
+    const linking = { ...INPUT, allowEmailLinking: true };
+    expect((await gatherOidcFacts(mockDb({}).client, linking)).passwordRegistrationOpen).toBe(true);
+    expect((await gatherOidcFacts(mockDb({ registrationMode: 'open' }).client, linking)).passwordRegistrationOpen).toBe(
+      true,
+    );
+  });
+
+  test('password registration is not open when closed, invite-only, or password login is off', async () => {
+    const linking = { ...INPUT, allowEmailLinking: true };
+    expect(
+      (await gatherOidcFacts(mockDb({ registrationMode: 'closed' }).client, linking)).passwordRegistrationOpen,
+    ).toBe(false);
+    expect(
+      (await gatherOidcFacts(mockDb({ registrationMode: 'invite-only' }).client, linking)).passwordRegistrationOpen,
+    ).toBe(false);
+    expect(
+      (await gatherOidcFacts(mockDb({}).client, { ...linking, passwordLogin: false })).passwordRegistrationOpen,
+    ).toBe(false);
+  });
+
+  test('skips the registration lookup when linking is off', async () => {
+    const { db, client } = mockDb({});
+    expect((await gatherOidcFacts(client, INPUT)).passwordRegistrationOpen).toBe(false);
+    expect(db.systemSetting.findUnique).not.toHaveBeenCalled();
   });
 
   test('passes the config flags through', async () => {

@@ -6,6 +6,7 @@
 
 import type { PrismaClient } from '@/generated/prisma/client';
 import { isHttpUrl } from './auth-config';
+import { findUsersByEmail } from './user-email';
 
 /** Provider id of the generic OIDC provider (callback path `/api/auth/callback/oidc`). */
 export const OIDC_PROVIDER_ID = 'oidc';
@@ -21,15 +22,23 @@ export interface OidcSignInFacts {
   linkedUserId: string | null;
   /** User signed in in this browser when the callback ran, if any. */
   sessionUserId: string | null;
-  /** Email Auth.js passes to the callback: the IdP's, lowercased (only irrelevant for linked identities). */
+  /**
+   * The IdP's email, lowercased by Auth.js. For linked identities Auth.js
+   * passes the linked user's stored email instead (unused by the policy).
+   */
   email: string | null;
   /** The user with that email ignoring case, or 'ambiguous' when several case variants exist. */
   userByEmail: { id: string; isPlaceholder: boolean; hasOidcAccount: boolean } | 'ambiguous' | null;
   autoRegister: boolean;
   allowEmailLinking: boolean;
+  /** Anyone can create a password account (password login on, registration mode 'open'). */
+  passwordRegistrationOpen: boolean;
 }
 
-export type OidcSignInDecision = { allow: true } | { allow: false; error: OidcSignInError };
+export type OidcSignInDecision =
+  | { allow: true }
+  /** `reason` only appears where the user-facing error doesn't explain the denial to an admin. */
+  | { allow: false; error: OidcSignInError; reason?: 'password_registration_open' };
 
 export function decideOidcSignIn(facts: OidcSignInFacts): OidcSignInDecision {
   // Auth.js would silently link an unlinked identity to whoever is signed in
@@ -57,6 +66,12 @@ export function decideOidcSignIn(facts: OidcSignInFacts): OidcSignInDecision {
       !facts.allowEmailLinking
     ) {
       return { allow: false, error: 'OidcAccountNotLinked' };
+    }
+    // While anyone can register a password account, someone could register
+    // another person's address in advance and receive their IdP identity on
+    // that person's first SSO sign-in.
+    if (facts.passwordRegistrationOpen) {
+      return { allow: false, error: 'OidcAccountNotLinked', reason: 'password_registration_open' };
     }
     return { allow: true };
   }
@@ -96,38 +111,13 @@ export function mapOidcProfile(claims: Record<string, unknown>): OidcUserProfile
   };
 }
 
-/**
- * Users whose email equals `email` ignoring case, oldest first. Auth.js
- * lowercases OAuth and magic-link emails, while password sign-ups store the
- * casing the user typed, so an exact lookup would miss existing users.
- */
-export async function findUsersByEmail(db: PrismaClient, email: string) {
-  // lower() = lower() rather than Prisma's `mode: 'insensitive'`, which
-  // compiles to ILIKE and treats `_` and `%` in the address as wildcards.
-  const rows = await db.$queryRaw<{ id: string }[]>`SELECT id FROM "User" WHERE lower(email) = lower(${email})`;
-  if (rows.length === 0) return [];
-  return db.user.findMany({ where: { id: { in: rows.map((r) => r.id) } }, orderBy: { createdAt: 'asc' } });
-}
-
-/**
- * The user Auth.js' `getUserByEmail` should return: the exact match if there
- * is one (what the stock adapter returns), else the only case-insensitive
- * match. Several other-case matches throw, so Auth.js fails the sign-in
- * instead of treating the address as unused and creating yet another account.
- */
-export function pickUserByEmail<T extends { email: string }>(email: string, matches: T[]): T | null {
-  const exact = matches.find((m) => m.email === email);
-  if (exact) return exact;
-  if (matches.length > 1) throw new Error('Several accounts match this email ignoring case');
-  return matches[0] ?? null;
-}
-
 export interface OidcFactsInput {
   providerAccountId: string;
   email: string | null;
   sessionUserId: string | null;
   autoRegister: boolean;
   allowEmailLinking: boolean;
+  passwordLogin: boolean;
 }
 
 async function describeEmailMatch(db: PrismaClient, email: string): Promise<OidcSignInFacts['userByEmail']> {
@@ -143,8 +133,14 @@ async function describeEmailMatch(db: PrismaClient, email: string): Promise<Oidc
   return { id: user.id, isPlaceholder: user.isPlaceholder, hasOidcAccount: oidcAccount !== null };
 }
 
+async function isPasswordRegistrationOpen(db: PrismaClient, passwordLogin: boolean): Promise<boolean> {
+  if (!passwordLogin) return false;
+  const setting = await db.systemSetting.findUnique({ where: { key: 'registrationMode' }, select: { value: true } });
+  return (setting?.value ?? 'open') === 'open';
+}
+
 export async function gatherOidcFacts(db: PrismaClient, input: OidcFactsInput): Promise<OidcSignInFacts> {
-  const [account, userByEmail, sessionUser] = await Promise.all([
+  const [account, userByEmail, sessionUser, passwordRegistrationOpen] = await Promise.all([
     db.account.findUnique({
       where: {
         provider_providerAccountId: { provider: OIDC_PROVIDER_ID, providerAccountId: input.providerAccountId },
@@ -156,6 +152,8 @@ export async function gatherOidcFacts(db: PrismaClient, input: OidcFactsInput): 
     // users that ShareTab keeps as placeholder rows still count as signed in,
     // which also stops Auth.js linking a new identity to that row.
     input.sessionUserId ? db.user.findUnique({ where: { id: input.sessionUserId }, select: { id: true } }) : null,
+    // Only matters when linking could happen.
+    input.allowEmailLinking ? isPasswordRegistrationOpen(db, input.passwordLogin) : false,
   ]);
 
   return {
@@ -165,5 +163,6 @@ export async function gatherOidcFacts(db: PrismaClient, input: OidcFactsInput): 
     userByEmail,
     autoRegister: input.autoRegister,
     allowEmailLinking: input.allowEmailLinking,
+    passwordRegistrationOpen,
   };
 }

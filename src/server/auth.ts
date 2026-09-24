@@ -12,14 +12,8 @@ import { logger } from './lib/logger';
 import { checkRateLimit, parsePositiveInt } from './lib/rate-limit';
 import { getClientIp, FALLBACK_IP } from './lib/client-ip';
 import { parseAuthConfig } from './lib/auth-config';
-import {
-  OIDC_PROVIDER_ID,
-  decideOidcSignIn,
-  findUsersByEmail,
-  gatherOidcFacts,
-  mapOidcProfile,
-  pickUserByEmail,
-} from './lib/oidc-sign-in';
+import { OIDC_PROVIDER_ID, decideOidcSignIn, gatherOidcFacts, mapOidcProfile } from './lib/oidc-sign-in';
+import { AmbiguousEmailError, findUserByEmail } from './lib/user-email';
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -33,12 +27,12 @@ for (const warning of authConfig.warnings) {
 
 // Auth.js lowercases OAuth and magic-link emails before looking users up,
 // but password sign-ups keep the casing the user typed. Match
-// case-insensitively so those users are found instead of duplicated.
+// case-insensitively so those users are found instead of duplicated; an
+// ambiguous match throws, which fails the sign-in instead of creating
+// another account.
 const adapter: Adapter = {
   ...PrismaAdapter(db),
-  async getUserByEmail(email) {
-    return pickUserByEmail(email, await findUsersByEmail(db, email));
-  },
+  getUserByEmail: (email) => findUserByEmail(db, email),
 };
 
 const providers: Provider[] = [];
@@ -75,17 +69,27 @@ if (authConfig.passwordLogin) {
           }
         }
 
-        // Rate limit login attempts per email (configurable for CI/testing)
+        // Rate limit login attempts per email (configurable for CI/testing).
+        // Lowercased like the lookup below, so case variants share a bucket.
         const maxLoginAttempts = parsePositiveInt(process.env.AUTH_RATE_LIMIT_MAX, 5);
-        const { allowed } = checkRateLimit(`login:${parsed.data.email}`, maxLoginAttempts, 15 * 60 * 1000);
+        const { allowed } = checkRateLimit(
+          `login:${parsed.data.email.toLowerCase()}`,
+          maxLoginAttempts,
+          15 * 60 * 1000,
+        );
         if (!allowed) {
           logger.warn('auth.rate_limited', { email: parsed.data.email });
           return null;
         }
 
-        const user = await db.user.findUnique({
-          where: { email: parsed.data.email },
-        });
+        let user;
+        try {
+          user = await findUserByEmail(db, parsed.data.email);
+        } catch (error) {
+          if (!(error instanceof AmbiguousEmailError)) throw error;
+          logger.warn('auth.login_failed', { email: parsed.data.email, reason: 'ambiguous_email' });
+          return null;
+        }
         if (!user?.passwordHash) return null;
 
         const valid = await bcrypt.compare(parsed.data.password, user.passwordHash);
@@ -187,11 +191,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         sessionUserId: session?.user?.id ?? null,
         autoRegister: authConfig.oidc.autoRegister,
         allowEmailLinking: authConfig.oidc.allowEmailLinking,
+        passwordLogin: authConfig.passwordLogin,
       });
       const decision = decideOidcSignIn(facts);
       if (decision.allow) return true;
 
-      logger.warn('auth.oidc_denied', { reason: decision.error, email: user.email ?? null });
+      logger.warn('auth.oidc_denied', {
+        error: decision.error,
+        ...(decision.reason ? { reason: decision.reason } : {}),
+        email: user.email ?? null,
+      });
       return `/login?error=${decision.error}`;
     },
     async jwt({ token, user }) {

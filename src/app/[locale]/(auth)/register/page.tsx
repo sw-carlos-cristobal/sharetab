@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Separator } from '@/components/ui/separator';
 import { Receipt } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
@@ -114,7 +115,9 @@ function RegisterForm() {
         <CardDescription className="mt-1">{t('subtitle')}</CardDescription>
       </CardHeader>
       <CardContent className="pt-4">
-        {mode === 'closed' ? (
+        {regMode.isPending ? (
+          <LoadingSpinner className="py-8" />
+        ) : mode === 'closed' ? (
           // Also the state when DISABLE_PASSWORD_LOGIN is set: don't show a
           // form that can never be submitted.
           <div className="rounded-md bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">

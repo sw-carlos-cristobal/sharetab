@@ -7,7 +7,7 @@ import { getClientIp } from '../../lib/client-ip';
 import { locales } from '@/i18n/routing';
 import { stripUndefined } from '../../lib/strip-undefined';
 import { parseAuthConfig } from '../../lib/auth-config';
-import { findUsersByEmail } from '../../lib/oidc-sign-in';
+import { findUsersByEmail } from '../../lib/user-email';
 
 const REGISTRATION_CLOSED = 'Registration is currently closed.';
 
@@ -96,8 +96,8 @@ export const authRouter = createTRPCRouter({
         }
       }
 
-      // Case-insensitive: `Bob@x` and `bob@x` are the same mailbox, and SSO /
-      // magic-link sign-ins match users by email ignoring case.
+      // Case-insensitive: `Bob@x` and `bob@x` are treated as the same address, and
+      // every sign-in method matches users by email ignoring case.
       const existing = await findUsersByEmail(ctx.db, input.email);
       if (existing.length > 0) {
         throw new TRPCError({
