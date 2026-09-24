@@ -71,13 +71,14 @@ describe('decideOidcSignIn', () => {
         userByEmail: { id: 'placeholder-1', isPlaceholder: true, hasOidcAccount: false },
         allowEmailLinking: true,
       }),
-    ).toEqual({ allow: false, error: 'OidcAccountNotLinked' });
+    ).toEqual({ allow: false, error: 'OidcAccountNotLinked', reason: 'placeholder' });
   });
 
   test('denies when several users match the email case-insensitively, even with linking on', () => {
     expect(decideOidcSignIn({ ...NEW_IDENTITY, userByEmail: 'ambiguous', allowEmailLinking: true })).toEqual({
       allow: false,
       error: 'OidcAccountNotLinked',
+      reason: 'ambiguous_email',
     });
   });
 
@@ -88,13 +89,14 @@ describe('decideOidcSignIn', () => {
         userByEmail: { ...EXISTING_USER, hasOidcAccount: true },
         allowEmailLinking: true,
       }),
-    ).toEqual({ allow: false, error: 'OidcAccountNotLinked' });
+    ).toEqual({ allow: false, error: 'OidcAccountNotLinked', reason: 'already_linked' });
   });
 
   test('denies an existing email when linking is off', () => {
     expect(decideOidcSignIn({ ...NEW_IDENTITY, userByEmail: EXISTING_USER })).toEqual({
       allow: false,
       error: 'OidcAccountNotLinked',
+      reason: 'linking_disabled',
     });
   });
 
@@ -308,6 +310,13 @@ describe('gatherOidcFacts', () => {
     expect((await gatherOidcFacts(mockDb({ registrationMode: 'open' }).client, linking)).passwordRegistrationOpen).toBe(
       true,
     );
+  });
+
+  test('an unrecognised registration mode counts as open, as auth.register treats it', async () => {
+    const linking = { ...INPUT, allowEmailLinking: true };
+    expect(
+      (await gatherOidcFacts(mockDb({ registrationMode: 'something-else' }).client, linking)).passwordRegistrationOpen,
+    ).toBe(true);
   });
 
   test('password registration is not open when closed, invite-only, or password login is off', async () => {

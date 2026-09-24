@@ -31,14 +31,41 @@ export interface OidcSignInFacts {
   userByEmail: { id: string; isPlaceholder: boolean; hasOidcAccount: boolean } | 'ambiguous' | null;
   autoRegister: boolean;
   allowEmailLinking: boolean;
-  /** Anyone can create a password account (password login on, registration mode 'open'). */
+  /** Anyone can create a password account (password login on, registration not closed or invite-only). */
   passwordRegistrationOpen: boolean;
 }
 
+/**
+ * Why an existing account wasn't linked. Users all see the same
+ * `OidcAccountNotLinked` message; the reason is logged for the admin.
+ */
+export type OidcLinkRefusal =
+  'ambiguous_email' | 'placeholder' | 'already_linked' | 'linking_disabled' | 'password_registration_open';
+
 export type OidcSignInDecision =
   | { allow: true }
-  /** `reason` only appears where the user-facing error doesn't explain the denial to an admin. */
-  | { allow: false; error: OidcSignInError; reason?: 'password_registration_open' };
+  | { allow: false; error: Exclude<OidcSignInError, 'OidcAccountNotLinked'> }
+  | { allow: false; error: 'OidcAccountNotLinked'; reason: OidcLinkRefusal };
+
+/** Why the identity may not be linked to the account with its email, or null when it may. */
+function linkRefusal(
+  facts: OidcSignInFacts,
+  user: NonNullable<OidcSignInFacts['userByEmail']>,
+): OidcLinkRefusal | null {
+  // Several case variants leave no way to pick one.
+  if (user === 'ambiguous') return 'ambiguous_email';
+  // Placeholder and deleted-user records must never gain a login.
+  if (user.isPlaceholder) return 'placeholder';
+  // An account with an IdP identity only signs in with that one; otherwise
+  // anyone who can claim the email at the IdP could attach a second one.
+  if (user.hasOidcAccount) return 'already_linked';
+  if (!facts.allowEmailLinking) return 'linking_disabled';
+  // While anyone can register a password account, someone could register
+  // another person's address in advance and receive their IdP identity on
+  // that person's first SSO sign-in.
+  if (facts.passwordRegistrationOpen) return 'password_registration_open';
+  return null;
+}
 
 export function decideOidcSignIn(facts: OidcSignInFacts): OidcSignInDecision {
   // Auth.js would silently link an unlinked identity to whoever is signed in
@@ -54,26 +81,8 @@ export function decideOidcSignIn(facts: OidcSignInFacts): OidcSignInDecision {
   if (!facts.email) return { allow: false, error: 'OidcEmailMissing' };
 
   if (facts.userByEmail) {
-    // Never link when there's no single safe target: placeholder and
-    // deleted-user records must not gain a login, several case variants
-    // leave no way to pick one, and an account that already has an IdP
-    // identity only signs in with that one (otherwise anyone who can claim
-    // the email at the IdP could attach a second identity to it).
-    if (
-      facts.userByEmail === 'ambiguous' ||
-      facts.userByEmail.isPlaceholder ||
-      facts.userByEmail.hasOidcAccount ||
-      !facts.allowEmailLinking
-    ) {
-      return { allow: false, error: 'OidcAccountNotLinked' };
-    }
-    // While anyone can register a password account, someone could register
-    // another person's address in advance and receive their IdP identity on
-    // that person's first SSO sign-in.
-    if (facts.passwordRegistrationOpen) {
-      return { allow: false, error: 'OidcAccountNotLinked', reason: 'password_registration_open' };
-    }
-    return { allow: true };
+    const reason = linkRefusal(facts, facts.userByEmail);
+    return reason ? { allow: false, error: 'OidcAccountNotLinked', reason } : { allow: true };
   }
 
   if (!facts.autoRegister) return { allow: false, error: 'OidcRegistrationDisabled' };
@@ -136,7 +145,8 @@ async function describeEmailMatch(db: PrismaClient, email: string): Promise<Oidc
 async function isPasswordRegistrationOpen(db: PrismaClient, passwordLogin: boolean): Promise<boolean> {
   if (!passwordLogin) return false;
   const setting = await db.systemSetting.findUnique({ where: { key: 'registrationMode' }, select: { value: true } });
-  return (setting?.value ?? 'open') === 'open';
+  // Same reading as auth.register: anything but closed / invite-only is open.
+  return setting?.value !== 'closed' && setting?.value !== 'invite-only';
 }
 
 export async function gatherOidcFacts(db: PrismaClient, input: OidcFactsInput): Promise<OidcSignInFacts> {

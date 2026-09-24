@@ -101,9 +101,9 @@ export function parseAuthConfig(env: Env): AuthConfig {
   const magicLink = read(env, 'EMAIL_SERVER_HOST') !== '';
 
   let passwordLogin = !parseBoolean(env, 'DISABLE_PASSWORD_LOGIN', false, warnings);
-  // Refuse a config with no sign-in method besides passwords at all. (Whether
-  // existing accounts can use it is up to the admin; see README.) Google
-  // doesn't count: the login page has no Google button.
+  // Refuse to disable password login when no other sign-in method is
+  // configured. (Whether existing accounts can use it is up to the admin; see
+  // README.) Google doesn't count: the login page has no Google button.
   if (!passwordLogin && !oidc && !magicLink) {
     warnings.push('DISABLE_PASSWORD_LOGIN is ignored: neither OIDC nor magic link sign-in is configured.');
     passwordLogin = true;
