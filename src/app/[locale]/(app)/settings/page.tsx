@@ -77,6 +77,10 @@ export default function SettingsPage() {
   const { data: session } = useSession();
 
   const profile = trpc.auth.getProfile.useQuery();
+  const loginOptions = trpc.auth.getLoginOptions.useQuery();
+  // SSO / magic-link-only accounts have no password to change, and with
+  // password login disabled a password would be useless anyway.
+  const showPasswordCard = profile.data?.hasPassword === true && loginOptions.data?.passwordLogin !== false;
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -124,59 +128,63 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('password.title')}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleChangePassword} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="currentPassword">{t('password.current')}</Label>
-              <Input
-                id="currentPassword"
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                required
-                minLength={1}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="newPassword">{t('password.new')}</Label>
-              <Input
-                id="newPassword"
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                required
-                minLength={8}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">{t('password.confirm')}</Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                minLength={8}
-              />
-              {confirmPassword && newPassword !== confirmPassword && (
-                <p className="text-sm text-red-600">{t('password.mismatch')}</p>
-              )}
-            </div>
-            <Button
-              type="submit"
-              disabled={changePassword.isPending || newPassword !== confirmPassword || !currentPassword || !newPassword}
-            >
-              {changePassword.isPending ? t('password.submitting') : t('password.submit')}
-            </Button>
-            {changePassword.isSuccess && <p className="text-sm text-green-600">{t('password.success')}</p>}
-            {changePassword.error && <p className="text-sm text-red-600">{changePassword.error.message}</p>}
-          </form>
-        </CardContent>
-      </Card>
+      {showPasswordCard && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('password.title')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleChangePassword} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="currentPassword">{t('password.current')}</Label>
+                <Input
+                  id="currentPassword"
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  required
+                  minLength={1}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="newPassword">{t('password.new')}</Label>
+                <Input
+                  id="newPassword"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                  minLength={8}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">{t('password.confirm')}</Label>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  minLength={8}
+                />
+                {confirmPassword && newPassword !== confirmPassword && (
+                  <p className="text-sm text-red-600">{t('password.mismatch')}</p>
+                )}
+              </div>
+              <Button
+                type="submit"
+                disabled={
+                  changePassword.isPending || newPassword !== confirmPassword || !currentPassword || !newPassword
+                }
+              >
+                {changePassword.isPending ? t('password.submitting') : t('password.submit')}
+              </Button>
+              {changePassword.isSuccess && <p className="text-sm text-green-600">{t('password.success')}</p>}
+              {changePassword.error && <p className="text-sm text-red-600">{changePassword.error.message}</p>}
+            </form>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
