@@ -12,7 +12,6 @@ describe('parseAuthConfig', () => {
     expect(parseAuthConfig({})).toEqual({
       passwordLogin: true,
       magicLink: false,
-      google: false,
       oidc: null,
       warnings: [],
     });
@@ -139,13 +138,14 @@ describe('parseAuthConfig', () => {
     expect(config.passwordLogin).toBe(false);
   });
 
-  test('DISABLE_PASSWORD_LOGIN turns password login off when only Google is configured', () => {
+  test('DISABLE_PASSWORD_LOGIN is ignored when only Google is configured (no Google button on the login page)', () => {
     const config = parseAuthConfig({
       GOOGLE_CLIENT_ID: 'id',
       GOOGLE_CLIENT_SECRET: 'secret',
       DISABLE_PASSWORD_LOGIN: 'true',
     });
-    expect(config.passwordLogin).toBe(false);
+    expect(config.passwordLogin).toBe(true);
+    expect(config.warnings).toHaveLength(1);
   });
 
   test('DISABLE_PASSWORD_LOGIN is ignored with a warning when no other sign-in method exists', () => {
@@ -164,10 +164,5 @@ describe('parseAuthConfig', () => {
   test('magicLink requires a non-blank EMAIL_SERVER_HOST', () => {
     expect(parseAuthConfig({ EMAIL_SERVER_HOST: 'smtp.example.com' }).magicLink).toBe(true);
     expect(parseAuthConfig({ EMAIL_SERVER_HOST: '  ' }).magicLink).toBe(false);
-  });
-
-  test('google requires both Google vars', () => {
-    expect(parseAuthConfig({ GOOGLE_CLIENT_ID: 'id', GOOGLE_CLIENT_SECRET: 'secret' }).google).toBe(true);
-    expect(parseAuthConfig({ GOOGLE_CLIENT_ID: 'id' }).google).toBe(false);
   });
 });

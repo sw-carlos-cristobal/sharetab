@@ -21,7 +21,6 @@ export interface OidcConfig {
 export interface AuthConfig {
   passwordLogin: boolean;
   magicLink: boolean;
-  google: boolean;
   oidc: OidcConfig | null;
   warnings: string[];
 }
@@ -99,16 +98,14 @@ export function parseAuthConfig(env: Env): AuthConfig {
   const warnings: string[] = [];
   const oidc = parseOidc(env, warnings);
   const magicLink = read(env, 'EMAIL_SERVER_HOST') !== '';
-  const google = read(env, 'GOOGLE_CLIENT_ID') !== '' && read(env, 'GOOGLE_CLIENT_SECRET') !== '';
 
   let passwordLogin = !parseBoolean(env, 'DISABLE_PASSWORD_LOGIN', false, warnings);
-  if (!passwordLogin && !oidc && !magicLink && !google) {
-    // Refuse to lock everyone (including the admin) out of the instance.
-    warnings.push(
-      'DISABLE_PASSWORD_LOGIN is ignored: no other sign-in method (OIDC, Google, magic link) is configured.',
-    );
+  // Refuse to lock everyone (including the admin) out of the instance. Google
+  // doesn't count: the login page has no Google button.
+  if (!passwordLogin && !oidc && !magicLink) {
+    warnings.push('DISABLE_PASSWORD_LOGIN is ignored: neither OIDC nor magic link sign-in is configured.');
     passwordLogin = true;
   }
 
-  return { passwordLogin, magicLink, google, oidc, warnings };
+  return { passwordLogin, magicLink, oidc, warnings };
 }
