@@ -11,7 +11,7 @@ ShareTab — open-source, self-hosted Splitwise alternative with AI receipt scan
 - **Framework:** Next.js 16 (App Router) + TypeScript
 - **API:** tRPC v11 (end-to-end type-safe)
 - **ORM:** Prisma 7 + PostgreSQL 16 (via `@prisma/adapter-pg`)
-- **Auth:** NextAuth v5 (email/password + OAuth)
+- **Auth:** NextAuth v5 (email/password + OAuth + generic OIDC)
 - **UI:** TailwindCSS 4 + shadcn/ui (v4, uses `@base-ui/react` — use `render` prop instead of `asChild`) + next-themes (dark mode)
 - **AI:** Pluggable providers (OpenAI, OpenAI-Codex, Claude, Meridian, Ollama) via `src/server/ai/`
 - **i18n:** next-intl (9 locales: en, es, sv, fr, de, pt-BR, ja, zh-CN, ko)
@@ -39,7 +39,9 @@ npx prisma db push   # Push schema without migration (dev only)
 
 - `src/server/` — Backend: auth config, Prisma client, tRPC routers, AI providers, pure calculation libs
 - `src/server/db.ts` — Prisma client singleton (uses `@prisma/adapter-pg` with `PrismaPg`)
-- `src/server/auth.ts` — NextAuth v5 config (Credentials + optional Google OAuth + optional Nodemailer magic link)
+- `src/server/auth.ts` — NextAuth v5 config (Credentials unless `DISABLE_PASSWORD_LOGIN` + optional Google OAuth + optional Nodemailer magic link + optional generic OIDC); wraps the Prisma adapter so `getUserByEmail` is case-insensitive
+- `src/server/lib/auth-config.ts` — Parses sign-in env vars (`OIDC_*`, `DISABLE_PASSWORD_LOGIN`) into `AuthConfig`; invalid values fall back to defaults with a logged warning
+- `src/server/lib/oidc-sign-in.ts` — OIDC sign-in policy: `decideOidcSignIn` (pure allow/deny) + `gatherOidcFacts` (DB lookups); denials redirect to `/login?error=<code>` (mapped to messages by `src/lib/sign-in-errors.ts`)
 - `src/server/trpc/init.ts` — tRPC context, `publicProcedure`, `protectedProcedure`, `groupMemberProcedure`
 - `src/server/trpc/router.ts` — Root app router (exports `AppRouter` type)
 - `src/server/trpc/routers/` — Individual routers: auth, groups, expenses, balances, settlements, activity, receipts, guest, admin
@@ -92,9 +94,9 @@ npx prisma db push   # Push schema without migration (dev only)
 
 ### Unit Tests (Vitest)
 
-- `npm test` — run all unit tests (~278 tests, <1s)
+- `npm test` — run all unit tests (~360 tests, <2s)
 - Tests live co-located with source: `src/**/*.test.ts`
-- Covers: `money.ts`, `split-calculator.ts`, `rate-limit.ts`, `upload-dir.ts`, `balance-calculator.ts`, `ai/registry.ts`, `ai/providers/openai-codex.ts`, `lib/normalize-date.ts`, `lib/meridian-login.ts`, `lib/receipt-processor.ts`, `lib/auth-health-poller.ts`, `lib/openai-codex-login.ts`, `trpc/routers/admin.ts`
+- Covers: `money.ts`, `split-calculator.ts`, `rate-limit.ts`, `upload-dir.ts`, `balance-calculator.ts`, `ai/registry.ts`, `ai/providers/openai-codex.ts`, `lib/normalize-date.ts`, `lib/meridian-login.ts`, `lib/receipt-processor.ts`, `lib/auth-health-poller.ts`, `lib/openai-codex-login.ts`, `lib/auth-config.ts`, `lib/oidc-sign-in.ts`, `trpc/routers/admin.ts`, `trpc/routers/auth.ts`, `src/lib/sign-in-errors.ts`
 
 ### E2E Tests (Playwright)
 

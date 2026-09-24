@@ -187,6 +187,15 @@ if [ -n "$GOOGLE_CLIENT_ID" ]; then
 else
   echo "  Google OAuth:   disabled"
 fi
+if [ -n "$OIDC_ISSUER" ] && [ -n "$OIDC_CLIENT_ID" ] && [ -n "$OIDC_CLIENT_SECRET" ]; then
+  echo "  OIDC SSO:       enabled (${OIDC_ISSUER})"
+else
+  echo "  OIDC SSO:       disabled"
+fi
+case "$(echo "${DISABLE_PASSWORD_LOGIN:-false}" | tr '[:upper:]' '[:lower:]')" in
+  true|1|yes|on) echo "  Password Login: disabled (ignored if no OIDC/magic link — see app log)" ;;
+  *)             echo "  Password Login: enabled" ;;
+esac
 echo "  Log Level:      ${LOG_LEVEL:-info}"
 echo "============================================"
 echo ""
