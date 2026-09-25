@@ -75,7 +75,14 @@ const loggingMiddleware = t.middleware(async ({ path, type, next, ctx }) => {
   if (ok) {
     logger.info('trpc.ok', { path, type, userId, durationMs, ...(impersonatedBy ? { impersonatedBy } : {}) });
   } else {
-    logger.warn('trpc.error', { path, type, userId, durationMs, ...(impersonatedBy ? { impersonatedBy } : {}) });
+    logger.warn('trpc.error', {
+      path,
+      type,
+      userId,
+      durationMs,
+      code: result.error.code,
+      ...(impersonatedBy ? { impersonatedBy } : {}),
+    });
   }
 
   return result;

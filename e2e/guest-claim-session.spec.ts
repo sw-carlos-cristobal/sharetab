@@ -1,5 +1,5 @@
 import { test, expect, request } from '@playwright/test';
-import { trpcMutation, trpcQuery, trpcResult, trpcError } from './helpers';
+import { joinGuestSession, trpcMutation, trpcQuery, trpcResult, trpcError } from './helpers';
 
 const BASE = process.env.BASE_URL || 'http://localhost:3001';
 
@@ -432,5 +432,59 @@ test.describe('Guest claiming sessions', () => {
     expect(session.paidByIndex).toBe(0);
 
     await ctx.dispose();
+  });
+
+  // #196: when several requests write to one session at once, Postgres aborts the later
+  // writer and the server re-runs it. Every request must still succeed, and no join or claim
+  // may be lost. This covers same-session contention and the retry budget; the cross-session
+  // aborts behind #196 came from Serializable isolation, and guest-transaction.test.ts pins
+  // guestTransaction (which the six claim-session mutations go through) to Repeatable Read.
+  // Retries are off so a regression can't pass on a second attempt.
+  test.describe('same-session contention', () => {
+    test.describe.configure({ retries: 0 });
+
+    test('simultaneous joins and claims on one session all succeed and none are lost', async () => {
+      const ctx = await request.newContext({ baseURL: BASE });
+      const guests = Array.from({ length: 8 }, (_, i) => `Guest ${i + 1}`);
+      const sharedItem = guests.length; // index of the dish everyone claims
+
+      const createRes = await trpcMutation(ctx, 'guest.createClaimSession', {
+        receiptData: { merchantName: 'Busy Table', subtotal: 900, tax: 0, tip: 0, total: 900, currency: 'USD' },
+        items: [
+          ...guests.map((_, i) => ({ name: `Dish ${i + 1}`, quantity: 1, unitPrice: 100, totalPrice: 100 })),
+          { name: 'Shared Nachos', quantity: 1, unitPrice: 100, totalPrice: 100 },
+        ],
+        creatorName: 'Host',
+        paidByName: 'Host',
+      });
+      const shareToken = (await createRes.json()).result?.data?.json?.shareToken;
+
+      const joined = await Promise.all(guests.map((name) => joinGuestSession(ctx, { token: shareToken, name })));
+
+      // All at once, each guest claims their own dish plus the shared one
+      const claims = await Promise.all(
+        joined.map((guest, i) =>
+          trpcMutation(ctx, 'guest.claimItems', {
+            token: shareToken,
+            personIndex: guest.personIndex,
+            personToken: guest.personToken,
+            claimedItemIndices: [i, sharedItem],
+          }),
+        ),
+      );
+      for (const claim of claims) expect(claim.ok(), await claim.text()).toBe(true);
+
+      const session = await trpcResult(await trpcQuery(ctx, 'guest.getSession', { token: shareToken }));
+      const assignedTo = (itemIndex: number) =>
+        session.assignments
+          .find((a: { itemIndex: number }) => a.itemIndex === itemIndex)
+          ?.personIndices.toSorted((a: number, b: number) => a - b);
+
+      expect(session.people.map((p: { name: string }) => p.name).sort()).toEqual(['Host', ...guests].sort());
+      for (const [i, guest] of joined.entries()) expect(assignedTo(i)).toEqual([guest.personIndex]);
+      expect(assignedTo(sharedItem)).toEqual(joined.map((g) => g.personIndex).sort((a, b) => a - b));
+
+      await ctx.dispose();
+    });
   });
 });

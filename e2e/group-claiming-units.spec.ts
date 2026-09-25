@@ -1,5 +1,5 @@
 import { test, expect, request } from '@playwright/test';
-import { trpcMutation } from './helpers';
+import { joinGuestSession, trpcMutation } from './helpers';
 
 const BASE = process.env.BASE_URL || 'http://localhost:3001';
 
@@ -144,19 +144,10 @@ test.describe('Group claiming units', () => {
     const shareToken = (await createRes.json()).result?.data?.json?.shareToken;
 
     // Alice & Bob join as a couple (groupSize=2)
-    const joinCouple = await trpcMutation(ctx, 'guest.joinSession', {
-      token: shareToken,
-      name: 'Alice & Bob',
-      groupSize: 2,
-    });
-    const coupleData = (await joinCouple.json()).result?.data?.json;
+    const coupleData = await joinGuestSession(ctx, { token: shareToken, name: 'Alice & Bob', groupSize: 2 });
 
     // Charlie joins solo
-    const joinCharlie = await trpcMutation(ctx, 'guest.joinSession', {
-      token: shareToken,
-      name: 'Charlie',
-    });
-    const charlieData = (await joinCharlie.json()).result?.data?.json;
+    const charlieData = await joinGuestSession(ctx, { token: shareToken, name: 'Charlie' });
 
     // Both claim the shared nachos
     await trpcMutation(ctx, 'guest.claimItems', {
@@ -225,17 +216,8 @@ test.describe('Group claiming units', () => {
     const shareToken = (await createRes.json()).result?.data?.json?.shareToken;
 
     // Both join with default groupSize (1)
-    const joinAlice = await trpcMutation(ctx, 'guest.joinSession', {
-      token: shareToken,
-      name: 'Alice',
-    });
-    const aliceData = (await joinAlice.json()).result?.data?.json;
-
-    const joinBob = await trpcMutation(ctx, 'guest.joinSession', {
-      token: shareToken,
-      name: 'Bob',
-    });
-    const bobData = (await joinBob.json()).result?.data?.json;
+    const aliceData = await joinGuestSession(ctx, { token: shareToken, name: 'Alice' });
+    const bobData = await joinGuestSession(ctx, { token: shareToken, name: 'Bob' });
 
     // Both claim the shared item
     await trpcMutation(ctx, 'guest.claimItems', {
@@ -297,11 +279,7 @@ test.describe('Group claiming units', () => {
     const shareToken = (await createRes.json()).result?.data?.json?.shareToken;
 
     // Charlie claims Fish via API
-    const joinCharlie = await trpcMutation(ctx, 'guest.joinSession', {
-      token: shareToken,
-      name: 'Charlie',
-    });
-    const charlieData = (await joinCharlie.json()).result?.data?.json;
+    const charlieData = await joinGuestSession(ctx, { token: shareToken, name: 'Charlie' });
     await trpcMutation(ctx, 'guest.claimItems', {
       token: shareToken,
       personIndex: charlieData.personIndex,
@@ -496,11 +474,7 @@ test.describe('Group claiming units', () => {
     const shareToken = (await createRes.json()).result?.data?.json?.shareToken;
 
     // Join as solo
-    const joinRes = await trpcMutation(ctx, 'guest.joinSession', {
-      token: shareToken,
-      name: 'Alice',
-    });
-    const { personToken } = (await joinRes.json()).result?.data?.json;
+    const { personToken } = await joinGuestSession(ctx, { token: shareToken, name: 'Alice' });
 
     // Edit to group size 3
     const editRes = await trpcMutation(ctx, 'guest.editPersonName', {
