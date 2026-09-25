@@ -96,7 +96,9 @@ npx prisma db push      # apply to dev DB
 npx prisma generate     # regenerate the client
 ```
 
-**Breaking schema changes** (enum conversions, column type changes, data migrations) can't be handled by `prisma db push` alone. For these, add an idempotent `.sql` file in `prisma/migrations/`. The Docker entrypoint runs all `*.sql` files in that directory before `prisma db push`, so they execute automatically on container startup. Name the file descriptively (e.g., `guest_split_status_enum.sql`) and make it safe to re-run.
+**Breaking schema changes** (enum conversions, column type changes, data migrations) can't be handled by `prisma db push` alone. For these, add a `.sql` file in `prisma/migrations/`. The Docker entrypoint runs all `*.sql` files in that directory before `prisma db push` on every container start, including a fresh install's first start, when no tables exist yet. Name the file descriptively (e.g., `guest_split_status_enum.sql`), make it safe to re-run, and make it a no-op on an empty database (e.g. skip when `to_regclass('"Table"') IS NULL`); an error here stops startup, so the container restarts in a loop.
+
+**SQL that needs the schema to exist** and that `prisma db push` can't express (e.g. an expression index such as the unique index on `lower(email)`) goes in `prisma/after-push/` instead. The entrypoint runs those files after `prisma db push` on every start. They must be safe to re-run and must not fail startup: catch errors and `RAISE WARNING` instead. Don't put them in a subdirectory of `prisma/migrations/`: `prisma.config.ts` points Prisma Migrate there, and it treats subdirectories as migrations. `.github/workflows/docker-fresh-install.yml` boots the image on an empty volume to test both phases.
 
 ### Adding a tRPC route
 
