@@ -321,3 +321,79 @@ describe('listGroups input schema', () => {
     expect(result.sortDirection).toBe('desc');
   });
 });
+
+describe('guest uploads toggle', () => {
+  const adminSession = { user: { id: 'admin-1', email: 'admin@example.com' } };
+
+  async function caller(session: { user: { id: string; email: string } }) {
+    const { adminRouter } = await import('./admin');
+    const ctx = { session, db: mockDb, headers: new Headers(), impersonating: null };
+    return adminRouter.createCaller(ctx as unknown as Parameters<typeof adminRouter.createCaller>[0]);
+  }
+
+  beforeEach(async () => {
+    vi.stubEnv('ADMIN_EMAIL', 'admin@example.com');
+    vi.stubEnv('DISABLE_GUEST_UPLOADS', '');
+    vi.clearAllMocks();
+    const { _resetGuestUploadsCache } = await import('@/server/lib/guest-uploads');
+    _resetGuestUploadsCache();
+    mockDb.user.findUnique.mockResolvedValue({ suspendedAt: null });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test('reports guest uploads as enabled until an admin saves the setting', async () => {
+    mockDb.systemSetting.findUnique.mockResolvedValue(null);
+    const api = await caller(adminSession);
+    expect(await api.getGuestUploadsEnabled()).toEqual({ enabled: true, forcedOffByEnv: false });
+  });
+
+  test('reports the saved value', async () => {
+    mockDb.systemSetting.findUnique.mockResolvedValue({ key: 'guestUploadsEnabled', value: 'false' });
+    const api = await caller(adminSession);
+    expect(await api.getGuestUploadsEnabled()).toEqual({ enabled: false, forcedOffByEnv: false });
+  });
+
+  test('reports when DISABLE_GUEST_UPLOADS overrides the saved value', async () => {
+    vi.stubEnv('DISABLE_GUEST_UPLOADS', 'true');
+    mockDb.systemSetting.findUnique.mockResolvedValue(null);
+    const api = await caller(adminSession);
+    expect(await api.getGuestUploadsEnabled()).toEqual({ enabled: true, forcedOffByEnv: true });
+  });
+
+  test('saving the setting upserts it and writes an audit entry', async () => {
+    const api = await caller(adminSession);
+    expect(await api.setGuestUploadsEnabled({ enabled: false })).toEqual({ enabled: false });
+    expect(mockDb.systemSetting.upsert).toHaveBeenCalledWith({
+      where: { key: 'guestUploadsEnabled' },
+      update: { value: 'false' },
+      create: { key: 'guestUploadsEnabled', value: 'false' },
+    });
+    expect(mockDb.adminAuditLog.create).toHaveBeenCalledWith({
+      data: {
+        adminId: 'admin-1',
+        action: 'GUEST_UPLOADS_SETTING_CHANGED',
+        metadata: { enabled: false },
+      },
+    });
+  });
+
+  test('refuses to save while DISABLE_GUEST_UPLOADS locks the setting', async () => {
+    vi.stubEnv('DISABLE_GUEST_UPLOADS', 'true');
+    const api = await caller(adminSession);
+    await expect(api.setGuestUploadsEnabled({ enabled: true })).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+    });
+    expect(mockDb.systemSetting.upsert).not.toHaveBeenCalled();
+    expect(mockDb.adminAuditLog.create).not.toHaveBeenCalled();
+  });
+
+  test('non-admins cannot read or change the setting', async () => {
+    const api = await caller({ user: { id: 'user-2', email: 'someone@example.com' } });
+    await expect(api.getGuestUploadsEnabled()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(api.setGuestUploadsEnabled({ enabled: false })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(mockDb.systemSetting.upsert).not.toHaveBeenCalled();
+  });
+});

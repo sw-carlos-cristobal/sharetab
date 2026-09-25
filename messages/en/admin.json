@@ -116,6 +116,15 @@
     "enabledStatus": "Venmo payment links are visible on split results",
     "disabledStatus": "Venmo payment links are hidden"
   },
+  "guestUploads": {
+    "title": "Guest Receipt Uploads",
+    "description": "When enabled, anyone can upload receipt images and run AI scans on Quick Split without an account. Turn this off so anonymous visitors can't. Signed-in users can still use Quick Split, so also limit who can create an account: Registration Control only covers password sign-up, while magic link, Google and OIDC sign-in can still create accounts.",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "enabledStatus": "Anyone can scan receipts on Quick Split",
+    "disabledStatus": "Only signed-in users can scan receipts",
+    "forcedOffStatus": "Locked off by the DISABLE_GUEST_UPLOADS environment variable"
+  },
   "aiStats": {
     "title": "AI Usage",
     "totalProcessed": "Total Receipts Processed",
@@ -224,6 +233,7 @@
     "actionNotifyPrefChanged": "Notify Pref Changed",
     "filesDeleted": "{count} files",
     "actionAIProviderTest": "AI Provider Test",
+    "actionGuestUploadsChanged": "Guest Uploads Changed",
     "actionExportCreated": "Data Export"
   },
   "meridianAuth": {

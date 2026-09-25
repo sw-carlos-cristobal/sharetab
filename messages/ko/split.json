@@ -6,7 +6,10 @@
     "or": "또는",
     "chooseGallery": "갤러리에서 선택",
     "uploading": "업로드 중...",
-    "uploadFailed": "업로드 실패"
+    "uploadFailed": "업로드 실패",
+    "guestDisabledTitle": "영수증 스캔에는 계정이 필요합니다",
+    "guestDisabledDescription": "이 서버의 관리자가 게스트의 영수증 업로드를 비활성화했습니다. 계산서를 나누려면 로그인하세요.",
+    "signIn": "로그인"
   },
   "processing": {
     "title": "영수증 처리 중...",

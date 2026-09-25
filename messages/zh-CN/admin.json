@@ -116,6 +116,15 @@
     "enabledStatus": "Venmo 支付链接显示在分账结果中",
     "disabledStatus": "Venmo 支付链接已隐藏"
   },
+  "guestUploads": {
+    "title": "访客上传收据",
+    "description": "启用后，任何人无需账号即可在快速分账中上传收据图片并运行 AI 扫描。关闭后，匿名访客将无法使用这些功能。已登录用户仍可使用快速分账，因此请同时限制谁可以创建账号：注册管理只针对密码注册，通过邮件链接、Google 或 OIDC 登录仍可能创建账号。",
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "enabledStatus": "任何人都可以在快速分账中扫描收据",
+    "disabledStatus": "仅已登录用户可以扫描收据",
+    "forcedOffStatus": "已被环境变量 DISABLE_GUEST_UPLOADS 锁定为关闭"
+  },
   "aiStats": {
     "title": "AI 使用情况",
     "totalProcessed": "已处理收据总数",
@@ -224,6 +233,7 @@
     "actionNotifyPrefChanged": "通知偏好变更",
     "filesDeleted": "{count} 个文件",
     "actionAIProviderTest": "AI 提供商测试",
+    "actionGuestUploadsChanged": "访客上传变更",
     "actionExportCreated": "数据导出"
   },
   "meridianAuth": {

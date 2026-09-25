@@ -37,6 +37,7 @@ import {
 } from '@/server/lib/openai-codex-login';
 
 import { getBuildInfo } from '@/server/lib/build-info';
+import { isGuestUploadsForcedOff, readGuestUploadsSetting, saveGuestUploadsSetting } from '@/server/lib/guest-uploads';
 
 const serverStartTime = new Date();
 const { version: cachedVersion, commitSha: cachedCommitSha } = getBuildInfo();
@@ -821,6 +822,28 @@ export const adminRouter = createTRPCRouter({
     await logAdminAction(ctx.db, ctx.user.id, 'VENMO_SETTING_CHANGED', null, { enabled: input.enabled });
 
     return { success: true };
+  }),
+
+  // ─── Guest Receipt Uploads Toggle ───────────────────────
+
+  // `enabled` is the saved toggle; DISABLE_GUEST_UPLOADS overrides it.
+  getGuestUploadsEnabled: adminProcedure.query(async ({ ctx }) => {
+    return { enabled: await readGuestUploadsSetting(ctx.db), forcedOffByEnv: isGuestUploadsForcedOff() };
+  }),
+
+  setGuestUploadsEnabled: adminProcedure.input(z.object({ enabled: z.boolean() })).mutation(async ({ ctx, input }) => {
+    // While the env var locks it, a saved value would only take effect later, unseen.
+    if (isGuestUploadsForcedOff()) {
+      throw new TRPCError({
+        code: 'PRECONDITION_FAILED',
+        message: 'Guest uploads are locked off by DISABLE_GUEST_UPLOADS',
+      });
+    }
+    await saveGuestUploadsSetting(ctx.db, input.enabled);
+
+    await logAdminAction(ctx.db, ctx.user.id, 'GUEST_UPLOADS_SETTING_CHANGED', null, { enabled: input.enabled });
+
+    return { enabled: input.enabled };
   }),
 
   // ─── Email Test ──────────────────────────────────────────

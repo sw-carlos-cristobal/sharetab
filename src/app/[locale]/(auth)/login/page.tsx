@@ -50,6 +50,8 @@ function LoginForm() {
   const [showMagicLink, setShowMagicLink] = useState(false);
   const [oidcRedirecting, setOidcRedirecting] = useState(false);
   const loginOptions = trpc.auth.getLoginOptions.useQuery();
+  // Quick Split needs uploads; hide its link only once we know guests are refused.
+  const guestUploadStatus = trpc.guest.getUploadStatus.useQuery();
   const callbackPath = normalizeCallbackPath(searchParams.get('callbackUrl'), locale);
   const callbackHref = stripLocalePrefix(callbackPath);
   const registerHref = `/register?callbackUrl=${encodeURIComponent(callbackPath)}`;
@@ -278,12 +280,14 @@ function LoginForm() {
               </Link>
             </p>
           )}
-          <p className="text-xs text-muted-foreground/80">
-            {t('quickSplit')}{' '}
-            <Link href="/split" className="font-medium text-primary hover:underline">
-              {t('quickSplitLink')}
-            </Link>
-          </p>
+          {guestUploadStatus.data?.allowed !== false && (
+            <p className="text-xs text-muted-foreground/80">
+              {t('quickSplit')}{' '}
+              <Link href="/split" className="font-medium text-primary hover:underline">
+                {t('quickSplitLink')}
+              </Link>
+            </p>
+          )}
         </div>
       </CardContent>
     </Card>

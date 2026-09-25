@@ -116,6 +116,15 @@
     "enabledStatus": "Venmo-betalningslänkar visas i delningsresultat",
     "disabledStatus": "Venmo-betalningslänkar är dolda"
   },
+  "guestUploads": {
+    "title": "Kvittouppladdning för gäster",
+    "description": "När aktiverat kan vem som helst ladda upp kvittobilder och köra AI-skanningar i Snabb delning utan konto. Stäng av detta så att anonyma besökare inte kan det. Inloggade användare kan fortfarande använda Snabb delning, så begränsa också vem som kan skapa ett konto: Registreringskontroll gäller bara registrering med lösenord, medan inloggning med magisk länk, Google och OIDC fortfarande kan skapa konton.",
+    "enabled": "Aktiverad",
+    "disabled": "Inaktiverad",
+    "enabledStatus": "Vem som helst kan skanna kvitton i Snabb delning",
+    "disabledStatus": "Endast inloggade användare kan skanna kvitton",
+    "forcedOffStatus": "Låst avstängd av miljövariabeln DISABLE_GUEST_UPLOADS"
+  },
   "aiStats": {
     "title": "AI-användning",
     "totalProcessed": "Totalt bearbetade kvitton",
@@ -224,6 +233,7 @@
     "actionNotifyPrefChanged": "Notifieringsinställning ändrad",
     "filesDeleted": "{count} filer",
     "actionAIProviderTest": "AI-leverantörstest",
+    "actionGuestUploadsChanged": "Gästuppladdning ändrad",
     "actionExportCreated": "Dataexport"
   },
   "meridianAuth": {

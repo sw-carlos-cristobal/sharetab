@@ -116,6 +116,15 @@
     "enabledStatus": "Venmo 결제 링크가 정산 결과에 표시됩니다",
     "disabledStatus": "Venmo 결제 링크가 숨겨져 있습니다"
   },
+  "guestUploads": {
+    "title": "게스트 영수증 업로드",
+    "description": "활성화하면 누구나 계정 없이 빠른 정산에서 영수증 이미지를 업로드하고 AI 스캔을 실행할 수 있습니다. 비활성화하면 익명 방문자는 이를 사용할 수 없습니다. 로그인한 사용자는 계속 빠른 정산을 사용할 수 있으므로 계정을 만들 수 있는 사람도 제한하세요. 가입 관리는 비밀번호 가입에만 적용되며, 매직 링크, Google, OIDC 로그인으로는 여전히 계정이 생성될 수 있습니다.",
+    "enabled": "활성화됨",
+    "disabled": "비활성화됨",
+    "enabledStatus": "누구나 빠른 정산에서 영수증을 스캔할 수 있습니다",
+    "disabledStatus": "로그인한 사용자만 영수증을 스캔할 수 있습니다",
+    "forcedOffStatus": "환경 변수 DISABLE_GUEST_UPLOADS에 의해 비활성화로 고정됨"
+  },
   "aiStats": {
     "title": "AI 사용 현황",
     "totalProcessed": "총 처리된 영수증",
@@ -224,6 +233,7 @@
     "actionNotifyPrefChanged": "알림 설정 변경",
     "filesDeleted": "{count}개 파일",
     "actionAIProviderTest": "AI 제공업체 테스트",
+    "actionGuestUploadsChanged": "게스트 업로드 변경",
     "actionExportCreated": "데이터 내보내기"
   },
   "meridianAuth": {
