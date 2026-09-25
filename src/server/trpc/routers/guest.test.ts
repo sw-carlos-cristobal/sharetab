@@ -9,18 +9,20 @@ const mockDb = {
   systemSetting: { findUnique: vi.fn() },
   user: { findUnique: vi.fn() },
   receipt: { findUnique: vi.fn(), updateMany: vi.fn(), update: vi.fn() },
+  $transaction: vi.fn(),
 };
 vi.mock('@/server/db', () => ({ db: mockDb }));
 vi.mock('@/server/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-const { processReceiptImage, checkRateLimit } = vi.hoisted(() => ({
+const { processReceiptImage, checkRateLimit, peekRateLimit } = vi.hoisted(() => ({
   processReceiptImage: vi.fn(),
   checkRateLimit: vi.fn(),
+  peekRateLimit: vi.fn(),
 }));
 vi.mock('@/server/lib/receipt-processor', () => ({ processReceiptImage }));
-vi.mock('@/server/lib/rate-limit', () => ({ checkRateLimit, refundRateLimit: vi.fn() }));
+vi.mock('@/server/lib/rate-limit', () => ({ checkRateLimit, peekRateLimit, refundRateLimit: vi.fn() }));
 vi.mock('@/server/ai/registry', () => ({ getConfiguredProviderPriority: vi.fn().mockReturnValue([]) }));
 
 type Session = { user: { id: string } } | null;
@@ -42,6 +44,7 @@ beforeEach(async () => {
   const { _resetGuestUploadsCache } = await import('@/server/lib/guest-uploads');
   _resetGuestUploadsCache();
   checkRateLimit.mockReturnValue({ allowed: true, retryAfterMs: 0 });
+  peekRateLimit.mockReturnValue({ allowed: true, retryAfterMs: 0 });
   mockDb.user.findUnique.mockResolvedValue({ suspendedAt: null });
 });
 
@@ -106,5 +109,23 @@ describe('guest.processReceipt with guest uploads enabled', () => {
     mockDb.receipt.findUnique.mockResolvedValue(null);
     const api = await caller();
     await expect(api.processReceipt({ receiptId: 'missing' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+});
+
+describe('guest.joinSession rate limit', () => {
+  test('refuses with TOO_MANY_REQUESTS before opening a transaction', async () => {
+    checkRateLimit.mockReturnValue({ allowed: false, retryAfterMs: 30_000 });
+    const api = await caller();
+    await expect(api.joinSession({ token: 'share-token', name: 'Alice', groupSize: 2 })).rejects.toMatchObject({
+      code: 'TOO_MANY_REQUESTS',
+    });
+    expect(mockDb.$transaction).not.toHaveBeenCalled();
+  });
+
+  test('opens the transaction when the join is within the limit', async () => {
+    mockDb.$transaction.mockRejectedValue(new Error('stop after the rate limit'));
+    const api = await caller();
+    await expect(api.joinSession({ token: 'share-token', name: 'Alice' })).rejects.toThrow('stop after the rate limit');
+    expect(mockDb.$transaction).toHaveBeenCalledOnce();
   });
 });

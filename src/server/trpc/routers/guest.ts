@@ -13,6 +13,7 @@ import { calculateSplitTotals } from '@/lib/split-calculator';
 import { normalizeGuestName } from '@/lib/guest-session';
 import { getConfiguredProviderPriority } from '@/server/ai/registry';
 import { canUseGuestUploads } from '../../lib/guest-uploads';
+import { checkJoinRateLimit } from '../../lib/guest-join-limit';
 
 async function getCreatorPayerVenmoHandle(
   db: typeof import('@/server/db').db,
@@ -607,6 +608,9 @@ export const guestRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      if (!checkJoinRateLimit(input.token, input.name)) {
+        throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'Too many requests. Please try again shortly.' });
+      }
       return guestTransaction(ctx.db, async (tx) => {
         const session = await tx.guestSplit.findUnique({
           where: { shareToken: input.token },

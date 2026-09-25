@@ -176,6 +176,8 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   });
 
   const autoRejoinAttempted = useRef(false);
+  // Set when a "rejoin as" button is clicked; its join starts 100ms later, before isPending is true
+  const rejoinScheduled = useRef(false);
 
   const joinSession = trpc.guest.joinSession.useMutation({
     onSuccess: (data, variables) => {
@@ -197,16 +199,16 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
         }
       }
       setClaimedItems(map);
-      if (!autoRejoinAttempted.current) {
-        toast.success(t('joinedSession'));
-      }
     },
-    onError: (error) => {
-      if (!autoRejoinAttempted.current) {
-        toast.error(error.message);
-      }
+    onSettled: () => {
+      rejoinScheduled.current = false;
     },
   });
+  // Toasts go on the joins the user starts; the automatic rejoin on page load stays silent
+  const joinToasts = {
+    onSuccess: () => toast.success(t('joinedSession')),
+    onError: (error: { message: string }) => toast.error(error.message),
+  };
 
   // Initialize venmo handle from split record, then creator's profile as fallback
   useEffect(() => {
@@ -383,7 +385,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
       toast.error(t('pleaseEnterName'));
       return;
     }
-    joinSession.mutate({ token, name: trimmed, ...(groupSize > 1 ? { groupSize } : {}) });
+    joinSession.mutate({ token, name: trimmed, ...(groupSize > 1 ? { groupSize } : {}) }, joinToasts);
   }
 
   function toggleClaim(itemIndex: number) {
@@ -716,10 +718,13 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
                     <button
                       key={idx}
                       type="button"
+                      disabled={joinSession.isPending}
                       onClick={() => {
+                        if (rejoinScheduled.current) return;
+                        rejoinScheduled.current = true;
                         setName(person.name);
                         setTimeout(() => {
-                          joinSession.mutate({ token, name: person.name });
+                          joinSession.mutate({ token, name: person.name }, joinToasts);
                         }, 100);
                       }}
                       className="flex items-center gap-2 rounded-full bg-muted px-3 py-1.5 hover:bg-muted/80 transition-colors"
