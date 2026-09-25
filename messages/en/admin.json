@@ -116,6 +116,14 @@
     "enabledStatus": "Venmo payment links are visible on split results",
     "disabledStatus": "Venmo payment links are hidden"
   },
+  "guestUploads": {
+    "title": "Guest Receipt Uploads",
+    "description": "When enabled, anyone can upload and scan receipts on Quick Split without an account. Turn this off to stop anonymous visitors from using server storage and AI scans. Signed-in users can still use Quick Split.",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "enabledStatus": "Anyone can scan receipts on Quick Split",
+    "disabledStatus": "Only signed-in users can scan receipts"
+  },
   "aiStats": {
     "title": "AI Usage",
     "totalProcessed": "Total Receipts Processed",
@@ -224,6 +232,7 @@
     "actionNotifyPrefChanged": "Notify Pref Changed",
     "filesDeleted": "{count} files",
     "actionAIProviderTest": "AI Provider Test",
+    "actionGuestUploadsChanged": "Guest Uploads Changed",
     "actionExportCreated": "Data Export"
   },
   "meridianAuth": {

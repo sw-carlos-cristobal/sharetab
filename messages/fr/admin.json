@@ -116,6 +116,14 @@
     "enabledStatus": "Les liens de paiement Venmo sont visibles dans les résultats de partage",
     "disabledStatus": "Les liens de paiement Venmo sont masqués"
   },
+  "guestUploads": {
+    "title": "Envoi de reçus par les invités",
+    "description": "Lorsqu'activé, n'importe qui peut envoyer et numériser des reçus dans Partage rapide sans compte. Désactivez-le pour empêcher les visiteurs anonymes d'utiliser le stockage du serveur et les analyses IA. Les utilisateurs connectés peuvent toujours utiliser Partage rapide.",
+    "enabled": "Activé",
+    "disabled": "Désactivé",
+    "enabledStatus": "N'importe qui peut numériser des reçus dans Partage rapide",
+    "disabledStatus": "Seuls les utilisateurs connectés peuvent numériser des reçus"
+  },
   "aiStats": {
     "title": "Utilisation de l'IA",
     "totalProcessed": "Total des reçus traités",
@@ -224,6 +232,7 @@
     "actionNotifyPrefChanged": "Préférence de notification modifiée",
     "filesDeleted": "{count} fichiers",
     "actionAIProviderTest": "Test fournisseur IA",
+    "actionGuestUploadsChanged": "Envoi invités modifié",
     "actionExportCreated": "Exportation de données"
   },
   "meridianAuth": {

@@ -116,6 +116,14 @@
     "enabledStatus": "Venmo決済リンクが割り勘結果に表示されます",
     "disabledStatus": "Venmo決済リンクは非表示です"
   },
+  "guestUploads": {
+    "title": "ゲストによるレシートのアップロード",
+    "description": "有効にすると、アカウントなしで誰でもかんたん割り勘でレシートをアップロード・スキャンできます。無効にすると、匿名の訪問者によるサーバーのストレージやAIスキャンの利用を防げます。ログイン中のユーザーは引き続きかんたん割り勘を利用できます。",
+    "enabled": "有効",
+    "disabled": "無効",
+    "enabledStatus": "誰でもかんたん割り勘でレシートをスキャンできます",
+    "disabledStatus": "ログイン中のユーザーのみレシートをスキャンできます"
+  },
   "aiStats": {
     "title": "AI使用状況",
     "totalProcessed": "処理済みレシート合計",
@@ -224,6 +232,7 @@
     "actionNotifyPrefChanged": "通知設定変更",
     "filesDeleted": "{count}ファイル",
     "actionAIProviderTest": "AIプロバイダーテスト",
+    "actionGuestUploadsChanged": "ゲストアップロード変更",
     "actionExportCreated": "データエクスポート"
   },
   "meridianAuth": {

@@ -116,6 +116,14 @@
     "enabledStatus": "Venmo 支付链接显示在分账结果中",
     "disabledStatus": "Venmo 支付链接已隐藏"
   },
+  "guestUploads": {
+    "title": "访客上传小票",
+    "description": "启用后，任何人无需账号即可在快速分账中上传并扫描小票。关闭此项可阻止匿名访客占用服务器存储和 AI 扫描。已登录用户仍可使用快速分账。",
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "enabledStatus": "任何人都可以在快速分账中扫描小票",
+    "disabledStatus": "仅已登录用户可以扫描小票"
+  },
   "aiStats": {
     "title": "AI 使用情况",
     "totalProcessed": "已处理收据总数",
@@ -224,6 +232,7 @@
     "actionNotifyPrefChanged": "通知偏好变更",
     "filesDeleted": "{count} 个文件",
     "actionAIProviderTest": "AI 提供商测试",
+    "actionGuestUploadsChanged": "访客上传变更",
     "actionExportCreated": "数据导出"
   },
   "meridianAuth": {

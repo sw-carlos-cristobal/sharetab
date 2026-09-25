@@ -116,6 +116,14 @@
     "enabledStatus": "Los enlaces de pago de Venmo son visibles en los resultados de división",
     "disabledStatus": "Los enlaces de pago de Venmo están ocultos"
   },
+  "guestUploads": {
+    "title": "Subida de recibos de invitados",
+    "description": "Cuando está habilitado, cualquiera puede subir y escanear recibos en División rápida sin una cuenta. Desactívalo para evitar que visitantes anónimos usen el almacenamiento del servidor y los escaneos con IA. Los usuarios con sesión iniciada pueden seguir usando División rápida.",
+    "enabled": "Habilitado",
+    "disabled": "Deshabilitado",
+    "enabledStatus": "Cualquiera puede escanear recibos en División rápida",
+    "disabledStatus": "Solo los usuarios con sesión iniciada pueden escanear recibos"
+  },
   "aiStats": {
     "title": "Uso de IA",
     "totalProcessed": "Total de recibos procesados",
@@ -224,6 +232,7 @@
     "actionNotifyPrefChanged": "Preferencia de notificación cambiada",
     "filesDeleted": "{count} archivos",
     "actionAIProviderTest": "Prueba de proveedor IA",
+    "actionGuestUploadsChanged": "Subida de invitados cambiada",
     "actionExportCreated": "Exportación de datos"
   },
   "meridianAuth": {

@@ -6,7 +6,10 @@
     "or": "Oder",
     "chooseGallery": "Aus Galerie wählen",
     "uploading": "Wird hochgeladen...",
-    "uploadFailed": "Upload fehlgeschlagen"
+    "uploadFailed": "Upload fehlgeschlagen",
+    "guestDisabledTitle": "Belegscan erfordert ein Konto",
+    "guestDisabledDescription": "Der Administrator dieses Servers hat das Hochladen von Belegen für Gäste deaktiviert. Melden Sie sich an, um eine Rechnung zu teilen.",
+    "signIn": "Anmelden"
   },
   "processing": {
     "title": "Beleg wird verarbeitet...",

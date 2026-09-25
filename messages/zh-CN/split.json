@@ -6,7 +6,10 @@
     "or": "或",
     "chooseGallery": "从相册选择",
     "uploading": "上传中...",
-    "uploadFailed": "上传失败"
+    "uploadFailed": "上传失败",
+    "guestDisabledTitle": "扫描小票需要账号",
+    "guestDisabledDescription": "此服务器的管理员已关闭访客上传小票功能。请登录后分摊账单。",
+    "signIn": "登录"
   },
   "processing": {
     "title": "正在处理小票...",

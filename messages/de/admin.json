@@ -116,6 +116,14 @@
     "enabledStatus": "Venmo-Zahlungslinks sind in den Aufteilungsergebnissen sichtbar",
     "disabledStatus": "Venmo-Zahlungslinks sind ausgeblendet"
   },
+  "guestUploads": {
+    "title": "Beleg-Uploads durch Gäste",
+    "description": "Wenn aktiviert, kann jeder ohne Konto Belege in Schnell teilen hochladen und scannen. Deaktivieren Sie dies, damit anonyme Besucher keinen Serverspeicher und keine KI-Scans verbrauchen. Angemeldete Benutzer können Schnell teilen weiterhin nutzen.",
+    "enabled": "Aktiviert",
+    "disabled": "Deaktiviert",
+    "enabledStatus": "Jeder kann Belege in Schnell teilen scannen",
+    "disabledStatus": "Nur angemeldete Benutzer können Belege scannen"
+  },
   "aiStats": {
     "title": "KI-Nutzung",
     "totalProcessed": "Insgesamt verarbeitete Belege",
@@ -224,6 +232,7 @@
     "actionNotifyPrefChanged": "Benachrichtigungspräferenz geändert",
     "filesDeleted": "{count} Dateien",
     "actionAIProviderTest": "KI-Anbietertest",
+    "actionGuestUploadsChanged": "Gast-Uploads geändert",
     "actionExportCreated": "Datenexport"
   },
   "meridianAuth": {

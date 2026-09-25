@@ -44,6 +44,7 @@ npx prisma db push   # Push schema without migration (dev only)
 - `src/server/lib/oidc-sign-in.ts` — OIDC sign-in policy: `decideOidcSignIn` (pure allow/deny) + `gatherOidcFacts` (DB lookups); denials redirect to `/login?error=<code>` (mapped to messages by `src/lib/sign-in-errors.ts`)
 - `src/server/lib/password-login.ts` — Credentials `authorize` (rate limits, case-insensitive lookup, bcrypt check)
 - `src/server/lib/user-email.ts` — Case-insensitive user lookup by email (`findUsersByEmail` / `findUserByEmail`), shared by the Auth.js adapter, password login, `auth.register`, and the OIDC policy
+- `src/server/lib/guest-uploads.ts` — Admin "Guest Receipt Uploads" toggle (`guestUploadsEnabled` SystemSetting, default on). When off, anonymous callers are refused by `/api/upload?guest=true` (403) and `guest.processReceipt` (FORBIDDEN); signed-in users share the Quick Split path and keep access
 - `src/server/trpc/init.ts` — tRPC context, `publicProcedure`, `protectedProcedure`, `groupMemberProcedure`
 - `src/server/trpc/router.ts` — Root app router (exports `AppRouter` type)
 - `src/server/trpc/routers/` — Individual routers: auth, groups, expenses, balances, settlements, activity, receipts, guest, admin
@@ -97,9 +98,9 @@ npx prisma db push   # Push schema without migration (dev only)
 
 ### Unit Tests (Vitest)
 
-- `npm test` — run all unit tests (~360 tests, <2s)
+- `npm test` — run all unit tests (~410 tests, <2s)
 - Tests live co-located with source: `src/**/*.test.ts`
-- Covers: `money.ts`, `split-calculator.ts`, `rate-limit.ts`, `upload-dir.ts`, `balance-calculator.ts`, `ai/registry.ts`, `ai/providers/openai-codex.ts`, `lib/normalize-date.ts`, `lib/meridian-login.ts`, `lib/receipt-processor.ts`, `lib/auth-health-poller.ts`, `lib/openai-codex-login.ts`, `lib/auth-config.ts`, `lib/oidc-sign-in.ts`, `lib/user-email.ts`, `lib/password-login.ts`, `trpc/routers/admin.ts`, `trpc/routers/auth.ts`, `src/lib/sign-in-errors.ts`
+- Covers: `money.ts`, `split-calculator.ts`, `rate-limit.ts`, `upload-dir.ts`, `balance-calculator.ts`, `ai/registry.ts`, `ai/providers/openai-codex.ts`, `lib/normalize-date.ts`, `lib/meridian-login.ts`, `lib/receipt-processor.ts`, `lib/auth-health-poller.ts`, `lib/openai-codex-login.ts`, `lib/auth-config.ts`, `lib/oidc-sign-in.ts`, `lib/user-email.ts`, `lib/password-login.ts`, `trpc/routers/admin.ts`, `trpc/routers/auth.ts`, `src/lib/sign-in-errors.ts`, `lib/guest-uploads.ts`, `trpc/routers/guest.ts`, `app/api/upload/route.ts`
 
 ### E2E Tests (Playwright)
 

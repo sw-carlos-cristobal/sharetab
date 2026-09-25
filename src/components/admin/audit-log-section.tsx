@@ -75,6 +75,10 @@ export function AuditLogSection() {
       label: t('audit.actionAIProviderTest'),
       color: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
     },
+    GUEST_UPLOADS_SETTING_CHANGED: {
+      label: t('audit.actionGuestUploadsChanged'),
+      color: 'bg-violet-500/10 text-violet-700 dark:text-violet-400',
+    },
   };
 
   function formatMetadata(metadata: Record<string, unknown> | null): string {
@@ -83,6 +87,7 @@ export function AuditLogSection() {
     if (metadata.email) parts.push(`${metadata.email}`);
     if (metadata.name) parts.push(`"${metadata.name}"`);
     if (metadata.mode) parts.push(`mode: ${metadata.mode}`);
+    if (typeof metadata.enabled === 'boolean') parts.push(`enabled: ${String(metadata.enabled)}`);
     if (metadata.code) parts.push(`code: ${metadata.code}`);
     if (metadata.targetEmail) parts.push(`${metadata.targetEmail}`);
     if (metadata.message !== undefined) {

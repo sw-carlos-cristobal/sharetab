@@ -116,7 +116,7 @@ ShareTab is a free, self-hosted alternative to Splitwise for tracking shared exp
 
 - **Group expense tracking** with multiple split modes (equal, percentage, shares, exact, item-level)
 - **AI receipt scanning** -- photograph a receipt, AI extracts line items, assign items to group members with proportional tax/tip; zoomable/pannable receipt viewer; rescan with correction prompts
-- **Guest bill splitting** -- no account needed, shareable summary links
+- **Guest bill splitting** -- no account needed, shareable summary links; admins can turn off guest receipt uploads so anonymous visitors can't use server storage or AI scans
 - **Pluggable AI providers** -- OpenAI (GPT-4o), OpenAI-Codex (ChatGPT OAuth), Claude (API key), Meridian (Claude Max subscription), local Ollama
 - **Group archiving** -- archive inactive groups to declutter your dashboard; toggle archived view on groups page
 - **Cross-group dashboard** -- see all your balances at a glance, with per-person debt breakdown
@@ -128,7 +128,7 @@ ShareTab is a free, self-hosted alternative to Splitwise for tracking shared exp
 - **Magic link auth** -- passwordless email sign-in
 - **Single sign-on (OIDC)** -- sign in with Authentik, Authelia, Keycloak, or other OpenID Connect providers; optional auto-registration and password-login disable
 - **PWA** -- installable on mobile with app-like experience
-- **Admin dashboard** -- user management, group overview, storage stats, AI usage, audit log, registration control, announcements, server logs, user impersonation, data export, expired guest split cleanup
+- **Admin dashboard** -- user management, group overview, storage stats, AI usage, audit log, registration control, guest receipt upload toggle, announcements, server logs, user impersonation, data export, expired guest split cleanup
 - **Self-hosted** -- Docker Compose deployment, designed for Unraid
 
 ## Quick Start

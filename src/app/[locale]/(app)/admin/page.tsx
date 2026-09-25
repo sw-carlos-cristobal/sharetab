@@ -22,6 +22,7 @@ import { OpenAICodexAuthSection } from '@/components/admin/openai-codex-auth-sec
 import { UserManagementSection } from '@/components/admin/user-management-section';
 import { GroupOverviewSection } from '@/components/admin/group-overview-section';
 import { VenmoSettingsSection } from '@/components/admin/venmo-settings-section';
+import { GuestUploadSettingsSection } from '@/components/admin/guest-upload-settings-section';
 
 export default function AdminPage() {
   const { data: session } = useSession();
@@ -48,6 +49,7 @@ export default function AdminPage() {
         <StorageStatsSection />
         <Separator />
         <RegistrationControlSection />
+        <GuestUploadSettingsSection />
         <Separator />
         <AnnouncementSection />
         <VenmoSettingsSection />

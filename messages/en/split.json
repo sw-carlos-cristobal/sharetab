@@ -6,7 +6,10 @@
     "or": "Or",
     "chooseGallery": "Choose from Gallery",
     "uploading": "Uploading...",
-    "uploadFailed": "Upload failed"
+    "uploadFailed": "Upload failed",
+    "guestDisabledTitle": "Receipt scanning requires an account",
+    "guestDisabledDescription": "The admin of this server has turned off receipt uploads for guests. Sign in to split a bill.",
+    "signIn": "Sign in"
   },
   "processing": {
     "title": "Processing receipt...",

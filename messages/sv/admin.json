@@ -116,6 +116,14 @@
     "enabledStatus": "Venmo-betalningslänkar visas i delningsresultat",
     "disabledStatus": "Venmo-betalningslänkar är dolda"
   },
+  "guestUploads": {
+    "title": "Kvittouppladdning för gäster",
+    "description": "När aktiverat kan vem som helst ladda upp och skanna kvitton i Snabb delning utan konto. Stäng av detta för att hindra anonyma besökare från att använda serverns lagring och AI-skanningar. Inloggade användare kan fortfarande använda Snabb delning.",
+    "enabled": "Aktiverad",
+    "disabled": "Inaktiverad",
+    "enabledStatus": "Vem som helst kan skanna kvitton i Snabb delning",
+    "disabledStatus": "Endast inloggade användare kan skanna kvitton"
+  },
   "aiStats": {
     "title": "AI-användning",
     "totalProcessed": "Totalt bearbetade kvitton",
@@ -224,6 +232,7 @@
     "actionNotifyPrefChanged": "Notifieringsinställning ändrad",
     "filesDeleted": "{count} filer",
     "actionAIProviderTest": "AI-leverantörstest",
+    "actionGuestUploadsChanged": "Gästuppladdning ändrad",
     "actionExportCreated": "Dataexport"
   },
   "meridianAuth": {
