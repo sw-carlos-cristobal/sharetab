@@ -6,7 +6,10 @@
     "or": "Eller",
     "chooseGallery": "Välj från galleri",
     "uploading": "Laddar upp...",
-    "uploadFailed": "Uppladdningen misslyckades"
+    "uploadFailed": "Uppladdningen misslyckades",
+    "guestDisabledTitle": "Kvittoskanning kräver ett konto",
+    "guestDisabledDescription": "Administratören för den här servern har stängt av kvittouppladdning för gäster. Logga in för att dela en nota.",
+    "signIn": "Logga in"
   },
   "processing": {
     "title": "Bearbetar kvitto...",

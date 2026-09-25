@@ -6,7 +6,10 @@
     "or": "Ou",
     "chooseGallery": "Choisir dans la galerie",
     "uploading": "Envoi en cours...",
-    "uploadFailed": "Échec du téléchargement"
+    "uploadFailed": "Échec du téléchargement",
+    "guestDisabledTitle": "La numérisation des reçus nécessite un compte",
+    "guestDisabledDescription": "L'administrateur de ce serveur a désactivé l'envoi de reçus pour les invités. Connectez-vous pour partager une addition.",
+    "signIn": "Se connecter"
   },
   "processing": {
     "title": "Traitement du reçu...",

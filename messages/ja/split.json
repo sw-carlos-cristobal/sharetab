@@ -6,7 +6,10 @@
     "or": "または",
     "chooseGallery": "ギャラリーから選択",
     "uploading": "アップロード中...",
-    "uploadFailed": "アップロードに失敗しました"
+    "uploadFailed": "アップロードに失敗しました",
+    "guestDisabledTitle": "レシートのスキャンにはアカウントが必要です",
+    "guestDisabledDescription": "このサーバーの管理者がゲストによるレシートのアップロードを無効にしています。割り勘するにはログインしてください。",
+    "signIn": "ログイン"
   },
   "processing": {
     "title": "レシートを処理中...",

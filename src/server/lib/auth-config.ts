@@ -6,6 +6,8 @@
  * so a typo in an optional auth setting can't take the whole app down.
  */
 
+import { parseBooleanValue } from './env';
+
 export type OidcTokenAuthMethod = 'client_secret_basic' | 'client_secret_post';
 
 export interface OidcConfig {
@@ -27,8 +29,6 @@ export interface AuthConfig {
 
 type Env = Record<string, string | undefined>;
 
-const TRUE_VALUES = new Set(['true', '1', 'yes', 'on']);
-const FALSE_VALUES = new Set(['false', '0', 'no', 'off']);
 const TOKEN_AUTH_METHODS: readonly OidcTokenAuthMethod[] = ['client_secret_basic', 'client_secret_post'];
 
 function read(env: Env, name: string): string {
@@ -36,11 +36,11 @@ function read(env: Env, name: string): string {
 }
 
 function parseBoolean(env: Env, name: string, fallback: boolean, warnings: string[]): boolean {
-  const value = read(env, name).toLowerCase();
+  const value = read(env, name);
   if (value === '') return fallback;
-  if (TRUE_VALUES.has(value)) return true;
-  if (FALSE_VALUES.has(value)) return false;
-  warnings.push(`${name} must be true or false; using the default (${fallback}).`);
+  const parsed = parseBooleanValue(value);
+  if (parsed !== null) return parsed;
+  warnings.push(`${name} must be true/false, 1/0, yes/no or on/off; using the default (${fallback}).`);
   return fallback;
 }
 

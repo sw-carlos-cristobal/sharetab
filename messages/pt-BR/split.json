@@ -6,7 +6,10 @@
     "or": "Ou",
     "chooseGallery": "Escolher da galeria",
     "uploading": "Enviando...",
-    "uploadFailed": "Falha no upload"
+    "uploadFailed": "Falha no upload",
+    "guestDisabledTitle": "Escanear recibos requer uma conta",
+    "guestDisabledDescription": "O administrador deste servidor desativou o envio de recibos para convidados. Entre para dividir uma conta.",
+    "signIn": "Entrar"
   },
   "processing": {
     "title": "Processando recibo...",

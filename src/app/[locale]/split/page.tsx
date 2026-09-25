@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { useRouter } from '@/i18n/navigation';
+import { TRPCClientError } from '@trpc/client';
+import { Link, useRouter } from '@/i18n/navigation';
 import { trpc } from '@/lib/trpc';
 import { formatCents, centsToDecimal, parseToCents } from '@/lib/money';
 import { calculateSplitTotals } from '@/lib/split-calculator';
@@ -50,6 +51,13 @@ type ExtractedData = {
   currency: string;
 };
 
+// The server refuses guest uploads with 403 (upload) or FORBIDDEN (scan).
+class GuestUploadsDisabledError extends Error {}
+
+function isGuestUploadsRefusal(err: unknown): boolean {
+  return err instanceof GuestUploadsDisabledError || (err instanceof TRPCClientError && err.data?.code === 'FORBIDDEN');
+}
+
 export default function GuestSplitPage() {
   const router = useRouter();
   const locale = useLocale();
@@ -91,6 +99,8 @@ export default function GuestSplitPage() {
   const utils = trpc.useUtils();
   const processReceipt = trpc.guest.processReceipt.useMutation();
   const providerInfo = trpc.guest.getScanProviderInfo.useQuery();
+  const uploadStatus = trpc.guest.getUploadStatus.useQuery();
+  const uploadsDisabled = uploadStatus.data?.allowed === false;
   const receiptData = trpc.guest.getReceiptItems.useQuery(
     { receiptId: receiptId! },
     { enabled: !!receiptId && step === 'people' },
@@ -132,6 +142,14 @@ export default function GuestSplitPage() {
     }
   }, [receiptData.data, items.length]);
 
+  // Guest uploads were turned off after this page loaded (or the session
+  // ended or the account was suspended). Refetch so the notice replaces the
+  // upload buttons; if they were turned back on meanwhile, show no error.
+  async function showGuestUploadsDisabled() {
+    const { data } = await uploadStatus.refetch();
+    setErrorMessage(data?.allowed === false ? t('upload.guestDisabledTitle') : '');
+  }
+
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -147,6 +165,8 @@ export default function GuestSplitPage() {
         method: 'POST',
         body: formData,
       });
+
+      if (res.status === 403) throw new GuestUploadsDisabledError();
 
       if (!res.ok) {
         let message = t('upload.uploadFailed');
@@ -177,7 +197,8 @@ export default function GuestSplitPage() {
       setStep('people');
     } catch (err) {
       setUploading(false);
-      setErrorMessage(err instanceof Error ? err.message : t('upload.uploadFailed'));
+      if (isGuestUploadsRefusal(err)) await showGuestUploadsDisabled();
+      else setErrorMessage(err instanceof Error ? err.message : t('upload.uploadFailed'));
       setStep('upload');
     }
   }
@@ -458,65 +479,80 @@ export default function GuestSplitPage() {
         <div className="space-y-6">
           <div className="text-center space-y-2 pt-8">
             <h1 className="text-3xl font-bold tracking-tight">{t('upload.title')}</h1>
-            <p className="text-muted-foreground">{t('upload.subtitle')}</p>
+            {!uploadsDisabled && <p className="text-muted-foreground">{t('upload.subtitle')}</p>}
           </div>
 
-          {errorMessage && (
+          {errorMessage && !uploadsDisabled && (
             <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{errorMessage}</div>
           )}
 
-          {/* Camera capture button - mobile optimized */}
-          <label
-            className="flex flex-col items-center gap-4 rounded-2xl bg-primary p-8 text-primary-foreground cursor-pointer active:scale-[0.98] transition-transform"
-            data-testid="guest-snap-upload"
-          >
-            <div className="rounded-full bg-primary-foreground/20 p-4">
-              <Camera className="h-10 w-10" />
+          {uploadsDisabled ? (
+            <div className="space-y-4 rounded-2xl border p-8 text-center" data-testid="guest-uploads-disabled">
+              <p className="text-lg font-semibold">{t('upload.guestDisabledTitle')}</p>
+              <p className="text-sm text-muted-foreground">{t('upload.guestDisabledDescription')}</p>
+              <Button
+                nativeButton={false}
+                render={<Link href={`/login?callbackUrl=${encodeURIComponent('/split')}`} />}
+              >
+                {t('upload.signIn')}
+              </Button>
             </div>
-            <span className="text-xl font-semibold">{t('upload.snapBill')}</span>
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/heic"
-              capture="environment"
-              onChange={handleFileUpload}
-              disabled={uploading}
-              className="hidden"
-            />
-          </label>
+          ) : (
+            <>
+              {/* Camera capture button - mobile optimized */}
+              <label
+                className="flex flex-col items-center gap-4 rounded-2xl bg-primary p-8 text-primary-foreground cursor-pointer active:scale-[0.98] transition-transform"
+                data-testid="guest-snap-upload"
+              >
+                <div className="rounded-full bg-primary-foreground/20 p-4">
+                  <Camera className="h-10 w-10" />
+                </div>
+                <span className="text-xl font-semibold">{t('upload.snapBill')}</span>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/heic"
+                  capture="environment"
+                  onChange={handleFileUpload}
+                  disabled={uploading}
+                  className="hidden"
+                />
+              </label>
 
-          <div className="relative flex items-center justify-center">
-            <span className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
-            </span>
-            <span className="relative bg-background px-4 text-sm text-muted-foreground uppercase">
-              {t('upload.or')}
-            </span>
-          </div>
+              <div className="relative flex items-center justify-center">
+                <span className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </span>
+                <span className="relative bg-background px-4 text-sm text-muted-foreground uppercase">
+                  {t('upload.or')}
+                </span>
+              </div>
 
-          {/* Gallery upload */}
-          <label
-            className="flex flex-col items-center gap-4 rounded-2xl border-2 border-dashed border-muted-foreground/25 p-8 cursor-pointer hover:border-primary/50 transition-colors active:scale-[0.98]"
-            data-testid="guest-gallery-upload"
-          >
-            <div className="rounded-full bg-muted p-4">
-              <ImageIcon className="h-8 w-8 text-muted-foreground" />
-            </div>
-            <span className="text-lg font-medium text-muted-foreground">{t('upload.chooseGallery')}</span>
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/heic"
-              onChange={handleFileUpload}
-              disabled={uploading}
-              className="hidden"
-              data-testid="guest-file-input"
-            />
-          </label>
+              {/* Gallery upload */}
+              <label
+                className="flex flex-col items-center gap-4 rounded-2xl border-2 border-dashed border-muted-foreground/25 p-8 cursor-pointer hover:border-primary/50 transition-colors active:scale-[0.98]"
+                data-testid="guest-gallery-upload"
+              >
+                <div className="rounded-full bg-muted p-4">
+                  <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                </div>
+                <span className="text-lg font-medium text-muted-foreground">{t('upload.chooseGallery')}</span>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/heic"
+                  onChange={handleFileUpload}
+                  disabled={uploading}
+                  className="hidden"
+                  data-testid="guest-file-input"
+                />
+              </label>
 
-          {uploading && (
-            <div className="flex items-center justify-center gap-2 text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              {t('upload.uploading')}
-            </div>
+              {uploading && (
+                <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  {t('upload.uploading')}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
@@ -672,6 +708,12 @@ export default function GuestSplitPage() {
                                 setStep('people');
                               },
                               onError: (err) => {
+                                if (isGuestUploadsRefusal(err)) {
+                                  void showGuestUploadsDisabled().then(() => {
+                                    setStep('upload');
+                                  });
+                                  return;
+                                }
                                 setErrorMessage(err.message);
                                 setStep('people');
                               },
