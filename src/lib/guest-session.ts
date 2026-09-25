@@ -23,7 +23,8 @@ export function isGuestSessionToken(value: string): boolean {
 
 // A personal link is the claim page URL with this device's person token in the #fragment,
 // so the same person can continue on another device. Browsers never send the fragment to
-// the server, so the token stays out of requests, server logs and Referer headers.
+// the server, so the token stays out of request URLs, and so out of access logs and Referer
+// headers. (The page still sends the token in POST bodies, e.g. to guest.resumeSession.)
 const PERSONAL_LINK_PARAM = 'me';
 
 export function personalLinkHash(personToken: string): string {

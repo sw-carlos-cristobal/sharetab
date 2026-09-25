@@ -196,6 +196,8 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   const joinInFlight = useRef(false);
   // Person token from a personal link (#me=...) this page was opened with, if any
   const linkedToken = useRef<string | null>(null);
+  // The person a personal link names, waiting for the user to confirm it's them
+  const [linkOffer, setLinkOffer] = useState<{ personIndex: number; personToken: string; name: string } | null>(null);
 
   // Become this person on this device, and remember it for the next visit
   function adoptIdentity(identity: { personIndex: number; personToken: string; name: string }) {
@@ -226,32 +228,62 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
       joinInFlight.current = false;
     },
   });
-  // A returning device finds its person by stored token (names can be edited by anyone).
-  // Silent: on failure the join form stays up. Network and server errors are retried, because
-  // a lost resume leaves the join form up while this device still holds a valid token; 4xx
-  // answers (e.g. the session is gone) are final.
+  // A returning device finds its person by token (names can be edited by anyone): the token
+  // this device stored, or one from a personal link. A stored token resumes silently; a
+  // personal link for someone else asks first, and a dead one says so. Network and server
+  // errors are retried, because a lost resume leaves the join form up while this device still
+  // holds a valid token; 4xx answers (e.g. the session is gone) are final.
   const resumeSession = trpc.guest.resumeSession.useMutation({
     retry: (failureCount, error) => failureCount < 2 && (error.data?.httpStatus ?? 500) >= 500,
     onSuccess: (data, variables) => {
       const fromLink = variables.personToken === linkedToken.current;
-      if (data) {
+      const storedToken = getStoredClaimIdentity(token)?.personToken;
+      if (data && fromLink && variables.personToken !== storedToken) {
+        // Don't silently become someone else (a personal link can be mis-shared)
+        setLinkOffer({ ...data, personToken: variables.personToken });
+      } else if (data) {
         adoptIdentity({ ...data, personToken: variables.personToken });
       } else if (fromLink) {
         // The user opened a personal link on purpose, so say why it didn't work
         toast.error(t('personalLinkInvalid'));
+        setTimeout(resumeStoredIdentity, 0);
       } else {
         // Nobody holds the stored token any more (e.g. this person was removed)
         removeStoredClaimIdentity(token);
       }
     },
     onError: (error, variables) => {
-      if (variables.personToken === linkedToken.current) toast.error(error.message);
+      if (variables.personToken !== linkedToken.current) return;
+      toast.error(error.message);
+      setTimeout(resumeStoredIdentity, 0);
     },
     onSettled: () => {
       joinInFlight.current = false;
     },
   });
   const joining = joinSession.isPending || resumeSession.isPending;
+
+  // Fall back to the person this device joined as, when a personal link doesn't work out.
+  // Called on the next tick from resumeSession callbacks, after its onSettled has run.
+  function resumeStoredIdentity() {
+    linkedToken.current = null;
+    const stored = getStoredClaimIdentity(token);
+    if (!stored || joinInFlight.current) return;
+    joinInFlight.current = true;
+    resumeSession.mutate({ token, personToken: stored.personToken });
+  }
+
+  function acceptLinkOffer() {
+    if (!linkOffer) return;
+    adoptIdentity(linkOffer);
+    setLinkOffer(null);
+    toast.success(t('continuingAs', { name: linkOffer.name }));
+  }
+
+  function declineLinkOffer() {
+    setLinkOffer(null);
+    resumeStoredIdentity();
+  }
 
   function startJoin(input: { name: string; groupSize?: number; personToken?: string }) {
     if (joinInFlight.current) return;
@@ -278,20 +310,33 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     }
   }, [session.data, profile.data?.venmoUsername, profile.isFetched, session.isLoading, authSession?.user, authStatus]);
 
-  // Take the token out of a personal link right away, so it doesn't stay in the address bar,
-  // the history entry, or a link copied from this page
+  // Read a personal link's token, then take it out of the address bar and this tab's history
+  // entry (the browser's global history keeps the URL that was opened).
   useEffect(() => {
     const linked = readPersonalLinkToken(window.location.hash);
-    if (!linked) return;
-    linkedToken.current = linked;
-    window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
+    if (linked) {
+      linkedToken.current = linked;
+      const clean = window.location.pathname + window.location.search;
+      // Next.js patches history.replaceState once its own effects run, after this page's on
+      // first mount. Called on the next tick with null state, the patched version keeps Next's
+      // internal history state (back/forward) and updates the router's URL, so the token
+      // isn't written back from router memory later.
+      setTimeout(() => window.history.replaceState(null, '', clean), 0);
+    }
+    // A personal link pasted into a tab already on this page only changes the fragment;
+    // reload so it is read like a fresh open
+    const onHashChange = () => {
+      if (readPersonalLinkToken(window.location.hash)) window.location.reload();
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
   // Rejoin as the person this device joined as (or the one a personal link names) once the
-  // session loads. A personal link wins over what this device stored.
+  // session loads, in any status: a finalized split still needs to know who you are. A
+  // personal link is tried first; for someone other than this device's person it asks first.
   useEffect(() => {
     if (autoRejoinAttempted.current || personIndex !== null || !session.data) return;
-    if (session.data.status !== 'CLAIMING') return;
 
     const personToken = linkedToken.current ?? getStoredClaimIdentity(token)?.personToken;
     if (!personToken) return;
@@ -483,10 +528,12 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     url.search = '';
     url.hash = personalLinkHash(personToken);
     const link = url.toString();
-    // Web Share opens the phone's share sheet (Messages, AirDrop, email); it needs HTTPS
+    // Web Share opens the device's share sheet (Messages, AirDrop, email); it only exists in a
+    // secure context (HTTPS or localhost), otherwise the link is copied
     if (typeof navigator.share === 'function') {
       try {
         await navigator.share({ title: t('personalLinkShareTitle'), url: link });
+        toast.warning(t('personalLinkShared'));
         return;
       } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') return;
@@ -562,10 +609,35 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   const data = session.data!;
   const currency = data.receiptData.currency;
 
+  // Asks before this device becomes the person a personal link names
+  const linkOfferCard = linkOffer && (
+    <Card className="border-primary/40" data-testid="personal-link-offer">
+      <CardContent className="space-y-3 py-4">
+        <p className="font-medium">{t('personalLinkOfferTitle', { name: linkOffer.name })}</p>
+        <p className="text-sm text-muted-foreground">{t('personalLinkOfferBody', { name: linkOffer.name })}</p>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" size="sm" onClick={acceptLinkOffer} data-testid="personal-link-accept">
+            {t('continueAs', { name: linkOffer.name })}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={declineLinkOffer}
+            data-testid="personal-link-decline"
+          >
+            {t('notThisPerson')}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
   // --- Finalized state ---
   if (data.status === 'FINALIZED') {
     return (
       <div className="space-y-6 pb-8">
+        {linkOfferCard}
         <div className="text-center space-y-2 pt-4">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
             <Check className="h-8 w-8 text-primary" />
@@ -760,6 +832,8 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
             </CardContent>
           </Card>
         )}
+
+        {linkOfferCard}
 
         {/* Join form */}
         <Card data-testid="claim-join-form">

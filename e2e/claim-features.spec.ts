@@ -1,5 +1,15 @@
 import { test, expect, request } from '@playwright/test';
-import { joinGuestSession, trpcMutation, trpcResult, trpcQuery, FAKE_PNG, authedContext, users } from './helpers';
+import {
+  joinGuestSession,
+  rememberClaimIdentity,
+  trpcMutation,
+  trpcResult,
+  trpcQuery,
+  FAKE_PNG,
+  authedContext,
+  users,
+} from './helpers';
+import { claimStorageKey } from '../src/lib/guest-session';
 
 const BASE = process.env.BASE_URL || 'http://localhost:3001';
 
@@ -135,6 +145,8 @@ test.describe('Claim page — rejoin buttons', () => {
 });
 
 test.describe('Claim page — continue on another device', () => {
+  const DEAD_TOKEN = '33333333-3333-4333-8333-333333333333';
+
   async function createSession(merchantName: string) {
     const ctx = await request.newContext({ baseURL: BASE });
     const createRes = await trpcMutation(ctx, 'guest.createClaimSession', {
@@ -162,12 +174,21 @@ test.describe('Claim page — continue on another device', () => {
     const personalLink = await phonePage.evaluate(() => navigator.clipboard.readText());
     expect(personalLink).toContain(`/split/${shareToken}/claim#me=`);
 
-    // PC: opening the link resumes as Alice, and the token leaves the address bar
+    // PC: the link asks first, then resumes as Alice; the token leaves the address bar
     const pc = await browser.newContext();
     const pcPage = await pc.newPage();
     await pcPage.goto(personalLink);
+    await expect(pcPage.getByTestId('personal-link-offer')).toContainText("This is Alice's personal link", {
+      timeout: 15000,
+    });
+    await expect.poll(() => pcPage.url()).not.toContain('#me=');
+    await pcPage.getByTestId('personal-link-accept').click();
     await expect(pcPage.getByText('Alice (you)').first()).toBeVisible({ timeout: 15000 });
-    expect(pcPage.url()).not.toContain('#me=');
+
+    // The PC now remembers Alice: a reload resumes without asking again
+    await pcPage.reload();
+    await expect(pcPage.getByText('Alice (you)').first()).toBeVisible({ timeout: 15000 });
+    await expect(pcPage.getByTestId('personal-link-offer')).toHaveCount(0);
     const session = await trpcResult(await trpcQuery(ctx, 'guest.getSession', { token: shareToken }));
     expect(session.people).toHaveLength(1);
 
@@ -176,24 +197,106 @@ test.describe('Claim page — continue on another device', () => {
     await ctx.dispose();
   });
 
-  test('a personal link that no longer works says so and leaves the join form up', async ({ page }) => {
-    const { ctx, shareToken } = await createSession('Dead Link Diner');
-    await page.goto(`/en/split/${shareToken}/claim#me=33333333-3333-4333-8333-333333333333`);
-    await expect(page.getByText('This personal link no longer works')).toBeVisible({ timeout: 15000 });
-    await expect(page.getByTestId('claim-join-form')).toBeVisible();
-    expect(page.url()).not.toContain('#me=');
+  test("someone else's personal link asks first, and declining keeps this device's own person", async ({ browser }) => {
+    const { ctx, shareToken } = await createSession('Wrong Link Bar');
+    const alice = await joinGuestSession(ctx, { token: shareToken, name: 'Alice' });
+    const bob = await joinGuestSession(ctx, { token: shareToken, name: 'Bob' });
+
+    // Bob's phone opens Alice's personal link (e.g. she shared it to the group by mistake)
+    const bobsPhone = await browser.newContext();
+    await rememberClaimIdentity(bobsPhone, shareToken, { name: 'Bob', personToken: bob.personToken });
+    const page = await bobsPhone.newPage();
+    await page.goto(`/en/split/${shareToken}/claim#me=${alice.personToken}`);
+    await expect(page.getByTestId('personal-link-offer')).toContainText("This is Alice's personal link", {
+      timeout: 15000,
+    });
+    await page.getByTestId('personal-link-decline').click();
+
+    await expect(page.getByText('Bob (you)').first()).toBeVisible({ timeout: 15000 });
+    const stored = await page.evaluate((key) => window.localStorage.getItem(key), claimStorageKey(shareToken));
+    expect(stored).toContain(bob.personToken);
+    const session = await trpcResult(await trpcQuery(ctx, 'guest.getSession', { token: shareToken }));
+    expect(session.people.map((p: { name: string }) => p.name)).toEqual(['Alice', 'Bob']);
+
+    await bobsPhone.close();
     await ctx.dispose();
   });
 
-  test('"Copy link" never includes a personal token', async ({ browser }) => {
+  test('a dead personal link says so and falls back to the person this device already was', async ({ browser }) => {
+    const { ctx, shareToken } = await createSession('Dead Link Diner');
+    const bob = await joinGuestSession(ctx, { token: shareToken, name: 'Bob' });
+    const bobsPhone = await browser.newContext();
+    await rememberClaimIdentity(bobsPhone, shareToken, { name: 'Bob', personToken: bob.personToken });
+    const page = await bobsPhone.newPage();
+
+    await page.goto(`/en/split/${shareToken}/claim#me=${DEAD_TOKEN}`);
+    await expect(page.getByText('This personal link no longer works')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText('Bob (you)').first()).toBeVisible({ timeout: 15000 });
+
+    await bobsPhone.close();
+    await ctx.dispose();
+  });
+
+  test('a dead personal link on a device with no identity leaves the join form up', async ({ page }) => {
+    const { ctx, shareToken } = await createSession('Dead Link Deli');
+    await page.goto(`/en/split/${shareToken}/claim#me=${DEAD_TOKEN}`);
+    await expect(page.getByText('This personal link no longer works')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId('claim-join-form')).toBeVisible();
+    await expect.poll(() => page.url()).not.toContain('#me=');
+    await ctx.dispose();
+  });
+
+  test('a personal link works on a finalized split too', async ({ browser }) => {
+    const { ctx, shareToken } = await createSession('Finalized Link Pub');
+    const alice = await joinGuestSession(ctx, { token: shareToken, name: 'Alice' });
+    const finalize = await trpcMutation(ctx, 'guest.finalizeSession', {
+      token: shareToken,
+      personIndex: alice.personIndex,
+      personToken: alice.personToken,
+    });
+    expect(finalize.ok(), await finalize.text()).toBe(true);
+
+    const pc = await browser.newContext();
+    const page = await pc.newPage();
+    await page.goto(`/en/split/${shareToken}/claim#me=${alice.personToken}`);
+    await expect(page.getByTestId('personal-link-offer')).toContainText("This is Alice's personal link", {
+      timeout: 15000,
+    });
+    await page.getByTestId('personal-link-accept').click();
+    await expect(page.getByText('Continuing as Alice')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId('personal-link-offer')).toHaveCount(0);
+
+    await pc.close();
+    await ctx.dispose();
+  });
+
+  test('a personal link pasted into a tab already on the claim page is picked up', async ({ page }) => {
+    const { ctx, shareToken } = await createSession('Pasted Link Cafe');
+    const alice = await joinGuestSession(ctx, { token: shareToken, name: 'Alice' });
+    await page.goto(`/en/split/${shareToken}/claim`);
+    await expect(page.getByTestId('claim-join-form')).toBeVisible({ timeout: 15000 });
+
+    await page.evaluate((hash) => {
+      window.location.hash = hash;
+    }, `me=${alice.personToken}`);
+    await expect(page.getByTestId('personal-link-offer')).toContainText("This is Alice's personal link", {
+      timeout: 15000,
+    });
+    await ctx.dispose();
+  });
+
+  test('"Copy link" drops the fragment, even one left in the address bar', async ({ browser }) => {
     const { ctx, shareToken } = await createSession('Plain Link Cafe');
     const context = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
     const page = await context.newPage();
-    await page.goto(`/en/split/${shareToken}/claim`);
+    // Not a personal link, so the page leaves it in the address bar
+    await page.goto(`/en/split/${shareToken}/claim#foo=1`);
     await page.getByTestId('rejoin-person-0').click();
     await expect(page.locator('[data-testid^="claim-item-"]').first()).toBeVisible({ timeout: 15000 });
+    expect(page.url()).toContain('#foo=1');
     await page.getByTestId('copy-link-btn').click();
     const copied = await page.evaluate(() => navigator.clipboard.readText());
+    expect(copied).toContain(`/split/${shareToken}/claim`);
     expect(copied).not.toContain('#');
     await context.close();
     await ctx.dispose();
