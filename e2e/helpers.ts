@@ -86,7 +86,12 @@ export async function joinGuestSession(
 ) {
   const res = await trpcMutation(ctx, 'guest.joinSession', input);
   const body = await res.text();
-  const joined: unknown = res.ok() ? JSON.parse(body)?.result?.data?.json : undefined;
+  let joined: unknown;
+  try {
+    joined = res.ok() ? JSON.parse(body)?.result?.data?.json : undefined;
+  } catch {
+    // Not JSON (e.g. an HTML error page from a proxy): reported with the body below.
+  }
   if (typeof (joined as { personToken?: unknown } | undefined)?.personToken !== 'string') {
     throw new Error(`guest.joinSession failed (${res.status()}): ${body}`);
   }
