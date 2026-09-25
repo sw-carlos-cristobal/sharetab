@@ -3,6 +3,7 @@ import type { AIProvider } from '../provider';
 import type { ReceiptExtractionResult } from '../schema';
 import { receiptExtractionSchema } from '../schema';
 import { RECEIPT_EXTRACTION_PROMPT } from '../prompts/receipt-extraction';
+import { logger } from '@/server/lib/logger';
 
 type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
 
@@ -37,7 +38,13 @@ async function ensureMeridian(): Promise<number> {
     meridianPort = port;
     console.log(`[meridian] proxy started on port ${port}`);
     return port;
-  })();
+  })().catch((err: unknown) => {
+    // Forget the failed start so the next call tries again (after a new
+    // login, for example) instead of failing until the server restarts.
+    meridianStarting = null;
+    logger.error('meridian.start.failed', { error: err instanceof Error ? err.message : String(err) });
+    throw err;
+  });
 
   return meridianStarting;
 }
