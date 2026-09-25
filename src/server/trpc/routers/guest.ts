@@ -11,6 +11,7 @@ import { parseExtractedData, parseGuestItems, parseGuestPeople, parseGuestAssign
 import { calculateSplitTotals } from '@/lib/split-calculator';
 import { normalizeGuestName } from '@/lib/guest-session';
 import { getConfiguredProviderPriority } from '@/server/ai/registry';
+import { canUploadAsGuest, isGuestUploadsEnabled } from '../../lib/guest-uploads';
 
 async function getCreatorPayerVenmoHandle(
   db: typeof import('@/server/db').db,
@@ -194,9 +195,21 @@ export const guestRouter = createTRPCRouter({
     }
   }),
 
+  getUploadStatus: publicProcedure.query(async ({ ctx }) => {
+    const enabled = await isGuestUploadsEnabled(ctx.db);
+    return { allowed: canUploadAsGuest({ enabled, signedIn: !!ctx.session?.user }) };
+  }),
+
   processReceipt: publicProcedure
     .input(z.object({ receiptId: z.string(), correctionHint: z.string().max(500).optional() }))
     .mutation(async ({ ctx, input }) => {
+      // Admin kill switch for unauthenticated AI spend. Checked first so a
+      // disabled install does no receipt lookup and burns no quota.
+      const enabled = await isGuestUploadsEnabled(ctx.db);
+      if (!canUploadAsGuest({ enabled, signedIn: !!ctx.session?.user })) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Guest receipt uploads are disabled' });
+      }
+
       const receipt = await ctx.db.receipt.findUnique({
         where: { id: input.receiptId },
       });

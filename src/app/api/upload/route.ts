@@ -6,6 +6,7 @@ import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { getUploadDir } from '@/server/lib/upload-dir';
 import { getClientIp } from '@/server/lib/client-ip';
+import { canUploadAsGuest, isGuestUploadsEnabled } from '@/server/lib/guest-uploads';
 import { randomUUID } from 'crypto';
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic'];
@@ -134,6 +135,16 @@ export async function POST(req: NextRequest) {
   let guestIp: string | null = null;
 
   if (isGuest) {
+    // Admin kill switch for unauthenticated storage + AI spend. Signed-in
+    // users share this Quick Split path, so they keep access when it's off.
+    // The session is only resolved when the switch is off, so the default
+    // path is unchanged.
+    const enabled = await isGuestUploadsEnabled(db);
+    const signedIn = !enabled && !!(await auth())?.user?.id;
+    if (!canUploadAsGuest({ enabled, signedIn })) {
+      return Response.json({ error: 'Guest receipt uploads are disabled' }, { status: 403 });
+    }
+
     // Guest upload: rate limit by IP. Peek only — budget is consumed after
     // the upload passes validation so invalid requests can't burn it.
     guestIp = getClientIp(req.headers);
