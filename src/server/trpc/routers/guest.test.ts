@@ -122,6 +122,16 @@ describe('guest.joinSession rate limit', () => {
     expect(mockDb.$transaction).not.toHaveBeenCalled();
   });
 
+  test('rejects an oversized token before it reaches the rate limiter', async () => {
+    const api = await caller();
+    await expect(api.joinSession({ token: 'x'.repeat(65), name: 'Alice' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    expect(peekRateLimit).not.toHaveBeenCalled();
+    expect(checkRateLimit).not.toHaveBeenCalled();
+    expect(mockDb.$transaction).not.toHaveBeenCalled();
+  });
+
   test('opens the transaction when the join is within the limit', async () => {
     mockDb.$transaction.mockRejectedValue(new Error('stop after the rate limit'));
     const api = await caller();

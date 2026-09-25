@@ -602,7 +602,8 @@ export const guestRouter = createTRPCRouter({
   joinSession: publicProcedure
     .input(
       z.object({
-        token: z.string(),
+        // Share tokens are 25-character cuids; the cap bounds the rate-limit keys built from it
+        token: z.string().max(64),
         name: z.string().trim().min(1).max(100),
         groupSize: z.number().int().min(1).max(20).optional(),
       }),
