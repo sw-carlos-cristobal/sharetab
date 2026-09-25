@@ -8,6 +8,7 @@
 
 ## Test Plan
 
+- [ ] `npm audit --omit=dev --audit-level=high` passes
 - [ ] `npm run format:check` passes
 - [ ] `npm run lint` passes
 - [ ] `npx tsc --noEmit` passes

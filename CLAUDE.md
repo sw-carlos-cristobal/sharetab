@@ -10,7 +10,7 @@ ShareTab — open-source, self-hosted Splitwise alternative with AI receipt scan
 
 - **Framework:** Next.js 16 (App Router) + TypeScript
 - **API:** tRPC v11 (end-to-end type-safe)
-- **ORM:** Prisma 7 + PostgreSQL 16 (via `@prisma/adapter-pg`)
+- **ORM:** Prisma 7 + PostgreSQL 16 (via `@prisma/adapter-pg`); `npm run dev:full` runs embedded PostgreSQL 18 (`embedded-postgres`), so local dev is two majors ahead of Docker and CI
 - **Auth:** NextAuth v5 (email/password + OAuth + generic OIDC)
 - **UI:** TailwindCSS 4 + shadcn/ui (v4, uses `@base-ui/react` — use `render` prop instead of `asChild`) + next-themes (dark mode)
 - **AI:** Pluggable providers (OpenAI, OpenAI-Codex, Claude, Meridian, Ollama) via `src/server/ai/`
@@ -29,7 +29,7 @@ npm run format:check # Prettier (check only)
 npx tsc --noEmit     # Type check
 npm test             # Run unit tests (Vitest)
 npm run test:watch   # Unit tests in watch mode
-npm run test:e2e     # Run Playwright e2e tests
+BASE_URL=http://localhost:3000 npm run test:e2e  # Run Playwright e2e tests (playwright.config.ts falls back to port 3001)
 npm run test:docker  # Build the Docker image and smoke test it (scripts/docker-smoke.sh; DOCKER_HOST=ssh://... for a remote daemon)
 npm run lint:i18n    # Check translations for missing/extra keys
 npx prisma generate  # Regenerate Prisma client after schema changes
@@ -40,7 +40,7 @@ npx prisma db push   # Push schema without migration (dev only)
 
 - `src/server/` — Backend: auth config, Prisma client, tRPC routers, AI providers, pure calculation libs
 - `src/server/db.ts` — Prisma client singleton (uses `@prisma/adapter-pg` with `PrismaPg`)
-- `src/server/auth.ts` — NextAuth v5 config (Credentials unless `DISABLE_PASSWORD_LOGIN` + optional Google OAuth + optional Nodemailer magic link + optional generic OIDC); wraps the Prisma adapter so `getUserByEmail` is case-insensitive
+- `src/server/auth.ts` — NextAuth v5 config (Credentials unless `DISABLE_PASSWORD_LOGIN` + optional Google OAuth (no login-page button, so only reachable by calling the provider directly) + optional Nodemailer magic link + optional generic OIDC); wraps the Prisma adapter so `getUserByEmail` is case-insensitive
 - `src/server/lib/auth-config.ts` — Parses sign-in env vars (`OIDC_*`, `DISABLE_PASSWORD_LOGIN`) into `AuthConfig`; invalid values fall back to defaults with a logged warning
 - `src/server/lib/oidc-sign-in.ts` — OIDC sign-in policy: `decideOidcSignIn` (pure allow/deny) + `gatherOidcFacts` (DB lookups); denials redirect to `/login?error=<code>` (mapped to messages by `src/lib/sign-in-errors.ts`)
 - `src/server/lib/password-login.ts` — Credentials `authorize` (rate limits, case-insensitive lookup, bcrypt check)
@@ -48,17 +48,25 @@ npx prisma db push   # Push schema without migration (dev only)
 - `src/server/lib/env.ts` — `parseBooleanValue`: the boolean env vocabulary (true/1/yes/on, false/0/no/off) shared by `auth-config.ts` and `guest-uploads.ts`
 - `src/server/lib/guest-uploads.ts` — Guest receipt upload kill switch: admin toggle (`guestUploadsEnabled` SystemSetting, default on, cached 10s, save via `saveGuestUploadsSetting`) overridden by `DISABLE_GUEST_UPLOADS=true` (the admin save is refused while it is set; an unrecognized value logs a warning and is ignored). When off, `canUseGuestUploads` refuses anonymous callers at `/api/upload?guest=true` (403) and `guest.processReceipt` (FORBIDDEN); signed-in users with an active (not suspended) account share the Quick Split path and keep access
 - `src/server/lib/guest-join-limit.ts` — `checkJoinRateLimit` for `guest.joinSession`: 10 joins/min per person (share token + the caller's person token when it sends one, else + normalized name) and 200/min per share token (twice the 100-person session cap). The session budget is peeked before the person budget is spent, so a refused call consumes nothing. A client rotating names can use up the per-token budget (accepted, like the other per-token guest limits)
+- `src/server/lib/receipt-processor.ts` — `processReceiptImage`: the receipt-scan pipeline shared by signed-in and guest scans (reads the image, runs `getAIProvidersWithFallback`, normalizes the date, creates the receipt items)
+- `src/server/lib/auth-health-poller.ts` — Background poller (started from `src/instrumentation.ts`) that checks Meridian and ChatGPT OAuth health when those providers are configured and emails `ADMIN_EMAIL` when auth expires (needs `EMAIL_SERVER_HOST`)
+- `src/server/lib/meridian-login.ts` / `openai-codex-login.ts` — OAuth PKCE login flows behind the admin dashboard's Meridian and ChatGPT sections; credentials persist in `CLAUDE_DIR` / `OPENAI_CODEX_DIR` (`/app/claude`, `/app/chatgpt` in Docker)
+- `src/server/lib/logger.ts` — Structured logger honoring `LOG_LEVEL`, with an in-memory buffer (`getRecentLogs`) that feeds the admin Server Logs section
+- `src/server/lib/build-info.ts` — `getBuildInfo`: `package.json` version plus the commit SHA baked in at build time (`COMMIT_SHA` build arg → `.commit-sha`)
+- `src/server/lib/normalize-date.ts` / `upload-dir.ts` — Receipt date normalization to `YYYY-MM-DD`; `UPLOAD_DIR` resolution
 - `src/server/lib/guest-transaction.ts` — `guestTransaction`: runs a claim-session transaction at Repeatable Read through `withTransactionRetry`; each transaction must read and write only the one `GuestSplit` row it looks up, and may run more than once (keep side effects outside it). A conflict that outlasts the retries becomes a generic `CONFLICT` error
 - `src/server/lib/transaction-retry.ts` — `withTransactionRetry`: re-runs a transaction that Postgres aborted with a serialization failure or deadlock (40001 / 40P01, seen through `@prisma/adapter-pg` as P2034 or `TransactionWriteConflict`), up to 10 runs with capped, jittered backoff
 - `src/server/lib/rate-limit.ts` — In-memory rate limiter: `checkRateLimit` (consume), `peekRateLimit` (check without consuming), `refundRateLimit`; `parsePositiveInt` reads env limits so a non-numeric value falls back to the default instead of disabling the limiter. Counters reset on restart
-- `src/server/lib/client-ip.ts` — `getClientIp`: `cf-connecting-ip`, then `x-real-ip`, then the first `x-forwarded-for` entry; returns `FALLBACK_IP` (`'global'`) when none is set. Login skips its per-IP bucket on `FALLBACK_IP`; guest endpoints share it as one bucket. The headers are spoofable without a trusted reverse proxy
-- `src/server/lib/exchange-rates.ts` — `getExchangeRate(from, to, date?)` from frankfurter.app (ECB rates, no API key), cached in memory for 1 hour; returns `null` on failure, and callers then ask for a manual rate. Used by the expenses, settlements, and receipts routers to convert into the group's currency
-- `src/server/lib/json-schemas.ts` — Zod schemas and `parse*` helpers for JSON columns (receipt extracted data; guest split items, people, assignments, summary); validate with these instead of casting
+- `src/server/lib/client-ip.ts` — `getClientIp`: `cf-connecting-ip`, then `x-real-ip`, then the first `x-forwarded-for` entry; returns `FALLBACK_IP` (`'global'`) when none is set (login then skips its per-IP bucket; guest endpoints share it as one bucket). Under `next start` / standalone this doesn't happen in practice: Next.js fills in `x-forwarded-for` with the socket address when it's missing, so a proxy that forwards no client address puts every user in one per-IP bucket. The headers are spoofable without a trusted reverse proxy
+- `src/server/lib/exchange-rates.ts` — `getExchangeRate(from, to, date?)` from frankfurter.app (ECB rates, no API key), cached in memory for 1 hour; returns `null` on failure. Used by the expenses, settlements, and receipts routers to convert into the group's currency; on `null`, expenses and settlements ask for a manual rate and receipts ask the user to try again
+- `src/server/lib/json-schemas.ts` — Zod schemas and `parse*` helpers for JSON columns (receipt extracted data; guest split items, people, assignments); validate with these instead of casting
 - `src/server/lib/signed-cookie.ts` — HMAC-SHA256 `signPayload` / `verifyAndParse` (keyed by `AUTH_SECRET`, falling back to `NEXTAUTH_SECRET`), used for the admin impersonation cookie
 - `src/server/lib/strip-undefined.ts` — `stripUndefined`: drops `undefined`-valued keys so optional zod output fits Prisma input types under `exactOptionalPropertyTypes`
-- `src/lib/venmo.ts` — Venmo handle normalization and pay deep links. Venmo UI shows only when the `venmoEnabled` SystemSetting is `'true'` (admin toggle, default off)
+- `src/lib/venmo.ts` — Venmo handle normalization and pay deep links. Venmo pay links and the split page's handle input show only when the `venmoEnabled` SystemSetting is `'true'` (admin toggle, default off) and the currency is USD; the handle field in Settings always shows
+- `src/lib/guest-session.ts` — Claim-session identity helpers shared by client and server: `normalizeGuestName` (trim + lowercase, also the per-person join rate-limit key), `isGuestSessionToken`, and `storedClaimIdentitySchema` for the identity kept in localStorage to rejoin a session
+- `src/lib/avatar.ts` — Shared avatar color and initials helpers
 - `src/lib/currencies.ts` — Currency list for the currency selector
-- `src/server/ai/providers/mock.ts` — Deterministic `mock` AI provider (not user-selectable); CI runs the build and e2e suite with `AI_PROVIDER_PRIORITY=mock`
+- `src/server/ai/providers/mock.ts` — Deterministic `mock` AI provider: accepted by `AI_PROVIDER_PRIORITY` but not listed as a selectable provider or in the admin test UI; CI runs the build and e2e suite with `AI_PROVIDER_PRIORITY=mock`
 - `src/server/trpc/init.ts` — tRPC context, `publicProcedure`, `protectedProcedure`, `groupMemberProcedure`
 - `src/server/trpc/router.ts` — Root app router (exports `AppRouter` type)
 - `src/server/trpc/routers/` — Individual routers: auth, groups, expenses, balances, settlements, activity, receipts, guest, admin
@@ -116,7 +124,7 @@ npx prisma db push   # Push schema without migration (dev only)
 
 - `npm test` — run all unit tests (~490 tests, <2s)
 - Tests live co-located with source: `src/**/*.test.ts`, plus `docker/**/*.test.mjs` for the Docker build scripts
-- Covers most of `src/lib/` and `src/server/lib/`, `ai/registry.ts`, `ai/providers/openai-codex.ts`, `ai/providers/meridian.ts`, the admin, auth, and guest routers, `app/api/upload/route.ts`, and `docker/stage-runtime-deps.mjs`. `git ls-files '*.test.ts' '*.test.mjs'` lists them
+- Covers most of `src/server/lib/`, `src/lib/` money, split-calculator, sign-in-errors, and avatar, `ai/registry.ts`, `ai/providers/openai-codex.ts`, `ai/providers/meridian.ts`, the admin, auth, and guest routers, `app/api/upload/route.ts`, and `docker/stage-runtime-deps.mjs`. `git ls-files '*.test.ts' '*.test.mjs'` lists them
 
 ### E2E Tests (Playwright)
 
@@ -124,7 +132,7 @@ npx prisma db push   # Push schema without migration (dev only)
 - `BASE_URL=http://localhost:3000 npx playwright test --headed` — visual testing
 - `RUN_AI_TESTS=1` — enable AI-dependent tests (requires configured AI provider)
 - Run `npm run dev:full` to start embedded PostgreSQL + dev server for testing
-- Set `AUTH_RATE_LIMIT_MAX=9999`, `AUTH_IP_RATE_LIMIT_MAX=9999`, and `GUEST_RATE_LIMIT_MAX=9999` in `.env` to avoid rate limiting during test runs (every local login shares one IP bucket — Next.js synthesizes `x-forwarded-for` for local requests)
+- Set `AUTH_RATE_LIMIT_MAX=9999`, `AUTH_IP_RATE_LIMIT_MAX=9999`, `REGISTER_RATE_LIMIT_MAX=9999`, and `GUEST_RATE_LIMIT_MAX=9999` in `.env` to lift the per-email and per-IP limits during test runs; the global guest caps and the fixed guest limits in `guest.ts` / `guest-join-limit.ts` still apply (every local request shares one IP bucket — Next.js synthesizes `x-forwarded-for` for local requests)
 - E2e tests use `navigateToGroup(page, name)` helper for pagination-safe group navigation
 - `createTestGroup()` auto-deletes the group on `dispose()` to avoid test pollution
 - Do NOT rely on Chrome DevTools MCP viewport emulation for visual accuracy — it doesn't account for browser chrome
@@ -140,13 +148,13 @@ npx prisma db push   # Push schema without migration (dev only)
 - `LanguageSwitcher` component in sidebar and mobile menu
 - User locale preference stored in `User.locale` field (Prisma schema)
 - `npm run lint:i18n` checks for missing or extra translation keys. CI doesn't run it, so run it after changing any `messages/` file
-- To add a new language: add locale to `src/i18n/routing.ts`, create `messages/{locale}/` with all namespace files, add display config to `languageConfig`
+- To add a new language: add locale to `src/i18n/routing.ts`, create `messages/{locale}/` with all namespace files, add display config to `languageConfig`, and add its `Intl` locale to `moneyLocales` in `src/lib/money.ts` (typed `satisfies Record<Locale, string>`, so `tsc` fails until you do)
 
 ## CI and Releases
 
 - `test.yml` — the required `test` check on PRs: `npm audit --omit=dev --audit-level=high`, `format:check`, `lint`, `tsc --noEmit`, unit tests, `prisma db push` + `prisma/after-push/*.sql` + seed, `build`, then the Playwright suite against `npm run start`
 - `docker-fresh-install.yml` — boots the production image on an empty volume, then restarts it, to exercise `docker/entrypoint.sh` and both SQL phases
-- `audit.yml` — scheduled npm audit; `auto-assign.yml` — assigns new issues to the owner; Dependabot (`.github/dependabot.yml`) groups npm, Actions, and Docker updates
+- `audit.yml` — scheduled npm audit; `auto-assign.yml` — assigns new issues to the owner; Dependabot (`.github/dependabot.yml`) groups npm minor/patch updates (majors come individually) and Actions updates, and also updates the Docker base image
 - No semver releases (retired after v0.8.0): don't bump `package.json` `version` or edit `CHANGELOG.md` for new changes. Each push to `main` runs `auto-release.yml` (tag `build/YYYY.MM.DD.N` + GitHub release listing commits since the previous build) and `docker.yml` (`ghcr.io/sw-carlos-cristobal/sharetab:latest` and `:<short-sha>`). The manual `promote-stable.yml` workflow moves the `stable` git tag and image tag to a chosen build
 
 ## Docker
