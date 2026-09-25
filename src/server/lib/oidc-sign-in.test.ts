@@ -1,11 +1,18 @@
 import { describe, expect, test, vi } from 'vitest';
 import type { PrismaClient } from '@/generated/prisma/client';
-import { decideOidcSignIn, gatherOidcFacts, mapOidcProfile, type OidcSignInFacts } from './oidc-sign-in';
+import {
+  decideOidcSignIn,
+  gatherOidcFacts,
+  mapOidcProfile,
+  readEmailVerified,
+  type OidcSignInFacts,
+} from './oidc-sign-in';
 
 const NEW_IDENTITY: OidcSignInFacts = {
   linkedUserId: null,
   sessionUserId: null,
   email: 'alice@example.com',
+  emailVerified: null,
   userByEmail: null,
   autoRegister: true,
   allowEmailLinking: false,
@@ -38,6 +45,7 @@ describe('decideOidcSignIn', () => {
         linkedUserId: 'user-1',
         sessionUserId: null,
         email: null,
+        emailVerified: false,
         userByEmail: { id: 'user-3', isPlaceholder: true, hasOidcAccount: false },
         autoRegister: false,
         allowEmailLinking: false,
@@ -117,6 +125,26 @@ describe('decideOidcSignIn', () => {
         passwordRegistrationOpen: true,
       }),
     ).toEqual({ allow: false, error: 'OidcAccountNotLinked', reason: 'password_registration_open' });
+  });
+
+  test('refuses linking when the IdP says the email is unverified', () => {
+    // The IdP itself doesn't vouch for the address, so it can't prove who owns the account.
+    expect(
+      decideOidcSignIn({ ...NEW_IDENTITY, userByEmail: EXISTING_USER, allowEmailLinking: true, emailVerified: false }),
+    ).toEqual({ allow: false, error: 'OidcAccountNotLinked', reason: 'email_unverified' });
+  });
+
+  test('links when the IdP confirms the email or leaves email_verified out', () => {
+    const linking = { ...NEW_IDENTITY, userByEmail: EXISTING_USER, allowEmailLinking: true };
+    expect(decideOidcSignIn({ ...linking, emailVerified: true })).toEqual({ allow: true });
+    expect(decideOidcSignIn({ ...linking, emailVerified: null })).toEqual({ allow: true });
+  });
+
+  test('an unverified email does not stop a brand-new identity or a linked one', () => {
+    expect(decideOidcSignIn({ ...NEW_IDENTITY, emailVerified: false })).toEqual({ allow: true });
+    expect(decideOidcSignIn({ ...NEW_IDENTITY, linkedUserId: 'user-1', emailVerified: false })).toEqual({
+      allow: true,
+    });
   });
 
   test('open password registration does not affect brand-new identities', () => {
@@ -201,6 +229,24 @@ describe('mapOidcProfile', () => {
   });
 });
 
+describe('readEmailVerified', () => {
+  test('reads a boolean claim', () => {
+    expect(readEmailVerified({ email_verified: true })).toBe(true);
+    expect(readEmailVerified({ email_verified: false })).toBe(false);
+  });
+
+  test('reads the "true" / "false" strings some IdPs send', () => {
+    expect(readEmailVerified({ email_verified: 'true' })).toBe(true);
+    expect(readEmailVerified({ email_verified: 'false' })).toBe(false);
+  });
+
+  test('returns null when the claim is missing or not a boolean', () => {
+    expect(readEmailVerified({})).toBeNull();
+    expect(readEmailVerified({ email_verified: 'yes' })).toBeNull();
+    expect(readEmailVerified({ email_verified: 0 })).toBeNull();
+  });
+});
+
 type MatchRow = { id: string; email: string; isPlaceholder: boolean };
 
 function mockDb(overrides: {
@@ -234,6 +280,7 @@ describe('gatherOidcFacts', () => {
   const INPUT = {
     providerAccountId: 'sub-1',
     email: 'alice@example.com',
+    emailVerified: null,
     sessionUserId: null,
     autoRegister: true,
     allowEmailLinking: false,
@@ -344,7 +391,17 @@ describe('gatherOidcFacts', () => {
 
   test('passes the config flags through', async () => {
     const { client } = mockDb({});
-    const facts = await gatherOidcFacts(client, { ...INPUT, autoRegister: false, allowEmailLinking: true });
-    expect(facts).toMatchObject({ autoRegister: false, allowEmailLinking: true, email: 'alice@example.com' });
+    const facts = await gatherOidcFacts(client, {
+      ...INPUT,
+      autoRegister: false,
+      allowEmailLinking: true,
+      emailVerified: false,
+    });
+    expect(facts).toMatchObject({
+      autoRegister: false,
+      allowEmailLinking: true,
+      email: 'alice@example.com',
+      emailVerified: false,
+    });
   });
 });

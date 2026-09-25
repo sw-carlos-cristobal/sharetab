@@ -27,6 +27,8 @@ export interface OidcSignInFacts {
    * passes the linked user's stored email instead (unused by the policy).
    */
   email: string | null;
+  /** The IdP's `email_verified` claim, or null when it doesn't send one. */
+  emailVerified: boolean | null;
   /** The user with that email ignoring case, or 'ambiguous' when several case variants exist. */
   userByEmail: { id: string; isPlaceholder: boolean; hasOidcAccount: boolean } | 'ambiguous' | null;
   autoRegister: boolean;
@@ -40,7 +42,12 @@ export interface OidcSignInFacts {
  * `OidcAccountNotLinked` message; the reason is logged for the admin.
  */
 export type OidcLinkRefusal =
-  'ambiguous_email' | 'placeholder' | 'already_linked' | 'linking_disabled' | 'password_registration_open';
+  | 'ambiguous_email'
+  | 'placeholder'
+  | 'already_linked'
+  | 'linking_disabled'
+  | 'email_unverified'
+  | 'password_registration_open';
 
 export type OidcSignInDecision =
   | { allow: true }
@@ -60,6 +67,9 @@ function linkRefusal(
   // anyone who can claim the email at the IdP could attach a second one.
   if (user.hasOidcAccount) return 'already_linked';
   if (!facts.allowEmailLinking) return 'linking_disabled';
+  // The IdP itself doesn't vouch for the address (Authentik's default email
+  // mapping always says so), so it proves nothing about who owns the account.
+  if (facts.emailVerified === false) return 'email_unverified';
   // While anyone can register a password account, someone could register
   // another person's address in advance and receive their IdP identity on
   // that person's first SSO sign-in.
@@ -121,9 +131,18 @@ export function mapOidcProfile(claims: Record<string, unknown>): OidcUserProfile
   };
 }
 
+/** The `email_verified` claim; some IdPs send it as the string "true" or "false". */
+export function readEmailVerified(claims: Record<string, unknown>): boolean | null {
+  const value = claims['email_verified'];
+  if (value === true || value === 'true') return true;
+  if (value === false || value === 'false') return false;
+  return null;
+}
+
 export interface OidcFactsInput {
   providerAccountId: string;
   email: string | null;
+  emailVerified: boolean | null;
   sessionUserId: string | null;
   autoRegister: boolean;
   allowEmailLinking: boolean;
@@ -171,6 +190,7 @@ export async function gatherOidcFacts(db: PrismaClient, input: OidcFactsInput): 
     linkedUserId: account?.userId ?? null,
     sessionUserId: sessionUser?.id ?? null,
     email: input.email,
+    emailVerified: input.emailVerified,
     userByEmail,
     autoRegister: input.autoRegister,
     allowEmailLinking: input.allowEmailLinking,

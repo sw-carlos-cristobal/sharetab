@@ -8,7 +8,13 @@ import Nodemailer from 'next-auth/providers/nodemailer';
 import { db } from './db';
 import { logger } from './lib/logger';
 import { parseAuthConfig } from './lib/auth-config';
-import { OIDC_PROVIDER_ID, decideOidcSignIn, gatherOidcFacts, mapOidcProfile } from './lib/oidc-sign-in';
+import {
+  OIDC_PROVIDER_ID,
+  decideOidcSignIn,
+  gatherOidcFacts,
+  mapOidcProfile,
+  readEmailVerified,
+} from './lib/oidc-sign-in';
 import { authorizePasswordLogin } from './lib/password-login';
 import { findUserByEmail } from './lib/user-email';
 
@@ -116,7 +122,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
   callbacks: {
-    async signIn({ user, account }): Promise<boolean | string> {
+    async signIn({ user, account, profile }): Promise<boolean | string> {
       if (account?.provider !== OIDC_PROVIDER_ID || !authConfig.oidc) return true;
 
       // The session this browser already has, if any, so an unlinked IdP
@@ -125,6 +131,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const facts = await gatherOidcFacts(db, {
         providerAccountId: account.providerAccountId,
         email: user.email ?? null,
+        // Raw claims from the UserInfo endpoint (see `idToken: false` above).
+        emailVerified: readEmailVerified(profile ?? {}),
         sessionUserId: session?.user?.id ?? null,
         autoRegister: authConfig.oidc.autoRegister,
         allowEmailLinking: authConfig.oidc.allowEmailLinking,

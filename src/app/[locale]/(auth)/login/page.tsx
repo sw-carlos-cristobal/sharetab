@@ -57,7 +57,9 @@ function LoginForm() {
   // Password login stays the default if the options can't be loaded, so the
   // page never renders empty.
   const passwordLogin = loginOptions.data?.passwordLogin ?? true;
-  const magicLinkOnly = !passwordLogin && (loginOptions.data?.magicLink ?? false);
+  // Without email settings there is no magic-link provider to send to.
+  const magicLinkEnabled = loginOptions.data?.magicLink ?? false;
+  const magicLinkOnly = !passwordLogin && magicLinkEnabled;
   const oidc = loginOptions.data?.oidc ?? null;
 
   // Errors from Auth.js redirects (`/login?error=...`) show until the user
@@ -199,13 +201,15 @@ function LoginForm() {
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <Label htmlFor="password">{t('password')}</Label>
-                        <button
-                          type="button"
-                          onClick={() => setShowMagicLink(true)}
-                          className="text-xs text-primary hover:text-primary/80 transition-colors"
-                        >
-                          {t('forgotPassword')}
-                        </button>
+                        {magicLinkEnabled && (
+                          <button
+                            type="button"
+                            onClick={() => setShowMagicLink(true)}
+                            className="text-xs text-primary hover:text-primary/80 transition-colors"
+                          >
+                            {t('forgotPassword')}
+                          </button>
+                        )}
                       </div>
                       <Input
                         id="password"
@@ -226,16 +230,20 @@ function LoginForm() {
                     </Button>
                   </form>
 
-                  <OrDivider label={t('or')} />
+                  {magicLinkEnabled && (
+                    <>
+                      <OrDivider label={t('or')} />
 
-                  <Button
-                    variant="outline"
-                    className="w-full rounded-full h-10 text-sm border-primary/20 text-muted-foreground hover:text-foreground hover:border-primary/40"
-                    onClick={() => setShowMagicLink(true)}
-                  >
-                    <Mail className="mr-2 h-4 w-4" />
-                    {t('magicLink')}
-                  </Button>
+                      <Button
+                        variant="outline"
+                        className="w-full rounded-full h-10 text-sm border-primary/20 text-muted-foreground hover:text-foreground hover:border-primary/40"
+                        onClick={() => setShowMagicLink(true)}
+                      >
+                        <Mail className="mr-2 h-4 w-4" />
+                        {t('magicLink')}
+                      </Button>
+                    </>
+                  )}
                 </>
               ) : (
                 <>
