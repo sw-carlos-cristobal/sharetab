@@ -6,7 +6,13 @@ import { useLocale, useTranslations } from 'next-intl';
 import { trpc } from '@/lib/trpc';
 import { formatCents } from '@/lib/money';
 import { copyToClipboard } from '@/lib/clipboard';
-import { claimStorageKey, storedClaimIdentitySchema, type StoredClaimIdentity } from '@/lib/guest-session';
+import {
+  claimStorageKey,
+  personalLinkHash,
+  readPersonalLinkToken,
+  storedClaimIdentitySchema,
+  type StoredClaimIdentity,
+} from '@/lib/guest-session';
 import { calculateSplitTotals } from '@/lib/split-calculator';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,6 +29,7 @@ import {
   Pencil,
   X,
   Link2,
+  MonitorSmartphone,
   Scissors,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -187,6 +194,8 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   // which only updates after a render, so a fast double tap could otherwise send two joins
   // for the same name (and the second is refused: "Someone has already joined under this name").
   const joinInFlight = useRef(false);
+  // Person token from a personal link (#me=...) this page was opened with, if any
+  const linkedToken = useRef<string | null>(null);
 
   // Become this person on this device, and remember it for the next visit
   function adoptIdentity(identity: { personIndex: number; personToken: string; name: string }) {
@@ -224,12 +233,19 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   const resumeSession = trpc.guest.resumeSession.useMutation({
     retry: (failureCount, error) => failureCount < 2 && (error.data?.httpStatus ?? 500) >= 500,
     onSuccess: (data, variables) => {
+      const fromLink = variables.personToken === linkedToken.current;
       if (data) {
         adoptIdentity({ ...data, personToken: variables.personToken });
+      } else if (fromLink) {
+        // The user opened a personal link on purpose, so say why it didn't work
+        toast.error(t('personalLinkInvalid'));
       } else {
         // Nobody holds the stored token any more (e.g. this person was removed)
         removeStoredClaimIdentity(token);
       }
+    },
+    onError: (error, variables) => {
+      if (variables.personToken === linkedToken.current) toast.error(error.message);
     },
     onSettled: () => {
       joinInFlight.current = false;
@@ -262,19 +278,29 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     }
   }, [session.data, profile.data?.venmoUsername, profile.isFetched, session.isLoading, authSession?.user, authStatus]);
 
-  // Auto-rejoin from localStorage when session data loads
+  // Take the token out of a personal link right away, so it doesn't stay in the address bar,
+  // the history entry, or a link copied from this page
+  useEffect(() => {
+    const linked = readPersonalLinkToken(window.location.hash);
+    if (!linked) return;
+    linkedToken.current = linked;
+    window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
+  }, []);
+
+  // Rejoin as the person this device joined as (or the one a personal link names) once the
+  // session loads. A personal link wins over what this device stored.
   useEffect(() => {
     if (autoRejoinAttempted.current || personIndex !== null || !session.data) return;
     if (session.data.status !== 'CLAIMING') return;
 
-    const stored = getStoredClaimIdentity(token);
-    if (!stored) return;
+    const personToken = linkedToken.current ?? getStoredClaimIdentity(token)?.personToken;
+    if (!personToken) return;
 
     // A join the user already started wins; resuming now could adopt a different person
     if (joinInFlight.current) return;
     autoRejoinAttempted.current = true;
     joinInFlight.current = true;
-    resumeSession.mutate({ token, personToken: stored.personToken });
+    resumeSession.mutate({ token, personToken });
   }, [session.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const claimItems = trpc.guest.claimItems.useMutation({
@@ -440,8 +466,35 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   }
 
   async function copyLink() {
-    if (await copyToClipboard(window.location.href)) {
+    // The plain share link; never carry a #fragment, which could hold a personal token
+    const url = new URL(window.location.href);
+    url.hash = '';
+    if (await copyToClipboard(url.toString())) {
       toast.success(t('linkCopied'));
+    } else {
+      toast.error(tc('actions.copyFailed'));
+    }
+  }
+
+  // Share this person's own link, so they can continue as themselves on another device
+  async function sharePersonalLink() {
+    if (!personToken) return;
+    const url = new URL(window.location.href);
+    url.search = '';
+    url.hash = personalLinkHash(personToken);
+    const link = url.toString();
+    // Web Share opens the phone's share sheet (Messages, AirDrop, email); it needs HTTPS
+    if (typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ title: t('personalLinkShareTitle'), url: link });
+        return;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        // Otherwise fall back to copying
+      }
+    }
+    if (await copyToClipboard(link)) {
+      toast.success(t('personalLinkCopied'));
     } else {
       toast.error(tc('actions.copyFailed'));
     }
@@ -824,11 +877,19 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
         </CardContent>
       </Card>
 
-      {/* Copy link */}
-      <Button type="button" variant="outline" size="sm" onClick={copyLink} data-testid="copy-link-btn">
-        <Link2 className="mr-2 h-4 w-4" />
-        {t('copyLink')}
-      </Button>
+      {/* Copy link, and this person's own link for their other devices */}
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={copyLink} data-testid="copy-link-btn">
+          <Link2 className="mr-2 h-4 w-4" />
+          {t('copyLink')}
+        </Button>
+        {personToken && (
+          <Button type="button" variant="outline" size="sm" onClick={sharePersonalLink} data-testid="personal-link-btn">
+            <MonitorSmartphone className="mr-2 h-4 w-4" />
+            {t('continueOnAnotherDevice')}
+          </Button>
+        )}
+      </div>
 
       {/* Receipt image viewer */}
       {data.receiptImagePath && (

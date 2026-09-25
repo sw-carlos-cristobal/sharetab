@@ -134,6 +134,72 @@ test.describe('Claim page — rejoin buttons', () => {
   });
 });
 
+test.describe('Claim page — continue on another device', () => {
+  async function createSession(merchantName: string) {
+    const ctx = await request.newContext({ baseURL: BASE });
+    const createRes = await trpcMutation(ctx, 'guest.createClaimSession', {
+      receiptData: { merchantName, subtotal: 1500, tax: 0, tip: 0, total: 1500, currency: 'USD' },
+      items: [{ name: 'Tacos', quantity: 1, unitPrice: 1500, totalPrice: 1500 }],
+      creatorName: 'Alice',
+      paidByName: 'Alice',
+    });
+    const shareToken: string = (await createRes.json()).result.data.json.shareToken;
+    return { ctx, shareToken };
+  }
+
+  test('a personal link from one device brings the same person back on another', async ({ browser }) => {
+    const { ctx, shareToken } = await createSession('Phone To PC');
+
+    // Phone: join as Alice and copy the personal link (Web Share isn't used here, so it copies)
+    const phone = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
+    await phone.addInitScript(() => Object.defineProperty(navigator, 'share', { value: undefined }));
+    const phonePage = await phone.newPage();
+    await phonePage.goto(`/en/split/${shareToken}/claim`);
+    await phonePage.getByTestId('rejoin-person-0').click();
+    await expect(phonePage.locator('[data-testid^="claim-item-"]').first()).toBeVisible({ timeout: 15000 });
+    await phonePage.getByTestId('personal-link-btn').click();
+    await expect(phonePage.getByText('Personal link copied')).toBeVisible({ timeout: 10000 });
+    const personalLink = await phonePage.evaluate(() => navigator.clipboard.readText());
+    expect(personalLink).toContain(`/split/${shareToken}/claim#me=`);
+
+    // PC: opening the link resumes as Alice, and the token leaves the address bar
+    const pc = await browser.newContext();
+    const pcPage = await pc.newPage();
+    await pcPage.goto(personalLink);
+    await expect(pcPage.getByText('Alice (you)').first()).toBeVisible({ timeout: 15000 });
+    expect(pcPage.url()).not.toContain('#me=');
+    const session = await trpcResult(await trpcQuery(ctx, 'guest.getSession', { token: shareToken }));
+    expect(session.people).toHaveLength(1);
+
+    await phone.close();
+    await pc.close();
+    await ctx.dispose();
+  });
+
+  test('a personal link that no longer works says so and leaves the join form up', async ({ page }) => {
+    const { ctx, shareToken } = await createSession('Dead Link Diner');
+    await page.goto(`/en/split/${shareToken}/claim#me=33333333-3333-4333-8333-333333333333`);
+    await expect(page.getByText('This personal link no longer works')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId('claim-join-form')).toBeVisible();
+    expect(page.url()).not.toContain('#me=');
+    await ctx.dispose();
+  });
+
+  test('"Copy link" never includes a personal token', async ({ browser }) => {
+    const { ctx, shareToken } = await createSession('Plain Link Cafe');
+    const context = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
+    const page = await context.newPage();
+    await page.goto(`/en/split/${shareToken}/claim`);
+    await page.getByTestId('rejoin-person-0').click();
+    await expect(page.locator('[data-testid^="claim-item-"]').first()).toBeVisible({ timeout: 15000 });
+    await page.getByTestId('copy-link-btn').click();
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    expect(copied).not.toContain('#');
+    await context.close();
+    await ctx.dispose();
+  });
+});
+
 test.describe('Claim page — receipt image', () => {
   test.beforeEach(({}, testInfo) => {
     if (!process.env.RUN_AI_TESTS) testInfo.skip(true, 'Set RUN_AI_TESTS=1 to enable (requires receipt with image)');

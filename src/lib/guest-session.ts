@@ -20,3 +20,18 @@ export function normalizeGuestName(name: string): string {
 export function isGuestSessionToken(value: string): boolean {
   return guestSessionTokenSchema.safeParse(value).success;
 }
+
+// A personal link is the claim page URL with this device's person token in the #fragment,
+// so the same person can continue on another device. Browsers never send the fragment to
+// the server, so the token stays out of requests, server logs and Referer headers.
+const PERSONAL_LINK_PARAM = 'me';
+
+export function personalLinkHash(personToken: string): string {
+  return `#${PERSONAL_LINK_PARAM}=${personToken}`;
+}
+
+/** The person token in a personal link's #fragment, or null if there isn't a valid one. */
+export function readPersonalLinkToken(hash: string): string | null {
+  const value = new URLSearchParams(hash.replace(/^#/, '')).get(PERSONAL_LINK_PARAM);
+  return value && isGuestSessionToken(value) ? value : null;
+}
