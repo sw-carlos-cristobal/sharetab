@@ -48,6 +48,17 @@ npx prisma db push   # Push schema without migration (dev only)
 - `src/server/lib/env.ts` — `parseBooleanValue`: the boolean env vocabulary (true/1/yes/on, false/0/no/off) shared by `auth-config.ts` and `guest-uploads.ts`
 - `src/server/lib/guest-uploads.ts` — Guest receipt upload kill switch: admin toggle (`guestUploadsEnabled` SystemSetting, default on, cached 10s, save via `saveGuestUploadsSetting`) overridden by `DISABLE_GUEST_UPLOADS=true` (the admin save is refused while it is set; an unrecognized value logs a warning and is ignored). When off, `canUseGuestUploads` refuses anonymous callers at `/api/upload?guest=true` (403) and `guest.processReceipt` (FORBIDDEN); signed-in users with an active (not suspended) account share the Quick Split path and keep access
 - `src/server/lib/guest-join-limit.ts` — `checkJoinRateLimit` for `guest.joinSession`: 10 joins/min per person (share token + the caller's person token when it sends one, else + normalized name) and 200/min per share token (twice the 100-person session cap). The session budget is peeked before the person budget is spent, so a refused call consumes nothing. A client rotating names can use up the per-token budget (accepted, like the other per-token guest limits)
+- `src/server/lib/guest-transaction.ts` — `guestTransaction`: runs a claim-session transaction at Repeatable Read through `withTransactionRetry`; each transaction must read and write only the one `GuestSplit` row it looks up, and may run more than once (keep side effects outside it). A conflict that outlasts the retries becomes a generic `CONFLICT` error
+- `src/server/lib/transaction-retry.ts` — `withTransactionRetry`: re-runs a transaction that Postgres aborted with a serialization failure or deadlock (40001 / 40P01, seen through `@prisma/adapter-pg` as P2034 or `TransactionWriteConflict`), up to 10 runs with capped, jittered backoff
+- `src/server/lib/rate-limit.ts` — In-memory rate limiter: `checkRateLimit` (consume), `peekRateLimit` (check without consuming), `refundRateLimit`; `parsePositiveInt` reads env limits so a non-numeric value falls back to the default instead of disabling the limiter. Counters reset on restart
+- `src/server/lib/client-ip.ts` — `getClientIp`: `cf-connecting-ip`, then `x-real-ip`, then the first `x-forwarded-for` entry; returns `FALLBACK_IP` (`'global'`) when none is set. Login skips its per-IP bucket on `FALLBACK_IP`; guest endpoints share it as one bucket. The headers are spoofable without a trusted reverse proxy
+- `src/server/lib/exchange-rates.ts` — `getExchangeRate(from, to, date?)` from frankfurter.app (ECB rates, no API key), cached in memory for 1 hour; returns `null` on failure, and callers then ask for a manual rate. Used by the expenses, settlements, and receipts routers to convert into the group's currency
+- `src/server/lib/json-schemas.ts` — Zod schemas and `parse*` helpers for JSON columns (receipt extracted data; guest split items, people, assignments, summary); validate with these instead of casting
+- `src/server/lib/signed-cookie.ts` — HMAC-SHA256 `signPayload` / `verifyAndParse` (keyed by `AUTH_SECRET`, falling back to `NEXTAUTH_SECRET`), used for the admin impersonation cookie
+- `src/server/lib/strip-undefined.ts` — `stripUndefined`: drops `undefined`-valued keys so optional zod output fits Prisma input types under `exactOptionalPropertyTypes`
+- `src/lib/venmo.ts` — Venmo handle normalization and pay deep links. Venmo UI shows only when the `venmoEnabled` SystemSetting is `'true'` (admin toggle, default off)
+- `src/lib/currencies.ts` — Currency list for the currency selector
+- `src/server/ai/providers/mock.ts` — Deterministic `mock` AI provider (not user-selectable); CI runs the build and e2e suite with `AI_PROVIDER_PRIORITY=mock`
 - `src/server/trpc/init.ts` — tRPC context, `publicProcedure`, `protectedProcedure`, `groupMemberProcedure`
 - `src/server/trpc/router.ts` — Root app router (exports `AppRouter` type)
 - `src/server/trpc/routers/` — Individual routers: auth, groups, expenses, balances, settlements, activity, receipts, guest, admin
@@ -63,8 +74,9 @@ npx prisma db push   # Push schema without migration (dev only)
 - `src/i18n/routing.ts` — Locale list, default locale, and next-intl routing config
 - `src/i18n/request.ts` — Server-side locale resolution for next-intl
 - `src/i18n/navigation.ts` — Locale-aware `Link`, `redirect`, `usePathname`, `useRouter`
-- `messages/{locale}/` — Translation files with namespaces: admin, auth, common, dashboard, expenses, groups, settings
-- `docker/` — Dockerfile (multi-stage) + docker-compose.yml
+- `messages/{locale}/` — Translation files with namespaces: admin, auth, common, dashboard, expenses, groups, settings, split, splits
+- `docker/` — Dockerfile (multi-stage), docker-compose.yml (builds from the checkout), entrypoint.sh (starts bundled PostgreSQL, runs the SQL phases, starts Node)
+- `unraid/sharetab.xml` — Unraid template (runs `ghcr.io/sw-carlos-cristobal/sharetab:stable`); keep its variables in sync with `.env.example` and `docker/docker-compose.yml`
 
 ## Key Conventions
 
@@ -104,7 +116,7 @@ npx prisma db push   # Push schema without migration (dev only)
 
 - `npm test` — run all unit tests (~490 tests, <2s)
 - Tests live co-located with source: `src/**/*.test.ts`, plus `docker/**/*.test.mjs` for the Docker build scripts
-- Covers: `money.ts`, `split-calculator.ts`, `rate-limit.ts`, `upload-dir.ts`, `balance-calculator.ts`, `ai/registry.ts`, `ai/providers/openai-codex.ts`, `ai/providers/meridian.ts`, `lib/normalize-date.ts`, `lib/meridian-login.ts`, `lib/receipt-processor.ts`, `lib/auth-health-poller.ts`, `lib/openai-codex-login.ts`, `lib/auth-config.ts`, `lib/oidc-sign-in.ts`, `lib/user-email.ts`, `lib/password-login.ts`, `trpc/routers/admin.ts`, `trpc/routers/auth.ts`, `src/lib/sign-in-errors.ts`, `lib/guest-uploads.ts`, `lib/guest-join-limit.ts`, `trpc/routers/guest.ts`, `app/api/upload/route.ts`, `docker/stage-runtime-deps.mjs`
+- Covers most of `src/lib/` and `src/server/lib/`, `ai/registry.ts`, `ai/providers/openai-codex.ts`, `ai/providers/meridian.ts`, the admin, auth, and guest routers, `app/api/upload/route.ts`, and `docker/stage-runtime-deps.mjs`. `git ls-files '*.test.ts' '*.test.mjs'` lists them
 
 ### E2E Tests (Playwright)
 
@@ -122,21 +134,28 @@ npx prisma db push   # Push schema without migration (dev only)
 - Uses `next-intl` with `createNextIntlPlugin` in `next.config.ts`
 - 9 locales defined in `src/i18n/routing.ts`: en, es, sv, fr, de, pt-BR, ja, zh-CN, ko (default: en)
 - All routes under `src/app/[locale]/` — the `[locale]` segment is required
-- Translation files: `messages/{locale}/{namespace}.json` (namespaces: admin, auth, common, dashboard, expenses, groups, settings)
+- Translation files: `messages/{locale}/{namespace}.json` (namespaces: admin, auth, common, dashboard, expenses, groups, settings, split, splits). A new namespace also needs an import in `src/i18n/request.ts`
 - Use `useTranslations(namespace)` in client components, `getTranslations(namespace)` in server components
 - Locale-aware navigation: import `Link`, `redirect`, `usePathname`, `useRouter` from `@/i18n/navigation`
 - `LanguageSwitcher` component in sidebar and mobile menu
 - User locale preference stored in `User.locale` field (Prisma schema)
-- `npm run lint:i18n` checks for missing or extra translation keys
+- `npm run lint:i18n` checks for missing or extra translation keys. CI doesn't run it, so run it after changing any `messages/` file
 - To add a new language: add locale to `src/i18n/routing.ts`, create `messages/{locale}/` with all namespace files, add display config to `languageConfig`
+
+## CI and Releases
+
+- `test.yml` — the required `test` check on PRs: `npm audit --omit=dev --audit-level=high`, `format:check`, `lint`, `tsc --noEmit`, unit tests, `prisma db push` + `prisma/after-push/*.sql` + seed, `build`, then the Playwright suite against `npm run start`
+- `docker-fresh-install.yml` — boots the production image on an empty volume, then restarts it, to exercise `docker/entrypoint.sh` and both SQL phases
+- `audit.yml` — scheduled npm audit; `auto-assign.yml` — assigns new issues to the owner; Dependabot (`.github/dependabot.yml`) groups npm, Actions, and Docker updates
+- No semver releases (retired after v0.8.0): don't bump `package.json` `version` or edit `CHANGELOG.md` for new changes. Each push to `main` runs `auto-release.yml` (tag `build/YYYY.MM.DD.N` + GitHub release listing commits since the previous build) and `docker.yml` (`ghcr.io/sw-carlos-cristobal/sharetab:latest` and `:<short-sha>`). The manual `promote-stable.yml` workflow moves the `stable` git tag and image tag to a chosen build
 
 ## Docker
 
-All-in-one container: PostgreSQL is bundled inside — no external database required. Requires `NEXTAUTH_SECRET` and `AUTH_SECRET` env vars.
+All-in-one container: PostgreSQL is bundled inside — no external database required. Requires `NEXTAUTH_SECRET` and `AUTH_SECRET` env vars. `docker/docker-compose.yml` builds the image from the checkout, so upgrading it means `git pull` + `--build`.
 
 Run `npm run test:docker` before pushing a change to `docker/`, the entrypoint, `prisma/` SQL, or dependencies. It builds the image and runs `scripts/docker-smoke.sh`: fresh install on an empty volume, upgrade restarts, and the Meridian provider starting and running through the app (it signs in as an admin and calls the admin "Test Receipt Extraction" endpoint). The container gets a unique name and publishes no ports, so it's safe on a host already running ShareTab; point `DOCKER_HOST=ssh://user@host` at a remote daemon when there's no local Docker (Docker access is root-equivalent on that host). CI runs the same script on pull requests (Docker Fresh Install), and `docker.yml` pushes the image it tested only after the script passes. `--meridian-auth <dir>` adds a live receipt extraction through Meridian using a scratch copy of a Claude login directory on the Docker host (local runs only; needs a token valid for 30+ minutes, and fails if the login was refreshed during the run).
 
 ```bash
-cd docker && docker compose up -d    # Start app (PostgreSQL included)
+cd docker && docker compose up -d --build    # Build and start app (PostgreSQL included)
 docker compose exec sharetab su-exec postgres pg_dump -U sharetab sharetab > backup.sql  # Backup
 ```
