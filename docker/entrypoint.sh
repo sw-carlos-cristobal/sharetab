@@ -88,6 +88,17 @@ fi
 echo "Running database migrations..."
 NODE_PATH=/prisma-cli/node_modules node /prisma-cli/node_modules/prisma/build/index.js db push
 
+# Run SQL that needs the schema to exist and that prisma db push can't express
+# (e.g. an index on lower(email)). Each file must be idempotent; any failure
+# stops startup, so files log a warning instead for anything optional.
+if [ -d "/app/prisma/after-push" ]; then
+  for sqlfile in /app/prisma/after-push/*.sql; do
+    [ -f "$sqlfile" ] || continue
+    echo "Running post-schema SQL: $(basename "$sqlfile")..."
+    su-exec postgres psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$sqlfile" 2>&1
+  done
+fi
+
 # ── Claude credentials: persistent shared dir for meridian provider ──
 export CLAUDE_DIR="${CLAUDE_DIR:-/app/claude}"
 mkdir -p "$CLAUDE_DIR"

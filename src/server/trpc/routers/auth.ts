@@ -8,8 +8,10 @@ import { locales } from '@/i18n/routing';
 import { stripUndefined } from '../../lib/strip-undefined';
 import { parseAuthConfig } from '../../lib/auth-config';
 import { findUsersByEmail } from '../../lib/user-email';
+import { Prisma } from '@/generated/prisma/client';
 
 const REGISTRATION_CLOSED = 'Registration is currently closed.';
+const EMAIL_TAKEN = 'Unable to create account. Please try a different email or sign in.';
 
 export const authRouter = createTRPCRouter({
   getSession: publicProcedure.query(({ ctx }) => {
@@ -100,21 +102,28 @@ export const authRouter = createTRPCRouter({
       // every sign-in method matches users by email ignoring case.
       const existing = await findUsersByEmail(ctx.db, input.email);
       if (existing.length > 0) {
-        throw new TRPCError({
-          code: 'CONFLICT',
-          message: 'Unable to create account. Please try a different email or sign in.',
-        });
+        throw new TRPCError({ code: 'CONFLICT', message: EMAIL_TAKEN });
       }
 
       const passwordHash = await bcrypt.hash(input.password, 12);
       const user = await ctx.db.$transaction(async (tx) => {
-        const created = await tx.user.create({
-          data: {
-            name: input.name,
-            email: input.email,
-            passwordHash,
-          },
-        });
+        const created = await tx.user
+          .create({
+            data: {
+              name: input.name,
+              email: input.email,
+              passwordHash,
+            },
+          })
+          .catch((error: unknown) => {
+            // A concurrent sign-up for this address, in any letter case, got
+            // in after the check above; the unique indexes on email and on
+            // lower(email) (prisma/after-push/) reject this one.
+            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+              throw new TRPCError({ code: 'CONFLICT', message: EMAIL_TAKEN });
+            }
+            throw error;
+          });
 
         if (input.inviteCode && mode === 'invite-only') {
           const claimed = await tx.systemInvite.updateMany({

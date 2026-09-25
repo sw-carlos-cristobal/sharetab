@@ -1,4 +1,5 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
+import { Prisma } from '@/generated/prisma/client';
 
 vi.mock('next/headers', () => ({
   cookies: vi.fn().mockResolvedValue({ get: vi.fn().mockReturnValue(null) }),
@@ -103,6 +104,59 @@ describe('auth.register duplicate check', () => {
       api.register({ name: 'Mallory', email: 'bob@example.com', password: 'password123' }),
     ).rejects.toMatchObject({ code: 'CONFLICT' });
     expect(mockDb.$transaction).not.toHaveBeenCalled();
+  });
+
+  // Two sign-ups for case variants of one address can both pass the check
+  // above; the database's unique index on lower(email) stops the second.
+  function signUpRace(createError: unknown) {
+    mockDb.systemSetting.findUnique.mockResolvedValue(null);
+    mockDb.$queryRaw.mockResolvedValue([]);
+    const tx = { user: { create: vi.fn().mockRejectedValue(createError) } };
+    mockDb.$transaction.mockImplementation(async (fn: (client: typeof tx) => unknown) => fn(tx));
+  }
+
+  test('a sign-up that loses the race to a case variant gets the same conflict error', async () => {
+    signUpRace(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed on the constraint: `User_email_lower_key`', {
+        code: 'P2002',
+        clientVersion: 'test',
+      }),
+    );
+    const api = await caller();
+    await expect(
+      api.register({ name: 'Mallory', email: 'bob@example.com', password: 'password123' }),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: 'Unable to create account. Please try a different email or sign in.',
+    });
+  });
+
+  test('other database errors from creating the user are not reported as a duplicate', async () => {
+    signUpRace(
+      new Prisma.PrismaClientKnownRequestError('Foreign key constraint violated', {
+        code: 'P2003',
+        clientVersion: 'test',
+      }),
+    );
+    const api = await caller();
+    await expect(
+      api.register({ name: 'Mallory', email: 'bob@example.com', password: 'password123' }),
+    ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' });
+  });
+
+  test('an invite that is claimed concurrently is still reported as an invite error', async () => {
+    mockDb.systemSetting.findUnique.mockResolvedValue({ key: 'registrationMode', value: 'invite-only' });
+    mockDb.systemInvite.findUnique.mockResolvedValue({ code: 'inv', revokedAt: null, usedAt: null, expiresAt: null });
+    mockDb.$queryRaw.mockResolvedValue([]);
+    const tx = {
+      user: { create: vi.fn().mockResolvedValue({ id: 'new', name: 'Mallory', email: 'bob@example.com' }) },
+      systemInvite: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    };
+    mockDb.$transaction.mockImplementation(async (fn: (client: typeof tx) => unknown) => fn(tx));
+    const api = await caller();
+    await expect(
+      api.register({ name: 'Mallory', email: 'bob@example.com', password: 'password123', inviteCode: 'inv' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN', message: 'Invalid or expired invite code.' });
   });
 });
 
