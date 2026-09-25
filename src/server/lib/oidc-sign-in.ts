@@ -114,7 +114,8 @@ export function mapOidcProfile(claims: Record<string, unknown>): OidcUserProfile
   return {
     id,
     name: name?.slice(0, MAX_NAME_LENGTH) ?? null,
-    email: claim(claims, 'email'),
+    // Auth.js lowercases it too; doing it here doesn't depend on that.
+    email: claim(claims, 'email')?.toLowerCase() ?? null,
     // Rendered as <img src> for other group members: only plain web URLs.
     image: picture && isHttpUrl(picture) ? picture : null,
   };

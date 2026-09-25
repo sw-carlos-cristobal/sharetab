@@ -51,7 +51,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   );
 }
 
-if (process.env.EMAIL_SERVER_HOST) {
+if (authConfig.magicLink) {
   providers.push(
     // @ts-expect-error -- upstream next-auth type bug (not fixable from the call
     // site): NodemailerConfig["server"] is declared `server?: AllTransportOptions`,

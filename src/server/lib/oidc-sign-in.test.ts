@@ -169,6 +169,10 @@ describe('mapOidcProfile', () => {
     expect(mapOidcProfile({ sub: 's' }).name).toBeNull();
   });
 
+  test('lowercases the email (ADMIN_EMAIL and lookups compare lowercase)', () => {
+    expect(mapOidcProfile({ sub: 's', email: 'Alice@Example.COM' }).email).toBe('alice@example.com');
+  });
+
   test('trims email and treats blank or non-string email as missing', () => {
     expect(mapOidcProfile({ sub: 's', email: '  alice@example.com ' }).email).toBe('alice@example.com');
     expect(mapOidcProfile({ sub: 's', email: '   ' }).email).toBeNull();

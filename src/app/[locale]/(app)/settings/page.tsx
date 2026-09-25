@@ -79,8 +79,11 @@ export default function SettingsPage() {
   const profile = trpc.auth.getProfile.useQuery();
   const loginOptions = trpc.auth.getLoginOptions.useQuery();
   // SSO / magic-link-only accounts have no password to change, and with
-  // password login disabled a password would be useless anyway.
-  const showPasswordCard = profile.data?.hasPassword === true && loginOptions.data?.passwordLogin === true;
+  // password login disabled a password would be useless anyway. Hidden while
+  // the options load (no flash); shown if they fail to load, since the server
+  // still enforces the setting.
+  const passwordLoginEnabled = loginOptions.isSuccess ? loginOptions.data.passwordLogin : loginOptions.isError;
+  const showPasswordCard = profile.data?.hasPassword === true && passwordLoginEnabled;
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
