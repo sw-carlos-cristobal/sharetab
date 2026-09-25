@@ -97,11 +97,13 @@ vi.mock('@/server/lib/logger', () => ({
 vi.mock('@/server/lib/rate-limit', () => ({
   checkRateLimit: vi.fn().mockReturnValue({ allowed: true }),
 }));
+const mockCreateProviderByName = vi.fn();
 vi.mock('@/server/ai/registry', () => ({
   getAIProvider: vi.fn().mockResolvedValue({
     name: 'mock-provider',
     isAvailable: vi.fn().mockResolvedValue(true),
   }),
+  createProviderByName: mockCreateProviderByName,
 }));
 
 describe('adminProcedure authorization', () => {
@@ -395,5 +397,62 @@ describe('guest uploads toggle', () => {
     await expect(api.getGuestUploadsEnabled()).rejects.toMatchObject({ code: 'FORBIDDEN' });
     await expect(api.setGuestUploadsEnabled({ enabled: false })).rejects.toMatchObject({ code: 'FORBIDDEN' });
     expect(mockDb.systemSetting.upsert).not.toHaveBeenCalled();
+  });
+});
+
+describe('testAIProvider', () => {
+  const adminSession = { user: { id: 'admin-1', email: 'admin@example.com' } };
+  const input = { providerName: 'openai-codex', imageBase64: 'aGVsbG8=', mimeType: 'image/png' as const };
+
+  async function caller() {
+    const { adminRouter } = await import('./admin');
+    const ctx = { session: adminSession, db: mockDb, headers: new Headers(), impersonating: null };
+    return adminRouter.createCaller(ctx as unknown as Parameters<typeof adminRouter.createCaller>[0]);
+  }
+
+  beforeEach(() => {
+    vi.stubEnv('ADMIN_EMAIL', 'admin@example.com');
+    vi.clearAllMocks();
+    mockDb.user.findUnique.mockResolvedValue({ suspendedAt: null });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test('reports an extraction failure with a status proxies pass through', async () => {
+    // A reverse proxy such as Cloudflare replaces an origin's 502 and 504
+    // bodies with its own HTML page, which hid the provider's message.
+    const { getHTTPStatusCodeFromError } = await import('@trpc/server/http');
+    mockCreateProviderByName.mockResolvedValue({
+      name: 'openai-codex',
+      isAvailable: vi.fn().mockResolvedValue(true),
+      extractReceipt: vi.fn().mockRejectedValue(new Error('OpenAI Codex request failed (429): usage limit reached')),
+    });
+    const api = await caller();
+
+    const error: unknown = await api.testAIProvider(input).catch((err: unknown) => err);
+
+    expect(error).toMatchObject({ message: 'OpenAI Codex request failed (429): usage limit reached' });
+    const status = getHTTPStatusCodeFromError(error as Parameters<typeof getHTTPStatusCodeFromError>[0]);
+    expect([502, 504]).not.toContain(status);
+  });
+
+  test('records the failure in the audit log', async () => {
+    mockCreateProviderByName.mockResolvedValue({
+      name: 'openai-codex',
+      isAvailable: vi.fn().mockResolvedValue(true),
+      extractReceipt: vi.fn().mockRejectedValue(new Error('boom')),
+    });
+    const api = await caller();
+
+    await api.testAIProvider(input).catch(() => undefined);
+
+    expect(mockDb.adminAuditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: 'AI_PROVIDER_TESTED',
+        metadata: expect.objectContaining({ provider: 'openai-codex', success: false, error: 'boom' }),
+      }),
+    });
   });
 });

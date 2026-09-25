@@ -1323,8 +1323,10 @@ export const adminRouter = createTRPCRouter({
           error: message,
         });
 
+        // Not BAD_GATEWAY: reverse proxies (Cloudflare among them) replace a
+        // 502 or 504 body with their own HTML page, which hides this message.
         throw new TRPCError({
-          code: 'BAD_GATEWAY',
+          code: 'INTERNAL_SERVER_ERROR',
           message,
         });
       }
