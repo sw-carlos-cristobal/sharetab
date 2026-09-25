@@ -74,7 +74,9 @@ export DATABASE_URL="${DATABASE_URL:-postgresql://$DB_USER:$DB_PASSWORD@localhos
 
 # ── Run Migrations ──────────────────────────────────────────
 
-# Run manual SQL migrations (for changes prisma db push can't handle, e.g. enum conversions)
+# Run manual SQL migrations (for changes prisma db push can't handle, e.g. enum conversions).
+# They run before `prisma db push` on every start, including a fresh install's
+# first, so each file must be idempotent and a no-op on an empty database.
 if [ -d "/app/prisma/migrations" ]; then
   for sqlfile in /app/prisma/migrations/*.sql; do
     [ -f "$sqlfile" ] || continue
