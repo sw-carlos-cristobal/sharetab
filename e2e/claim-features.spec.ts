@@ -1,11 +1,13 @@
 import { test, expect, request } from '@playwright/test';
-import { trpcMutation, trpcResult, trpcQuery, FAKE_PNG, authedContext, users } from './helpers';
+import { joinGuestSession, trpcMutation, trpcResult, trpcQuery, FAKE_PNG, authedContext, users } from './helpers';
 
 const BASE = process.env.BASE_URL || 'http://localhost:3001';
 
 test.describe('Claim page — rejoin buttons', () => {
-  test('shows existing participants as rejoin buttons', async ({ page }) => {
-    // Create a claiming session with two people already joined
+  test("offers people nobody has joined as yet, but won't let a new device take over someone who joined", async ({
+    page,
+  }) => {
+    // Alice created the split and Pat paid; only Alice has joined
     const ctx = await request.newContext({ baseURL: BASE });
 
     const createRes = await trpcMutation(ctx, 'guest.createClaimSession', {
@@ -22,28 +24,26 @@ test.describe('Claim page — rejoin buttons', () => {
         { name: 'Muffin', quantity: 1, unitPrice: 1000, totalPrice: 1000 },
       ],
       creatorName: 'Alice',
-      paidByName: 'Alice',
+      paidByName: 'Pat',
     });
     expect(createRes.ok()).toBe(true);
     const shareToken = (await createRes.json()).result?.data?.json?.shareToken;
 
-    // Join as Alice first to create a participant
-    const joinRes = await trpcMutation(ctx, 'guest.joinSession', {
-      token: shareToken,
-      name: 'Alice',
-    });
-    expect(joinRes.ok()).toBe(true);
-
+    await joinGuestSession(ctx, { token: shareToken, name: 'Alice' });
     await ctx.dispose();
 
-    // Open the claim page in a browser — should show rejoin button for Alice
+    // A browser without Alice's stored identity sees a join button for Pat only
     await page.goto(`/en/split/${shareToken}/claim`);
     await expect(page.getByTestId('claim-join-form')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId('rejoin-person-1')).toContainText('Pat');
+    await expect(page.getByTestId('rejoin-person-0')).toHaveCount(0);
 
-    // Rejoin button for Alice should be visible
-    const rejoinBtn = page.getByTestId('rejoin-person-0');
-    await expect(rejoinBtn).toBeVisible();
-    await expect(rejoinBtn).toContainText('Alice');
+    // Typing Alice's name is refused, and the page stays on the join form
+    await page.getByTestId('claim-name-input').fill('alice');
+    await page.getByTestId('claim-join-btn').click();
+    await expect(page.getByText('Someone has already joined under this name')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId('claim-join-form')).toBeVisible();
+    await expect(page.locator('[data-testid^="claim-item-"]')).toHaveCount(0);
   });
 
   test('clicking rejoin button auto-joins as that person', async ({ page }) => {
@@ -74,6 +74,63 @@ test.describe('Claim page — rejoin buttons', () => {
 
     // Should auto-join and show claim items (join form disappears)
     await expect(page.locator('[data-testid^="claim-item-"]').first()).toBeVisible({ timeout: 15000 });
+  });
+
+  test('double-tapping a join button joins once, without an "already joined" error', async ({ page }) => {
+    const ctx = await request.newContext({ baseURL: BASE });
+    const createRes = await trpcMutation(ctx, 'guest.createClaimSession', {
+      receiptData: { merchantName: 'Double Tap Diner', subtotal: 1500, tax: 0, tip: 0, total: 1500, currency: 'USD' },
+      items: [{ name: 'Burger', quantity: 1, unitPrice: 1500, totalPrice: 1500 }],
+      creatorName: 'Carol',
+      paidByName: 'Carol',
+    });
+    const shareToken = (await createRes.json()).result?.data?.json?.shareToken;
+
+    const joinRequests: string[] = [];
+    page.on('request', (req) => {
+      if (req.url().includes('guest.joinSession')) joinRequests.push(req.url());
+    });
+
+    await page.goto(`/en/split/${shareToken}/claim`);
+    await expect(page.getByTestId('claim-join-form')).toBeVisible({ timeout: 10000 });
+    await page.getByTestId('rejoin-person-0').dblclick();
+
+    await expect(page.locator('[data-testid^="claim-item-"]').first()).toBeVisible({ timeout: 15000 });
+    await page.waitForLoadState('networkidle');
+    // A second join for the same name would be refused ("Someone has already joined under this name")
+    expect(joinRequests).toHaveLength(1);
+    await expect(page.getByText('Someone has already joined under this name')).toHaveCount(0);
+    const session = await trpcResult(await trpcQuery(ctx, 'guest.getSession', { token: shareToken }));
+    expect(session.people).toHaveLength(1);
+    await ctx.dispose();
+  });
+
+  test('someone who renamed themselves is still recognized when they come back', async ({ page }) => {
+    const ctx = await request.newContext({ baseURL: BASE });
+    const createRes = await trpcMutation(ctx, 'guest.createClaimSession', {
+      receiptData: { merchantName: 'Rename Bistro', subtotal: 1500, tax: 0, tip: 0, total: 1500, currency: 'USD' },
+      items: [{ name: 'Soup', quantity: 1, unitPrice: 1500, totalPrice: 1500 }],
+      creatorName: 'Alice',
+      paidByName: 'Alice',
+    });
+    const shareToken = (await createRes.json()).result?.data?.json?.shareToken;
+
+    await page.goto(`/en/split/${shareToken}/claim`);
+    await page.getByTestId('rejoin-person-0').click();
+    await expect(page.locator('[data-testid^="claim-item-"]').first()).toBeVisible({ timeout: 15000 });
+
+    // Rename herself, then come back to the page
+    await page.getByTestId('edit-person-0').click();
+    await page.getByTestId('edit-name-input-0').fill('Alice S.');
+    await page.locator('button[type="submit"]').click();
+    await expect(page.getByText('Alice S. (you)').first()).toBeVisible({ timeout: 10000 });
+    await page.reload();
+
+    // Still recognized as the same person: no second "Alice" was created
+    await expect(page.getByText('Alice S. (you)').first()).toBeVisible({ timeout: 15000 });
+    const session = await trpcResult(await trpcQuery(ctx, 'guest.getSession', { token: shareToken }));
+    expect(session.people.map((p: { name: string }) => p.name)).toEqual(['Alice S.']);
+    await ctx.dispose();
   });
 });
 

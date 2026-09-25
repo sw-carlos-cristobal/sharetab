@@ -18,17 +18,26 @@ test.describe('guest.joinSession rate limit', () => {
     expect(createRes.ok(), await createRes.text()).toBe(true);
     const shareToken: string = (await createRes.json()).result.data.json.shareToken;
 
-    // The groupSize toggle makes every rejoin write the session row, as a looping client would
+    // Rejoining a name someone holds needs their token, so the looping client here is Alice's
+    // own device. The groupSize toggle makes every rejoin write the session row.
+    let personToken: string | undefined;
     for (let i = 0; i < 10; i++) {
       const res = await trpcMutation(ctx, 'guest.joinSession', {
         token: shareToken,
         name: 'Alice',
         groupSize: (i % 2) + 1,
+        ...(personToken ? { personToken } : {}),
       });
       expect(res.ok(), `join ${i + 1}: ${await res.text()}`).toBe(true);
+      personToken ??= (await res.json()).result.data.json.personToken;
     }
 
-    const refused = await trpcMutation(ctx, 'guest.joinSession', { token: shareToken, name: 'alice', groupSize: 2 });
+    const refused = await trpcMutation(ctx, 'guest.joinSession', {
+      token: shareToken,
+      name: 'alice',
+      groupSize: 2,
+      personToken,
+    });
     expect(refused.status()).toBe(429);
     expect((await trpcError(refused))?.data?.code).toBe('TOO_MANY_REQUESTS');
 

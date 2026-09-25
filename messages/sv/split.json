@@ -108,7 +108,7 @@
     "viewReceipt": "Visa kvitto",
     "hideReceipt": "Dölj kvitto",
     "receiptImage": "Kvittobild",
-    "orRejoinAs": "Eller återanslut som:",
+    "orJoinAs": "Eller gå med som:",
     "claimingFor": "Hävdar för",
     "saveClaimsFor": "Spara val för {name}",
     "editName": "Redigera namn",

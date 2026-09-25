@@ -9,7 +9,9 @@ const mockDb = {
   systemSetting: { findUnique: vi.fn() },
   user: { findUnique: vi.fn() },
   receipt: { findUnique: vi.fn(), updateMany: vi.fn(), update: vi.fn() },
-  $transaction: vi.fn(),
+  guestSplit: { findUnique: vi.fn(), update: vi.fn() },
+  // Interactive transactions run their callback against the same mocks.
+  $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(mockDb)),
 };
 vi.mock('@/server/db', () => ({ db: mockDb }));
 vi.mock('@/server/lib/logger', () => ({
@@ -133,9 +135,151 @@ describe('guest.joinSession rate limit', () => {
   });
 
   test('opens the transaction when the join is within the limit', async () => {
-    mockDb.$transaction.mockRejectedValue(new Error('stop after the rate limit'));
+    mockDb.$transaction.mockRejectedValueOnce(new Error('stop after the rate limit'));
     const api = await caller();
     await expect(api.joinSession({ token: 'share-token', name: 'Alice' })).rejects.toThrow('stop after the rate limit');
     expect(mockDb.$transaction).toHaveBeenCalledOnce();
+  });
+});
+
+const ALICE_TOKEN = '11111111-1111-4111-8111-111111111111';
+const OTHER_TOKEN = '22222222-2222-4222-8222-222222222222';
+
+function claimSession(
+  people: { name: string; personToken?: string; groupSize?: number }[],
+  overrides: { status?: string; expiresAt?: Date } = {},
+) {
+  mockDb.guestSplit.findUnique.mockResolvedValue({
+    id: 'gs1',
+    shareToken: 'share-1',
+    status: 'CLAIMING',
+    expiresAt: new Date(Date.now() + 60_000),
+    receiptId: null,
+    receiptData: { subtotal: 0, tax: 0, tip: 0, total: 0, currency: 'USD' },
+    items: [],
+    people,
+    assignments: [],
+    summary: null,
+    paidByIndex: 0,
+    payerVenmoHandle: null,
+    userId: null,
+    createdAt: new Date(),
+    ...overrides,
+  });
+}
+
+function savedPeople() {
+  const call = mockDb.guestSplit.update.mock.calls.at(-1)?.[0] as { data: { people: unknown } } | undefined;
+  return call?.data.people;
+}
+
+describe('guest.joinSession', () => {
+  test('adds a new name with a fresh token', async () => {
+    claimSession([{ name: 'Host' }]);
+    const joined = await (await caller()).joinSession({ token: 'share-1', name: 'Bob' });
+    expect(joined.personIndex).toBe(1);
+    expect(joined.personToken).toMatch(/^[0-9a-f-]{36}$/);
+    expect(savedPeople()).toEqual([{ name: 'Host' }, { name: 'Bob', personToken: joined.personToken }]);
+  });
+
+  test('gives a pre-seeded name nobody has joined as yet to its first joiner', async () => {
+    claimSession([{ name: 'Host' }]);
+    const joined = await (await caller()).joinSession({ token: 'share-1', name: ' host ' });
+    expect(joined.personIndex).toBe(0);
+    expect(savedPeople()).toEqual([{ name: 'Host', personToken: joined.personToken }]);
+  });
+
+  test("refuses a name someone already joined as when the caller doesn't present that person's token", async () => {
+    claimSession([{ name: 'Alice', personToken: ALICE_TOKEN }]);
+    const error = await (await caller()).joinSession({ token: 'share-1', name: 'alice' }).catch((e: unknown) => e);
+    expect(error).toMatchObject({ code: 'CONFLICT' });
+    expect((error as Error).message).not.toContain(ALICE_TOKEN);
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test('refuses a name someone already joined as when the caller presents a different token', async () => {
+    claimSession([{ name: 'Alice', personToken: ALICE_TOKEN }]);
+    const error = await (
+      await caller()
+    )
+      .joinSession({ token: 'share-1', name: 'Alice', personToken: OTHER_TOKEN })
+      .catch((e: unknown) => e);
+    expect(error).toMatchObject({ code: 'CONFLICT' });
+    expect((error as Error).message).not.toContain(ALICE_TOKEN);
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test('lets the holder of the token rejoin as that person', async () => {
+    claimSession([{ name: 'Host' }, { name: 'Alice', personToken: ALICE_TOKEN }]);
+    expect(await (await caller()).joinSession({ token: 'share-1', name: 'Alice', personToken: ALICE_TOKEN })).toEqual({
+      personIndex: 1,
+      personToken: ALICE_TOKEN,
+    });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test('updates the group size when the token holder rejoins with a new one', async () => {
+    claimSession([{ name: 'Alice', personToken: ALICE_TOKEN }]);
+    await (await caller()).joinSession({ token: 'share-1', name: 'Alice', personToken: ALICE_TOKEN, groupSize: 2 });
+    expect(savedPeople()).toEqual([{ name: 'Alice', personToken: ALICE_TOKEN, groupSize: 2 }]);
+  });
+
+  test('ignores a presented token when joining under a new name', async () => {
+    claimSession([{ name: 'Alice', personToken: ALICE_TOKEN }]);
+    const joined = await (await caller()).joinSession({ token: 'share-1', name: 'Bob', personToken: ALICE_TOKEN });
+    expect(joined.personIndex).toBe(1);
+    expect(joined.personToken).not.toBe(ALICE_TOKEN);
+  });
+});
+
+describe('guest.resumeSession', () => {
+  test('finds the person holding the token, under their current name', async () => {
+    // Alice joined, then renamed herself; her device still has her token
+    claimSession([{ name: 'Host' }, { name: 'Alice S.', personToken: ALICE_TOKEN }]);
+    expect(await (await caller()).resumeSession({ token: 'share-1', personToken: ALICE_TOKEN })).toEqual({
+      personIndex: 1,
+      name: 'Alice S.',
+    });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test('returns null when nobody holds the token any more', async () => {
+    claimSession([{ name: 'Host' }, { name: 'Alice', personToken: OTHER_TOKEN }]);
+    expect(await (await caller()).resumeSession({ token: 'share-1', personToken: ALICE_TOKEN })).toBeNull();
+  });
+
+  test('reports a missing session as NOT_FOUND', async () => {
+    mockDb.guestSplit.findUnique.mockResolvedValue(null);
+    await expect((await caller()).resumeSession({ token: 'nope', personToken: ALICE_TOKEN })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
+
+  test('reports an expired session as NOT_FOUND', async () => {
+    claimSession([{ name: 'Alice', personToken: ALICE_TOKEN }], { expiresAt: new Date(Date.now() - 1000) });
+    await expect((await caller()).resumeSession({ token: 'share-1', personToken: ALICE_TOKEN })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+      message: 'Session expired',
+    });
+  });
+
+  test('still finds the person once the session is finalized', async () => {
+    claimSession([{ name: 'Alice', personToken: ALICE_TOKEN }], { status: 'FINALIZED' });
+    expect(await (await caller()).resumeSession({ token: 'share-1', personToken: ALICE_TOKEN })).toEqual({
+      personIndex: 0,
+      name: 'Alice',
+    });
+  });
+});
+
+describe('guest.getSession people', () => {
+  test('says which people have joined without exposing their tokens', async () => {
+    claimSession([{ name: 'Host' }, { name: 'Alice', personToken: ALICE_TOKEN, groupSize: 2 }]);
+    const session = await (await caller()).getSession({ token: 'share-1' });
+    expect(session.people).toEqual([
+      { name: 'Host', groupSize: 1, hasJoined: false },
+      { name: 'Alice', groupSize: 2, hasJoined: true },
+    ]);
+    expect(JSON.stringify(session)).not.toContain(ALICE_TOKEN);
   });
 });

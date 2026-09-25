@@ -8,6 +8,11 @@ export const storedClaimIdentitySchema = z.object({
 });
 export type StoredClaimIdentity = z.infer<typeof storedClaimIdentitySchema>;
 
+/** The localStorage key under which the claim page keeps this device's identity for a session. */
+export function claimStorageKey(shareToken: string): string {
+  return `sharetab-claim:${shareToken}`;
+}
+
 export function normalizeGuestName(name: string): string {
   return name.trim().toLowerCase();
 }

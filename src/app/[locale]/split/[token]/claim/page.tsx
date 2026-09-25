@@ -6,7 +6,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { trpc } from '@/lib/trpc';
 import { formatCents } from '@/lib/money';
 import { copyToClipboard } from '@/lib/clipboard';
-import { storedClaimIdentitySchema, type StoredClaimIdentity } from '@/lib/guest-session';
+import { claimStorageKey, storedClaimIdentitySchema, type StoredClaimIdentity } from '@/lib/guest-session';
 import { calculateSplitTotals } from '@/lib/split-calculator';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -34,7 +34,7 @@ function getStoredClaimIdentity(token: string): StoredClaimIdentity | null {
   if (typeof window === 'undefined') return null;
 
   try {
-    const raw = window.localStorage.getItem(`sharetab-claim:${token}`);
+    const raw = window.localStorage.getItem(claimStorageKey(token));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as unknown;
     const identity = storedClaimIdentitySchema.safeParse(parsed);
@@ -44,10 +44,19 @@ function getStoredClaimIdentity(token: string): StoredClaimIdentity | null {
   }
 }
 
+function removeStoredClaimIdentity(token: string) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(claimStorageKey(token));
+  } catch {
+    // Non-fatal, like setStoredClaimIdentity.
+  }
+}
+
 function setStoredClaimIdentity(token: string, identity: StoredClaimIdentity) {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(`sharetab-claim:${token}`, JSON.stringify(identity));
+    window.localStorage.setItem(claimStorageKey(token), JSON.stringify(identity));
   } catch {
     // Non-fatal: failing to persist rejoin state should not block the claim flow.
   }
@@ -107,9 +116,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     onSuccess: (_data, variables) => {
       const removedIdx = variables.targetIndex;
       if (removedIdx === myPersonIndex) {
-        if (typeof window !== 'undefined') {
-          window.localStorage.removeItem(`sharetab-claim:${token}`);
-        }
+        removeStoredClaimIdentity(token);
         setClaimedItems(new Map());
         setPersonIndex(null);
         setMyPersonIndex(null);
@@ -176,39 +183,65 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   });
 
   const autoRejoinAttempted = useRef(false);
-  // Set when a "rejoin as" button is clicked; its join starts 100ms later, before isPending is true
-  const rejoinScheduled = useRef(false);
+  // Set synchronously when a join or resume starts. `joining` below comes from React state,
+  // which only updates after a render, so a fast double tap could otherwise send two joins
+  // for the same name (and the second is refused: "Someone has already joined under this name").
+  const joinInFlight = useRef(false);
+
+  // Become this person on this device, and remember it for the next visit
+  function adoptIdentity(identity: { personIndex: number; personToken: string; name: string }) {
+    setPersonIndex(identity.personIndex);
+    setMyPersonIndex(identity.personIndex);
+    setPersonToken(identity.personToken);
+    setStoredClaimIdentity(token, { name: identity.name, personToken: identity.personToken });
+    // Initialize claimed items from server assignments for ALL people
+    const map = new Map<number, Set<number>>();
+    if (session.data) {
+      for (const a of session.data.assignments) {
+        for (const pi of a.personIndices) {
+          if (!map.has(pi)) map.set(pi, new Set());
+          map.get(pi)!.add(a.itemIndex);
+        }
+      }
+    }
+    setClaimedItems(map);
+  }
 
   const joinSession = trpc.guest.joinSession.useMutation({
     onSuccess: (data, variables) => {
-      setPersonIndex(data.personIndex);
-      setMyPersonIndex(data.personIndex);
-      setPersonToken(data.personToken);
-      setStoredClaimIdentity(token, {
-        name: variables.name,
-        personToken: data.personToken,
-      });
-      // Initialize claimed items from server assignments for ALL people
-      const map = new Map<number, Set<number>>();
-      if (session.data) {
-        for (const a of session.data.assignments) {
-          for (const pi of a.personIndices) {
-            if (!map.has(pi)) map.set(pi, new Set());
-            map.get(pi)!.add(a.itemIndex);
-          }
-        }
-      }
-      setClaimedItems(map);
+      adoptIdentity({ ...data, name: variables.name });
+      toast.success(t('joinedSession'));
     },
+    onError: (error) => toast.error(error.message),
     onSettled: () => {
-      rejoinScheduled.current = false;
+      joinInFlight.current = false;
     },
   });
-  // Toasts go on the joins the user starts; the automatic rejoin on page load stays silent
-  const joinToasts = {
-    onSuccess: () => toast.success(t('joinedSession')),
-    onError: (error: { message: string }) => toast.error(error.message),
-  };
+  // A returning device finds its person by stored token (names can be edited by anyone).
+  // Silent: on failure the join form stays up. Network and server errors are retried, because
+  // a lost resume leaves the join form up while this device still holds a valid token; 4xx
+  // answers (e.g. the session is gone) are final.
+  const resumeSession = trpc.guest.resumeSession.useMutation({
+    retry: (failureCount, error) => failureCount < 2 && (error.data?.httpStatus ?? 500) >= 500,
+    onSuccess: (data, variables) => {
+      if (data) {
+        adoptIdentity({ ...data, personToken: variables.personToken });
+      } else {
+        // Nobody holds the stored token any more (e.g. this person was removed)
+        removeStoredClaimIdentity(token);
+      }
+    },
+    onSettled: () => {
+      joinInFlight.current = false;
+    },
+  });
+  const joining = joinSession.isPending || resumeSession.isPending;
+
+  function startJoin(input: { name: string; groupSize?: number; personToken?: string }) {
+    if (joinInFlight.current) return;
+    joinInFlight.current = true;
+    joinSession.mutate({ token, ...input });
+  }
 
   // Initialize venmo handle from split record, then creator's profile as fallback
   useEffect(() => {
@@ -237,11 +270,11 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     const stored = getStoredClaimIdentity(token);
     if (!stored) return;
 
+    // A join the user already started wins; resuming now could adopt a different person
+    if (joinInFlight.current) return;
     autoRejoinAttempted.current = true;
-    joinSession.mutate({
-      token,
-      name: stored.name,
-    });
+    joinInFlight.current = true;
+    resumeSession.mutate({ token, personToken: stored.personToken });
   }, [session.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const claimItems = trpc.guest.claimItems.useMutation({
@@ -385,7 +418,13 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
       toast.error(t('pleaseEnterName'));
       return;
     }
-    joinSession.mutate({ token, name: trimmed, ...(groupSize > 1 ? { groupSize } : {}) }, joinToasts);
+    // A stored token lets this device rejoin as the person it joined as before.
+    const stored = getStoredClaimIdentity(token);
+    startJoin({
+      name: trimmed,
+      ...(groupSize > 1 ? { groupSize } : {}),
+      ...(stored ? { personToken: stored.personToken } : {}),
+    });
   }
 
   function toggleClaim(itemIndex: number) {
@@ -709,45 +748,44 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
                 <span className="text-xs text-muted-foreground">{t('groupSizeHint')}</span>
               </div>
             </div>
-            {/* Rejoin as existing participant */}
-            {data.people.length > 0 && (
+            {/* Join as a listed person nobody has joined as yet (e.g. the payer); people who
+                already joined can only be rejoined from the device holding their token. */}
+            {data.people.some((person) => !person.hasJoined) && (
               <div className="space-y-2">
-                <p className="text-xs text-muted-foreground">{t('orRejoinAs')}</p>
+                <p className="text-xs text-muted-foreground">{t('orJoinAs')}</p>
                 <div className="flex flex-wrap gap-2">
-                  {data.people.map((person, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      disabled={joinSession.isPending}
-                      onClick={() => {
-                        if (rejoinScheduled.current) return;
-                        rejoinScheduled.current = true;
-                        setName(person.name);
-                        setTimeout(() => {
-                          joinSession.mutate({ token, name: person.name }, joinToasts);
-                        }, 100);
-                      }}
-                      className="flex items-center gap-2 rounded-full bg-muted px-3 py-1.5 hover:bg-muted/80 transition-colors"
-                      data-testid={`rejoin-person-${idx}`}
-                    >
-                      <Avatar className="h-6 w-6">
-                        <AvatarFallback className={`text-[10px] font-semibold ${guestAvatarColor(idx)}`}>
-                          {getInitials(person.name)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="text-sm font-medium">{person.name}</span>
-                    </button>
-                  ))}
+                  {data.people.map((person, idx) =>
+                    person.hasJoined ? null : (
+                      <button
+                        key={idx}
+                        type="button"
+                        disabled={joining}
+                        onClick={() => {
+                          setName(person.name);
+                          startJoin({ name: person.name });
+                        }}
+                        className="flex items-center gap-2 rounded-full bg-muted px-3 py-1.5 hover:bg-muted/80 transition-colors disabled:opacity-50"
+                        data-testid={`rejoin-person-${idx}`}
+                      >
+                        <Avatar className="h-6 w-6">
+                          <AvatarFallback className={`text-[10px] font-semibold ${guestAvatarColor(idx)}`}>
+                            {getInitials(person.name)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-sm font-medium">{person.name}</span>
+                      </button>
+                    ),
+                  )}
                 </div>
               </div>
             )}
             <Button
               className="w-full"
               onClick={handleJoin}
-              disabled={!name.trim() || joinSession.isPending}
+              disabled={!name.trim() || joining}
               data-testid="claim-join-btn"
             >
-              {joinSession.isPending ? (
+              {joining ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   {t('joining')}

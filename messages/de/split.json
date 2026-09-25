@@ -108,7 +108,7 @@
     "viewReceipt": "Beleg anzeigen",
     "hideReceipt": "Beleg ausblenden",
     "receiptImage": "Belegbild",
-    "orRejoinAs": "Oder beitreten als:",
+    "orJoinAs": "Oder beitreten als:",
     "claimingFor": "Auswahl für",
     "saveClaimsFor": "Auswahl speichern für {name}",
     "editName": "Name bearbeiten",

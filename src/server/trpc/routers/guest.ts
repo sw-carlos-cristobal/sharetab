@@ -38,7 +38,14 @@ type GuestSessionPerson = {
 };
 
 function toPublicPeople(people: GuestSessionPerson[]) {
-  return people.map(({ name, groupSize }) => ({ name, groupSize: groupSize ?? 1 }));
+  // Never includes personToken: no guest procedure returns another person's token (a client
+  // gets its own from joinSession; the admin export is the only place tokens leave in bulk).
+  // hasJoined tells the claim page which names are still free to join as (unused by getSplit).
+  return people.map(({ name, groupSize, personToken }) => ({
+    name,
+    groupSize: groupSize ?? 1,
+    hasJoined: !!personToken,
+  }));
 }
 
 function cloneAssignments(assignments: { itemIndex: number; personIndices: number[] }[]) {
@@ -606,6 +613,8 @@ export const guestRouter = createTRPCRouter({
         token: z.string().max(64),
         name: z.string().trim().min(1).max(100),
         groupSize: z.number().int().min(1).max(20).optional(),
+        // The caller's stored token, needed to rejoin as a person someone has already joined as
+        personToken: z.string().uuid().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -641,6 +650,14 @@ export const guestRouter = createTRPCRouter({
             });
             return { personIndex: existingIndex, personToken };
           }
+          // Someone has already joined as this person: only the holder of their token may
+          // rejoin, otherwise anyone with the link could take over their identity by name.
+          if (input.personToken !== existingPerson.personToken) {
+            throw new TRPCError({
+              code: 'CONFLICT',
+              message: 'Someone has already joined under this name. Please choose a different name.',
+            });
+          }
           // Update groupSize on rejoin only if explicitly provided and different
           if (input.groupSize != null && input.groupSize !== (existingPerson.groupSize ?? 1)) {
             people[existingIndex] = { ...existingPerson, groupSize: input.groupSize };
@@ -669,6 +686,26 @@ export const guestRouter = createTRPCRouter({
 
         return { personIndex: people.length - 1, personToken };
       });
+    }),
+
+  // How a returning device finds its person: by the token it stored when it joined, not by
+  // name, since anyone in the session can rename anyone. A mutation so the token travels in
+  // the request body, not a URL. Returns null when nobody holds the token any more. Doesn't
+  // require CLAIMING (it only maps a token the caller holds to the index and name getSession
+  // already shows), though the claim page only calls it while claiming.
+  resumeSession: publicProcedure
+    .input(z.object({ token: z.string().max(64), personToken: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const session = await ctx.db.guestSplit.findUnique({
+        where: { shareToken: input.token },
+      });
+      if (!session) throw new TRPCError({ code: 'NOT_FOUND', message: 'Session not found' });
+      if (session.expiresAt < new Date()) throw new TRPCError({ code: 'NOT_FOUND', message: 'Session expired' });
+
+      const people = session.people as GuestSessionPerson[];
+      const personIndex = people.findIndex((p) => p.personToken === input.personToken);
+      if (personIndex < 0) return null;
+      return { personIndex, name: people[personIndex]!.name };
     }),
 
   editPersonName: publicProcedure
