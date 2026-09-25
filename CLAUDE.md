@@ -46,6 +46,7 @@ npx prisma db push   # Push schema without migration (dev only)
 - `src/server/lib/user-email.ts` — Case-insensitive user lookup by email (`findUsersByEmail` / `findUserByEmail`), shared by the Auth.js adapter, password login, `auth.register`, and the OIDC policy
 - `src/server/lib/env.ts` — `parseBooleanValue`: the boolean env vocabulary (true/1/yes/on, false/0/no/off) shared by `auth-config.ts` and `guest-uploads.ts`
 - `src/server/lib/guest-uploads.ts` — Guest receipt upload kill switch: admin toggle (`guestUploadsEnabled` SystemSetting, default on, cached 10s, save via `saveGuestUploadsSetting`) overridden by `DISABLE_GUEST_UPLOADS=true` (the admin save is refused while it is set; an unrecognized value logs a warning and is ignored). When off, `canUseGuestUploads` refuses anonymous callers at `/api/upload?guest=true` (403) and `guest.processReceipt` (FORBIDDEN); signed-in users with an active (not suspended) account share the Quick Split path and keep access
+- `src/server/lib/guest-join-limit.ts` — `checkJoinRateLimit` for `guest.joinSession`: 10 joins/min per person (share token + normalized name) and 200/min per share token (twice the 100-person session cap). The session budget is peeked before the person budget is spent, so a refused call consumes nothing. A client rotating names can use up the per-token budget (accepted, like the other per-token guest limits)
 - `src/server/trpc/init.ts` — tRPC context, `publicProcedure`, `protectedProcedure`, `groupMemberProcedure`
 - `src/server/trpc/router.ts` — Root app router (exports `AppRouter` type)
 - `src/server/trpc/routers/` — Individual routers: auth, groups, expenses, balances, settlements, activity, receipts, guest, admin
@@ -99,9 +100,9 @@ npx prisma db push   # Push schema without migration (dev only)
 
 ### Unit Tests (Vitest)
 
-- `npm test` — run all unit tests (~420 tests, <2s)
+- `npm test` — run all unit tests (~460 tests, <2s)
 - Tests live co-located with source: `src/**/*.test.ts`
-- Covers: `money.ts`, `split-calculator.ts`, `rate-limit.ts`, `upload-dir.ts`, `balance-calculator.ts`, `ai/registry.ts`, `ai/providers/openai-codex.ts`, `lib/normalize-date.ts`, `lib/meridian-login.ts`, `lib/receipt-processor.ts`, `lib/auth-health-poller.ts`, `lib/openai-codex-login.ts`, `lib/auth-config.ts`, `lib/oidc-sign-in.ts`, `lib/user-email.ts`, `lib/password-login.ts`, `trpc/routers/admin.ts`, `trpc/routers/auth.ts`, `src/lib/sign-in-errors.ts`, `lib/guest-uploads.ts`, `trpc/routers/guest.ts`, `app/api/upload/route.ts`
+- Covers: `money.ts`, `split-calculator.ts`, `rate-limit.ts`, `upload-dir.ts`, `balance-calculator.ts`, `ai/registry.ts`, `ai/providers/openai-codex.ts`, `lib/normalize-date.ts`, `lib/meridian-login.ts`, `lib/receipt-processor.ts`, `lib/auth-health-poller.ts`, `lib/openai-codex-login.ts`, `lib/auth-config.ts`, `lib/oidc-sign-in.ts`, `lib/user-email.ts`, `lib/password-login.ts`, `trpc/routers/admin.ts`, `trpc/routers/auth.ts`, `src/lib/sign-in-errors.ts`, `lib/guest-uploads.ts`, `lib/guest-join-limit.ts`, `trpc/routers/guest.ts`, `app/api/upload/route.ts`
 
 ### E2E Tests (Playwright)
 
