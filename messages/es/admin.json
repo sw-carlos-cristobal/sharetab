@@ -118,7 +118,7 @@
   },
   "guestUploads": {
     "title": "Subida de recibos de invitados",
-    "description": "Cuando está habilitado, cualquiera puede subir imágenes de recibos y ejecutar escaneos con IA en División rápida sin una cuenta. Desactívalo para que los visitantes anónimos no puedan hacerlo. Los usuarios con sesión iniciada pueden seguir usando División rápida, así que si el Control de registro está en Abierto, cámbialo también a Solo con invitación o Cerrado.",
+    "description": "Cuando está habilitado, cualquiera puede subir imágenes de recibos y ejecutar escaneos con IA en División rápida sin una cuenta. Desactívalo para que los visitantes anónimos no puedan hacerlo. Los usuarios con sesión iniciada pueden seguir usando División rápida, así que limita también quién puede crear una cuenta: el Control de registro solo cubre el registro con contraseña, mientras que el inicio de sesión con enlace mágico, Google u OIDC aún puede crear cuentas.",
     "enabled": "Habilitado",
     "disabled": "Deshabilitado",
     "enabledStatus": "Cualquiera puede escanear recibos en División rápida",

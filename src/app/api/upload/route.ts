@@ -136,8 +136,9 @@ export async function POST(req: NextRequest) {
 
   if (isGuest) {
     // Kill switch for unauthenticated storage + AI spend (admin toggle or
-    // DISABLE_GUEST_UPLOADS). Signed-in users share this Quick Split path and
-    // keep access; their session is only resolved when the switch is off.
+    // DISABLE_GUEST_UPLOADS). Signed-in users with an active account share this
+    // Quick Split path and keep access; the session is only resolved when the
+    // switch is off.
     if (!(await canUseGuestUploads(db, async () => (await auth())?.user?.id))) {
       return Response.json({ error: 'Guest receipt uploads are disabled' }, { status: 403 });
     }

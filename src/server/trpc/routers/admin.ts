@@ -832,6 +832,13 @@ export const adminRouter = createTRPCRouter({
   }),
 
   setGuestUploadsEnabled: adminProcedure.input(z.object({ enabled: z.boolean() })).mutation(async ({ ctx, input }) => {
+    // While the env var locks it, a saved value would only take effect later, unseen.
+    if (isGuestUploadsForcedOff()) {
+      throw new TRPCError({
+        code: 'PRECONDITION_FAILED',
+        message: 'Guest uploads are locked off by DISABLE_GUEST_UPLOADS',
+      });
+    }
     await saveGuestUploadsSetting(ctx.db, input.enabled);
 
     await logAdminAction(ctx.db, ctx.user.id, 'GUEST_UPLOADS_SETTING_CHANGED', null, { enabled: input.enabled });

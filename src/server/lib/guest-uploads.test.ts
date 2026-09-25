@@ -1,5 +1,9 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { PrismaClient } from '@/generated/prisma/client';
+
+const { warn } = vi.hoisted(() => ({ warn: vi.fn() }));
+vi.mock('./logger', () => ({ logger: { info: vi.fn(), warn, error: vi.fn(), debug: vi.fn() } }));
+
 import {
   GUEST_UPLOADS_SETTING_KEY,
   _resetGuestUploadsCache,
@@ -22,6 +26,7 @@ function mockDb(setting: string | null, user: { suspendedAt: Date | null } | nul
 }
 
 beforeEach(() => {
+  vi.clearAllMocks();
   _resetGuestUploadsCache();
   vi.stubEnv('DISABLE_GUEST_UPLOADS', '');
 });
@@ -50,7 +55,7 @@ describe('readGuestUploadsSetting', () => {
     expect(await readGuestUploadsSetting(mockDb('0').prisma)).toBe(true);
   });
 
-  test('caches the value so a request flood costs one query per TTL', async () => {
+  test('sequential reads within the TTL cost one query', async () => {
     vi.useFakeTimers();
     const { db, prisma } = mockDb('false');
     await readGuestUploadsSetting(prisma);
@@ -80,6 +85,26 @@ describe('saveGuestUploadsSetting', () => {
   });
 });
 
+describe('cache vs. a concurrent save', () => {
+  test('a read that started before a save cannot put the old value back in the cache', async () => {
+    let finishRead: (row: { value: string } | null) => void = () => undefined;
+    const { db, prisma } = mockDb(null);
+    db.systemSetting.findUnique.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishRead = resolve;
+      }),
+    );
+
+    const staleRead = readGuestUploadsSetting(prisma);
+    await saveGuestUploadsSetting(prisma, false);
+    finishRead({ value: 'true' });
+    await staleRead;
+
+    db.systemSetting.findUnique.mockResolvedValue({ value: 'false' });
+    expect(await readGuestUploadsSetting(prisma)).toBe(false);
+  });
+});
+
 describe('DISABLE_GUEST_UPLOADS', () => {
   test('locks guest uploads off without reading the admin setting', async () => {
     vi.stubEnv('DISABLE_GUEST_UPLOADS', 'true');
@@ -103,6 +128,22 @@ describe('DISABLE_GUEST_UPLOADS', () => {
       expect(isGuestUploadsForcedOff()).toBe(false);
       expect(await isGuestUploadsEnabled(mockDb(null).prisma)).toBe(true);
     }
+  });
+
+  test('logs a warning once for an unrecognized value, so a typo is visible', () => {
+    vi.stubEnv('DISABLE_GUEST_UPLOADS', 'ture');
+    isGuestUploadsForcedOff();
+    isGuestUploadsForcedOff();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith('guestUploads.invalidEnv', expect.objectContaining({ value: 'ture' }));
+  });
+
+  test('does not warn for recognized or empty values', () => {
+    for (const value of ['', 'true', 'off']) {
+      vi.stubEnv('DISABLE_GUEST_UPLOADS', value);
+      isGuestUploadsForcedOff();
+    }
+    expect(warn).not.toHaveBeenCalled();
   });
 });
 

@@ -380,6 +380,16 @@ describe('guest uploads toggle', () => {
     });
   });
 
+  test('refuses to save while DISABLE_GUEST_UPLOADS locks the setting', async () => {
+    vi.stubEnv('DISABLE_GUEST_UPLOADS', 'true');
+    const api = await caller(adminSession);
+    await expect(api.setGuestUploadsEnabled({ enabled: true })).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+    });
+    expect(mockDb.systemSetting.upsert).not.toHaveBeenCalled();
+    expect(mockDb.adminAuditLog.create).not.toHaveBeenCalled();
+  });
+
   test('non-admins cannot read or change the setting', async () => {
     const api = await caller({ user: { id: 'user-2', email: 'someone@example.com' } });
     await expect(api.getGuestUploadsEnabled()).rejects.toMatchObject({ code: 'FORBIDDEN' });

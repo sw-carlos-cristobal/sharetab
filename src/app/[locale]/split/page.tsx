@@ -142,11 +142,12 @@ export default function GuestSplitPage() {
     }
   }, [receiptData.data, items.length]);
 
-  // Guest uploads were turned off (or the session ended) after this page
-  // loaded, so swap the upload buttons for the sign-in notice.
+  // Guest uploads were turned off after this page loaded (or the session
+  // ended or the account was suspended). Refetch so the notice replaces the
+  // upload buttons; if they were turned back on meanwhile, show no error.
   async function showGuestUploadsDisabled() {
-    await uploadStatus.refetch();
-    setErrorMessage(t('upload.guestDisabledTitle'));
+    const { data } = await uploadStatus.refetch();
+    setErrorMessage(data?.allowed === false ? t('upload.guestDisabledTitle') : '');
   }
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -708,8 +709,9 @@ export default function GuestSplitPage() {
                               },
                               onError: (err) => {
                                 if (isGuestUploadsRefusal(err)) {
-                                  setStep('upload');
-                                  void showGuestUploadsDisabled();
+                                  void showGuestUploadsDisabled().then(() => {
+                                    setStep('upload');
+                                  });
                                   return;
                                 }
                                 setErrorMessage(err.message);

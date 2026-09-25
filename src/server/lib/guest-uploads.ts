@@ -1,23 +1,46 @@
 import type { PrismaClient } from '@/generated/prisma/client';
-import { parseBooleanValue } from './auth-config';
+import { parseBooleanValue } from './env';
+import { logger } from './logger';
 
 /** SystemSetting key for the admin "guest receipt uploads" toggle. */
 export const GUEST_UPLOADS_SETTING_KEY = 'guestUploadsEnabled';
 
-// Anonymous upload floods read the setting on every request, so it is cached
-// briefly instead of costing a query each time. Saving through this module
-// updates the cache at once; another instance sharing the database picks the
-// change up within the TTL. Kept on globalThis so every route bundle in the
-// process shares one cache.
+// The switch is checked before any rate limit, and refused requests never
+// consume rate-limit budget, so without a cache every anonymous request —
+// including a flood of refused ones — would cost a database query. The value
+// is cached for a few seconds; saving through this module updates it at once.
+// Kept on globalThis so every route bundle in the process shares one cache.
 const CACHE_TTL_MS = 10_000;
-const cacheHolder = globalThis as unknown as { guestUploadsSetting?: { enabled: boolean; expiresAt: number } };
+
+interface GuestUploadsState {
+  cached?: { enabled: boolean; expiresAt: number };
+  // Bumped by every save, so a read that raced a save doesn't cache the old value.
+  generation: number;
+  warnedInvalidEnv?: boolean;
+}
+
+const holder = globalThis as unknown as { guestUploadsState?: GuestUploadsState };
+
+function state(): GuestUploadsState {
+  holder.guestUploadsState ??= { generation: 0 };
+  return holder.guestUploadsState;
+}
 
 /**
  * DISABLE_GUEST_UPLOADS=true locks guest uploads off for the whole deployment,
  * overriding the admin toggle — e.g. before the admin account exists.
  */
 export function isGuestUploadsForcedOff(): boolean {
-  return parseBooleanValue(process.env.DISABLE_GUEST_UPLOADS) === true;
+  const raw = process.env.DISABLE_GUEST_UPLOADS;
+  const parsed = parseBooleanValue(raw);
+  if (parsed === null && raw?.trim() && !state().warnedInvalidEnv) {
+    state().warnedInvalidEnv = true;
+    logger.warn('guestUploads.invalidEnv', {
+      message: 'DISABLE_GUEST_UPLOADS must be true or false; ignoring it, so the admin toggle applies.',
+      value: raw,
+    });
+  }
+  return parsed === true;
 }
 
 /**
@@ -25,14 +48,15 @@ export function isGuestUploadsForcedOff(): boolean {
  * keep their behavior; only the stored value "false" disables it.
  */
 export async function readGuestUploadsSetting(db: PrismaClient): Promise<boolean> {
-  const cached = cacheHolder.guestUploadsSetting;
-  if (cached && Date.now() < cached.expiresAt) return cached.enabled;
+  const s = state();
+  if (s.cached && Date.now() < s.cached.expiresAt) return s.cached.enabled;
+  const generation = s.generation;
   const setting = await db.systemSetting.findUnique({
     where: { key: GUEST_UPLOADS_SETTING_KEY },
     select: { value: true },
   });
   const enabled = setting?.value !== 'false';
-  cacheHolder.guestUploadsSetting = { enabled, expiresAt: Date.now() + CACHE_TTL_MS };
+  if (s.generation === generation) s.cached = { enabled, expiresAt: Date.now() + CACHE_TTL_MS };
   return enabled;
 }
 
@@ -42,7 +66,9 @@ export async function saveGuestUploadsSetting(db: PrismaClient, enabled: boolean
     update: { value: String(enabled) },
     create: { key: GUEST_UPLOADS_SETTING_KEY, value: String(enabled) },
   });
-  cacheHolder.guestUploadsSetting = { enabled, expiresAt: Date.now() + CACHE_TTL_MS };
+  const s = state();
+  s.generation += 1;
+  s.cached = { enabled, expiresAt: Date.now() + CACHE_TTL_MS };
 }
 
 /** Whether anonymous visitors may upload and scan receipts on Quick Split. */
@@ -68,7 +94,7 @@ export async function canUseGuestUploads(
   return user !== null && user.suspendedAt === null;
 }
 
-/** Clears the cached setting — for tests only. */
+/** Clears the cached setting and warning state — for tests only. */
 export function _resetGuestUploadsCache(): void {
-  delete cacheHolder.guestUploadsSetting;
+  delete holder.guestUploadsState;
 }

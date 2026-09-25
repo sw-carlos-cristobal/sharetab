@@ -118,7 +118,7 @@
   },
   "guestUploads": {
     "title": "Guest Receipt Uploads",
-    "description": "When enabled, anyone can upload receipt images and run AI scans on Quick Split without an account. Turn this off so anonymous visitors can't. Signed-in users can still use Quick Split, so if Registration Control is set to Open, switch it to Invite Only or Closed as well.",
+    "description": "When enabled, anyone can upload receipt images and run AI scans on Quick Split without an account. Turn this off so anonymous visitors can't. Signed-in users can still use Quick Split, so also limit who can create an account: Registration Control only covers password sign-up, while magic link, Google and OIDC sign-in can still create accounts.",
     "enabled": "Enabled",
     "disabled": "Disabled",
     "enabledStatus": "Anyone can scan receipts on Quick Split",
