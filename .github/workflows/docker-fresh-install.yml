@@ -40,24 +40,9 @@ jobs:
           # Reuse the layers the main-branch image build caches.
           cache-from: type=gha,scope=main-image
 
-      - name: Start on an empty database, then restart
+      - name: Start on an empty database
         run: |
-          wait_healthy() {
-            for _ in $(seq 1 90); do
-              if [ "$(docker inspect -f '{{.State.Running}}' sharetab)" != "true" ]; then
-                echo "::error::The container exited during startup ($1)."
-                return 1
-              fi
-              if curl -fsS http://localhost:3000/api/health; then
-                echo
-                return 0
-              fi
-              sleep 2
-            done
-            echo "::error::Timed out waiting for /api/health ($1)."
-            return 1
-          }
-
+          source .github/scripts/fresh-install-helpers.sh
           secret=$(openssl rand -base64 32)
           docker run -d --name sharetab -p 3000:3000 \
             -e NEXTAUTH_SECRET="$secret" -e AUTH_SECRET="$secret" \
@@ -66,12 +51,59 @@ jobs:
 
           # The tables exist, not just a reachable database (psql fails if
           # either is missing).
-          docker exec sharetab su-exec postgres psql -h /run/postgresql -d sharetab -v ON_ERROR_STOP=1 \
-            -c 'SELECT count(*) AS users FROM "User"' \
-            -c 'SELECT count(*) AS guest_splits FROM "GuestSplit"'
+          db -c 'SELECT count(*) FROM "User"' -c 'SELECT count(*) FROM "GuestSplit"'
 
+      - name: Emails are unique ignoring case
+        run: |
+          source .github/scripts/fresh-install-helpers.sh
+          add_user ci-1 'CI@Example.com'
+          if add_user ci-2 'ci@example.com'; then
+            echo "::error::A case variant of an existing email was accepted."
+            exit 1
+          fi
+          add_user ci-3 'other@example.com'
+          db -c "DELETE FROM \"User\" WHERE id LIKE 'ci-%'"
+
+      - name: Restart, and prisma db push keeps the email index
+        run: |
+          source .github/scripts/fresh-install-helpers.sh
+          # The after-push SQL would recreate a dropped index before we look,
+          # so compare the index's identity instead of just its existence.
+          before=$(db -c "SELECT '\"User_email_lower_key\"'::regclass::oid")
           docker restart sharetab
           wait_healthy "restart"
+          after=$(db -c "SELECT '\"User_email_lower_key\"'::regclass::oid")
+          if [ "$before" != "$after" ]; then
+            echo "::error::prisma db push dropped User_email_lower_key (oid $before -> $after)."
+            exit 1
+          fi
+
+      - name: Existing case-variant duplicates don't block startup
+        run: |
+          source .github/scripts/fresh-install-helpers.sh
+          # An install from before the index, with case-variant duplicates.
+          db -c 'DROP INDEX "User_email_lower_key"'
+          add_user dup-1 'Dup@Example.com'
+          add_user dup-2 'dup@example.com'
+          docker restart sharetab
+          wait_healthy "restart with duplicates"
+          if ! docker logs sharetab 2>&1 | grep -q "more than one account uses each of these addresses in different letter cases: dup@example.com"; then
+            echo "::error::No warning about the duplicate emails in the startup log."
+            exit 1
+          fi
+          if [ "$(has_email_index)" != "f" ]; then
+            echo "::error::The email index exists although duplicates do."
+            exit 1
+          fi
+
+          # Once the duplicate is gone, the next start creates the index.
+          db -c "DELETE FROM \"User\" WHERE id = 'dup-2'"
+          docker restart sharetab
+          wait_healthy "restart after removing the duplicate"
+          if [ "$(has_email_index)" != "t" ]; then
+            echo "::error::The email index wasn't created after the duplicate was removed."
+            exit 1
+          fi
 
       - name: Container logs
         if: always()

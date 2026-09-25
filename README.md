@@ -195,7 +195,7 @@ docker compose pull
 docker compose up -d
 ```
 
-The entrypoint automatically runs any SQL migration files in `prisma/migrations/` before applying the Prisma schema. Most upgrades are fully automatic.
+The entrypoint automatically runs any SQL migration files in `prisma/migrations/` before applying the Prisma schema, and the files in `prisma/after-push/` after it. Most upgrades are fully automatic.
 
 ### Manual migration (v0.7.x → v0.8.0)
 
@@ -207,6 +207,23 @@ docker compose exec sharetab su-exec postgres psql -U sharetab -d sharetab \
 ```
 
 This is idempotent — safe to run more than once.
+
+<a id="email-case-uniqueness"></a>
+
+### Accounts whose emails differ only in letter case
+
+The database rejects a new account whose email matches an existing one ignoring case (`Alice@example.com` and `alice@example.com`). The index that enforces this is created on startup, but it can't be created while such accounts already exist, which older versions allowed. In that case ShareTab starts normally and the container log shows a warning listing the affected addresses:
+
+```
+WARNING:  Case-insensitive email uniqueness is not enforced yet: more than one account uses each of these addresses in different letter cases: alice@example.com. ...
+```
+
+In the admin dashboard, delete the account the person no longer uses (its expenses stay in their groups under "Deleted user"). The index is created on the next start, or right away with:
+
+```bash
+docker compose exec sharetab su-exec postgres psql -U sharetab -d sharetab \
+  -f /app/prisma/after-push/user_email_lower_unique.sql
+```
 
 ## Configuration
 
@@ -326,7 +343,7 @@ Sign in through your own identity provider (IdP): Authentik, Authelia, Keycloak,
 - `email_unverified`: the IdP sent `email_verified: false` for this user; see step 1 above.
 - `password_registration_open`: linking is on but Registration Mode is _Open_; close it (step 2 above).
 - `already_linked`: the account is linked to a different IdP identity. If the IdP user was recreated, confirm at the IdP that the old identity (the row's `providerAccountId`) no longer exists before deleting that account's `provider = 'oidc'` row in the `Account` table, then link again.
-- `ambiguous_email`: several ShareTab accounts share the email in different letter cases; merge or delete the extra account.
+- `ambiguous_email`: several ShareTab accounts share the email in different letter cases; delete the extra account (see [Accounts whose emails differ only in letter case](#email-case-uniqueness)).
 - `placeholder`: the email belongs to a placeholder or deleted user, which can't be signed in to.
 
 <a id="oidc-security-notes"></a>**Security notes**

@@ -70,6 +70,7 @@ npx prisma db push   # Push schema without migration (dev only)
 - AI providers implement the `AIProvider` interface in `src/server/ai/provider.ts`
 - `src/middleware.ts` — NextAuth middleware protecting authenticated routes
 - `prisma/seed.ts` — Demo data seed script (run with `npm run db:seed`); idempotent — skips if data already exists
+- Hand-written SQL, run by `docker/entrypoint.sh` on every start: `prisma/migrations/*.sql` before `prisma db push` (idempotent, and a no-op on an empty database since a fresh install has no tables yet), `prisma/after-push/*.sql` after it (idempotent; log a warning instead of failing, since any error stops startup). `prisma/after-push/user_email_lower_unique.sql` holds the unique index on `lower(email)` that Prisma's schema can't express; `prisma db push` leaves it alone. `.github/workflows/docker-fresh-install.yml` boots the image on an empty volume to test both phases
 - Prisma v7: datasource URL is configured in `prisma.config.ts`, not in `schema.prisma`
 - Prisma v7: PrismaClient requires `@prisma/adapter-pg` adapter in constructor
 - Prisma v7: import from `@/generated/prisma/client` (not `@/generated/prisma` — no index.ts)

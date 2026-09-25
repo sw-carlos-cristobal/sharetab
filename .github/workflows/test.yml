@@ -80,6 +80,16 @@ jobs:
           DATABASE_URL: postgresql://sharetab:sharetab@localhost:5432/sharetab
         run: npx prisma db push
 
+      # Same as docker/entrypoint.sh after db push (e.g. the unique index on
+      # lower(email)), so the e2e tests run against the production schema.
+      - name: Apply post-schema SQL
+        env:
+          DATABASE_URL: postgresql://sharetab:sharetab@localhost:5432/sharetab
+        run: |
+          for sqlfile in prisma/after-push/*.sql; do
+            npx prisma db execute --file "$sqlfile"
+          done
+
       - name: Seed database
         env:
           DATABASE_URL: postgresql://sharetab:sharetab@localhost:5432/sharetab
