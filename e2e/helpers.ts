@@ -76,6 +76,29 @@ export async function trpcMutation(
 }
 
 /**
+ * Join a guest claim session via the API. Fails with the server's response when the
+ * join doesn't succeed or returns no result, instead of handing back undefined for the
+ * caller to trip over.
+ */
+export async function joinGuestSession(
+  ctx: Awaited<ReturnType<typeof request.newContext>>,
+  input: { token: string; name: string; groupSize?: number },
+) {
+  const res = await trpcMutation(ctx, 'guest.joinSession', input);
+  const body = await res.text();
+  let joined: unknown;
+  try {
+    joined = res.ok() ? JSON.parse(body)?.result?.data?.json : undefined;
+  } catch {
+    // Not JSON (e.g. an HTML error page from a proxy): reported with the body below.
+  }
+  if (typeof (joined as { personToken?: unknown } | undefined)?.personToken !== 'string') {
+    throw new Error(`guest.joinSession failed (${res.status()}): ${body}`);
+  }
+  return joined as { personIndex: number; personToken: string };
+}
+
+/**
  * Call a tRPC query (batched format).
  */
 export async function trpcQuery(ctx: Awaited<ReturnType<typeof request.newContext>>, proc: string, input?: unknown) {
