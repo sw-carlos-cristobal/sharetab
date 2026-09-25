@@ -97,6 +97,62 @@ test.describe('Guest receipt uploads admin toggle', () => {
     await context.close();
   });
 
+  test('if uploads come back on before the status refetch, no stale notice is shown', async ({ browser }) => {
+    const context = await browser.newContext({ viewport: { width: 430, height: 932 } });
+    const page = await context.newPage();
+    let refused = false;
+    await page.route('**/api/trpc/guest.processReceipt**', async (route) => {
+      await setGuestUploads(false);
+      refused = true;
+      await route.continue();
+    });
+    // The refetch after the refusal may be batched with other queries, so match on the path.
+    await page.route(
+      (url) => url.pathname.includes('guest.getUploadStatus'),
+      async (route) => {
+        if (refused) await setGuestUploads(true);
+        await route.continue();
+      },
+    );
+
+    await page.goto('/en/split');
+    await page.getByTestId('guest-file-input').setInputFiles(RECEIPT_IMAGE);
+
+    // Processing shows while the scan is refused; the upload step returns once
+    // the client has handled the refusal and its status refetch.
+    await expect(page.getByTestId('guest-processing')).toBeVisible();
+    await expect(page.getByTestId('guest-snap-upload')).toBeVisible();
+    expect(refused).toBe(true);
+    await expect(page.getByText('Receipt scanning requires an account')).toHaveCount(0);
+    await expect(page.getByTestId('guest-uploads-disabled')).toHaveCount(0);
+
+    await context.close();
+  });
+
+  test('turning uploads off before a rescan shows the notice, not a raw error', async ({ browser }) => {
+    const context = await browser.newContext({ viewport: { width: 430, height: 932 } });
+    const page = await context.newPage();
+    let refuseNextScan = false;
+    await page.route('**/api/trpc/guest.processReceipt**', async (route) => {
+      if (refuseNextScan) await setGuestUploads(false);
+      await route.continue();
+    });
+
+    await page.goto('/en/split');
+    await page.getByTestId('guest-file-input').setInputFiles(RECEIPT_IMAGE);
+    await expect(page.getByTestId('guest-people-step')).toBeVisible({ timeout: 30000 });
+
+    refuseNextScan = true;
+    await page.getByRole('button', { name: 'Rescan with corrections' }).click();
+    await page.getByPlaceholder('The total should be $45.99', { exact: false }).fill('The tax is wrong');
+    await page.getByRole('button', { name: 'Rescan', exact: true }).click();
+
+    await expect(page.getByTestId('guest-uploads-disabled')).toBeVisible();
+    await expect(page.getByText('Guest receipt uploads are disabled')).toHaveCount(0);
+
+    await context.close();
+  });
+
   test('signed-in users can still use Quick Split while guest uploads are off', async ({ page }) => {
     await setGuestUploads(false);
     await login(page, users.alice.email, users.alice.password);

@@ -100,8 +100,8 @@ describe('cache vs. a concurrent save', () => {
     finishRead({ value: 'true' });
     await staleRead;
 
-    db.systemSetting.findUnique.mockResolvedValue({ value: 'false' });
     expect(await readGuestUploadsSetting(prisma)).toBe(false);
+    expect(db.systemSetting.findUnique).toHaveBeenCalledTimes(1);
   });
 });
 

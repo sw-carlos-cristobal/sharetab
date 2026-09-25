@@ -386,7 +386,7 @@
     Name="Disable Guest Uploads"
     Target="DISABLE_GUEST_UPLOADS"
     Default="false"
-    Description="Lock guest (no account) receipt uploads and AI scans off, overriding the admin toggle (true/false). Signed-in users keep Quick Split, so also limit who can create an account: Registration Control only covers password sign-up; magic link, Google and OIDC auto-registration still create accounts."
+    Description="Lock guest (no account) receipt uploads and AI scans off, overriding the admin toggle (true/false). Signed-in users with an active account keep Quick Split, so also limit who can create an account: Registration Control only covers password sign-up; magic link, Google and OIDC auto-registration still create accounts."
     Type="Variable"
     Display="advanced"
     Required="false"

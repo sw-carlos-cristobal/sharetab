@@ -9,7 +9,8 @@ export const GUEST_UPLOADS_SETTING_KEY = 'guestUploadsEnabled';
 // consume rate-limit budget, so without a cache every anonymous request —
 // including a flood of refused ones — would cost a database query. The value
 // is cached for a few seconds; saving through this module updates it at once.
-// Kept on globalThis so every route bundle in the process shares one cache.
+// Kept on globalThis so every route bundle in the process shares one cache
+// (and logs the invalid-env warning once).
 const CACHE_TTL_MS = 10_000;
 
 interface GuestUploadsState {
@@ -33,8 +34,9 @@ function state(): GuestUploadsState {
 export function isGuestUploadsForcedOff(): boolean {
   const raw = process.env.DISABLE_GUEST_UPLOADS;
   const parsed = parseBooleanValue(raw);
-  if (parsed === null && raw?.trim() && !state().warnedInvalidEnv) {
-    state().warnedInvalidEnv = true;
+  const s = state();
+  if (parsed === null && raw?.trim() && !s.warnedInvalidEnv) {
+    s.warnedInvalidEnv = true;
     logger.warn('guestUploads.invalidEnv', {
       message: 'DISABLE_GUEST_UPLOADS must be true or false; ignoring it, so the admin toggle applies.',
       value: raw,

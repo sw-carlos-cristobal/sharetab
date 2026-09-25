@@ -116,7 +116,7 @@ ShareTab is a free, self-hosted alternative to Splitwise for tracking shared exp
 
 - **Group expense tracking** with multiple split modes (equal, percentage, shares, exact, item-level)
 - **AI receipt scanning** -- photograph a receipt, AI extracts line items, assign items to group members with proportional tax/tip; zoomable/pannable receipt viewer; rescan with correction prompts
-- **Guest bill splitting** -- no account needed, shareable summary links; admins can turn off guest receipt uploads (admin toggle or `DISABLE_GUEST_UPLOADS`) so anonymous visitors can't upload receipt images or run AI scans (signed-in users keep access, so also limit who can create an account: Registration Control only covers password sign-up, while magic link, Google and OIDC auto-registration still create accounts; see [Security notes](#oidc-security-notes))
+- **Guest bill splitting** -- no account needed, shareable summary links; admins can turn off guest receipt uploads (admin toggle or `DISABLE_GUEST_UPLOADS`) so anonymous visitors can't upload receipt images or run AI scans (signed-in users with an active account keep access, so also limit who can create an account: Registration Control only covers password sign-up, while magic link, Google and OIDC auto-registration still create accounts; see [Security notes](#oidc-security-notes))
 - **Pluggable AI providers** -- OpenAI (GPT-4o), OpenAI-Codex (ChatGPT OAuth), Claude (API key), Meridian (Claude Max subscription), local Ollama
 - **Group archiving** -- archive inactive groups to declutter your dashboard; toggle archived view on groups page
 - **Cross-group dashboard** -- see all your balances at a glance, with per-person debt breakdown
@@ -354,6 +354,7 @@ Sign in through your own identity provider (IdP): Authentik, Authelia, Keycloak,
 - Accounts are linked to the IdP's user ID (`sub`). If you switch to a different IdP, delete the old links first (rows with `provider = 'oidc'` in the `Account` table), or a new IdP user whose ID happens to match an old one would sign in to that old account; then link everyone again as in _Moving existing users to SSO_.
 - Signing out of ShareTab doesn't sign you out of the IdP.
 - Magic link sign-in (when `EMAIL_SERVER_HOST` is set) creates an account for any email address, regardless of `OIDC_AUTO_REGISTER` or the Registration setting.
+- Google sign-in (when `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set) likewise creates an account for any Google user, regardless of the Registration setting.
 
 ### Magic Link Auth (optional)
 

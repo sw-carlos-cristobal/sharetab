@@ -118,7 +118,7 @@
   },
   "guestUploads": {
     "title": "Beleg-Uploads durch Gäste",
-    "description": "Wenn aktiviert, kann jeder ohne Konto Belegbilder in Schnell teilen hochladen und KI-Scans ausführen. Deaktivieren Sie dies, damit anonyme Besucher das nicht mehr können. Angemeldete Benutzer können Schnell teilen weiterhin nutzen. Beschränken Sie daher auch, wer ein Konto erstellen kann: Die Registrierungskontrolle gilt nur für die Registrierung mit Passwort, die Anmeldung per Magic Link, Google oder OIDC kann weiterhin Konten erstellen.",
+    "description": "Wenn aktiviert, kann jeder ohne Konto Belegbilder in Schnell teilen hochladen und KI-Scans ausführen. Deaktivieren Sie dies, damit anonyme Besucher das nicht mehr können. Angemeldete Benutzer können Schnell teilen weiterhin nutzen. Beschränken Sie daher auch, wer ein Konto erstellen kann: Die Registrierungskontrolle gilt nur für die Registrierung mit Passwort, die Anmeldung per E-Mail-Link, Google oder OIDC kann weiterhin Konten erstellen.",
     "enabled": "Aktiviert",
     "disabled": "Deaktiviert",
     "enabledStatus": "Jeder kann Belege in Schnell teilen scannen",
