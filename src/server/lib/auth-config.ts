@@ -40,7 +40,7 @@ function parseBoolean(env: Env, name: string, fallback: boolean, warnings: strin
   if (value === '') return fallback;
   const parsed = parseBooleanValue(value);
   if (parsed !== null) return parsed;
-  warnings.push(`${name} must be true or false; using the default (${fallback}).`);
+  warnings.push(`${name} must be true/false, 1/0, yes/no or on/off; using the default (${fallback}).`);
   return fallback;
 }
 

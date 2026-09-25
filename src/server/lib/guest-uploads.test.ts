@@ -135,7 +135,10 @@ describe('DISABLE_GUEST_UPLOADS', () => {
     isGuestUploadsForcedOff();
     isGuestUploadsForcedOff();
     expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn).toHaveBeenCalledWith('guestUploads.invalidEnv', expect.objectContaining({ value: 'ture' }));
+    expect(warn).toHaveBeenCalledWith(
+      'guestUploads.invalidEnv',
+      expect.objectContaining({ value: 'ture', message: expect.stringContaining('yes/no') as unknown }),
+    );
   });
 
   test('does not warn for recognized or empty values', () => {

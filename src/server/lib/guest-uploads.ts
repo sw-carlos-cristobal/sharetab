@@ -38,7 +38,8 @@ export function isGuestUploadsForcedOff(): boolean {
   if (parsed === null && raw?.trim() && !s.warnedInvalidEnv) {
     s.warnedInvalidEnv = true;
     logger.warn('guestUploads.invalidEnv', {
-      message: 'DISABLE_GUEST_UPLOADS must be true or false; ignoring it, so the admin toggle applies.',
+      message:
+        'DISABLE_GUEST_UPLOADS must be true/false, 1/0, yes/no or on/off; ignoring it, so the admin toggle applies.',
       value: raw,
     });
   }
