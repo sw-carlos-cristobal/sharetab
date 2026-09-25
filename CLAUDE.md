@@ -30,6 +30,7 @@ npx tsc --noEmit     # Type check
 npm test             # Run unit tests (Vitest)
 npm run test:watch   # Unit tests in watch mode
 npm run test:e2e     # Run Playwright e2e tests
+npm run test:docker  # Build the Docker image and smoke test it (scripts/docker-smoke.sh; DOCKER_HOST=ssh://... for a remote daemon)
 npm run lint:i18n    # Check translations for missing/extra keys
 npx prisma generate  # Regenerate Prisma client after schema changes
 npx prisma db push   # Push schema without migration (dev only)
@@ -73,7 +74,7 @@ npx prisma db push   # Push schema without migration (dev only)
 - AI providers implement the `AIProvider` interface in `src/server/ai/provider.ts`
 - `src/middleware.ts` — NextAuth middleware protecting authenticated routes
 - `prisma/seed.ts` — Demo data seed script (run with `npm run db:seed`); idempotent — skips if data already exists
-- Hand-written SQL, run by `docker/entrypoint.sh` on every start: `prisma/migrations/*.sql` before `prisma db push` (idempotent, and a no-op on an empty database since a fresh install has no tables yet), `prisma/after-push/*.sql` after it (idempotent; log a warning instead of failing, since any error stops startup). `prisma/after-push/user_email_lower_unique.sql` holds the unique index on `lower(email)` that Prisma's schema can't express; `prisma db push` leaves it alone. `.github/workflows/docker-fresh-install.yml` boots the image on an empty volume to test both phases
+- Hand-written SQL, run by `docker/entrypoint.sh` on every start: `prisma/migrations/*.sql` before `prisma db push` (idempotent, and a no-op on an empty database since a fresh install has no tables yet), `prisma/after-push/*.sql` after it (idempotent; log a warning instead of failing, since any error stops startup). `prisma/after-push/user_email_lower_unique.sql` holds the unique index on `lower(email)` that Prisma's schema can't express; `prisma db push` leaves it alone. `scripts/docker-smoke.sh` boots the image on an empty volume to test both phases
 - Prisma v7: datasource URL is configured in `prisma.config.ts`, not in `schema.prisma`
 - Prisma v7: PrismaClient requires `@prisma/adapter-pg` adapter in constructor
 - Prisma v7: import from `@/generated/prisma/client` (not `@/generated/prisma` — no index.ts)
@@ -84,7 +85,7 @@ npx prisma db push   # Push schema without migration (dev only)
 - Theme: emerald/teal accent color (OKLCH), neutral backgrounds — defined in `globals.css`
 - `scripts/dev.mjs` — All-in-one dev script: starts embedded-postgres + Next.js dev server
 - `next.config.ts` sets `output: "standalone"` conditionally when `DOCKER_BUILD=1` (set by `docker/Dockerfile`)
-- The standalone trace misses packages loaded with a dynamic `import()` (Meridian) and the native packages they pick at runtime, so `docker/Dockerfile` stages their whole dependency closure with `docker/stage-runtime-deps.mjs`; add any new dynamically imported package there. The Docker Fresh Install workflow starts the Meridian proxy inside the built image to catch a missing one
+- The standalone trace misses packages loaded with a dynamic `import()` (Meridian) and the native packages they pick at runtime, so `docker/Dockerfile` stages their whole dependency closure with `docker/stage-runtime-deps.mjs`; add any new dynamically imported package there. `scripts/docker-smoke.sh` starts the Meridian proxy inside the built image to catch a missing one
 
 ## Responsive Layout Architecture
 
@@ -132,6 +133,8 @@ npx prisma db push   # Push schema without migration (dev only)
 ## Docker
 
 All-in-one container: PostgreSQL is bundled inside — no external database required. Requires `NEXTAUTH_SECRET` and `AUTH_SECRET` env vars.
+
+Run `npm run test:docker` before pushing a change to `docker/`, the entrypoint, `prisma/` SQL, or dependencies. It builds the image and runs `scripts/docker-smoke.sh`: fresh install on an empty volume, upgrade restarts, and the Meridian proxy starting. The container gets a unique name and publishes no ports, so it's safe on a host already running ShareTab; point `DOCKER_HOST=ssh://user@host` at a remote daemon when there's no local Docker. CI runs the same script on pull requests (Docker Fresh Install) and before `docker.yml` publishes `:latest`. `--meridian-auth <dir>` adds a live receipt extraction through Meridian using a copy of a Claude login directory on the Docker host (local use only; needs a token valid for 30+ minutes).
 
 ```bash
 cd docker && docker compose up -d    # Start app (PostgreSQL included)

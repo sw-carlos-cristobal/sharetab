@@ -1,10 +1,12 @@
 name: Docker Fresh Install
 
-# Boots the production image the way a new install does (empty data volume,
-# bundled PostgreSQL, docker/entrypoint.sh), then restarts it the way every
-# existing install does on upgrade. The Test workflow runs the app with
-# `npm run start` against its own database, so it never exercises the
-# entrypoint or the manual SQL migrations.
+# Builds the production image and runs scripts/docker-smoke.sh against it:
+# a fresh install on an empty data volume, restarts the way every existing
+# install does on upgrade, and the Meridian proxy starting inside the image.
+# The Test workflow runs the app with `npm run start` against its own
+# database, so it never exercises the entrypoint, the manual SQL migrations,
+# or the packages the Dockerfile adds. docker.yml runs the same script before
+# publishing an image; run it locally with `scripts/docker-smoke.sh --build`.
 
 on:
   push:
@@ -40,93 +42,5 @@ jobs:
           # Reuse the layers the main-branch image build caches.
           cache-from: type=gha,scope=main-image
 
-      - name: Start on an empty database
-        run: |
-          source .github/scripts/fresh-install-helpers.sh
-          secret=$(openssl rand -base64 32)
-          docker run -d --name sharetab -p 3000:3000 \
-            -e NEXTAUTH_SECRET="$secret" -e AUTH_SECRET="$secret" \
-            sharetab:ci
-          wait_healthy "first start"
-
-          # The tables exist, not just a reachable database (psql fails if
-          # either is missing).
-          db -c 'SELECT count(*) FROM "User"' -c 'SELECT count(*) FROM "GuestSplit"'
-
-      - name: Meridian proxy starts
-        run: |
-          # The standalone trace misses Meridian (a dynamic import) and the
-          # native packages it loads, so the Dockerfile stages them. Starting
-          # the proxy on a spare port fails unless the module and its
-          # dependencies load, /etc/machine-id exists, and the Claude Code
-          # binary resolves. No Claude login is needed to start it.
-          docker exec sharetab /usr/local/bin/claude --version
-          docker exec -w /app sharetab node -e "
-            import('@rynfar/meridian')
-              .then(async (m) => {
-                await m.startProxyServer({ port: 3499, host: '127.0.0.1', silent: true });
-                const res = await fetch('http://127.0.0.1:3499/health');
-                console.log('health:', res.status, await res.text());
-                process.exit(0);
-              })
-              .catch((err) => {
-                console.error(err);
-                process.exit(1);
-              });
-          "
-
-      - name: Emails are unique ignoring case
-        run: |
-          source .github/scripts/fresh-install-helpers.sh
-          add_user ci-1 'CI@Example.com'
-          if add_user ci-2 'ci@example.com'; then
-            echo "::error::A case variant of an existing email was accepted."
-            exit 1
-          fi
-          add_user ci-3 'other@example.com'
-          db -c "DELETE FROM \"User\" WHERE id LIKE 'ci-%'"
-
-      - name: Restart, and prisma db push keeps the email index
-        run: |
-          source .github/scripts/fresh-install-helpers.sh
-          # The after-push SQL would recreate a dropped index before we look,
-          # so compare the index's identity instead of just its existence.
-          before=$(db -c "SELECT '\"User_email_lower_key\"'::regclass::oid")
-          docker restart sharetab
-          wait_healthy "restart"
-          after=$(db -c "SELECT '\"User_email_lower_key\"'::regclass::oid")
-          if [ "$before" != "$after" ]; then
-            echo "::error::prisma db push dropped User_email_lower_key (oid $before -> $after)."
-            exit 1
-          fi
-
-      - name: Existing case-variant duplicates don't block startup
-        run: |
-          source .github/scripts/fresh-install-helpers.sh
-          # An install from before the index, with case-variant duplicates.
-          db -c 'DROP INDEX "User_email_lower_key"'
-          add_user dup-1 'Dup@Example.com'
-          add_user dup-2 'dup@example.com'
-          docker restart sharetab
-          wait_healthy "restart with duplicates"
-          if ! docker logs sharetab 2>&1 | grep -q "more than one account uses each of these addresses in different letter cases: dup@example.com"; then
-            echo "::error::No warning about the duplicate emails in the startup log."
-            exit 1
-          fi
-          if [ "$(has_email_index)" != "f" ]; then
-            echo "::error::The email index exists although duplicates do."
-            exit 1
-          fi
-
-          # Once the duplicate is gone, the next start creates the index.
-          db -c "DELETE FROM \"User\" WHERE id = 'dup-2'"
-          docker restart sharetab
-          wait_healthy "restart after removing the duplicate"
-          if [ "$(has_email_index)" != "t" ]; then
-            echo "::error::The email index wasn't created after the duplicate was removed."
-            exit 1
-          fi
-
-      - name: Container logs
-        if: always()
-        run: docker logs sharetab || true
+      - name: Smoke test the image
+        run: scripts/docker-smoke.sh --image sharetab:ci

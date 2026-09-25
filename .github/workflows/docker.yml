@@ -43,6 +43,23 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=
 
+      # Test the image before publishing it: a broken :latest reaches every
+      # install that updates.
+      - name: Build image for testing
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/Dockerfile
+          load: true
+          tags: sharetab:ci
+          build-args: |
+            COMMIT_SHA=${{ github.sha }}
+          cache-from: type=gha,scope=main-image
+
+      - name: Smoke test the image
+        run: scripts/docker-smoke.sh --image sharetab:ci
+
+      # Same inputs as the test build, so every layer comes from its cache.
       - name: Build and push
         uses: docker/build-push-action@v7
         with:
