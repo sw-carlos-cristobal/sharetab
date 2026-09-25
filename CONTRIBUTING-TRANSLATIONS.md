@@ -34,7 +34,7 @@ messages/
 
 2. **Translate all values** in each JSON file. Never change the keys — only the values.
 
-3. **Register your locale** in `src/i18n/routing.ts` (add it to both `locales` and `languageConfig`):
+3. **Register your locale** in `src/i18n/routing.ts` (add it to both `locales` and `languageConfig`), and add its number-formatting locale to `moneyLocales` in `src/lib/money.ts` (the type check fails until you do):
 
    ```ts
    export const locales = ['en', 'es', 'YOUR_LOCALE'] as const;
