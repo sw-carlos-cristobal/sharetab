@@ -2,6 +2,8 @@
 -- Run this BEFORE applying the schema change via prisma db push
 -- Only needed for databases with existing GuestSplit rows
 -- Idempotent: safe to re-run
+-- Must also be safe on an empty database: docker/entrypoint.sh runs it before
+-- prisma db push on every start, including a fresh install's first one
 
 -- Step 1: Create the enum type (skip if already exists)
 DO $$ BEGIN
@@ -42,7 +44,10 @@ END $$;
 
 -- Step 3: Backfill updatedAt for existing rows (required by @updatedAt)
 DO $$ BEGIN
-  IF NOT EXISTS (
+  IF to_regclass('"GuestSplit"') IS NULL THEN
+    -- Fresh install: nothing to backfill; prisma db push creates the table next
+    NULL;
+  ELSIF NOT EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_name = 'GuestSplit' AND column_name = 'updatedAt'
   ) THEN
