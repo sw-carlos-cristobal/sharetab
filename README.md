@@ -126,6 +126,7 @@ ShareTab is a free, self-hosted alternative to Splitwise for tracking shared exp
 - **Dark mode** -- system-aware with manual toggle
 - **Invite links** -- share a link to add friends to your groups
 - **Magic link auth** -- passwordless email sign-in
+- **Single sign-on (OIDC)** -- sign in with Authentik, Authelia, Keycloak, or other OpenID Connect providers; optional auto-registration and password-login disable
 - **PWA** -- installable on mobile with app-like experience
 - **Admin dashboard** -- user management, group overview, storage stats, AI usage, audit log, registration control, announcements, server logs, user impersonation, data export, expired guest split cleanup
 - **Self-hosted** -- Docker Compose deployment, designed for Unraid
@@ -286,6 +287,56 @@ AI_PROVIDER_PRIORITY="openai-codex,meridian"
 | ---------------------- | ------------------------------------------------- |
 | `GOOGLE_CLIENT_ID`     | Google OAuth client ID for "Sign in with Google". |
 | `GOOGLE_CLIENT_SECRET` | Corresponding client secret.                      |
+
+### OIDC / Single Sign-On (optional)
+
+Sign in through your own identity provider (IdP): Authentik, Authelia, Keycloak, Pocket ID, or another OpenID Connect provider that supports confidential clients (client ID + secret) and a UserInfo endpoint. OIDC is enabled when the issuer, client ID, and client secret are all set; the login page then shows a **Sign in with &lt;name&gt;** button.
+
+| Variable                   | Default               | Description                                                                                                                                                                                                                                                                                                                                                        |
+| -------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `OIDC_ISSUER`              | —                     | Issuer URL. Must match the `issuer` field of `<issuer>/.well-known/openid-configuration`, including any trailing slash on a path (Authentik: `https://auth.example.com/application/o/<slug>/`).                                                                                                                                                                    |
+| `OIDC_CLIENT_ID`           | —                     | Client ID of the application you created at the IdP.                                                                                                                                                                                                                                                                                                               |
+| `OIDC_CLIENT_SECRET`       | —                     | Client secret (confidential client).                                                                                                                                                                                                                                                                                                                               |
+| `OIDC_DISPLAY_NAME`        | `SSO`                 | Button label: "Sign in with &lt;name&gt;".                                                                                                                                                                                                                                                                                                                         |
+| `OIDC_AUTO_REGISTER`       | `true`                | Create a ShareTab account the first time a new IdP user signs in. When `false`, SSO only works for IdP identities already linked to a ShareTab account (or, with `OIDC_ALLOW_EMAIL_LINKING=true`, matching an existing account's email).                                                                                                                           |
+| `OIDC_ALLOW_EMAIL_LINKING` | `false`               | Link a first-time IdP sign-in to an existing ShareTab account with the same email (case-insensitive), unless that account is already linked to an IdP identity. Refused while anyone can sign up with a password (password login on and Registration Mode set to _Open_), and when the IdP marks the email unverified. See [Security notes](#oidc-security-notes). |
+| `OIDC_TOKEN_AUTH_METHOD`   | `client_secret_basic` | How the client secret is sent to the token endpoint: `client_secret_basic` or `client_secret_post`. Must match the client's setting at the IdP.                                                                                                                                                                                                                    |
+| `DISABLE_PASSWORD_LOGIN`   | `false`               | Hide the email/password form and close registration. Ignored (with a warning in the log) unless OIDC or magic link sign-in is configured. With SSO only, link existing accounts first (see _Moving existing users to SSO_) or their owners, the admin included, can't sign in.                                                                                     |
+
+`OIDC_AUTO_REGISTER` is independent of the admin **Registration** setting, which only governs the email/password sign-up form: with SSO, your IdP decides who may sign in. If your IdP allows public self-enrollment, set `OIDC_AUTO_REGISTER=false` or restrict the application at the IdP.
+
+**Setup**
+
+1. At your IdP, create an OpenID Connect application (Authentik: _OAuth2/OpenID Provider_, client type _Confidential_) with the scopes `openid`, `email`, and `profile`.
+2. Set its redirect URI to `<NEXTAUTH_URL>/api/auth/callback/oidc`, e.g. `https://sharetab.example.com/api/auth/callback/oidc`.
+3. Set `NEXTAUTH_URL` to the URL people use to reach ShareTab (it defaults to `http://localhost:3000`), then `OIDC_ISSUER`, `OIDC_CLIENT_ID`, and `OIDC_CLIENT_SECRET`, and restart ShareTab. Behind a reverse proxy, also set `AUTH_TRUST_HOST=true`.
+
+**Moving existing users to SSO**
+
+1. Make sure each person's email at the IdP matches their ShareTab email (case doesn't matter) and that the IdP doesn't mark it unverified: ShareTab won't link an account when the IdP sends `email_verified: false`. Authentik's default email scope mapping always sends `false`; if you trust the addresses stored in Authentik, give the provider a custom email scope mapping that returns `"email_verified": True` instead.
+2. In the admin dashboard, set Registration Mode to _Closed_ (linking is refused while anyone can sign up with a password; _Invite Only_ is accepted too, but anyone holding an unused invite code could still register someone else's address, so revoke unused invites first). Then check that each ShareTab account whose email matches an IdP user really belongs to that person: linking hands the account to the IdP user, and its existing password keeps working.
+3. Set `OIDC_ALLOW_EMAIL_LINKING=true` and have everyone sign in once with the SSO button; this links their IdP identity to their existing account.
+4. Turn `OIDC_ALLOW_EMAIL_LINKING` back off, and optionally set `DISABLE_PASSWORD_LOGIN=true`.
+
+**Troubleshooting:** "Sign-in failed" after clicking the SSO button or returning from the IdP usually means an issuer mismatch (check the trailing slash), `invalid_client` (switch `OIDC_TOKEN_AUTH_METHOD`), or an IdP client that doesn't allow the authorization code grant (the log shows `OAuthCallbackError`, and Authentik logs `Invalid grant_type for provider`; enable the _authorization_code_ grant type on the provider). Landing back on the login page with no message means ShareTab couldn't map the IdP's profile (the log shows `OAuthProfileParseError`). In both cases the container log shows the exact Auth.js error.
+
+"An account with this email already exists…" means a ShareTab account has that email but the IdP identity isn't linked to it. The `reason` in the `auth.oidc_denied` log line says why:
+
+- `linking_disabled`: `OIDC_ALLOW_EMAIL_LINKING` is off; link as in _Moving existing users to SSO_.
+- `email_unverified`: the IdP sent `email_verified: false` for this user; see step 1 above.
+- `password_registration_open`: linking is on but Registration Mode is _Open_; close it (step 2 above).
+- `already_linked`: the account is linked to a different IdP identity. If the IdP user was recreated, confirm at the IdP that the old identity (the row's `providerAccountId`) no longer exists before deleting that account's `provider = 'oidc'` row in the `Account` table, then link again.
+- `ambiguous_email`: several ShareTab accounts share the email in different letter cases; merge or delete the extra account.
+- `placeholder`: the email belongs to a placeholder or deleted user, which can't be signed in to.
+
+<a id="oidc-security-notes"></a>**Security notes**
+
+- Only enable `OIDC_ALLOW_EMAIL_LINKING` if your IdP doesn't let users set arbitrary, unverified email addresses (for example by editing their own email in the IdP's profile page); otherwise someone could claim another person's email at the IdP and take over their ShareTab account. ShareTab refuses to link when the IdP marks the email unverified, but many IdPs don't send `email_verified` at all, so that check alone doesn't make linking safe. Keep it on only while migrating.
+- Admin rights still come from `ADMIN_EMAIL`, so whoever the IdP lets sign in with that address is the admin. On a new instance, sign in as the admin before anyone else can: once the admin account exists and is linked, another IdP identity with that address is refused. SSO accounts are created with a lowercase email; keep `ADMIN_EMAIL` lowercase.
+- If someone is already signed in, starting an SSO sign-in for a different or not-yet-linked identity is refused; they must sign out first. This stops an IdP account from being attached to whoever last used a shared device.
+- Accounts are linked to the IdP's user ID (`sub`). If you switch to a different IdP, delete the old links first (rows with `provider = 'oidc'` in the `Account` table), or a new IdP user whose ID happens to match an old one would sign in to that old account; then link everyone again as in _Moving existing users to SSO_.
+- Signing out of ShareTab doesn't sign you out of the IdP.
+- Magic link sign-in (when `EMAIL_SERVER_HOST` is set) creates an account for any email address, regardless of `OIDC_AUTO_REGISTER` or the Registration setting.
 
 ### Magic Link Auth (optional)
 

@@ -309,6 +309,80 @@
     Required="false"
     Mask="true"></Config>
 
+  <!-- OIDC / SSO -->
+  <Config
+    Name="OIDC Issuer"
+    Target="OIDC_ISSUER"
+    Default=""
+    Description="OIDC issuer URL (optional — enables SSO via Authentik, Authelia, Keycloak, ...). Must match the issuer in the IdP's .well-known/openid-configuration exactly (Authentik: trailing slash). Redirect URI: [NEXTAUTH_URL]/api/auth/callback/oidc"
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false"></Config>
+  <Config
+    Name="OIDC Client ID"
+    Target="OIDC_CLIENT_ID"
+    Default=""
+    Description="OIDC client ID"
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false"></Config>
+  <Config
+    Name="OIDC Client Secret"
+    Target="OIDC_CLIENT_SECRET"
+    Default=""
+    Description="OIDC client secret"
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="true"></Config>
+  <Config
+    Name="OIDC Display Name"
+    Target="OIDC_DISPLAY_NAME"
+    Default="SSO"
+    Description="Login button label: Sign in with [name]"
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false"></Config>
+  <Config
+    Name="OIDC Auto Register"
+    Target="OIDC_AUTO_REGISTER"
+    Default="true"
+    Description="Create a ShareTab account the first time a new IdP user signs in (true/false)"
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false"></Config>
+  <Config
+    Name="OIDC Allow Email Linking"
+    Target="OIDC_ALLOW_EMAIL_LINKING"
+    Default="false"
+    Description="Link a first-time IdP login to an existing ShareTab user with the same email (true/false). Only enable if your IdP doesn't let users set arbitrary, unverified emails. Refused while anyone can sign up with a password (Registration Mode: Open)."
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false"></Config>
+  <Config
+    Name="OIDC Token Auth Method"
+    Target="OIDC_TOKEN_AUTH_METHOD"
+    Default="client_secret_basic"
+    Description="How the client secret is sent to the token endpoint: client_secret_basic or client_secret_post"
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false"></Config>
+  <Config
+    Name="Disable Password Login"
+    Target="DISABLE_PASSWORD_LOGIN"
+    Default="false"
+    Description="Hide the email/password form and close registration (true/false). Ignored unless OIDC or magic link sign-in is configured. With SSO only, link existing accounts first or their owners cannot sign in."
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false"></Config>
+
   <!-- Admin -->
   <Config
     Name="Admin Email"

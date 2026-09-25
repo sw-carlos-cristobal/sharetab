@@ -10,15 +10,29 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Separator } from '@/components/ui/separator';
-import { Receipt, Mail } from 'lucide-react';
+import { KeyRound, Receipt, Mail } from 'lucide-react';
+import { trpc } from '@/lib/trpc';
 import { normalizeCallbackPath, stripLocalePrefix } from '@/lib/locale-paths';
+import { getSignInErrorKey } from '@/lib/sign-in-errors';
 
 export default function LoginPage() {
   return (
     <Suspense>
       <LoginForm />
     </Suspense>
+  );
+}
+
+function OrDivider({ label }: { label: string }) {
+  return (
+    <div className="relative my-8">
+      <Separator />
+      <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-3 text-xs text-muted-foreground uppercase tracking-wider">
+        {label}
+      </span>
+    </div>
   );
 }
 
@@ -34,9 +48,24 @@ function LoginForm() {
   const [magicLinkEmail, setMagicLinkEmail] = useState('');
   const [magicLinkSending, setMagicLinkSending] = useState(false);
   const [showMagicLink, setShowMagicLink] = useState(false);
+  const [oidcRedirecting, setOidcRedirecting] = useState(false);
+  const loginOptions = trpc.auth.getLoginOptions.useQuery();
   const callbackPath = normalizeCallbackPath(searchParams.get('callbackUrl'), locale);
   const callbackHref = stripLocalePrefix(callbackPath);
   const registerHref = `/register?callbackUrl=${encodeURIComponent(callbackPath)}`;
+
+  // Password login stays the default if the options can't be loaded, so the
+  // page never renders empty.
+  const passwordLogin = loginOptions.data?.passwordLogin ?? true;
+  // Without email settings there is no magic-link provider to send to.
+  const magicLinkEnabled = loginOptions.data?.magicLink ?? false;
+  const magicLinkOnly = !passwordLogin && magicLinkEnabled;
+  const oidc = loginOptions.data?.oidc ?? null;
+
+  // Errors from Auth.js redirects (`/login?error=...`) show until the user
+  // triggers a new attempt, which sets its own error state.
+  const urlErrorKey = getSignInErrorKey(searchParams.get('error'));
+  const shownError = error || (urlErrorKey ? t(`errors.${urlErrorKey}`) : '');
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -80,6 +109,40 @@ function LoginForm() {
     }
   }
 
+  async function handleOidc() {
+    setError('');
+    setOidcRedirecting(true);
+    try {
+      // Full-page redirect to the identity provider; failures normally come
+      // back as `/login?error=...`.
+      await signIn('oidc', { redirectTo: callbackPath });
+    } catch {
+      setOidcRedirecting(false);
+      setError(t('errors.generic'));
+    }
+  }
+
+  const magicLinkForm = (
+    <form onSubmit={handleMagicLink} className="space-y-4">
+      <p className="text-sm text-muted-foreground">{t('magicLinkDescription')}</p>
+      <div className="space-y-2">
+        <Label htmlFor="magic-email">{t('magicLinkEmail')}</Label>
+        <Input
+          id="magic-email"
+          type="email"
+          placeholder={t('emailPlaceholder')}
+          value={magicLinkEmail}
+          onChange={(e) => setMagicLinkEmail(e.target.value)}
+          required
+        />
+      </div>
+      <Button type="submit" className="w-full rounded-full h-10 text-sm font-medium mt-2" disabled={magicLinkSending}>
+        <Mail className="mr-2 h-4 w-4" />
+        {magicLinkSending ? t('magicLinkSending') : t('magicLinkSubmit')}
+      </Button>
+    </form>
+  );
+
   return (
     <Card className="border-primary/10 shadow-lg shadow-primary/5">
       <CardHeader className="text-center pb-2">
@@ -90,103 +153,115 @@ function LoginForm() {
         <CardDescription className="mt-1">{t('subtitle')}</CardDescription>
       </CardHeader>
       <CardContent className="pt-4">
-        {!showMagicLink ? (
-          <>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {error && <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
-              <div className="space-y-2">
-                <Label htmlFor="email">{t('email')}</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder={t('emailPlaceholder')}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password">{t('password')}</Label>
-                  <button
-                    type="button"
-                    onClick={() => setShowMagicLink(true)}
-                    className="text-xs text-primary hover:text-primary/80 transition-colors"
-                  >
-                    {t('forgotPassword')}
-                  </button>
-                </div>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder={t('passwordPlaceholder')}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  minLength={8}
-                />
-              </div>
-              <Button type="submit" className="w-full rounded-full h-10 text-sm font-medium mt-2" disabled={loading}>
-                {loading ? t('submitting') : t('submit')}
-              </Button>
-            </form>
-
-            <div className="relative my-8">
-              <Separator />
-              <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-3 text-xs text-muted-foreground uppercase tracking-wider">
-                {t('or')}
-              </span>
-            </div>
-
-            <Button
-              variant="outline"
-              className="w-full rounded-full h-10 text-sm border-primary/20 text-muted-foreground hover:text-foreground hover:border-primary/40"
-              onClick={() => setShowMagicLink(true)}
-            >
-              <Mail className="mr-2 h-4 w-4" />
-              {t('magicLink')}
-            </Button>
-          </>
+        {loginOptions.isPending ? (
+          <LoadingSpinner className="py-8" />
         ) : (
           <>
-            <form onSubmit={handleMagicLink} className="space-y-4">
-              {error && <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
-              <p className="text-sm text-muted-foreground">{t('magicLinkDescription')}</p>
-              <div className="space-y-2">
-                <Label htmlFor="magic-email">{t('magicLinkEmail')}</Label>
-                <Input
-                  id="magic-email"
-                  type="email"
-                  placeholder={t('emailPlaceholder')}
-                  value={magicLinkEmail}
-                  onChange={(e) => setMagicLinkEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <Button
-                type="submit"
-                className="w-full rounded-full h-10 text-sm font-medium mt-2"
-                disabled={magicLinkSending}
+            {shownError && (
+              <div
+                role="alert"
+                data-testid="login-error"
+                className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive"
               >
-                <Mail className="mr-2 h-4 w-4" />
-                {magicLinkSending ? t('magicLinkSending') : t('magicLinkSubmit')}
-              </Button>
-            </form>
+                {shownError}
+              </div>
+            )}
 
-            <div className="relative my-8">
-              <Separator />
-              <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-3 text-xs text-muted-foreground uppercase tracking-wider">
-                {t('or')}
-              </span>
-            </div>
+            {oidc && (
+              <>
+                <Button
+                  data-testid="oidc-sign-in"
+                  variant={passwordLogin || magicLinkOnly ? 'outline' : 'default'}
+                  className="w-full rounded-full h-10 text-sm font-medium"
+                  onClick={handleOidc}
+                  disabled={oidcRedirecting}
+                >
+                  <KeyRound className="mr-2 h-4 w-4" />
+                  {t('sso', { provider: oidc.name })}
+                </Button>
+                {(passwordLogin || magicLinkOnly) && <OrDivider label={t('or')} />}
+              </>
+            )}
 
-            <Button
-              variant="outline"
-              className="w-full rounded-full h-10 text-sm border-primary/20 text-muted-foreground hover:text-foreground hover:border-primary/40"
-              onClick={() => setShowMagicLink(false)}
-            >
-              {t('passwordLink')}
-            </Button>
+            {passwordLogin &&
+              (!showMagicLink ? (
+                <>
+                  <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="email">{t('email')}</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder={t('emailPlaceholder')}
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="password">{t('password')}</Label>
+                        {magicLinkEnabled && (
+                          <button
+                            type="button"
+                            onClick={() => setShowMagicLink(true)}
+                            className="text-xs text-primary hover:text-primary/80 transition-colors"
+                          >
+                            {t('forgotPassword')}
+                          </button>
+                        )}
+                      </div>
+                      <Input
+                        id="password"
+                        type="password"
+                        placeholder={t('passwordPlaceholder')}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                        minLength={8}
+                      />
+                    </div>
+                    <Button
+                      type="submit"
+                      className="w-full rounded-full h-10 text-sm font-medium mt-2"
+                      disabled={loading}
+                    >
+                      {loading ? t('submitting') : t('submit')}
+                    </Button>
+                  </form>
+
+                  {magicLinkEnabled && (
+                    <>
+                      <OrDivider label={t('or')} />
+
+                      <Button
+                        variant="outline"
+                        className="w-full rounded-full h-10 text-sm border-primary/20 text-muted-foreground hover:text-foreground hover:border-primary/40"
+                        onClick={() => setShowMagicLink(true)}
+                      >
+                        <Mail className="mr-2 h-4 w-4" />
+                        {t('magicLink')}
+                      </Button>
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  {magicLinkForm}
+
+                  <OrDivider label={t('or')} />
+
+                  <Button
+                    variant="outline"
+                    className="w-full rounded-full h-10 text-sm border-primary/20 text-muted-foreground hover:text-foreground hover:border-primary/40"
+                    onClick={() => setShowMagicLink(false)}
+                  >
+                    {t('passwordLink')}
+                  </Button>
+                </>
+              ))}
+
+            {magicLinkOnly && magicLinkForm}
           </>
         )}
 
@@ -195,12 +270,14 @@ function LoginForm() {
         </div>
 
         <div className="text-center space-y-3">
-          <p className="text-sm text-muted-foreground">
-            {t('noAccount')}{' '}
-            <Link href={registerHref} className="font-medium text-primary hover:underline">
-              {t('createAccount')}
-            </Link>
-          </p>
+          {passwordLogin && (
+            <p className="text-sm text-muted-foreground">
+              {t('noAccount')}{' '}
+              <Link href={registerHref} className="font-medium text-primary hover:underline">
+                {t('createAccount')}
+              </Link>
+            </p>
+          )}
           <p className="text-xs text-muted-foreground/80">
             {t('quickSplit')}{' '}
             <Link href="/split" className="font-medium text-primary hover:underline">
