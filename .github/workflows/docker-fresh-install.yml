@@ -53,6 +53,28 @@ jobs:
           # either is missing).
           db -c 'SELECT count(*) FROM "User"' -c 'SELECT count(*) FROM "GuestSplit"'
 
+      - name: Meridian proxy starts
+        run: |
+          # The standalone trace misses Meridian (a dynamic import) and the
+          # native packages it loads, so the Dockerfile stages them. Starting
+          # the proxy on a spare port fails unless the module and its
+          # dependencies load, /etc/machine-id exists, and the Claude Code
+          # binary resolves. No Claude login is needed to start it.
+          docker exec sharetab /usr/local/bin/claude --version
+          docker exec -w /app sharetab node -e "
+            import('@rynfar/meridian')
+              .then(async (m) => {
+                await m.startProxyServer({ port: 3499, host: '127.0.0.1', silent: true });
+                const res = await fetch('http://127.0.0.1:3499/health');
+                console.log('health:', res.status, await res.text());
+                process.exit(0);
+              })
+              .catch((err) => {
+                console.error(err);
+                process.exit(1);
+              });
+          "
+
       - name: Emails are unique ignoring case
         run: |
           source .github/scripts/fresh-install-helpers.sh

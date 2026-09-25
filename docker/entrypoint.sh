@@ -11,6 +11,16 @@ if [ -z "$AUTH_SECRET" ] || [ "$AUTH_SECRET" = "change-me-in-production" ]; then
   exit 1
 fi
 
+# ── Machine ID ─────────────────────────────────────────────────
+# The Meridian proxy won't start without /etc/machine-id (it keys its
+# session locks on it) and Alpine doesn't ship one. Generate one for this
+# container unless one exists or was bind-mounted.
+if [ ! -s /etc/machine-id ]; then
+  if ! tr -d '-' < /proc/sys/kernel/random/uuid > /etc/machine-id 2>/dev/null; then
+    echo "WARNING: could not write /etc/machine-id; the meridian AI provider will not start."
+  fi
+fi
+
 PGDATA="${PGDATA:-/var/lib/postgresql/data}"
 DB_USER="${DB_USER:-sharetab}"
 DB_PASSWORD="${DB_PASSWORD:-sharetab}"
