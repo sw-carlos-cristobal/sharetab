@@ -37,7 +37,7 @@ import {
 } from '@/server/lib/openai-codex-login';
 
 import { getBuildInfo } from '@/server/lib/build-info';
-import { GUEST_UPLOADS_SETTING_KEY, isGuestUploadsEnabled } from '@/server/lib/guest-uploads';
+import { isGuestUploadsForcedOff, readGuestUploadsSetting, saveGuestUploadsSetting } from '@/server/lib/guest-uploads';
 
 const serverStartTime = new Date();
 const { version: cachedVersion, commitSha: cachedCommitSha } = getBuildInfo();
@@ -826,16 +826,13 @@ export const adminRouter = createTRPCRouter({
 
   // ─── Guest Receipt Uploads Toggle ───────────────────────
 
+  // `enabled` is the saved toggle; DISABLE_GUEST_UPLOADS overrides it.
   getGuestUploadsEnabled: adminProcedure.query(async ({ ctx }) => {
-    return { enabled: await isGuestUploadsEnabled(ctx.db) };
+    return { enabled: await readGuestUploadsSetting(ctx.db), forcedOffByEnv: isGuestUploadsForcedOff() };
   }),
 
   setGuestUploadsEnabled: adminProcedure.input(z.object({ enabled: z.boolean() })).mutation(async ({ ctx, input }) => {
-    await ctx.db.systemSetting.upsert({
-      where: { key: GUEST_UPLOADS_SETTING_KEY },
-      update: { value: String(input.enabled) },
-      create: { key: GUEST_UPLOADS_SETTING_KEY, value: String(input.enabled) },
-    });
+    await saveGuestUploadsSetting(ctx.db, input.enabled);
 
     await logAdminAction(ctx.db, ctx.user.id, 'GUEST_UPLOADS_SETTING_CHANGED', null, { enabled: input.enabled });
 

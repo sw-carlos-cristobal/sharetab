@@ -331,9 +331,12 @@ describe('guest uploads toggle', () => {
     return adminRouter.createCaller(ctx as unknown as Parameters<typeof adminRouter.createCaller>[0]);
   }
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.stubEnv('ADMIN_EMAIL', 'admin@example.com');
+    vi.stubEnv('DISABLE_GUEST_UPLOADS', '');
     vi.clearAllMocks();
+    const { _resetGuestUploadsCache } = await import('@/server/lib/guest-uploads');
+    _resetGuestUploadsCache();
     mockDb.user.findUnique.mockResolvedValue({ suspendedAt: null });
   });
 
@@ -344,13 +347,20 @@ describe('guest uploads toggle', () => {
   test('reports guest uploads as enabled until an admin saves the setting', async () => {
     mockDb.systemSetting.findUnique.mockResolvedValue(null);
     const api = await caller(adminSession);
-    expect(await api.getGuestUploadsEnabled()).toEqual({ enabled: true });
+    expect(await api.getGuestUploadsEnabled()).toEqual({ enabled: true, forcedOffByEnv: false });
   });
 
   test('reports the saved value', async () => {
     mockDb.systemSetting.findUnique.mockResolvedValue({ key: 'guestUploadsEnabled', value: 'false' });
     const api = await caller(adminSession);
-    expect(await api.getGuestUploadsEnabled()).toEqual({ enabled: false });
+    expect(await api.getGuestUploadsEnabled()).toEqual({ enabled: false, forcedOffByEnv: false });
+  });
+
+  test('reports when DISABLE_GUEST_UPLOADS overrides the saved value', async () => {
+    vi.stubEnv('DISABLE_GUEST_UPLOADS', 'true');
+    mockDb.systemSetting.findUnique.mockResolvedValue(null);
+    const api = await caller(adminSession);
+    expect(await api.getGuestUploadsEnabled()).toEqual({ enabled: true, forcedOffByEnv: true });
   });
 
   test('saving the setting upserts it and writes an audit entry', async () => {

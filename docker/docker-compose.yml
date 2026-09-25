@@ -50,6 +50,7 @@ services:
       - GUEST_RATE_LIMIT_MAX=${GUEST_RATE_LIMIT_MAX:-10}
       - GUEST_UPLOAD_GLOBAL_LIMIT=${GUEST_UPLOAD_GLOBAL_LIMIT:-100}
       - GUEST_AI_GLOBAL_LIMIT=${GUEST_AI_GLOBAL_LIMIT:-100}
+      - DISABLE_GUEST_UPLOADS=${DISABLE_GUEST_UPLOADS:-false}
       - LOG_LEVEL=${LOG_LEVEL:-info}
     volumes:
       - pgdata:/var/lib/postgresql/data

@@ -35,11 +35,19 @@ function read(env: Env, name: string): string {
   return env[name]?.trim() ?? '';
 }
 
-function parseBoolean(env: Env, name: string, fallback: boolean, warnings: string[]): boolean {
-  const value = read(env, name).toLowerCase();
-  if (value === '') return fallback;
+/** Parses a boolean env value (true/1/yes/on, false/0/no/off); null when empty or unrecognized. */
+export function parseBooleanValue(raw: string | undefined): boolean | null {
+  const value = raw?.trim().toLowerCase() ?? '';
   if (TRUE_VALUES.has(value)) return true;
   if (FALSE_VALUES.has(value)) return false;
+  return null;
+}
+
+function parseBoolean(env: Env, name: string, fallback: boolean, warnings: string[]): boolean {
+  const value = read(env, name);
+  if (value === '') return fallback;
+  const parsed = parseBooleanValue(value);
+  if (parsed !== null) return parsed;
   warnings.push(`${name} must be true or false; using the default (${fallback}).`);
   return fallback;
 }

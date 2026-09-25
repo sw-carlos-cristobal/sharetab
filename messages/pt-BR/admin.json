@@ -118,11 +118,12 @@
   },
   "guestUploads": {
     "title": "Envio de recibos por convidados",
-    "description": "Quando ativado, qualquer pessoa pode enviar e escanear recibos na Divisão rápida sem uma conta. Desative para impedir que visitantes anônimos usem o armazenamento do servidor e as análises com IA. Usuários conectados ainda podem usar a Divisão rápida.",
+    "description": "Quando ativado, qualquer pessoa pode enviar imagens de recibos e fazer análises com IA na Divisão rápida sem uma conta. Desative para que visitantes anônimos não possam. Usuários conectados ainda podem usar a Divisão rápida, então, se o Controle de registro estiver em Aberto, mude-o também para Somente com convite ou Fechado.",
     "enabled": "Ativado",
     "disabled": "Desativado",
     "enabledStatus": "Qualquer pessoa pode escanear recibos na Divisão rápida",
-    "disabledStatus": "Somente usuários conectados podem escanear recibos"
+    "disabledStatus": "Somente usuários conectados podem escanear recibos",
+    "forcedOffStatus": "Bloqueado pela variável de ambiente DISABLE_GUEST_UPLOADS"
   },
   "aiStats": {
     "title": "Uso de IA",

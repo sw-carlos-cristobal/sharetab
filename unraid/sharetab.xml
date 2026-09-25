@@ -382,6 +382,15 @@
     Display="advanced"
     Required="false"
     Mask="false"></Config>
+  <Config
+    Name="Disable Guest Uploads"
+    Target="DISABLE_GUEST_UPLOADS"
+    Default="false"
+    Description="Lock guest (no account) receipt uploads and AI scans off, overriding the admin toggle (true/false). Signed-in users keep Quick Split, so also restrict registration if it is open."
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false"></Config>
 
   <!-- Admin -->
   <Config

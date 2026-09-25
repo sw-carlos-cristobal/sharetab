@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
+import { TRPCClientError } from '@trpc/client';
 import { Link, useRouter } from '@/i18n/navigation';
 import { trpc } from '@/lib/trpc';
 import { formatCents, centsToDecimal, parseToCents } from '@/lib/money';
@@ -49,6 +50,13 @@ type ExtractedData = {
   total: number;
   currency: string;
 };
+
+// The server refuses guest uploads with 403 (upload) or FORBIDDEN (scan).
+class GuestUploadsDisabledError extends Error {}
+
+function isGuestUploadsRefusal(err: unknown): boolean {
+  return err instanceof GuestUploadsDisabledError || (err instanceof TRPCClientError && err.data?.code === 'FORBIDDEN');
+}
 
 export default function GuestSplitPage() {
   const router = useRouter();
@@ -134,6 +142,13 @@ export default function GuestSplitPage() {
     }
   }, [receiptData.data, items.length]);
 
+  // Guest uploads were turned off (or the session ended) after this page
+  // loaded, so swap the upload buttons for the sign-in notice.
+  async function showGuestUploadsDisabled() {
+    await uploadStatus.refetch();
+    setErrorMessage(t('upload.guestDisabledTitle'));
+  }
+
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -150,11 +165,7 @@ export default function GuestSplitPage() {
         body: formData,
       });
 
-      if (res.status === 403) {
-        // An admin turned guest uploads off after this page loaded.
-        void uploadStatus.refetch();
-        throw new Error(t('upload.guestDisabledTitle'));
-      }
+      if (res.status === 403) throw new GuestUploadsDisabledError();
 
       if (!res.ok) {
         let message = t('upload.uploadFailed');
@@ -185,7 +196,8 @@ export default function GuestSplitPage() {
       setStep('people');
     } catch (err) {
       setUploading(false);
-      setErrorMessage(err instanceof Error ? err.message : t('upload.uploadFailed'));
+      if (isGuestUploadsRefusal(err)) await showGuestUploadsDisabled();
+      else setErrorMessage(err instanceof Error ? err.message : t('upload.uploadFailed'));
       setStep('upload');
     }
   }
@@ -695,6 +707,11 @@ export default function GuestSplitPage() {
                                 setStep('people');
                               },
                               onError: (err) => {
+                                if (isGuestUploadsRefusal(err)) {
+                                  setStep('upload');
+                                  void showGuestUploadsDisabled();
+                                  return;
+                                }
                                 setErrorMessage(err.message);
                                 setStep('people');
                               },

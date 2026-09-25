@@ -118,11 +118,12 @@
   },
   "guestUploads": {
     "title": "Beleg-Uploads durch Gäste",
-    "description": "Wenn aktiviert, kann jeder ohne Konto Belege in Schnell teilen hochladen und scannen. Deaktivieren Sie dies, damit anonyme Besucher keinen Serverspeicher und keine KI-Scans verbrauchen. Angemeldete Benutzer können Schnell teilen weiterhin nutzen.",
+    "description": "Wenn aktiviert, kann jeder ohne Konto Belegbilder in Schnell teilen hochladen und KI-Scans ausführen. Deaktivieren Sie dies, damit anonyme Besucher das nicht mehr können. Angemeldete Benutzer können Schnell teilen weiterhin nutzen. Steht die Registrierungskontrolle auf Offen, stellen Sie sie daher auch auf Nur mit Einladung oder Geschlossen.",
     "enabled": "Aktiviert",
     "disabled": "Deaktiviert",
     "enabledStatus": "Jeder kann Belege in Schnell teilen scannen",
-    "disabledStatus": "Nur angemeldete Benutzer können Belege scannen"
+    "disabledStatus": "Nur angemeldete Benutzer können Belege scannen",
+    "forcedOffStatus": "Durch die Umgebungsvariable DISABLE_GUEST_UPLOADS gesperrt"
   },
   "aiStats": {
     "title": "KI-Nutzung",

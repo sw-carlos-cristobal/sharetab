@@ -116,7 +116,7 @@ ShareTab is a free, self-hosted alternative to Splitwise for tracking shared exp
 
 - **Group expense tracking** with multiple split modes (equal, percentage, shares, exact, item-level)
 - **AI receipt scanning** -- photograph a receipt, AI extracts line items, assign items to group members with proportional tax/tip; zoomable/pannable receipt viewer; rescan with correction prompts
-- **Guest bill splitting** -- no account needed, shareable summary links; admins can turn off guest receipt uploads so anonymous visitors can't use server storage or AI scans
+- **Guest bill splitting** -- no account needed, shareable summary links; admins can turn off guest receipt uploads (admin toggle or `DISABLE_GUEST_UPLOADS`) so anonymous visitors can't upload receipt images or run AI scans (signed-in users keep access, so also restrict registration if it is open)
 - **Pluggable AI providers** -- OpenAI (GPT-4o), OpenAI-Codex (ChatGPT OAuth), Claude (API key), Meridian (Claude Max subscription), local Ollama
 - **Group archiving** -- archive inactive groups to declutter your dashboard; toggle archived view on groups page
 - **Cross-group dashboard** -- see all your balances at a glance, with per-person debt breakdown
@@ -385,6 +385,7 @@ Sign in through your own identity provider (IdP): Authentik, Authelia, Keycloak,
 | `AUTH_RATE_LIMIT_MAX`     | `5`                     | Max login attempts per IP per hour.                                      |
 | `REGISTER_RATE_LIMIT_MAX` | `10`                    | Max registration attempts per IP per hour.                               |
 | `GUEST_RATE_LIMIT_MAX`    | `10`                    | Max guest split creations per IP per hour.                               |
+| `DISABLE_GUEST_UPLOADS`   | `false`                 | Lock guest receipt uploads and AI scans off; overrides the admin toggle. |
 | `LOG_LEVEL`               | `info`                  | Logging verbosity: `debug`, `info`, `warn`, or `error`.                  |
 
 ## Tech Stack

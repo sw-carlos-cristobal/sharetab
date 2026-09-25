@@ -7,6 +7,7 @@ vi.mock('@/server/auth', () => ({ auth: vi.fn() }));
 
 const mockDb = {
   systemSetting: { findUnique: vi.fn() },
+  user: { findUnique: vi.fn() },
   receipt: { findUnique: vi.fn(), updateMany: vi.fn(), update: vi.fn() },
 };
 vi.mock('@/server/db', () => ({ db: mockDb }));
@@ -36,9 +37,12 @@ function guestUploadsSetting(value: 'true' | 'false' | null) {
   mockDb.systemSetting.findUnique.mockResolvedValue(value === null ? null : { key: 'guestUploadsEnabled', value });
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.clearAllMocks();
+  const { _resetGuestUploadsCache } = await import('@/server/lib/guest-uploads');
+  _resetGuestUploadsCache();
   checkRateLimit.mockReturnValue({ allowed: true, retryAfterMs: 0 });
+  mockDb.user.findUnique.mockResolvedValue({ suspendedAt: null });
 });
 
 describe('guest.getUploadStatus', () => {
@@ -56,6 +60,12 @@ describe('guest.getUploadStatus', () => {
     guestUploadsSetting('false');
     expect(await (await caller(signedIn)).getUploadStatus()).toEqual({ allowed: true });
   });
+
+  test('refuses suspended users when guest uploads are disabled', async () => {
+    guestUploadsSetting('false');
+    mockDb.user.findUnique.mockResolvedValue({ suspendedAt: new Date() });
+    expect(await (await caller(signedIn)).getUploadStatus()).toEqual({ allowed: false });
+  });
 });
 
 describe('guest.processReceipt with guest uploads disabled', () => {
@@ -71,7 +81,14 @@ describe('guest.processReceipt with guest uploads disabled', () => {
     expect(processReceiptImage).not.toHaveBeenCalled();
   });
 
-  test('lets signed-in users scan their Quick Split receipt', async () => {
+  test('refuses suspended users the same way', async () => {
+    mockDb.user.findUnique.mockResolvedValue({ suspendedAt: new Date() });
+    const api = await caller(signedIn);
+    await expect(api.processReceipt({ receiptId: 'r1' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(processReceiptImage).not.toHaveBeenCalled();
+  });
+
+  test('lets signed-in users scan a Quick Split receipt', async () => {
     const receipt = { id: 'r1', isGuest: true };
     mockDb.receipt.findUnique.mockResolvedValue(receipt);
     mockDb.receipt.updateMany.mockResolvedValue({ count: 1 });

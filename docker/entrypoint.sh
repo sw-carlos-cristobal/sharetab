@@ -209,6 +209,10 @@ case "$(echo "${DISABLE_PASSWORD_LOGIN:-false}" | tr '[:upper:]' '[:lower:]')" i
   true|1|yes|on) echo "  Password Login: disabled (ignored if no OIDC/magic link — see app log)" ;;
   *)             echo "  Password Login: enabled" ;;
 esac
+case "$(echo "${DISABLE_GUEST_UPLOADS:-false}" | tr '[:upper:]' '[:lower:]')" in
+  true|1|yes|on) echo "  Guest Uploads:  locked off (DISABLE_GUEST_UPLOADS)" ;;
+  *)             echo "  Guest Uploads:  admin toggle" ;;
+esac
 echo "  Log Level:      ${LOG_LEVEL:-info}"
 echo "============================================"
 echo ""

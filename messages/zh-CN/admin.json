@@ -117,12 +117,13 @@
     "disabledStatus": "Venmo 支付链接已隐藏"
   },
   "guestUploads": {
-    "title": "访客上传小票",
-    "description": "启用后，任何人无需账号即可在快速分账中上传并扫描小票。关闭此项可阻止匿名访客占用服务器存储和 AI 扫描。已登录用户仍可使用快速分账。",
+    "title": "访客上传收据",
+    "description": "启用后，任何人无需账号即可在快速分账中上传收据图片并运行 AI 扫描。关闭后，匿名访客将无法使用这些功能。已登录用户仍可使用快速分账，因此如果注册管理设为“开放”，请同时改为“仅限邀请”或“关闭”。",
     "enabled": "已启用",
     "disabled": "已禁用",
-    "enabledStatus": "任何人都可以在快速分账中扫描小票",
-    "disabledStatus": "仅已登录用户可以扫描小票"
+    "enabledStatus": "任何人都可以在快速分账中扫描收据",
+    "disabledStatus": "仅已登录用户可以扫描收据",
+    "forcedOffStatus": "已被环境变量 DISABLE_GUEST_UPLOADS 锁定为关闭"
   },
   "aiStats": {
     "title": "AI 使用情况",

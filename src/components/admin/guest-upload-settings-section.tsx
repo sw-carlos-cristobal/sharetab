@@ -4,7 +4,7 @@ import { useTranslations } from 'next-intl';
 import { trpc } from '@/lib/trpc';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ScanLine } from 'lucide-react';
+import { Loader2, ScanLine } from 'lucide-react';
 
 export function GuestUploadSettingsSection() {
   const t = useTranslations('admin');
@@ -16,7 +16,13 @@ export function GuestUploadSettingsSection() {
     },
   });
 
-  const enabled = guestUploads.data?.enabled;
+  const data = guestUploads.data;
+  // DISABLE_GUEST_UPLOADS wins over the saved toggle, so show the effective state.
+  const enabled = data ? data.enabled && !data.forcedOffByEnv : false;
+
+  let status = '';
+  if (data?.forcedOffByEnv) status = t('guestUploads.forcedOffStatus');
+  else if (data) status = enabled ? t('guestUploads.enabledStatus') : t('guestUploads.disabledStatus');
 
   return (
     <Card>
@@ -28,20 +34,22 @@ export function GuestUploadSettingsSection() {
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm text-muted-foreground">{t('guestUploads.description')}</p>
-        <div className="flex items-center gap-3">
-          <Button
-            variant={enabled ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setGuestUploads.mutate({ enabled: !enabled })}
-            disabled={setGuestUploads.isPending || guestUploads.isLoading || enabled === undefined}
-            data-testid="guest-uploads-toggle-btn"
-          >
-            {enabled ? t('guestUploads.enabled') : t('guestUploads.disabled')}
-          </Button>
-          <span className="text-xs text-muted-foreground">
-            {enabled ? t('guestUploads.enabledStatus') : t('guestUploads.disabledStatus')}
-          </span>
-        </div>
+        {data ? (
+          <div className="flex items-center gap-3">
+            <Button
+              variant={enabled ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setGuestUploads.mutate({ enabled: !data.enabled })}
+              disabled={setGuestUploads.isPending || data.forcedOffByEnv}
+              data-testid="guest-uploads-toggle-btn"
+            >
+              {enabled ? t('guestUploads.enabled') : t('guestUploads.disabled')}
+            </Button>
+            <span className="text-xs text-muted-foreground">{status}</span>
+          </div>
+        ) : (
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        )}
       </CardContent>
     </Card>
   );

@@ -118,11 +118,12 @@
   },
   "guestUploads": {
     "title": "Subida de recibos de invitados",
-    "description": "Cuando está habilitado, cualquiera puede subir y escanear recibos en División rápida sin una cuenta. Desactívalo para evitar que visitantes anónimos usen el almacenamiento del servidor y los escaneos con IA. Los usuarios con sesión iniciada pueden seguir usando División rápida.",
+    "description": "Cuando está habilitado, cualquiera puede subir imágenes de recibos y ejecutar escaneos con IA en División rápida sin una cuenta. Desactívalo para que los visitantes anónimos no puedan hacerlo. Los usuarios con sesión iniciada pueden seguir usando División rápida, así que si el Control de registro está en Abierto, cámbialo también a Solo con invitación o Cerrado.",
     "enabled": "Habilitado",
     "disabled": "Deshabilitado",
     "enabledStatus": "Cualquiera puede escanear recibos en División rápida",
-    "disabledStatus": "Solo los usuarios con sesión iniciada pueden escanear recibos"
+    "disabledStatus": "Solo los usuarios con sesión iniciada pueden escanear recibos",
+    "forcedOffStatus": "Bloqueado por la variable de entorno DISABLE_GUEST_UPLOADS"
   },
   "aiStats": {
     "title": "Uso de IA",

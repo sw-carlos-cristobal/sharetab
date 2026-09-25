@@ -118,11 +118,12 @@
   },
   "guestUploads": {
     "title": "Kvittouppladdning för gäster",
-    "description": "När aktiverat kan vem som helst ladda upp och skanna kvitton i Snabb delning utan konto. Stäng av detta för att hindra anonyma besökare från att använda serverns lagring och AI-skanningar. Inloggade användare kan fortfarande använda Snabb delning.",
+    "description": "När aktiverat kan vem som helst ladda upp kvittobilder och köra AI-skanningar i Snabb delning utan konto. Stäng av detta så att anonyma besökare inte kan det. Inloggade användare kan fortfarande använda Snabb delning, så om Registreringskontroll är satt till Öppen, ändra den också till Endast inbjudan eller Stängd.",
     "enabled": "Aktiverad",
     "disabled": "Inaktiverad",
     "enabledStatus": "Vem som helst kan skanna kvitton i Snabb delning",
-    "disabledStatus": "Endast inloggade användare kan skanna kvitton"
+    "disabledStatus": "Endast inloggade användare kan skanna kvitton",
+    "forcedOffStatus": "Låst avstängd av miljövariabeln DISABLE_GUEST_UPLOADS"
   },
   "aiStats": {
     "title": "AI-användning",

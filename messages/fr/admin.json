@@ -118,11 +118,12 @@
   },
   "guestUploads": {
     "title": "Envoi de reçus par les invités",
-    "description": "Lorsqu'activé, n'importe qui peut envoyer et numériser des reçus dans Partage rapide sans compte. Désactivez-le pour empêcher les visiteurs anonymes d'utiliser le stockage du serveur et les analyses IA. Les utilisateurs connectés peuvent toujours utiliser Partage rapide.",
+    "description": "Lorsqu'activé, n'importe qui peut envoyer des images de reçus et lancer des analyses IA dans Partage rapide sans compte. Désactivez-le pour que les visiteurs anonymes ne le puissent plus. Les utilisateurs connectés peuvent toujours utiliser Partage rapide : si le Contrôle des inscriptions est sur Ouvert, passez-le aussi sur Sur invitation uniquement ou Fermé.",
     "enabled": "Activé",
     "disabled": "Désactivé",
     "enabledStatus": "N'importe qui peut numériser des reçus dans Partage rapide",
-    "disabledStatus": "Seuls les utilisateurs connectés peuvent numériser des reçus"
+    "disabledStatus": "Seuls les utilisateurs connectés peuvent numériser des reçus",
+    "forcedOffStatus": "Verrouillé par la variable d'environnement DISABLE_GUEST_UPLOADS"
   },
   "aiStats": {
     "title": "Utilisation de l'IA",
