@@ -77,15 +77,20 @@ export async function trpcMutation(
 
 /**
  * Join a guest claim session via the API. Fails with the server's response when the
- * join doesn't succeed, instead of handing back undefined for the caller to trip over.
+ * join doesn't succeed or returns no result, instead of handing back undefined for the
+ * caller to trip over.
  */
 export async function joinGuestSession(
   ctx: Awaited<ReturnType<typeof request.newContext>>,
   input: { token: string; name: string; groupSize?: number },
 ) {
   const res = await trpcMutation(ctx, 'guest.joinSession', input);
-  if (!res.ok()) throw new Error(`guest.joinSession failed (${res.status()}): ${await res.text()}`);
-  return (await res.json()).result.data.json as { personIndex: number; personToken: string };
+  const body = await res.text();
+  const joined: unknown = res.ok() ? JSON.parse(body)?.result?.data?.json : undefined;
+  if (typeof (joined as { personToken?: unknown } | undefined)?.personToken !== 'string') {
+    throw new Error(`guest.joinSession failed (${res.status()}): ${body}`);
+  }
+  return joined as { personIndex: number; personToken: string };
 }
 
 /**

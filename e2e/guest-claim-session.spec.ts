@@ -457,7 +457,9 @@ test.describe('Guest claiming sessions', () => {
         creatorName: 'Host',
         paidByName: 'Host',
       });
-      const shareToken = (await createRes.json()).result?.data?.json?.shareToken;
+      expect(createRes.ok(), await createRes.text()).toBe(true);
+      const shareToken: string = (await createRes.json()).result.data.json.shareToken;
+      expect(shareToken).toBeTruthy();
 
       const joined = await Promise.all(guests.map((name) => joinGuestSession(ctx, { token: shareToken, name })));
 
