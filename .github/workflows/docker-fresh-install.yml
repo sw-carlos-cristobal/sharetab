@@ -1,0 +1,78 @@
+name: Docker Fresh Install
+
+# Boots the production image the way a new install does (empty data volume,
+# bundled PostgreSQL, docker/entrypoint.sh), then restarts it the way every
+# existing install does on upgrade. The Test workflow runs the app with
+# `npm run start` against its own database, so it never exercises the
+# entrypoint or the manual SQL migrations.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: docker-fresh-install-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fresh-install:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/Dockerfile
+          load: true
+          tags: sharetab:ci
+          # Reuse the layers the main-branch image build caches.
+          cache-from: type=gha,scope=main-image
+
+      - name: Start on an empty database, then restart
+        run: |
+          wait_healthy() {
+            for _ in $(seq 1 90); do
+              if [ "$(docker inspect -f '{{.State.Running}}' sharetab)" != "true" ]; then
+                echo "::error::The container exited during startup ($1)."
+                return 1
+              fi
+              if curl -fsS http://localhost:3000/api/health; then
+                echo
+                return 0
+              fi
+              sleep 2
+            done
+            echo "::error::Timed out waiting for /api/health ($1)."
+            return 1
+          }
+
+          secret=$(openssl rand -base64 32)
+          docker run -d --name sharetab -p 3000:3000 \
+            -e NEXTAUTH_SECRET="$secret" -e AUTH_SECRET="$secret" \
+            sharetab:ci
+          wait_healthy "first start"
+
+          # The tables exist, not just a reachable database (psql fails if
+          # either is missing).
+          docker exec sharetab su-exec postgres psql -h /run/postgresql -d sharetab -v ON_ERROR_STOP=1 \
+            -c 'SELECT count(*) AS users FROM "User"' \
+            -c 'SELECT count(*) AS guest_splits FROM "GuestSplit"'
+
+          docker restart sharetab
+          wait_healthy "restart"
+
+      - name: Container logs
+        if: always()
+        run: docker logs sharetab || true
