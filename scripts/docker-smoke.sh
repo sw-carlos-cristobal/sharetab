@@ -337,7 +337,11 @@ add_user dup-1 'Dup@Example.com'
 add_user dup-2 'dup@example.com'
 docker restart "$CONTAINER" >/dev/null
 wait_healthy "restart with duplicates"
-if ! docker logs "$CONTAINER" 2>&1 | grep -q "more than one account uses each of these addresses in different letter cases: dup@example.com"; then
+# Not `docker logs | grep -q`: grep -q exits at the first match, docker logs
+# then dies of SIGPIPE writing the rest, and pipefail fails the pipeline, so
+# the check failed at random.
+startup_log=$(docker logs "$CONTAINER" 2>&1)
+if ! grep -qF "more than one account uses each of these addresses in different letter cases: dup@example.com" <<<"$startup_log"; then
   fail "No warning about the duplicate emails in the startup log."
 fi
 if [[ "$(has_email_index)" != "f" ]]; then
