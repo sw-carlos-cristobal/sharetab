@@ -83,20 +83,24 @@ export async function trpcMutation(
  */
 export async function joinGuestSession(
   ctx: Awaited<ReturnType<typeof request.newContext>>,
-  input: { token: string; name: string; groupSize?: number; personToken?: string },
+  input: { token: string; name: string; groupSize?: number; personToken?: string; joinKey?: string },
 ) {
   const res = await trpcMutation(ctx, 'guest.joinSession', input);
   const body = await res.text();
-  let joined: unknown;
+  let joined: { personIndex?: unknown; personToken?: unknown; name?: unknown } | undefined;
   try {
     joined = res.ok() ? JSON.parse(body)?.result?.data?.json : undefined;
   } catch {
     // Not JSON (e.g. an HTML error page from a proxy): reported with the body below.
   }
-  if (typeof (joined as { personToken?: unknown } | undefined)?.personToken !== 'string') {
+  if (
+    typeof joined?.personIndex !== 'number' ||
+    typeof joined.personToken !== 'string' ||
+    typeof joined.name !== 'string'
+  ) {
     throw new Error(`guest.joinSession failed (${res.status()}): ${body}`);
   }
-  return joined as { personIndex: number; personToken: string };
+  return joined as { personIndex: number; personToken: string; name: string };
 }
 
 /**

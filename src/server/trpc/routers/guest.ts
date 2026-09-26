@@ -35,12 +35,19 @@ type GuestSessionPerson = {
   name: string;
   personToken?: string;
   groupSize?: number; // defaults to 1, > 1 means this person represents a group
+  // The join that created (or first claimed) this person: its idempotency key and the normalized
+  // name it was made with, replayable until expiresAt (epoch ms). See joinSession.
+  join?: { key: string; name: string; expiresAt: number };
 };
 
+// How long a join can be replayed with its join key (Stripe prunes idempotency keys once they are at least 24 hours old)
+const JOIN_REPLAY_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 function toPublicPeople(people: GuestSessionPerson[]) {
-  // Never includes personToken: no guest procedure returns another person's token (a client
-  // gets its own from joinSession; the admin export is the only place tokens leave in bulk).
-  // hasJoined tells the claim page which names are still free to join as (unused by getSplit).
+  // Never includes personToken or join: no guest procedure returns another person's token
+  // (a client gets its own from joinSession; the admin export is the only place tokens leave in bulk).
+  // hasJoined tells the claim page which names are still free to join as (the results page,
+  // which reads getSplit, ignores it).
   return people.map(({ name, groupSize, personToken }) => ({
     name,
     groupSize: groupSize ?? 1,
@@ -613,8 +620,16 @@ export const guestRouter = createTRPCRouter({
         token: z.string().max(64),
         name: z.string().trim().min(1).max(100),
         groupSize: z.number().int().min(1).max(20).optional(),
-        // The caller's stored token, needed to rejoin as a person someone has already joined as
+        // The token this device stored when it joined: whoever holds it is the caller. Only ever
+        // used to find its holder, never given to anyone, so a removed person's old token
+        // can't be attached to someone new.
         personToken: z.string().uuid().optional(),
+        // An idempotency key the device made for this join. Replayable like Stripe's
+        // Idempotency-Key: saved (with the normalized name) on the person the join creates or
+        // first claims, a replay with the same key and name within JOIN_REPLAY_WINDOW_MS returns
+        // that person, so a join whose response was lost doesn't end up at a taken name; the same
+        // key with another name is refused. Tokens themselves are always minted here.
+        joinKey: z.string().uuid().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -633,50 +648,79 @@ export const guestRouter = createTRPCRouter({
         const people = [...(session.people as GuestSessionPerson[])];
         const normalizedName = normalizeGuestName(input.name);
 
+        // The caller already is someone, by the token their device stored: return them under their
+        // current name (anyone may have renamed them), whatever name was typed. Checked before a
+        // join-key replay, so the device's current identity wins (e.g. another tab joined meanwhile).
+        const holderIndex = input.personToken ? people.findIndex((p) => p.personToken === input.personToken) : -1;
+        if (holderIndex >= 0) {
+          const holder = people[holderIndex]!;
+          // Update groupSize on rejoin only if explicitly provided and different
+          if (input.groupSize != null && input.groupSize !== (holder.groupSize ?? 1)) {
+            people[holderIndex] = { ...holder, groupSize: input.groupSize };
+            await tx.guestSplit.update({
+              where: { id: session.id },
+              data: { people: people as unknown as Prisma.InputJsonValue },
+            });
+          }
+          return { personIndex: holderIndex, personToken: holder.personToken!, name: holder.name };
+        }
+
+        // A replay of a join that already went through: the same person, unchanged
+        const now = Date.now();
+        const replayIndex = input.joinKey
+          ? people.findIndex((p) => !!p.join && p.join.key === input.joinKey && p.join.expiresAt > now)
+          : -1;
+        if (replayIndex >= 0) {
+          const replayed = people[replayIndex]!;
+          if (replayed.join!.name !== normalizedName) {
+            throw new TRPCError({
+              code: 'CONFLICT',
+              message: 'This join request was already used with a different name.',
+            });
+          }
+          return { personIndex: replayIndex, personToken: replayed.personToken!, name: replayed.name };
+        }
+
+        const personToken = randomUUID();
+        const joinRecord = input.joinKey
+          ? { join: { key: input.joinKey, name: normalizedName, expiresAt: now + JOIN_REPLAY_WINDOW_MS } }
+          : {};
+
         // Check if name already exists (case-insensitive)
         const existingIndex = people.findIndex((p) => normalizeGuestName(p.name) === normalizedName);
         if (existingIndex >= 0) {
           const existingPerson = people[existingIndex]!;
-          if (!existingPerson.personToken) {
-            const personToken = randomUUID();
-            people[existingIndex] = {
-              ...existingPerson,
-              personToken,
-              ...(input.groupSize != null ? { groupSize: input.groupSize } : {}),
-            };
-            await tx.guestSplit.update({
-              where: { id: session.id },
-              data: { people: people as unknown as Prisma.InputJsonValue },
-            });
-            return { personIndex: existingIndex, personToken };
-          }
-          // Someone has already joined as this person: only the holder of their token may
-          // rejoin, otherwise anyone with the link could take over their identity by name.
-          if (input.personToken !== existingPerson.personToken) {
+          // Someone has already joined as this person, and the caller doesn't hold their token.
+          // Refuse, or anyone with the link could take over their identity by name.
+          if (existingPerson.personToken) {
             throw new TRPCError({
               code: 'CONFLICT',
-              message: 'Someone has already joined under this name. Please choose a different name.',
+              message:
+                'Someone has already joined under this name. If that was you, open this split on the device you joined with and get your personal link there. Otherwise, choose a different name.',
             });
           }
-          // Update groupSize on rejoin only if explicitly provided and different
-          if (input.groupSize != null && input.groupSize !== (existingPerson.groupSize ?? 1)) {
-            people[existingIndex] = { ...existingPerson, groupSize: input.groupSize };
-            await tx.guestSplit.update({
-              where: { id: session.id },
-              data: { people: people as unknown as Prisma.InputJsonValue },
-            });
-          }
-          return { personIndex: existingIndex, personToken: existingPerson.personToken };
+          people[existingIndex] = {
+            ...existingPerson,
+            personToken,
+            ...joinRecord,
+            ...(input.groupSize != null ? { groupSize: input.groupSize } : {}),
+          };
+          await tx.guestSplit.update({
+            where: { id: session.id },
+            data: { people: people as unknown as Prisma.InputJsonValue },
+          });
+          return { personIndex: existingIndex, personToken, name: existingPerson.name };
         }
 
         if (people.length >= 100) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'Maximum 100 people per session' });
         }
 
-        const personToken = randomUUID();
+        const name = input.name.trim();
         people.push({
-          name: input.name.trim(),
+          name,
           personToken,
+          ...joinRecord,
           ...(input.groupSize != null ? { groupSize: input.groupSize } : {}),
         });
         await tx.guestSplit.update({
@@ -684,18 +728,26 @@ export const guestRouter = createTRPCRouter({
           data: { people: people as unknown as Prisma.InputJsonValue },
         });
 
-        return { personIndex: people.length - 1, personToken };
+        return { personIndex: people.length - 1, personToken, name };
       });
     }),
 
   // How a returning device finds its person: by the token it stored when it joined, not by
   // name, since anyone in the session can rename anyone. A mutation so the token travels in
   // the request body, not a URL. Returns null when nobody holds the token any more. Doesn't
-  // require CLAIMING (it only maps a token the caller holds to the index and name getSession
-  // already shows), though the claim page only calls it while claiming.
+  // require CLAIMING: it only maps a token the caller holds to the index and name getSession
+  // already shows, and the claim page also calls it on finalized splits (personal links work there).
   resumeSession: publicProcedure
     .input(z.object({ token: z.string().max(64), personToken: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
+      // A claim page load resumes a few times at most (a personal link, accepting it, the stored
+      // identity), plus retries on server errors. Per share token like getSession's read budget,
+      // not per IP: diners share NAT and client IP headers are client-supplied (the same reasons
+      // as for joinSession).
+      const { allowed } = checkRateLimit(`guest-resume:${input.token}`, 120, 60 * 1000);
+      if (!allowed) {
+        throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'Too many requests. Please try again shortly.' });
+      }
       const session = await ctx.db.guestSplit.findUnique({
         where: { shareToken: input.token },
       });

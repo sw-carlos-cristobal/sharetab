@@ -28,6 +28,7 @@ export const guestPersonSchema = z.object({
   name: z.string(),
   personToken: z.string().optional(),
   groupSize: z.number().int().min(1).optional(),
+  join: z.object({ key: z.string(), name: z.string(), expiresAt: z.number() }).optional(),
 });
 
 export type GuestPerson = z.infer<typeof guestPersonSchema>;

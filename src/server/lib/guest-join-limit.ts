@@ -1,14 +1,14 @@
 import { normalizeGuestName } from '@/lib/guest-session';
 import { checkRateLimit, peekRateLimit } from './rate-limit';
 
-/** Joins per person (share token + name) per minute. The claim page rejoins once per page load. */
+/** Joins per person (share token + name) per minute. The claim page only joins when the user asks; returning devices use guest.resumeSession. */
 const JOIN_LIMIT_PER_PERSON = 10;
 /** Joins per share token per minute, all names combined: twice for each of the 100 people a session holds. */
 const JOIN_LIMIT_PER_SESSION = 200;
 const JOIN_WINDOW_MS = 60 * 1000;
 
 /**
- * Rate limit for guest.joinSession. Rejoining under an existing name with a
+ * Rate limit for guest.joinSession. A token holder rejoining with a
  * different groupSize writes the session row on every call, so an unlimited
  * loop keeps that row busy and other people's claims can run out of retries.
  *

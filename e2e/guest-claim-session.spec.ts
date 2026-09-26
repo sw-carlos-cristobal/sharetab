@@ -50,6 +50,7 @@ test.describe('Guest claiming sessions', () => {
     const joinBody = (await joinRes.json()).result?.data?.json;
     expect(joinBody.personIndex).toBe(1);
     expect(joinBody.personToken).toBeTruthy();
+    expect(joinBody.name).toBe('Bob');
 
     // Verify 2 people now
     const getRes2 = await trpcQuery(ctx, 'guest.getSession', { token: shareToken });
@@ -196,7 +197,7 @@ test.describe('Guest claiming sessions', () => {
 
     // The device holding her token rejoins as her
     const rejoin = await joinGuestSession(ctx, { token: shareToken, name: 'alice', personToken: alice.personToken });
-    expect(rejoin).toEqual({ personIndex: 0, personToken: alice.personToken });
+    expect(rejoin).toEqual({ personIndex: 0, personToken: alice.personToken, name: 'Alice' });
 
     await ctx.dispose();
   });
