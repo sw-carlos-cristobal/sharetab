@@ -140,7 +140,7 @@ esac
 
 case ",${AI_PROVIDER_PRIORITY}," in
   *,claude,*|*,meridian,*)
-  echo "  AI Model:       ${ANTHROPIC_MODEL:-claude-sonnet-4-6}"
+  echo "  AI Model:       ${ANTHROPIC_MODEL:-claude-sonnet-5}"
   case ",${AI_PROVIDER_PRIORITY}," in
     *,claude,*)
     if [ -n "$ANTHROPIC_API_KEY" ]; then

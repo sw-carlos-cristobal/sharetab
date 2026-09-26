@@ -25,7 +25,7 @@ export class ClaudeProvider implements AIProvider {
       : RECEIPT_EXTRACTION_PROMPT;
 
     const stream = this.client.messages.stream({
-      model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6',
+      model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5',
       max_tokens: 4000,
       messages: [
         {
