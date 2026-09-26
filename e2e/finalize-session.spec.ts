@@ -1,5 +1,5 @@
 import { test, expect, request } from '@playwright/test';
-import { trpcMutation } from './helpers';
+import { rememberClaimIdentity, trpcMutation } from './helpers';
 
 const BASE = process.env.BASE_URL || 'http://localhost:3001';
 
@@ -39,14 +39,11 @@ test.describe('Finalize claim session', () => {
     });
     await ctx.dispose();
 
+    // Open in a browser that holds Alice's identity; the claim page rejoins as her
     const browserCtx = await browser.newContext();
+    await rememberClaimIdentity(browserCtx, shareToken, { name: 'Alice', personToken });
     const page = await browserCtx.newPage();
     await page.goto(`/en/split/${shareToken}/claim`);
-
-    // Join as Alice (auto-rejoin from localStorage won't work, join manually)
-    await expect(page.getByTestId('claim-join-form')).toBeVisible({ timeout: 15000 });
-    await page.getByTestId('claim-name-input').fill('Alice');
-    await page.getByTestId('claim-join-btn').click();
     await expect(page.locator('[data-testid^="claim-item-"]').first()).toBeVisible({ timeout: 15000 });
 
     // Wait for join toast to clear

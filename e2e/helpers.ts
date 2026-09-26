@@ -1,4 +1,5 @@
-import { type Page, request } from '@playwright/test';
+import { type BrowserContext, type Page, request } from '@playwright/test';
+import { claimStorageKey } from '../src/lib/guest-session';
 
 const BASE = process.env.BASE_URL || 'http://localhost:3001';
 
@@ -82,20 +83,43 @@ export async function trpcMutation(
  */
 export async function joinGuestSession(
   ctx: Awaited<ReturnType<typeof request.newContext>>,
-  input: { token: string; name: string; groupSize?: number },
+  input: { token: string; name: string; groupSize?: number; personToken?: string; joinKey?: string },
 ) {
   const res = await trpcMutation(ctx, 'guest.joinSession', input);
   const body = await res.text();
-  let joined: unknown;
+  let joined: { personIndex?: unknown; personToken?: unknown; name?: unknown } | undefined;
   try {
     joined = res.ok() ? JSON.parse(body)?.result?.data?.json : undefined;
   } catch {
     // Not JSON (e.g. an HTML error page from a proxy): reported with the body below.
   }
-  if (typeof (joined as { personToken?: unknown } | undefined)?.personToken !== 'string') {
+  if (
+    typeof joined?.personIndex !== 'number' ||
+    typeof joined.personToken !== 'string' ||
+    typeof joined.name !== 'string'
+  ) {
     throw new Error(`guest.joinSession failed (${res.status()}): ${body}`);
   }
-  return joined as { personIndex: number; personToken: string };
+  return joined as { personIndex: number; personToken: string; name: string };
+}
+
+/**
+ * Give a browser context the stored identity of the device that joined a claim session as
+ * this person: the claim page keeps { name, personToken } in localStorage and resumes with
+ * the token on load. Joining as someone who already joined requires their token, so a
+ * fresh context can't take over a person by typing their name.
+ * addInitScript re-plants the identity on every navigation in this context, even after the
+ * page clears it; use a new context for anything that tests the identity being removed.
+ */
+export async function rememberClaimIdentity(
+  browserCtx: BrowserContext,
+  shareToken: string,
+  identity: { name: string; personToken: string },
+) {
+  await browserCtx.addInitScript(({ key, value }) => window.localStorage.setItem(key, value), {
+    key: claimStorageKey(shareToken),
+    value: JSON.stringify(identity),
+  });
 }
 
 /**
