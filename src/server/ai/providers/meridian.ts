@@ -141,7 +141,7 @@ export class MeridianProvider implements AIProvider {
 
     const stream = client.messages.stream(
       {
-        model: process.env.ANTHROPIC_MODEL || 'claude-opus-4-6',
+        model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5',
         max_tokens: 4000,
         messages: [
           {

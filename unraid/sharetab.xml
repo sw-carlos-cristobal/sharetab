@@ -199,12 +199,12 @@
   <Config
     Name="Anthropic Model"
     Target="ANTHROPIC_MODEL"
-    Default="claude-opus-4-6"
-    Description="Claude model for receipt scanning (claude/meridian providers). Options: claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5-20251001"
+    Default="claude-sonnet-5"
+    Description="Claude model for receipt scanning (claude/meridian providers). Defaults to claude-sonnet-5. Options include claude-sonnet-5, claude-opus-5, claude-haiku-4-5"
     Type="Variable"
     Display="always"
     Required="false"
-    Mask="false">claude-opus-4-6</Config>
+    Mask="false">claude-sonnet-5</Config>
   <Config
     Name="Anthropic Health Model"
     Target="ANTHROPIC_HEALTH_MODEL"
