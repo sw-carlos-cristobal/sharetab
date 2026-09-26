@@ -33,9 +33,11 @@
 #                     volume on the host that is removed afterwards, so the
 #                     original is never written and the credentials never
 #                     reach this machine. The access token must be valid for
-#                     30+ more minutes: a refresh would rotate the refresh
-#                     token and sign out the install the directory belongs to.
-#                     The script fails if one happened anyway.
+#                     30+ more minutes, checked on the copy before anything
+#                     starts (Meridian and the app refresh an expired token
+#                     as soon as they start): a refresh would rotate the
+#                     refresh token and sign out the install the directory
+#                     belongs to. The script fails if one happened anyway.
 #   --keep            leave the container running afterwards (not with
 #                     --meridian-auth). It holds a smoke-test admin account
 #                     (credentials printed on exit) that other containers on
@@ -63,6 +65,7 @@ cd "$(dirname "$0")/.."
 
 CONTAINER="sharetab-smoke-$$-$RANDOM"
 AUTH_VOLUME=""
+AUTH_TOKEN_HASH=""
 FAILED=true
 ADMIN_EMAIL="smoke-admin@example.com"
 ADMIN_PASSWORD=$(openssl rand -hex 16)
@@ -155,7 +158,8 @@ has_email_index() {
 }
 
 # Copy the Claude login in $MERIDIAN_AUTH into a scratch volume owned by the
-# app user, and set AUTH_VOLUME. A host path must be absolute and must exist
+# app user, set AUTH_VOLUME, and check the copy before the app ever sees it
+# (setting AUTH_TOKEN_HASH). A host path must be absolute and must exist
 # (docker run fails otherwise); a volume name must exist (docker would
 # otherwise create an empty one).
 copy_meridian_auth() {
@@ -176,15 +180,55 @@ copy_meridian_auth() {
     --mount "type=volume,src=$AUTH_VOLUME,dst=/dst" "$IMAGE" \
     -c 'cp -a /src/. /dst/ && chown -R 1001:1001 /dst' ||
     fail "Could not copy the Claude login from $MERIDIAN_AUTH."
+
+  # Check expiry here, not in the running container. Meridian's proxy
+  # refreshes a token that has expired or expires within 5 minutes as soon
+  # as it starts (startProxyServer schedules the refresh), and so do the
+  # app's startup (refreshIfNeeded) and its auth poller (within 15 minutes).
+  # Checked later, an expired login already looks fresh and the original
+  # install's refresh token is already rotated.
+  local minutes_left reading
+  reading=$(docker run --rm --entrypoint node \
+    --mount "type=volume,src=$AUTH_VOLUME,dst=/dst,readonly" "$IMAGE" -e "
+      const creds = JSON.parse(require('fs').readFileSync('/dst/.credentials.json', 'utf8'));
+      const oauth = creds.claudeAiOauth ?? {};
+      const minutes = Math.floor(((oauth.expiresAt ?? 0) - Date.now()) / 60000);
+      const token = oauth.refreshToken;
+      const hash = token ? require('crypto').createHash('sha256').update(token).digest('hex') : 'none';
+      console.log(minutes + ' ' + hash);
+    ") || fail "No readable .credentials.json in $MERIDIAN_AUTH."
+  read -r minutes_left AUTH_TOKEN_HASH <<<"$reading"
+  if [[ "$AUTH_TOKEN_HASH" == none ]]; then
+    fail "The Claude login in $MERIDIAN_AUTH has no refresh token; sign in again from that install's admin page first."
+  fi
+  if ((minutes_left < 30)); then
+    fail "The Claude access token expires in ${minutes_left} min (negative: already expired); sign in again from the admin page of the install $MERIDIAN_AUTH came from first."
+  fi
+  echo "Access token valid for ${minutes_left} more minutes."
 }
 
-# Prints a hash of the refresh token in the container's copy of the login.
+# Prints a hash of the refresh token in the container's copy of the login, or
+# "none" when it has none.
 refresh_token_hash() {
   docker exec "$CONTAINER" node -e "
     const creds = JSON.parse(require('fs').readFileSync('/app/claude/.credentials.json', 'utf8'));
-    const token = creds.claudeAiOauth?.refreshToken ?? '';
-    console.log(require('crypto').createHash('sha256').update(token).digest('hex'));
+    const token = creds.claudeAiOauth?.refreshToken;
+    console.log(token ? require('crypto').createHash('sha256').update(token).digest('hex') : 'none');
   "
+}
+
+# Fails if the container's copy of the login no longer holds the refresh
+# token it was copied with. A new token means a refresh rotated it, which
+# signs out the install $MERIDIAN_AUTH came from; none means Claude Code
+# cleared the copy after a refresh failed.
+check_login_unchanged() {
+  local now
+  now=$(refresh_token_hash)
+  if [[ "$now" == none ]]; then
+    fail "Claude Code cleared its copy of the login after a refresh failed, so the refresh token is probably invalid on the install $MERIDIAN_AUTH came from too; check its admin page."
+  elif [[ "$now" != "$AUTH_TOKEN_HASH" ]]; then
+    fail "The Claude login was refreshed during the run, which rotates its refresh token; sign in again on the install $MERIDIAN_AUTH came from."
+  fi
 }
 
 # Runs scripts/docker-smoke-meridian.mjs in the container: signs in as an
@@ -257,21 +301,11 @@ docker exec -u nextjs -e HOME=/home/nextjs -w /app "$CONTAINER" node -e "
 
 if [[ -n "$MERIDIAN_AUTH" ]]; then
   section "Meridian extracts a receipt through the app (live)"
-  # Refuse to run close to expiry: a refresh here would rotate the refresh
-  # token the original install still holds.
-  minutes_left=$(docker exec "$CONTAINER" node -e "
-    const creds = JSON.parse(require('fs').readFileSync('/app/claude/.credentials.json', 'utf8'));
-    console.log(Math.floor(((creds.claudeAiOauth?.expiresAt ?? 0) - Date.now()) / 60000));
-  ") || fail "No readable .credentials.json in $MERIDIAN_AUTH."
-  if ((minutes_left < 30)); then
-    fail "The Claude access token expires in ${minutes_left} min; sign in again from the admin page first."
-  fi
-  echo "Access token valid for ${minutes_left} more minutes."
-  token_before=$(refresh_token_hash)
-  check_meridian_via_app || fail "Meridian did not extract the receipt through the app."
-  if [[ "$(refresh_token_hash)" != "$token_before" ]]; then
-    fail "The Claude login was refreshed during the test, which rotates its refresh token; sign in again on the install $MERIDIAN_AUTH came from."
-  fi
+  # Report a changed login even when the extraction failed.
+  live_status=0
+  check_meridian_via_app || live_status=$?
+  check_login_unchanged
+  ((live_status == 0)) || fail "Meridian did not extract the receipt through the app."
 else
   section "Meridian runs through the app"
   check_meridian_via_app || fail "The app's Meridian provider did not run."
@@ -315,6 +349,11 @@ docker restart "$CONTAINER" >/dev/null
 wait_healthy "restart after removing the duplicate"
 if [[ "$(has_email_index)" != "t" ]]; then
   fail "The email index wasn't created after the duplicate was removed."
+fi
+
+if [[ -n "$MERIDIAN_AUTH" ]]; then
+  # The restarts above ran with the login mounted too.
+  check_login_unchanged
 fi
 
 FAILED=false
