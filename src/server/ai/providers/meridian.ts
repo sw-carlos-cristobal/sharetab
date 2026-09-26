@@ -29,30 +29,41 @@ export async function startMeridianProxy(): Promise<void> {
 }
 
 // startProxyServer resolves before the server listens, and a failed listen
-// only logs when silent is off, so poll /health until a 10 s deadline (shared
-// by every probe, so a listener that accepts but never answers can't stretch
-// it). Any response with Meridian's JSON means it is listening (it answers 503
-// when unhealthy, e.g. without a boot identity); anything else on the port
-// means our listen failed. isAvailable() then only checks for a 2xx, which a
-// "degraded" proxy (auth unverifiable, e.g. no login) also returns.
+// only logs when silent is off, so poll /health until a 10 s deadline shared
+// by every probe (headers and body), so a listener that stalls can't stretch
+// it. A body shaped like Meridian's (one of its statuses plus a version) means
+// it is listening, even when it answers 503 as unhealthy (e.g. no boot
+// identity); anything else on the port means our listen failed. isAvailable()
+// then only checks for a 2xx, which a "degraded" proxy (auth unverifiable,
+// e.g. no login) also returns.
 const MERIDIAN_READY_DEADLINE_MS = 10_000;
+const MERIDIAN_HEALTH_STATUSES = new Set(['healthy', 'degraded', 'unhealthy', 'draining']);
+
+function isMeridianHealth(body: unknown): boolean {
+  if (typeof body !== 'object' || body === null) return false;
+  const { status, version } = body as { status?: unknown; version?: unknown };
+  return typeof status === 'string' && MERIDIAN_HEALTH_STATUSES.has(status) && version !== undefined;
+}
 
 async function waitForMeridian(port: number): Promise<void> {
   const deadline = Date.now() + MERIDIAN_READY_DEADLINE_MS;
   while (Date.now() < deadline) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), Math.min(2_000, deadline - Date.now()));
-    let res: Response;
+    let body: unknown;
     try {
-      res = await fetch(`http://127.0.0.1:${port}/health`, { signal: controller.signal });
+      const res = await fetch(`http://127.0.0.1:${port}/health`, { signal: controller.signal });
+      body = await res.json().catch((err: unknown) => {
+        if (controller.signal.aborted) throw err; // stalled mid-body: no answer yet
+        return null; // not JSON: something else answers
+      });
     } catch {
       clearTimeout(timer);
       await new Promise((r) => setTimeout(r, Math.min(250, Math.max(0, deadline - Date.now()))));
       continue;
     }
     clearTimeout(timer);
-    const body: unknown = await res.json().catch(() => null);
-    if (typeof body === 'object' && body !== null && 'status' in body) return;
+    if (isMeridianHealth(body)) return;
     throw new Error(`Something other than Meridian answers on port ${port}`);
   }
   throw new Error(`Meridian proxy did not answer on port ${port}`);

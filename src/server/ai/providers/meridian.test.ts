@@ -15,6 +15,10 @@ vi.mock('@/server/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+// Meridian's /health bodies always carry one of its statuses and a version.
+const MERIDIAN_HEALTHY = '{"status":"healthy","version":"1.71.0"}';
+const MERIDIAN_UNHEALTHY = '{"status":"unhealthy","version":"1.71.0"}';
+
 // Meridian refuses to start without a machine-id; once the file exists, a
 // retry succeeds. (A missing module can't recover this way: Node caches the
 // failed import.)
@@ -28,7 +32,7 @@ describe('MeridianProvider proxy start', () => {
     refreshIfNeeded.mockReset().mockResolvedValue(false);
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => new Response('{"status":"healthy"}', { status: 200 })),
+      vi.fn(async () => new Response(MERIDIAN_HEALTHY, { status: 200 })),
     );
   });
 
@@ -97,7 +101,7 @@ describe('MeridianProvider proxy start', () => {
     expect(await first).toBe(false);
     expect(proxyClose).toHaveBeenCalledTimes(1);
 
-    vi.mocked(fetch).mockResolvedValue(new Response('{"status":"healthy"}', { status: 200 }));
+    vi.mocked(fetch).mockResolvedValue(new Response(MERIDIAN_HEALTHY, { status: 200 }));
     expect(await new MeridianProvider().isAvailable()).toBe(true);
     expect(startProxyServer).toHaveBeenCalledTimes(2);
   });
@@ -132,7 +136,7 @@ describe('MeridianProvider proxy start', () => {
     vi.mocked(fetch).mockImplementation(async () => {
       calls += 1;
       if (calls < 30) throw new TypeError('fetch failed'); // ~7.5s of refusals
-      return new Response('{"status":"healthy"}', { status: 200 });
+      return new Response(MERIDIAN_HEALTHY, { status: 200 });
     });
     const { MeridianProvider } = await import('./meridian');
 
@@ -154,6 +158,43 @@ describe('MeridianProvider proxy start', () => {
     expect(startProxyServer).toHaveBeenCalledTimes(2);
   });
 
+  test('rejects another service whose /health looks generic', async () => {
+    startProxyServer.mockResolvedValue(proxyInstance());
+    vi.mocked(fetch).mockResolvedValueOnce(new Response('{"status":"ok"}', { status: 200 }));
+    const { MeridianProvider, getMeridianStartError } = await import('./meridian');
+
+    expect(await new MeridianProvider().isAvailable()).toBe(false);
+    expect(getMeridianStartError()).toMatch(/other than Meridian/);
+    expect(proxyClose).toHaveBeenCalledTimes(1);
+  });
+
+  test('keeps the 10 second deadline while the /health body is still arriving', async () => {
+    vi.useFakeTimers();
+    startProxyServer.mockResolvedValue(proxyInstance());
+    // Headers arrive, but the body stalls until the probe's abort fires.
+    vi.mocked(fetch).mockImplementation(
+      async (_url, init) =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              init?.signal?.addEventListener('abort', () => controller.error(new Error('aborted')));
+            },
+          }),
+          { status: 200 },
+        ),
+    );
+    const { MeridianProvider } = await import('./meridian');
+
+    let settled = false;
+    const available = new MeridianProvider().isAvailable().finally(() => {
+      settled = true;
+    });
+    await vi.advanceTimersByTimeAsync(10_500);
+
+    expect(settled).toBe(true);
+    expect(await available).toBe(false);
+  });
+
   test('records a message for an Error that has none', async () => {
     startProxyServer.mockRejectedValueOnce(new Error(''));
     const { MeridianProvider, getMeridianStartError } = await import('./meridian');
@@ -167,7 +208,7 @@ describe('MeridianProvider proxy start', () => {
     // Meridian answers 503 when unhealthy (e.g. draining, or no boot
     // identity); it is listening, so restarting it would not help.
     startProxyServer.mockResolvedValue(proxyInstance());
-    vi.mocked(fetch).mockResolvedValue(new Response('{"status":"unhealthy"}', { status: 503 }));
+    vi.mocked(fetch).mockResolvedValue(new Response(MERIDIAN_UNHEALTHY, { status: 503 }));
     const { MeridianProvider } = await import('./meridian');
 
     expect(await new MeridianProvider().isAvailable()).toBe(false);
@@ -194,7 +235,7 @@ describe('startMeridianProxy / getMeridianStartError', () => {
     refreshIfNeeded.mockReset().mockResolvedValue(false);
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => new Response('{"status":"healthy"}', { status: 200 })),
+      vi.fn(async () => new Response(MERIDIAN_HEALTHY, { status: 200 })),
     );
   });
 
