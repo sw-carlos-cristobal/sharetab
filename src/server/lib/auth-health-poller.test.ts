@@ -134,6 +134,49 @@ describe('MeridianHealthPoller', () => {
     expect(result.error).toBe('Claude authentication expired');
   });
 
+  test('checkMeridianHealth returns unhealthy when Claude Code fails to authenticate the probe', async () => {
+    // Meridian's /health only checks that a credentials file exists, so a
+    // login Claude Code cleared after a failed refresh still reads as logged
+    // in; the probe then fails with a 500 api_error (observed with Meridian
+    // 1.71.0).
+    const message =
+      'Claude Code returned an error result: Failed to authenticate: OAuth session expired and could not be refreshed';
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: 'healthy', auth: { loggedIn: true, email: null } }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ type: 'error', error: { type: 'api_error', message } }), { status: 500 }),
+      );
+
+    const { checkMeridianHealth } = await import('./auth-health-poller');
+    const result = await checkMeridianHealth();
+    expect(result.status).toBe('unhealthy');
+    expect(result.error).toBe(message);
+  });
+
+  test('checkMeridianHealth returns healthy on api errors that are not about authentication', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: 'healthy', auth: { loggedIn: true, email: 'user@test.com' } }), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            type: 'error',
+            error: { type: 'api_error', message: 'Claude Code returned an error result: Overloaded' },
+          }),
+          { status: 500 },
+        ),
+      );
+
+    const { checkMeridianHealth } = await import('./auth-health-poller');
+    const result = await checkMeridianHealth();
+    expect(result.status).toBe('healthy');
+  });
+
   test('checkMeridianHealth returns healthy on non-auth API errors (rate limit, etc.)', async () => {
     vi.mocked(fetch)
       .mockResolvedValueOnce(
