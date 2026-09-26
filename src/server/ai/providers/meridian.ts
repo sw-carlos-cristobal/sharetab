@@ -29,21 +29,28 @@ export async function startMeridianProxy(): Promise<void> {
 }
 
 // startProxyServer resolves before the server listens, and a failed listen
-// only logs when silent is off, so poll /health for up to 10s. Any response
-// with Meridian's JSON means it is listening (it answers 503 when unhealthy,
-// e.g. without a boot identity); anything else on the port means our listen
-// failed. isAvailable() then only checks for a 2xx, which a "degraded" proxy
-// (auth unverifiable, e.g. no login) also returns.
+// only logs when silent is off, so poll /health until a 10 s deadline (shared
+// by every probe, so a listener that accepts but never answers can't stretch
+// it). Any response with Meridian's JSON means it is listening (it answers 503
+// when unhealthy, e.g. without a boot identity); anything else on the port
+// means our listen failed. isAvailable() then only checks for a 2xx, which a
+// "degraded" proxy (auth unverifiable, e.g. no login) also returns.
+const MERIDIAN_READY_DEADLINE_MS = 10_000;
+
 async function waitForMeridian(port: number): Promise<void> {
-  for (let i = 0; i < 40; i++) {
+  const deadline = Date.now() + MERIDIAN_READY_DEADLINE_MS;
+  while (Date.now() < deadline) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), Math.min(2_000, deadline - Date.now()));
     let res: Response;
     try {
-      // A listener that accepts but never answers must not stall the start.
-      res = await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(2_000) });
+      res = await fetch(`http://127.0.0.1:${port}/health`, { signal: controller.signal });
     } catch {
-      await new Promise((r) => setTimeout(r, 250));
+      clearTimeout(timer);
+      await new Promise((r) => setTimeout(r, Math.min(250, Math.max(0, deadline - Date.now()))));
       continue;
     }
+    clearTimeout(timer);
     const body: unknown = await res.json().catch(() => null);
     if (typeof body === 'object' && body !== null && 'status' in body) return;
     throw new Error(`Something other than Meridian answers on port ${port}`);

@@ -102,6 +102,29 @@ describe('MeridianProvider proxy start', () => {
     expect(startProxyServer).toHaveBeenCalledTimes(2);
   });
 
+  test('gives up on a listener that accepts but never answers after 10 seconds in total', async () => {
+    vi.useFakeTimers();
+    startProxyServer.mockResolvedValue(proxyInstance());
+    // Every probe hangs until its abort signal fires.
+    vi.mocked(fetch).mockImplementation(
+      (_url, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        }),
+    );
+    const { MeridianProvider } = await import('./meridian');
+
+    let settled = false;
+    const available = new MeridianProvider().isAvailable().finally(() => {
+      settled = true;
+    });
+    await vi.advanceTimersByTimeAsync(10_500);
+
+    expect(settled).toBe(true);
+    expect(await available).toBe(false);
+    expect(proxyClose).toHaveBeenCalledTimes(1);
+  });
+
   test('waits up to 10 seconds for the proxy to answer', async () => {
     vi.useFakeTimers();
     startProxyServer.mockResolvedValue(proxyInstance());
