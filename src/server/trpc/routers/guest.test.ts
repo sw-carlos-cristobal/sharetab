@@ -361,6 +361,11 @@ describe('guest.resumeSession', () => {
       name: 'Alice S.',
     });
     expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+    // Reads only the fields it needs, not the (possibly large) items and assignments
+    expect(mockDb.guestSplit.findUnique).toHaveBeenCalledWith({
+      where: { shareToken: 'share-1' },
+      select: { expiresAt: true, people: true },
+    });
   });
 
   test('returns null when nobody holds the token any more', async () => {

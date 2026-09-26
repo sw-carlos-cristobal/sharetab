@@ -748,8 +748,10 @@ export const guestRouter = createTRPCRouter({
       if (!allowed) {
         throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'Too many requests. Please try again shortly.' });
       }
+      // Only what's needed: items and assignments can be large
       const session = await ctx.db.guestSplit.findUnique({
         where: { shareToken: input.token },
+        select: { expiresAt: true, people: true },
       });
       if (!session) throw new TRPCError({ code: 'NOT_FOUND', message: 'Session not found' });
       if (session.expiresAt < new Date()) throw new TRPCError({ code: 'NOT_FOUND', message: 'Session expired' });
