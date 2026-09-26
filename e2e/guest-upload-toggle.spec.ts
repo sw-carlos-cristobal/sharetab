@@ -130,6 +130,9 @@ test.describe('Guest receipt uploads admin toggle', () => {
   });
 
   test('turning uploads off before a rescan shows the notice, not a raw error', async ({ browser }) => {
+    // The first scan is a real extraction when RUN_AI_TESTS points at a live
+    // provider, which takes 20-50 s (the other AI specs allow 120 s).
+    test.setTimeout(150_000);
     const context = await browser.newContext({ viewport: { width: 430, height: 932 } });
     const page = await context.newPage();
     let refuseNextScan = false;
@@ -140,7 +143,7 @@ test.describe('Guest receipt uploads admin toggle', () => {
 
     await page.goto('/en/split');
     await page.getByTestId('guest-file-input').setInputFiles(RECEIPT_IMAGE);
-    await expect(page.getByTestId('guest-people-step')).toBeVisible({ timeout: 30000 });
+    await expect(page.getByTestId('guest-people-step')).toBeVisible({ timeout: 120000 });
 
     refuseNextScan = true;
     await page.getByRole('button', { name: 'Rescan with corrections' }).click();

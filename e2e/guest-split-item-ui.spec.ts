@@ -103,16 +103,16 @@ test.describe('Guest split — item split UI', () => {
     await page.getByPlaceholder(/price/i).fill('15');
     await page.getByTestId('guest-add-item-submit').click();
 
-    await expect(page.getByText('Taco')).toBeVisible({ timeout: 5000 });
-    await expect(page.getByText('x3')).toBeVisible();
+    // Scope to the added items' rows: the receipt's own items can also contain
+    // "Taco" or "x3" (the mock provider returns "Fish Tacos" and several x3 items).
+    const tacoRow = page.getByText('Taco', { exact: true }).locator('xpath=..');
+    const sodaRow = page.getByText('Soda', { exact: true }).locator('xpath=..');
+    await expect(tacoRow).toBeVisible({ timeout: 5000 });
+    await expect(sodaRow).toBeVisible();
+    await expect(tacoRow.getByText('x3', { exact: true })).toBeVisible();
 
-    // Split button should exist for Taco (qty 3) but not Soda (qty 1)
-    // Count split buttons — at least one should exist (for Taco and any other multi-qty items from the receipt)
-    const splitBtns = page.locator('[data-testid^="guest-split-btn-"]');
-    const count = await splitBtns.count();
-    expect(count).toBeGreaterThanOrEqual(1);
-
-    // Soda should NOT have a split button — verify by checking no scissors icon next to it
-    // (Soda has qty 1, so no split button rendered)
+    // A split button on Taco (qty 3), none on Soda (qty 1)
+    await expect(tacoRow.locator('[data-testid^="guest-split-btn-"]')).toHaveCount(1);
+    await expect(sodaRow.locator('[data-testid^="guest-split-btn-"]')).toHaveCount(0);
   });
 });
