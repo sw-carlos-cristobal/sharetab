@@ -11,6 +11,7 @@
 - [ ] `npm run lint` passes
 - [ ] `npm test` passes
 - [ ] `npm run build` passes
+- [ ] `npm run test:docker` passes (Docker, entrypoint, `prisma/` SQL, or dependency changes)
 - [ ] Tested manually in the browser (describe what you clicked through)
 - [ ] E2E tests added or updated (if applicable)
 
