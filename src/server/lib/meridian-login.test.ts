@@ -92,6 +92,23 @@ describe('MeridianLoginManager', () => {
     expect(written.claudeAiOauth.refreshToken).toBe('sk-ant-ort01-test-refresh');
   });
 
+  test('submitCode logs no part of the authorization code', async () => {
+    vi.doMock('fs', () => ({ unlinkSync: vi.fn(), writeFileSync: vi.fn() }));
+    const { logger } = await import('@/server/lib/logger');
+    const { startLogin, submitCode } = await import('./meridian-login');
+    await startLogin();
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ access_token: 'a', refresh_token: 'r', expires_in: 3600 }), { status: 200 }),
+    );
+
+    await submitCode('QWERTYUIOPasdfghjkl-zxcvbnm');
+
+    const logged = JSON.stringify(
+      [logger.info, logger.warn, logger.error, logger.debug].flatMap((fn) => vi.mocked(fn).mock.calls),
+    );
+    expect(logged).not.toContain('QWERTY');
+  });
+
   test('submitCode returns error on token exchange failure', async () => {
     const { startLogin, submitCode, isLoginInProgress } = await import('./meridian-login');
     await startLogin();

@@ -174,7 +174,6 @@ export async function submitCode(codeOrUrl: string): Promise<{ success: boolean;
   try {
     logger.info('meridian.login.exchangingCode', {
       codeLength: code.length,
-      codePreview: code.substring(0, 10) + '...',
       redirectUri: REDIRECT_URI,
       clientId: CLIENT_ID,
     });
