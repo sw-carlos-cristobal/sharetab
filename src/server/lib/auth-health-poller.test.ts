@@ -155,6 +155,23 @@ describe('MeridianHealthPoller', () => {
     expect(result.error).toBe(message);
   });
 
+  test('checkMeridianHealth reports the default error when an auth failure has no string message', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: 'healthy', auth: { loggedIn: true } }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ type: 'error', error: { type: 'authentication_error', message: { code: 1 } } }), {
+          status: 401,
+        }),
+      );
+
+    const { checkMeridianHealth } = await import('./auth-health-poller');
+    const result = await checkMeridianHealth();
+    expect(result.status).toBe('unhealthy');
+    expect(result.error).toBe('Authentication expired');
+  });
+
   test('checkMeridianHealth returns healthy on api errors that are not about authentication', async () => {
     vi.mocked(fetch)
       .mockResolvedValueOnce(

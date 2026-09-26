@@ -169,7 +169,7 @@ async function runMeridianHealthCheck(): Promise<MeridianHealthResult> {
       return {
         status: 'unhealthy',
         ...(healthData.auth?.email !== undefined ? { email: healthData.auth.email } : {}),
-        error: probeBody?.error?.message ?? 'Authentication expired',
+        error: typeof errorMessage === 'string' ? errorMessage : 'Authentication expired',
       };
     }
 
