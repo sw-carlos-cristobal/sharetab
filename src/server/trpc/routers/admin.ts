@@ -26,6 +26,7 @@ import {
   isLoginInProgress,
 } from '@/server/lib/meridian-login';
 import { clearProviderCache } from '@/server/ai/registry';
+import { getMeridianStartError, startMeridianProxy } from '@/server/ai/providers/meridian';
 import {
   checkOpenAICodexHealth,
   invalidateOpenAICodexHealthCache,
@@ -38,6 +39,9 @@ import {
 
 import { getBuildInfo } from '@/server/lib/build-info';
 import { isGuestUploadsForcedOff, readGuestUploadsSetting, saveGuestUploadsSetting } from '@/server/lib/guest-uploads';
+
+// How long a successful Meridian login waits for the proxy start attempt.
+const MERIDIAN_LOGIN_START_WAIT_MS = 15_000;
 
 const serverStartTime = new Date();
 const { version: cachedVersion, commitSha: cachedCommitSha } = getBuildInfo();
@@ -1069,8 +1073,12 @@ export const adminRouter = createTRPCRouter({
       return { status: 'not_applicable' as const };
     }
     const health = await checkMeridianHealth();
+    // A proxy that isn't listening has no health to report; show why its
+    // last start failed instead.
+    const startError = health.status === 'not_running' ? getMeridianStartError() : null;
     return {
       ...health,
+      ...(startError ? { error: startError } : {}),
       loginInProgress: isLoginInProgress(),
     };
   }),
@@ -1108,9 +1116,24 @@ export const adminRouter = createTRPCRouter({
       try {
         const result = await submitCode(input.code);
 
+        let proxyError: string | null = null;
         if (result.success) {
           clearProviderCache();
+          // Wait (bounded) for the proxy start attempt before answering, then
+          // drop the cached health: the page re-reads the status right after
+          // this returns, and a check that lands before the proxy listens
+          // caches "not running" for 15s.
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          await Promise.race([
+            startMeridianProxy(),
+            new Promise<void>((resolve) => {
+              timer = setTimeout(resolve, MERIDIAN_LOGIN_START_WAIT_MS);
+            }),
+          ]);
+          clearTimeout(timer);
           invalidateMeridianHealthCache();
+          // The login itself succeeded; report a proxy that still can't start.
+          proxyError = getMeridianStartError();
         }
 
         await logAdminAction(
@@ -1118,10 +1141,10 @@ export const adminRouter = createTRPCRouter({
           ctx.user.id,
           result.success ? 'MERIDIAN_LOGIN_COMPLETED' : 'MERIDIAN_LOGIN_FAILED',
           null,
-          { success: result.success, error: result.error },
+          { success: result.success, error: result.error, ...(proxyError ? { proxyError } : {}) },
         );
 
-        return result;
+        return { ...result, ...(proxyError ? { proxyError } : {}) };
       } catch (err) {
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
@@ -1323,10 +1346,12 @@ export const adminRouter = createTRPCRouter({
           error: message,
         });
 
-        // Not BAD_GATEWAY: reverse proxies (Cloudflare among them) replace a
-        // 502 or 504 body with their own HTML page, which hides this message.
+        // SERVICE_UNAVAILABLE (503): the provider failed, not ShareTab. Not
+        // BAD_GATEWAY: Cloudflare (and proxies set to intercept errors)
+        // replaces a 502 or 504 body with its own HTML page, hiding this
+        // message.
         throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
+          code: 'SERVICE_UNAVAILABLE',
           message,
         });
       }
