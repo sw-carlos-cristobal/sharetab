@@ -39,6 +39,78 @@ function generateCodeChallenge(verifier: string): string {
   return createHash('sha256').update(verifier).digest('base64url');
 }
 
+// ─── Token responses ────────────────────────────────────
+// Token endpoint bodies can carry credentials. The only parts that reach a log
+// line or an error message (which the admin audit log stores) are the status,
+// a known OAuth error code, and a numeric expires_in.
+
+// The error codes RFC 6749 defines: §5.2 for the token endpoint, and §4.1.2.1
+// for authorization responses, which some servers also return from the token
+// endpoint
+const OAUTH_ERROR_CODES = new Set([
+  'invalid_request',
+  'invalid_client',
+  'invalid_grant',
+  'unauthorized_client',
+  'unsupported_grant_type',
+  'invalid_scope',
+  'access_denied',
+  'unsupported_response_type',
+  'server_error',
+  'temporarily_unavailable',
+]);
+
+/**
+ * The status and error code of a failed token request: all that is logged or
+ * shown. The code is kept only if it is one RFC 6749 defines. Anything else in
+ * the body (other error values, error_description, extra fields, a proxy's
+ * error page) can echo the code or token that was sent.
+ */
+async function describeTokenError(res: Response): Promise<{ status: number; error?: string }> {
+  const body: unknown = await res.json().catch(() => null);
+  const error = body && typeof body === 'object' && 'error' in body ? body.error : undefined;
+  return typeof error === 'string' && OAUTH_ERROR_CODES.has(error)
+    ? { status: res.status, error }
+    : { status: res.status };
+}
+
+interface TokenResponse {
+  access_token: string;
+  refresh_token?: string;
+  expires_in: number;
+  subscription_type?: string;
+  rate_limit_tier?: string;
+}
+
+/**
+ * A successful token response, type-checked. A parse error's message can quote
+ * up to 20 characters of the body, and a string expires_in would reach the
+ * refresh log, so either fails with a fixed error. expires_in is required (RFC
+ * 6749 only recommends it) because the credentials file needs expiresAt, and
+ * this endpoint sends it (8-hour tokens); token_type isn't used, so isn't
+ * checked.
+ */
+async function readTokenResponse(res: Response): Promise<TokenResponse> {
+  const body: unknown = await res.json().catch(() => null);
+  if (!body || typeof body !== 'object') throw new Error('Malformed token response');
+  const { access_token, refresh_token, expires_in, subscription_type, rate_limit_tier } = body as Record<
+    string,
+    unknown
+  >;
+  const optionalString = (value: unknown) => value === undefined || typeof value === 'string';
+  if (
+    typeof access_token !== 'string' ||
+    typeof expires_in !== 'number' ||
+    !Number.isFinite(expires_in) ||
+    !optionalString(refresh_token) ||
+    !optionalString(subscription_type) ||
+    !optionalString(rate_limit_tier)
+  ) {
+    throw new Error('Malformed token response');
+  }
+  return body as TokenResponse;
+}
+
 // ─── Credential path ────────────────────────────────────
 
 function getCredentialPath(): string {
@@ -193,19 +265,16 @@ export async function submitCode(codeOrUrl: string): Promise<{ success: boolean;
     });
 
     if (!res.ok) {
-      const body = await res.text();
-      logger.error('meridian.login.tokenExchangeFailed', {
-        status: res.status,
-        body,
-      });
+      const failure = await describeTokenError(res);
+      logger.error('meridian.login.tokenExchangeFailed', failure);
       cleanup();
       return {
         success: false,
-        error: `Token exchange failed (${res.status}): ${body}`,
+        error: `Token exchange failed (${failure.status})${failure.error ? `: ${failure.error}` : ''}`,
       };
     }
 
-    const tokens = await res.json();
+    const tokens = await readTokenResponse(res);
     const credPath = getCredentialPath();
 
     // Write credentials in the same format Claude CLI expects
@@ -285,15 +354,11 @@ export async function refreshIfNeeded(options?: { force?: boolean }): Promise<bo
     });
 
     if (!res.ok) {
-      const body = await res.text();
-      logger.error('meridian.refresh.failed', {
-        status: res.status,
-        body,
-      });
+      logger.error('meridian.refresh.failed', await describeTokenError(res));
       return false;
     }
 
-    const tokens = await res.json();
+    const tokens = await readTokenResponse(res);
     const updated = {
       claudeAiOauth: {
         ...oauth,
