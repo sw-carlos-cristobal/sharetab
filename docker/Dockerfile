@@ -13,6 +13,18 @@ COPY package.json package-lock.json ./
 COPY prisma ./prisma
 COPY prisma.config.ts ./
 RUN npm ci --legacy-peer-deps
+# The standalone trace can't follow what Meridian loads at runtime: libsql's
+# platform-native package (a computed require of @libsql/<target>) and the
+# Claude Code binary it locates. So stage Meridian's whole dependency closure
+# into /runtime-deps, outside /app so the build never sees it, for the runner
+# (see docker/stage-runtime-deps.mjs). Meridian hands the agent SDK the binary
+# it locates itself, @anthropic-ai/claude-code/bin/claude.exe (placed there by
+# claude-code's postinstall, as a hardlink or a copy), so the Linux binary
+# packages of both (each over 200 MiB) are left out.
+COPY docker/stage-runtime-deps.mjs ./docker/
+RUN node docker/stage-runtime-deps.mjs /runtime-deps @rynfar/meridian \
+      --exclude '@anthropic-ai/claude-agent-sdk-linux-*' \
+      --exclude '@anthropic-ai/claude-code-linux-*'
 COPY . .
 RUN npx prisma generate
 RUN npm run build
@@ -40,9 +52,8 @@ COPY --from=builder /app/.commit-sha ./.commit-sha
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./
 COPY --from=builder /app/src/generated ./src/generated
-# Copy meridian proxy (embedded, dynamically imported — not traced by Next.js bundler)
-COPY --from=builder /app/node_modules/@rynfar/meridian ./node_modules/@rynfar/meridian
-COPY --from=builder /app/node_modules/@anthropic-ai/claude-agent-sdk ./node_modules/@anthropic-ai/claude-agent-sdk
+# Meridian proxy and its dependencies (staged in the builder, see above)
+COPY --from=builder /runtime-deps/node_modules ./node_modules
 # Install Prisma CLI in isolated dir to avoid conflict with standalone node_modules
 WORKDIR /prisma-cli
 RUN npm init -y && \

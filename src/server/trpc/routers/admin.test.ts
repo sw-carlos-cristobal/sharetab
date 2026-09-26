@@ -97,11 +97,38 @@ vi.mock('@/server/lib/logger', () => ({
 vi.mock('@/server/lib/rate-limit', () => ({
   checkRateLimit: vi.fn().mockReturnValue({ allowed: true }),
 }));
+const { mockCreateProviderByName } = vi.hoisted(() => ({ mockCreateProviderByName: vi.fn() }));
 vi.mock('@/server/ai/registry', () => ({
   getAIProvider: vi.fn().mockResolvedValue({
     name: 'mock-provider',
     isAvailable: vi.fn().mockResolvedValue(true),
   }),
+  createProviderByName: mockCreateProviderByName,
+  isProviderConfigured: vi.fn().mockReturnValue(true),
+  clearProviderCache: vi.fn(),
+}));
+const { mockStartMeridianProxy, mockGetMeridianStartError } = vi.hoisted(() => ({
+  mockStartMeridianProxy: vi.fn(),
+  mockGetMeridianStartError: vi.fn(),
+}));
+vi.mock('@/server/ai/providers/meridian', () => ({
+  startMeridianProxy: mockStartMeridianProxy,
+  getMeridianStartError: mockGetMeridianStartError,
+}));
+const { mockCheckMeridianHealth, mockInvalidateMeridianHealthCache } = vi.hoisted(() => ({
+  mockCheckMeridianHealth: vi.fn(),
+  mockInvalidateMeridianHealthCache: vi.fn(),
+}));
+vi.mock('@/server/lib/auth-health-poller', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/server/lib/auth-health-poller')>()),
+  checkMeridianHealth: mockCheckMeridianHealth,
+  invalidateMeridianHealthCache: mockInvalidateMeridianHealthCache,
+}));
+const { mockSubmitCode } = vi.hoisted(() => ({ mockSubmitCode: vi.fn() }));
+vi.mock('@/server/lib/meridian-login', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/server/lib/meridian-login')>()),
+  submitCode: mockSubmitCode,
+  isLoginInProgress: vi.fn().mockReturnValue(false),
 }));
 
 describe('adminProcedure authorization', () => {
@@ -322,15 +349,15 @@ describe('listGroups input schema', () => {
   });
 });
 
+const adminSession = { user: { id: 'admin-1', email: 'admin@example.com' } };
+
+async function callerAs(session: { user: { id: string; email: string } }) {
+  const { adminRouter } = await import('./admin');
+  const ctx = { session, db: mockDb, headers: new Headers(), impersonating: null };
+  return adminRouter.createCaller(ctx as unknown as Parameters<typeof adminRouter.createCaller>[0]);
+}
+
 describe('guest uploads toggle', () => {
-  const adminSession = { user: { id: 'admin-1', email: 'admin@example.com' } };
-
-  async function caller(session: { user: { id: string; email: string } }) {
-    const { adminRouter } = await import('./admin');
-    const ctx = { session, db: mockDb, headers: new Headers(), impersonating: null };
-    return adminRouter.createCaller(ctx as unknown as Parameters<typeof adminRouter.createCaller>[0]);
-  }
-
   beforeEach(async () => {
     vi.stubEnv('ADMIN_EMAIL', 'admin@example.com');
     vi.stubEnv('DISABLE_GUEST_UPLOADS', '');
@@ -346,25 +373,25 @@ describe('guest uploads toggle', () => {
 
   test('reports guest uploads as enabled until an admin saves the setting', async () => {
     mockDb.systemSetting.findUnique.mockResolvedValue(null);
-    const api = await caller(adminSession);
+    const api = await callerAs(adminSession);
     expect(await api.getGuestUploadsEnabled()).toEqual({ enabled: true, forcedOffByEnv: false });
   });
 
   test('reports the saved value', async () => {
     mockDb.systemSetting.findUnique.mockResolvedValue({ key: 'guestUploadsEnabled', value: 'false' });
-    const api = await caller(adminSession);
+    const api = await callerAs(adminSession);
     expect(await api.getGuestUploadsEnabled()).toEqual({ enabled: false, forcedOffByEnv: false });
   });
 
   test('reports when DISABLE_GUEST_UPLOADS overrides the saved value', async () => {
     vi.stubEnv('DISABLE_GUEST_UPLOADS', 'true');
     mockDb.systemSetting.findUnique.mockResolvedValue(null);
-    const api = await caller(adminSession);
+    const api = await callerAs(adminSession);
     expect(await api.getGuestUploadsEnabled()).toEqual({ enabled: true, forcedOffByEnv: true });
   });
 
   test('saving the setting upserts it and writes an audit entry', async () => {
-    const api = await caller(adminSession);
+    const api = await callerAs(adminSession);
     expect(await api.setGuestUploadsEnabled({ enabled: false })).toEqual({ enabled: false });
     expect(mockDb.systemSetting.upsert).toHaveBeenCalledWith({
       where: { key: 'guestUploadsEnabled' },
@@ -382,7 +409,7 @@ describe('guest uploads toggle', () => {
 
   test('refuses to save while DISABLE_GUEST_UPLOADS locks the setting', async () => {
     vi.stubEnv('DISABLE_GUEST_UPLOADS', 'true');
-    const api = await caller(adminSession);
+    const api = await callerAs(adminSession);
     await expect(api.setGuestUploadsEnabled({ enabled: true })).rejects.toMatchObject({
       code: 'PRECONDITION_FAILED',
     });
@@ -391,9 +418,155 @@ describe('guest uploads toggle', () => {
   });
 
   test('non-admins cannot read or change the setting', async () => {
-    const api = await caller({ user: { id: 'user-2', email: 'someone@example.com' } });
+    const api = await callerAs({ user: { id: 'user-2', email: 'someone@example.com' } });
     await expect(api.getGuestUploadsEnabled()).rejects.toMatchObject({ code: 'FORBIDDEN' });
     await expect(api.setGuestUploadsEnabled({ enabled: false })).rejects.toMatchObject({ code: 'FORBIDDEN' });
     expect(mockDb.systemSetting.upsert).not.toHaveBeenCalled();
+  });
+});
+
+describe('testAIProvider', () => {
+  const input = { providerName: 'openai-codex', imageBase64: 'aGVsbG8=', mimeType: 'image/png' as const };
+
+  beforeEach(() => {
+    vi.stubEnv('ADMIN_EMAIL', 'admin@example.com');
+    vi.clearAllMocks();
+    mockDb.user.findUnique.mockResolvedValue({ suspendedAt: null });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test('reports an extraction failure as 503 with the provider message', async () => {
+    // Cloudflare replaces an origin's 502 and 504 bodies with its own HTML
+    // page, which hid the provider's message.
+    const { getHTTPStatusCodeFromError } = await import('@trpc/server/http');
+    mockCreateProviderByName.mockResolvedValue({
+      name: 'openai-codex',
+      isAvailable: vi.fn().mockResolvedValue(true),
+      extractReceipt: vi.fn().mockRejectedValue(new Error('OpenAI Codex request failed (429): usage limit reached')),
+    });
+    const api = await callerAs(adminSession);
+
+    const error: unknown = await api.testAIProvider(input).catch((err: unknown) => err);
+
+    expect(error).toMatchObject({ message: 'OpenAI Codex request failed (429): usage limit reached' });
+    expect(getHTTPStatusCodeFromError(error as Parameters<typeof getHTTPStatusCodeFromError>[0])).toBe(503);
+  });
+
+  test('records the failure in the audit log', async () => {
+    mockCreateProviderByName.mockResolvedValue({
+      name: 'openai-codex',
+      isAvailable: vi.fn().mockResolvedValue(true),
+      extractReceipt: vi.fn().mockRejectedValue(new Error('boom')),
+    });
+    const api = await callerAs(adminSession);
+
+    await api.testAIProvider(input).catch(() => undefined);
+
+    expect(mockDb.adminAuditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: 'AI_PROVIDER_TESTED',
+        metadata: expect.objectContaining({ provider: 'openai-codex', success: false, error: 'boom' }),
+      }),
+    });
+  });
+});
+
+describe('Meridian login and status', () => {
+  beforeEach(() => {
+    vi.stubEnv('ADMIN_EMAIL', 'admin@example.com');
+    vi.clearAllMocks();
+    mockDb.user.findUnique.mockResolvedValue({ suspendedAt: null });
+    mockGetMeridianStartError.mockReturnValue(null);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test('a successful login starts the proxy before the status is re-read', async () => {
+    // The health check caches "not running" for 15s, so the page's status
+    // refetch after the login must not land before the proxy is up.
+    mockSubmitCode.mockResolvedValue({ success: true });
+    let started = false;
+    mockStartMeridianProxy.mockImplementation(async () => {
+      await Promise.resolve();
+      started = true;
+    });
+    const startedWhenInvalidated: boolean[] = [];
+    mockInvalidateMeridianHealthCache.mockImplementation(() => startedWhenInvalidated.push(started));
+    const api = await callerAs(adminSession);
+
+    await api.completeMeridianLogin({ code: 'abc#state' });
+
+    expect(mockStartMeridianProxy).toHaveBeenCalledTimes(1);
+    expect(startedWhenInvalidated.at(-1)).toBe(true);
+  });
+
+  test('a login reports why the proxy did not start', async () => {
+    mockSubmitCode.mockResolvedValue({ success: true });
+    mockStartMeridianProxy.mockResolvedValue(undefined);
+    mockGetMeridianStartError.mockReturnValue('Meridian proxy did not answer on port 3457');
+    const api = await callerAs(adminSession);
+
+    const result = await api.completeMeridianLogin({ code: 'abc#state' });
+
+    expect(result).toMatchObject({ success: true, proxyError: 'Meridian proxy did not answer on port 3457' });
+    expect(mockDb.adminAuditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: 'MERIDIAN_LOGIN_COMPLETED',
+        metadata: expect.objectContaining({ proxyError: 'Meridian proxy did not answer on port 3457' }),
+      }),
+    });
+  });
+
+  test('a login does not wait forever for a proxy start that hangs', async () => {
+    vi.useFakeTimers();
+    try {
+      mockSubmitCode.mockResolvedValue({ success: true });
+      mockStartMeridianProxy.mockReturnValue(new Promise(() => undefined));
+      const api = await callerAs(adminSession);
+
+      const login = api.completeMeridianLogin({ code: 'abc#state' });
+      await vi.advanceTimersByTimeAsync(20_000);
+
+      await expect(login).resolves.toMatchObject({ success: true });
+      expect(mockInvalidateMeridianHealthCache).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('a failed login does not start the proxy', async () => {
+    mockSubmitCode.mockResolvedValue({ success: false, error: 'invalid code' });
+    const api = await callerAs(adminSession);
+
+    await api.completeMeridianLogin({ code: 'abc#state' });
+
+    expect(mockStartMeridianProxy).not.toHaveBeenCalled();
+  });
+
+  test('the status shows why the proxy is not running', async () => {
+    mockCheckMeridianHealth.mockResolvedValue({ status: 'not_running' });
+    mockGetMeridianStartError.mockReturnValue("Cannot find module '@libsql/linux-x64-musl'");
+    const api = await callerAs(adminSession);
+
+    expect(await api.getMeridianAuthStatus()).toMatchObject({
+      status: 'not_running',
+      error: "Cannot find module '@libsql/linux-x64-musl'",
+    });
+  });
+
+  test('the status leaves a running proxy alone', async () => {
+    mockCheckMeridianHealth.mockResolvedValue({ status: 'healthy', email: 'me@example.com' });
+    mockGetMeridianStartError.mockReturnValue('an old failure');
+    const api = await callerAs(adminSession);
+
+    const status = await api.getMeridianAuthStatus();
+
+    expect(status).toMatchObject({ status: 'healthy', email: 'me@example.com' });
+    expect(status).not.toHaveProperty('error');
   });
 });

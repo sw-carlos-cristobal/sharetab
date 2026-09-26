@@ -243,7 +243,7 @@ All configuration is done through environment variables. Copy `.env.example` to 
 | `AI_PROVIDER_PRIORITY`   | Comma-separated provider priority list (for example `openai-codex,meridian,openai`). ShareTab checks providers in order, uses the first available one, and falls through to the next provider if extraction fails. |
 | `OPENAI_API_KEY`         | Required when `openai` is included in `AI_PROVIDER_PRIORITY`.                                                                                                                                                      |
 | `OPENAI_MODEL`           | OpenAI model for receipt scanning. Defaults to `gpt-4o`.                                                                                                                                                           |
-| `OPENAI_CODEX_MODEL`     | Model for ChatGPT OAuth / Codex backend receipt scanning. Defaults to `gpt-5.4`.                                                                                                                                   |
+| `OPENAI_CODEX_MODEL`     | Model for ChatGPT OAuth / Codex backend receipt scanning. Defaults to `gpt-5.5`.                                                                                                                                   |
 | `ANTHROPIC_API_KEY`      | Required when `claude` is included in `AI_PROVIDER_PRIORITY`.                                                                                                                                                      |
 | `ANTHROPIC_MODEL`        | Claude model for receipt scanning (claude and meridian providers). Defaults to `claude-sonnet-5`.                                                                                                                  |
 | `ANTHROPIC_HEALTH_MODEL` | Model for health-check probes (auth verification). Defaults to `claude-haiku-4-5-20251001`.                                                                                                                        |
@@ -476,6 +476,12 @@ BASE_URL=http://localhost:3000 npx playwright test --headed
 
 # Include AI-dependent tests (requires configured AI provider)
 BASE_URL=http://localhost:3000 RUN_AI_TESTS=1 npx playwright test
+
+# Build the Docker image and smoke test it (fresh install, upgrade restarts,
+# Meridian). Run before pushing Docker, entrypoint, SQL, or dependency changes.
+npm run test:docker
+# Same, against a remote Docker daemon
+DOCKER_HOST=ssh://user@host npm run test:docker
 ```
 
 Set `AUTH_RATE_LIMIT_MAX=9999` and `GUEST_RATE_LIMIT_MAX=9999` in `.env` to avoid rate limiting during repeated test runs.

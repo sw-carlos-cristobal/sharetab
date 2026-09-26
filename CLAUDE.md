@@ -30,6 +30,7 @@ npx tsc --noEmit     # Type check
 npm test             # Run unit tests (Vitest)
 npm run test:watch   # Unit tests in watch mode
 npm run test:e2e     # Run Playwright e2e tests
+npm run test:docker  # Build the Docker image and smoke test it (scripts/docker-smoke.sh; DOCKER_HOST=ssh://... for a remote daemon)
 npm run lint:i18n    # Check translations for missing/extra keys
 npx prisma generate  # Regenerate Prisma client after schema changes
 npx prisma db push   # Push schema without migration (dev only)
@@ -73,7 +74,7 @@ npx prisma db push   # Push schema without migration (dev only)
 - AI providers implement the `AIProvider` interface in `src/server/ai/provider.ts`
 - `src/middleware.ts` — NextAuth middleware protecting authenticated routes
 - `prisma/seed.ts` — Demo data seed script (run with `npm run db:seed`); idempotent — skips if data already exists
-- Hand-written SQL, run by `docker/entrypoint.sh` on every start: `prisma/migrations/*.sql` before `prisma db push` (idempotent, and a no-op on an empty database since a fresh install has no tables yet), `prisma/after-push/*.sql` after it (idempotent; log a warning instead of failing, since any error stops startup). `prisma/after-push/user_email_lower_unique.sql` holds the unique index on `lower(email)` that Prisma's schema can't express; `prisma db push` leaves it alone. `.github/workflows/docker-fresh-install.yml` boots the image on an empty volume to test both phases
+- Hand-written SQL, run by `docker/entrypoint.sh` on every start: `prisma/migrations/*.sql` before `prisma db push` (idempotent, and a no-op on an empty database since a fresh install has no tables yet), `prisma/after-push/*.sql` after it (idempotent; log a warning instead of failing, since any error stops startup). `prisma/after-push/user_email_lower_unique.sql` holds the unique index on `lower(email)` that Prisma's schema can't express; `prisma db push` leaves it alone. `scripts/docker-smoke.sh` boots the image on an empty volume to test both phases
 - Prisma v7: datasource URL is configured in `prisma.config.ts`, not in `schema.prisma`
 - Prisma v7: PrismaClient requires `@prisma/adapter-pg` adapter in constructor
 - Prisma v7: import from `@/generated/prisma/client` (not `@/generated/prisma` — no index.ts)
@@ -84,6 +85,7 @@ npx prisma db push   # Push schema without migration (dev only)
 - Theme: emerald/teal accent color (OKLCH), neutral backgrounds — defined in `globals.css`
 - `scripts/dev.mjs` — All-in-one dev script: starts embedded-postgres + Next.js dev server
 - `next.config.ts` sets `output: "standalone"` conditionally when `DOCKER_BUILD=1` (set by `docker/Dockerfile`)
+- The standalone trace follows static imports and requires but not a require whose name is computed at runtime (libsql loads its platform-native `@libsql/<target>` package that way) or a binary a package locates at runtime (Meridian finds `@anthropic-ai/claude-code/bin/claude.exe`). `docker/Dockerfile` stages the whole dependency closure of such a package with `docker/stage-runtime-deps.mjs`; stage any new package that loads native code or binaries that way there. `scripts/docker-smoke.sh` starts the Meridian proxy inside the built image to catch a missing one
 
 ## Responsive Layout Architecture
 
@@ -100,9 +102,9 @@ npx prisma db push   # Push schema without migration (dev only)
 
 ### Unit Tests (Vitest)
 
-- `npm test` — run all unit tests (~460 tests, <2s)
-- Tests live co-located with source: `src/**/*.test.ts`
-- Covers: `money.ts`, `split-calculator.ts`, `rate-limit.ts`, `upload-dir.ts`, `balance-calculator.ts`, `ai/registry.ts`, `ai/providers/openai-codex.ts`, `lib/normalize-date.ts`, `lib/meridian-login.ts`, `lib/receipt-processor.ts`, `lib/auth-health-poller.ts`, `lib/openai-codex-login.ts`, `lib/auth-config.ts`, `lib/oidc-sign-in.ts`, `lib/user-email.ts`, `lib/password-login.ts`, `trpc/routers/admin.ts`, `trpc/routers/auth.ts`, `src/lib/sign-in-errors.ts`, `lib/guest-uploads.ts`, `lib/guest-join-limit.ts`, `trpc/routers/guest.ts`, `app/api/upload/route.ts`
+- `npm test` — run all unit tests (~490 tests, <2s)
+- Tests live co-located with source: `src/**/*.test.ts`, plus `docker/**/*.test.mjs` for the Docker build scripts
+- Covers: `money.ts`, `split-calculator.ts`, `rate-limit.ts`, `upload-dir.ts`, `balance-calculator.ts`, `ai/registry.ts`, `ai/providers/openai-codex.ts`, `ai/providers/meridian.ts`, `lib/normalize-date.ts`, `lib/meridian-login.ts`, `lib/receipt-processor.ts`, `lib/auth-health-poller.ts`, `lib/openai-codex-login.ts`, `lib/auth-config.ts`, `lib/oidc-sign-in.ts`, `lib/user-email.ts`, `lib/password-login.ts`, `trpc/routers/admin.ts`, `trpc/routers/auth.ts`, `src/lib/sign-in-errors.ts`, `lib/guest-uploads.ts`, `lib/guest-join-limit.ts`, `trpc/routers/guest.ts`, `app/api/upload/route.ts`, `docker/stage-runtime-deps.mjs`
 
 ### E2E Tests (Playwright)
 
@@ -131,6 +133,8 @@ npx prisma db push   # Push schema without migration (dev only)
 ## Docker
 
 All-in-one container: PostgreSQL is bundled inside — no external database required. Requires `NEXTAUTH_SECRET` and `AUTH_SECRET` env vars.
+
+Run `npm run test:docker` before pushing a change to `docker/`, the entrypoint, `prisma/` SQL, or dependencies. It builds the image and runs `scripts/docker-smoke.sh`: fresh install on an empty volume, upgrade restarts, and the Meridian provider starting and running through the app (it signs in as an admin and calls the admin "Test Receipt Extraction" endpoint). The container gets a unique name and publishes no ports, so it's safe on a host already running ShareTab; point `DOCKER_HOST=ssh://user@host` at a remote daemon when there's no local Docker (Docker access is root-equivalent on that host). CI runs the same script on pull requests (Docker Fresh Install), and `docker.yml` pushes the image it tested only after the script passes. `--meridian-auth <dir>` adds a live receipt extraction through Meridian using a scratch copy of a Claude login directory on the Docker host (local runs only; needs a token valid for 30+ minutes, and fails if the login was refreshed during the run).
 
 ```bash
 cd docker && docker compose up -d    # Start app (PostgreSQL included)

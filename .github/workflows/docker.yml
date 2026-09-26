@@ -43,15 +43,35 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=
 
-      - name: Build and push
+      # Build once, test that image, and push that same image, so no
+      # untested image gets a tag: :latest is pulled by installs tracking it,
+      # and promote-stable.yml promotes :stable from these sha tags. The
+      # tradeoff: build-push-action adds no provenance when it loads the image
+      # for testing, so the pushed image has none. Keeping it would mean
+      # pushing a tag before the test and promoting it afterwards
+      # (imagetools create), which gives an untested image a tag.
+      - name: Build image
         uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/Dockerfile
-          push: true
+          load: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             COMMIT_SHA=${{ github.sha }}
           cache-from: type=gha,scope=main-image
           cache-to: type=gha,mode=max,scope=main-image
+
+      - name: Smoke test the image
+        env:
+          IMAGE: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
+        run: scripts/docker-smoke.sh --image "$IMAGE"
+
+      - name: Push the tested image
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          while IFS= read -r tag; do
+            if [ -n "$tag" ]; then docker push "$tag"; fi
+          done <<< "$TAGS"
