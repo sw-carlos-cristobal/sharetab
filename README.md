@@ -116,6 +116,10 @@ ShareTab is a free, self-hosted alternative to Splitwise for tracking shared exp
 
 - **Group expense tracking** with multiple split modes (equal, percentage, shares, exact, item-level)
 - **AI receipt scanning** -- photograph a receipt, AI extracts line items, assign items to group members with proportional tax/tip; zoomable/pannable receipt viewer; rescan with correction prompts
+- **Multi-currency** -- record an expense in any currency and ShareTab converts it to the group's currency at the exchange rate for the expense date (ECB rates from [frankfurter.app](https://frankfurter.app), no API key; the server needs outbound internet access). For a currency without an ECB rate, or when the lookup fails, enter the rate yourself (expenses created from a scanned receipt can't take a manual rate)
+- **Claim sessions** -- share a scanned receipt as a link so everyone picks their own items: split an item between people, join as a couple or group that pays a proportional share, and finalize when done; works for guest splits and group receipt scans, and signed-in users find their guest splits under **My Splits**
+- **Venmo payments** -- one-tap Venmo pay links on guest split results, claim sessions, and group balances; paying a group debt records the settlement after you confirm. USD only, and off by default: an admin enables it, users add their Venmo handle in Settings, and a guest split's creator (signed in) adds theirs on the split
+- **9 languages** -- English, Spanish, Swedish, French, German, Brazilian Portuguese, Japanese, Simplified Chinese, and Korean, with locale-aware money formatting; each user's choice is saved to their account
 - **Guest bill splitting** -- no account needed, shareable summary links; admins can turn off guest receipt uploads (admin toggle or `DISABLE_GUEST_UPLOADS`) so anonymous visitors can't upload receipt images or run AI scans (signed-in users with an active account keep access, so also limit who can create an account: Registration Control only covers password sign-up, while magic link, Google and OIDC auto-registration still create accounts; see [Security notes](#oidc-security-notes))
 - **Pluggable AI providers** -- OpenAI (GPT-4o), OpenAI-Codex (ChatGPT OAuth), Claude (API key), Meridian (Claude Max subscription), local Ollama
 - **Group archiving** -- archive inactive groups to declutter your dashboard; toggle archived view on groups page
@@ -128,15 +132,16 @@ ShareTab is a free, self-hosted alternative to Splitwise for tracking shared exp
 - **Magic link auth** -- passwordless email sign-in
 - **Single sign-on (OIDC)** -- sign in with Authentik, Authelia, Keycloak, or other OpenID Connect providers; optional auto-registration and password-login disable
 - **PWA** -- installable on mobile with app-like experience
-- **Admin dashboard** -- user management, group overview, storage stats, AI usage, audit log, registration control, guest receipt upload toggle, announcements, server logs, user impersonation, data export, expired guest split cleanup
+- **Admin dashboard** -- system health (database, version and commit, uptime), user management, group overview, storage stats, AI usage, AI provider test, Meridian and ChatGPT OAuth login, auth-expiry email alerts, activity feed, audit log, registration control, guest receipt upload toggle, Venmo toggle, announcements, server logs, user impersonation, data export, expired guest split cleanup
 - **Self-hosted** -- Docker Compose deployment, designed for Unraid
 
 ## Quick Start
 
-ShareTab ships as an all-in-one Docker container with PostgreSQL bundled inside. No external database needed.
+ShareTab ships as an all-in-one Docker container with PostgreSQL bundled inside. No external database needed. The bundled Compose file builds the image from your checkout of this repo:
 
 ```bash
-cd docker
+git clone https://github.com/sw-carlos-cristobal/sharetab.git
+cd sharetab/docker
 cp ../.env.example .env
 ```
 
@@ -147,10 +152,10 @@ Edit `.env` with your settings -- at minimum, generate real values for `NEXTAUTH
 openssl rand -base64 32
 ```
 
-Then start the container:
+Then build and start the container:
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
 
 The app will be available at `http://localhost:3000`.
@@ -179,29 +184,71 @@ You can also skip the manual copy and paste the raw template URL into Unraid's t
 
 `https://raw.githubusercontent.com/sw-carlos-cristobal/sharetab/main/unraid/sharetab.xml`
 
-**Backups:**
+The template runs the prebuilt `ghcr.io/sw-carlos-cristobal/sharetab:stable` image (see [Prebuilt images](#prebuilt-images)). To upgrade, click **Check for Updates** in the Docker tab, then apply the update.
+
+<a id="backups"></a>**Backups:**
 
 ```bash
+# Unraid (the template names the container "sharetab")
+docker exec sharetab su-exec postgres pg_dump -U sharetab sharetab > backup.sql
+
+# Docker Compose (run from the docker/ directory)
 docker compose exec sharetab su-exec postgres pg_dump -U sharetab sharetab > backup.sql
 ```
 
+The dump covers the database only. A full backup also needs the receipt images (`/app/uploads`), the AI provider logins if you use `meridian` or `openai-codex` (`/app/claude`, `/app/chatgpt`), and your settings. On Unraid the data folders are under `/mnt/user/appdata/sharetab/` and the template settings are on the flash drive (`/boot/config/plugins/dockerMan/templates-user/`); with Compose the data is in the `docker_uploads`, `docker_claude`, and `docker_chatgpt` named volumes (Compose prefixes volume names with the project name, `docker` by default; `docker volume ls` lists them) and the settings are in `docker/.env`.
+
+Files can change between the dump and the copy while people use ShareTab. For a backup where everything matches, stop the container and copy all of its data while it is stopped: on Unraid the whole `/mnt/user/appdata/sharetab/` folder (it includes the database files in `db/`), with Compose the `docker_pgdata`, `docker_uploads`, `docker_claude`, and `docker_chatgpt` volumes. Keep file ownership when you copy (`cp -a` or `rsync -a`), or PostgreSQL can't read its files after a restore.
+
 ## Upgrading
 
-When upgrading to a new ShareTab version, pull the latest image and recreate the container:
+Before upgrading:
+
+1. Take a full backup (see [Backups](#backups)).
+2. Read the sections below: any upgrade that needs a manual step is described there. The [build releases](../../releases) list every commit since the build you run.
+3. Compare `.env.example` with your `.env` (or the Unraid template) for new variables.
+
+Going back to an older build isn't supported once a newer one has changed the database schema: on start, `prisma db push` can refuse to drop the newer columns, and the container won't start. Restore the backup you took before upgrading instead.
+
+The bundled Compose file builds the image from your checkout, so upgrade by updating the checkout and rebuilding. From the `docker/` directory:
 
 ```bash
-cd docker
-docker compose pull
-docker compose up -d
+git pull
+docker compose up -d --build
 ```
+
+`docker compose pull` alone doesn't upgrade this setup: the image is built locally, not pulled.
+
+### Prebuilt images
+
+Each push to `main` starts an image build, and each build that finishes is published to the GitHub Container Registry. To run a prebuilt image instead of building one, replace the `build:` block and `image: sharetab:latest` in `docker/docker-compose.yml` with one of these tags, then upgrade from the `docker/` directory with `docker compose pull && docker compose up -d`:
+
+| Tag                                           | What it is                                                                                                                                                                      |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ghcr.io/sw-carlos-cristobal/sharetab:stable` | A build the maintainer has promoted as stable. Recommended; the Unraid template uses this tag. It can lag `main`, so a feature described in this README may not be in it yet.   |
+| `ghcr.io/sw-carlos-cristobal/sharetab:latest` | The newest commit on `main`, whether or not it has been promoted, so it can include changes that haven't been tried outside CI.                                                 |
+| `ghcr.io/sw-carlos-cristobal/sharetab:<sha>`  | One specific commit (short SHA, e.g. `870a80e`), for pinning. A push that lands while the previous build is still running cancels that build, so not every commit has an image. |
+
+Each push to `main` also gets a GitHub release named `Build YYYY.MM.DD.N-<sha>` listing the changes since the previous build; see [Releases](../../releases). The `stable` git tag normally marks the commit `:stable` was built from ([browse it](../../tree/stable)); after a failed promotion (see [Releases](#releases)) the tag and the image can point at different commits. ShareTab no longer publishes numbered (semver) versions; the last was v0.8.0.
+
+### Removed OCR provider
+
+The `ocr` receipt provider was removed in build `2026.05.16.1` (#143). Before that, ShareTab fell back to OCR automatically whenever no other provider worked, and the default was `openai,ocr`. If none of your other providers works (for example the default `openai` with no `OPENAI_API_KEY`, or `meridian` that was never logged in), receipt scanning stops working after the upgrade. Configure a working provider first (see [AI Receipt Scanning](#ai-receipt-scanning)).
+
+### Database changes on upgrade
 
 The entrypoint automatically runs any SQL migration files in `prisma/migrations/` before applying the Prisma schema, and the files in `prisma/after-push/` after it. Most upgrades are fully automatic.
 
-### Manual migration (v0.7.x → v0.8.0)
+### Manual migration: GuestSplit status enum (builds after v0.8.0)
 
-Version 0.8.0 added an `updatedAt` column and converted the `status` column from text to an enum on the `GuestSplit` table. This migration now runs automatically on container startup. If you need to run it manually:
+Builds after v0.8.0 (#127) added an `updatedAt` column and converted the `status` column from text to an enum on the `GuestSplit` table. This migration now runs automatically on container startup. If you need to run it manually:
 
 ```bash
+# Unraid
+docker exec sharetab su-exec postgres psql -U sharetab -d sharetab \
+  -f /app/prisma/migrations/guest_split_status_enum.sql
+
+# Docker Compose (run from the docker/ directory)
 docker compose exec sharetab su-exec postgres psql -U sharetab -d sharetab \
   -f /app/prisma/migrations/guest_split_status_enum.sql
 ```
@@ -221,6 +268,11 @@ WARNING:  Case-insensitive email uniqueness is not enforced yet: more than one a
 In the admin dashboard, delete the account the person no longer uses (its expenses stay in their groups under "Deleted user"). The index is created on the next start, or right away with:
 
 ```bash
+# Unraid
+docker exec sharetab su-exec postgres psql -U sharetab -d sharetab \
+  -f /app/prisma/after-push/user_email_lower_unique.sql
+
+# Docker Compose (run from the docker/ directory)
 docker compose exec sharetab su-exec postgres psql -U sharetab -d sharetab \
   -f /app/prisma/after-push/user_email_lower_unique.sql
 ```
@@ -251,6 +303,10 @@ All configuration is done through environment variables. Copy `.env.example` to 
 | `OLLAMA_BASE_URL`        | Ollama server URL. Defaults to `http://localhost:11434`.                                                                                                                                                           |
 | `OLLAMA_MODEL`           | Ollama model name. Defaults to `llava`.                                                                                                                                                                            |
 
+The defaults above are what ShareTab uses when a variable is unset. The Unraid template sets `ANTHROPIC_MODEL=claude-opus-4-6`, so there the `claude` provider also uses Opus unless you change it, and its `OLLAMA_BASE_URL` is a placeholder (`http://192.168.1.x:11434`) to replace with your Ollama host. With Docker Compose, the values in `docker/.env` win for the variables `docker-compose.yml` passes to the container (a variable exported in your shell wins over `.env`; others in `.env`, such as `DATABASE_URL`, are ignored); the fallbacks in `docker-compose.yml` apply only to variables left unset or empty. `UPLOAD_DIR` is the exception: the Compose file fixes it at `/app/uploads`.
+
+**Using `ollama` in Docker:** `localhost` inside the container is the container itself, so set `OLLAMA_BASE_URL` to the address of the machine running Ollama.
+
 The `openai-codex` provider uses ChatGPT OAuth via the Codex backend instead of an API key. Auth data lives in `/app/chatgpt`, so if that path is on a persistent volume the login survives restarts and image updates.
 
 After the container is running, open the ShareTab admin dashboard and complete the ChatGPT OAuth flow there:
@@ -273,7 +329,7 @@ After the container is running, open the ShareTab admin dashboard and complete t
 
 The bundled Docker Compose setup persists `/app/claude` automatically. If you use your own Docker or Unraid template, mount a persistent path to `/app/claude`.
 
-**⚠️ OCR provider (removed):** The `ocr` provider (Tesseract.js) was originally included as a free fallback for users without AI API access, but after extensive testing across hundreds of real-world receipts, the accuracy was too unreliable for production use. Common failures included extracting modifiers as line items, failing to exclude delivery fees, and poor handling of non-standard receipt layouts. The OCR provider has been removed from the codebase. Existing configs that include `ocr` in `AI_PROVIDER_PRIORITY` will silently ignore it. If you need reliable receipt scanning, configure one of the AI providers above (openai-codex or meridian are recommended). Community contributions to reintroduce OCR with improved accuracy are welcome.
+**⚠️ OCR provider (removed):** The `ocr` provider (Tesseract.js) was originally included as a free fallback for users without AI API access, but after extensive testing across hundreds of real-world receipts, the accuracy was too unreliable for production use. Common failures included extracting modifiers as line items, failing to exclude delivery fees, and poor handling of non-standard receipt layouts. The OCR provider has been removed from the codebase. `ocr` in `AI_PROVIDER_PRIORITY` is now ignored, and nothing falls back to OCR any more. With `ocr` on its own there is no provider: ShareTab still starts (the container log shows `app.startup.failed`), but receipt scans fail. If you need reliable receipt scanning, configure one of the AI providers above (openai-codex or meridian are recommended). Community contributions to reintroduce OCR with improved accuracy are welcome.
 
 ### AI Provider Performance
 
@@ -300,10 +356,12 @@ AI_PROVIDER_PRIORITY="openai-codex,meridian"
 
 ### OAuth (optional)
 
-| Variable               | Description                                       |
-| ---------------------- | ------------------------------------------------- |
-| `GOOGLE_CLIENT_ID`     | Google OAuth client ID for "Sign in with Google". |
-| `GOOGLE_CLIENT_SECRET` | Corresponding client secret.                      |
+| Variable               | Description                  |
+| ---------------------- | ---------------------------- |
+| `GOOGLE_CLIENT_ID`     | Google OAuth client ID.      |
+| `GOOGLE_CLIENT_SECRET` | Corresponding client secret. |
+
+Setting both registers Google as a sign-in provider, but the login page has no Google button yet, so people can't choose it there. The provider still accepts sign-ins sent to it directly, so it can still create accounts (see [Security notes](#oidc-security-notes)).
 
 ### OIDC / Single Sign-On (optional)
 
@@ -354,7 +412,7 @@ Sign in through your own identity provider (IdP): Authentik, Authelia, Keycloak,
 - Accounts are linked to the IdP's user ID (`sub`). If you switch to a different IdP, delete the old links first (rows with `provider = 'oidc'` in the `Account` table), or a new IdP user whose ID happens to match an old one would sign in to that old account; then link everyone again as in _Moving existing users to SSO_.
 - Signing out of ShareTab doesn't sign you out of the IdP.
 - Magic link sign-in (when `EMAIL_SERVER_HOST` is set) creates an account for any email address, regardless of `OIDC_AUTO_REGISTER` or the Registration setting.
-- Google sign-in (when `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set) likewise creates an account for any Google user, regardless of the Registration setting.
+- Google sign-in (when `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set) likewise creates an account for any Google user who reaches it, regardless of the Registration setting, even though the login page has no Google button.
 
 ### Magic Link Auth (optional)
 
@@ -374,20 +432,39 @@ Sign in through your own identity provider (IdP): Authentik, Authelia, Keycloak,
 
 ### Other
 
-| Variable                  | Default                 | Description                                                              |
-| ------------------------- | ----------------------- | ------------------------------------------------------------------------ |
-| `NEXTAUTH_URL`            | `http://localhost:3000` | Public URL of your instance.                                             |
-| `AUTH_TRUST_HOST`         | `false`                 | Set to `true` when running on a local network or behind a reverse proxy. |
-| `DB_USER`                 | `sharetab`              | PostgreSQL username (Docker bundled DB).                                 |
-| `DB_PASSWORD`             | `sharetab`              | PostgreSQL password (Docker bundled DB).                                 |
-| `DB_NAME`                 | `sharetab`              | PostgreSQL database name (Docker bundled DB).                            |
-| `UPLOAD_DIR`              | `./uploads`             | Directory for receipt image uploads.                                     |
-| `MAX_UPLOAD_SIZE_MB`      | `10`                    | Maximum upload file size.                                                |
-| `AUTH_RATE_LIMIT_MAX`     | `5`                     | Max login attempts per IP per hour.                                      |
-| `REGISTER_RATE_LIMIT_MAX` | `10`                    | Max registration attempts per IP per hour.                               |
-| `GUEST_RATE_LIMIT_MAX`    | `10`                    | Max guest split creations per IP per hour.                               |
-| `DISABLE_GUEST_UPLOADS`   | `false`                 | Lock guest receipt uploads and AI scans off; overrides the admin toggle. |
-| `LOG_LEVEL`               | `info`                  | Logging verbosity: `debug`, `info`, `warn`, or `error`.                  |
+| Variable                | Default                 | Description                                                                                                     |
+| ----------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `NEXTAUTH_URL`          | `http://localhost:3000` | Public URL of your instance.                                                                                    |
+| `AUTH_TRUST_HOST`       | `false`                 | Set to `true` when running on a local network or behind a reverse proxy.                                        |
+| `DB_USER`               | `sharetab`              | PostgreSQL username (Docker bundled DB).                                                                        |
+| `DB_PASSWORD`           | `sharetab`              | PostgreSQL password (Docker bundled DB).                                                                        |
+| `DB_NAME`               | `sharetab`              | PostgreSQL database name (Docker bundled DB).                                                                   |
+| `UPLOAD_DIR`            | `./uploads`             | Directory for receipt image uploads. The Docker image uses `/app/uploads`, and the Compose file fixes it there. |
+| `MAX_UPLOAD_SIZE_MB`    | `10`                    | Maximum upload file size.                                                                                       |
+| `DISABLE_GUEST_UPLOADS` | `false`                 | Lock guest receipt uploads and AI scans off; overrides the admin toggle.                                        |
+| `LOG_LEVEL`             | `info`                  | Logging verbosity: `debug`, `info`, `warn`, or `error`.                                                         |
+
+### Rate Limiting
+
+| Variable                    | Default | Description                                                                                            |
+| --------------------------- | ------- | ------------------------------------------------------------------------------------------------------ |
+| `AUTH_RATE_LIMIT_MAX`       | `5`     | Max login attempts per email address per 15 minutes.                                                   |
+| `AUTH_IP_RATE_LIMIT_MAX`    | `30`    | Max login attempts per client IP per 15 minutes.                                                       |
+| `REGISTER_RATE_LIMIT_MAX`   | `10`    | Max registration attempts per client IP per hour.                                                      |
+| `GUEST_RATE_LIMIT_MAX`      | `10`    | Per client IP per hour, applied separately to guest receipt uploads, guest splits, and claim sessions. |
+| `GUEST_UPLOAD_GLOBAL_LIMIT` | `100`   | Max guest receipt uploads per hour across all guests combined.                                         |
+| `GUEST_AI_GLOBAL_LIMIT`     | `100`   | Max guest AI receipt scans per hour across all guests combined.                                        |
+
+The client IP comes from the `cf-connecting-ip`, `x-real-ip`, or `x-forwarded-for` header, in that order. When a request has none of them, Next.js fills in `x-forwarded-for` with the address of whatever connected to ShareTab. So for per-IP limits to work in production:
+
+- Reach ShareTab only through a reverse proxy; don't expose its port directly.
+- Have the proxy set the client's address itself, overwriting or removing all three headers; never pass client-supplied values through.
+- Two common mistakes leave the IP under the client's control: setting only `x-forwarded-for` (a client-sent `x-real-ip` wins over it), and appending to `x-forwarded-for` as nginx's `$proxy_add_x_forwarded_for` does (ShareTab reads the first entry, which the client wrote). Setting `x-real-ip` from the connection and removing any client-sent `cf-connecting-ip` avoids both.
+- Trust `cf-connecting-ip` only if ShareTab can be reached through Cloudflare alone.
+
+A proxy that forwards no client address makes every user share the proxy's IP, so the per-IP limits apply to everyone combined: 30 sign-in attempts (successful or not) in 15 minutes block password login for everyone, and registrations and guest uploads are capped the same way. The per-email and global limits apply either way.
+
+Guest receipts and claim sessions also have fixed limits that no variable changes. Per share link, per minute: 200 joins (10 per person), 10 item-claim saves, 10 item splits, 10 name edits, 10 person removals, and 120 reads. Per guest receipt, per hour: 3 AI scans and 10 item lookups; per client IP, 20 guest AI scans per hour. A split's creator can change its Venmo handle 10 times per minute. Counters are kept in memory and reset when ShareTab restarts.
 
 ## Tech Stack
 
@@ -395,53 +472,19 @@ Sign in through your own identity provider (IdP): Authentik, Authelia, Keycloak,
 | --------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | Framework | [Next.js 16](https://nextjs.org) (App Router) + TypeScript                                                                                |
 | API       | [tRPC v11](https://trpc.io) (end-to-end type-safe)                                                                                        |
-| Database  | [Prisma 7](https://www.prisma.io) + PostgreSQL 16                                                                                         |
-| Auth      | [NextAuth v5](https://authjs.dev) (credentials + OAuth + magic link)                                                                      |
+| Database  | [Prisma 7](https://www.prisma.io) + PostgreSQL 16 (Docker and CI; `npm run dev:full` runs embedded PostgreSQL 18)                         |
+| Auth      | [NextAuth v5](https://authjs.dev) (credentials + magic link + OIDC; optional Google provider with no login-page button)                   |
 | UI        | [TailwindCSS 4](https://tailwindcss.com) + [shadcn/ui](https://ui.shadcn.com) + [next-themes](https://github.com/pacocoursey/next-themes) |
 | AI        | Pluggable providers: OpenAI, OpenAI-Codex, Claude, Meridian, Ollama                                                                       |
 | Testing   | [Vitest](https://vitest.dev) (unit) + [Playwright](https://playwright.dev) (e2e)                                                          |
 
 ## Development
 
-### Automation Commands
-
-These commands are intended to be explicit enough for a human or an LLM to use without inferring repo-specific workflow details.
+### Setup
 
 ```bash
-# Bump version files on main and update CHANGELOG.md
-npm run version:bump -- patch
-
-# Create a release branch + PR from main
-npm run release:create -- patch
-
-# Create a PR from the current branch
-npm run pr:create -- --title "feat: example change"
-
-# Push the current HEAD to origin/main
-npm run push:main
-
-# Publish a merged release by pushing the version tag
-npm run release:publish -- v1.2.3
-```
-
-Intent mapping:
-
-- "bump the version" -> `npm run version:bump -- <patch|minor|major>`
-- "create a release" -> `npm run release:create -- <patch|minor|major>`
-- "create a PR" -> `npm run pr:create -- [--base main] [--title \"...\"]`
-- "push to main" -> `npm run push:main`
-- "publish the release" -> `npm run release:publish -- [vX.Y.Z]`
-
-Release flow:
-
-1. Run `npm run release:create -- patch` from `main`.
-2. Merge the generated `release/vX.Y.Z` PR.
-3. Run `npm run release:publish -- vX.Y.Z` from `main`.
-
-`release:publish` only creates and pushes the git tag. The actual GitHub release page and semver Docker images are still published by [publish-release.yml](./.github/workflows/publish-release.yml).
-
-```bash
-# Install dependencies
+# Install dependencies (the committed .npmrc sets legacy-peer-deps=true, because
+# next-auth's optional nodemailer peer range is older than the nodemailer ShareTab pins)
 npm install
 
 # Generate Prisma client
@@ -484,7 +527,30 @@ npm run test:docker
 DOCKER_HOST=ssh://user@host npm run test:docker
 ```
 
-Set `AUTH_RATE_LIMIT_MAX=9999` and `GUEST_RATE_LIMIT_MAX=9999` in `.env` to avoid rate limiting during repeated test runs.
+Set `AUTH_RATE_LIMIT_MAX=9999`, `AUTH_IP_RATE_LIMIT_MAX=9999`, `REGISTER_RATE_LIMIT_MAX=9999`, and `GUEST_RATE_LIMIT_MAX=9999` in `.env` to lift the per-email and per-IP limits during repeated test runs (the global guest caps and the fixed guest limits still apply). Every local request counts against one IP, because Next.js adds an `x-forwarded-for` header to local requests.
+
+### Releases
+
+There are no version bumps or release branches. Each push to `main` is released automatically:
+
+- [auto-release.yml](.github/workflows/auto-release.yml) tags the commit `build/YYYY.MM.DD.N` and creates a GitHub release listing the commits since the previous build.
+- [docker.yml](.github/workflows/docker.yml) builds the image and pushes it as `ghcr.io/sw-carlos-cristobal/sharetab:latest` and `:<short-sha>`.
+
+To promote a build to `stable` (the tag the Unraid template uses), run the **Promote to Stable** workflow ([promote-stable.yml](.github/workflows/promote-stable.yml)) with a build tag or commit SHA; it defaults to the head of `main`. It moves the `stable` git tag, then retags that commit's image as `:stable`. If that commit has no image, the run fails after the git tag has already moved, so the `stable` git tag and the `:stable` image then point at different commits until a later promotion succeeds.
+
+```bash
+gh workflow run promote-stable.yml -f ref=build/YYYY.MM.DD.N
+```
+
+### Helper scripts
+
+```bash
+# Open a PR for the current branch with gh (prints the existing PR's URL if there is one)
+npm run pr:create -- [--base main] [--title "..."] [--body "..." | --body-file path]
+
+# Push the current HEAD to origin/main (refuses if the working tree has uncommitted or untracked files)
+npm run push:main
+```
 
 ## Contributing
 

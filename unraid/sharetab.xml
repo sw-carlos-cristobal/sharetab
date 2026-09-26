@@ -5,7 +5,7 @@
   <Registry>https://github.com/sw-carlos-cristobal/sharetab/pkgs/container/sharetab</Registry>
   <Branch>
     <Tag>stable</Tag>
-    <TagDescription>Latest stable release</TagDescription>
+    <TagDescription>Promoted stable build</TagDescription>
   </Branch>
   <Network>bridge</Network>
   <Privileged>false</Privileged>
@@ -19,10 +19,17 @@
     Features:
     - Group expense tracking with multiple split modes
     - AI receipt scanning: photograph a receipt, extract items, assign to friends
+    - Claim sessions: share a receipt link so everyone claims their own items
+    - Guest bill splitting with no account needed
+    - Multi-currency expenses with automatic exchange-rate conversion
+    - Venmo pay links (optional, admin toggle)
     - Pluggable AI providers: OpenAI, OpenAI-Codex (ChatGPT OAuth), Claude, Meridian (Claude Max), Ollama
     - Cross-group dashboard with debt simplification
+    - 9 languages
     - PWA installable on mobile
-    - Magic link email authentication (optional)
+    - Sign-in options: email/password, magic link email, and OIDC single sign-on (Authentik, Authelia, Keycloak, ...); a Google provider can also be configured, but the login page has no Google button
+
+    This template runs the :stable image, which can lag the newest features described in the README.
   </Overview>
   <Category>Productivity: Tools:</Category>
   <WebUI>http://[IP]:[PORT:3000]</WebUI>
@@ -294,7 +301,7 @@
     Name="Google OAuth Client ID"
     Target="GOOGLE_CLIENT_ID"
     Default=""
-    Description="Google OAuth client ID (optional — enables Google sign-in)"
+    Description="Google OAuth client ID (optional). The login page has no Google button, but sign-ins sent to the provider directly still work and create accounts for any Google user; see the README security notes."
     Type="Variable"
     Display="advanced"
     Required="false"
@@ -409,7 +416,7 @@
     Name="Login Rate Limit"
     Target="AUTH_RATE_LIMIT_MAX"
     Default="5"
-    Description="Max login attempts per IP per hour. Increase for testing."
+    Description="Max login attempts per email address per 15 minutes. Increase for testing."
     Type="Variable"
     Display="advanced"
     Required="false"
@@ -418,11 +425,47 @@
     Name="Registration Rate Limit"
     Target="REGISTER_RATE_LIMIT_MAX"
     Default="10"
-    Description="Max registration attempts per IP per hour."
+    Description="Max registration attempts per client IP per hour."
     Type="Variable"
     Display="advanced"
     Required="false"
     Mask="false">10</Config>
+  <Config
+    Name="Login Rate Limit per IP"
+    Target="AUTH_IP_RATE_LIMIT_MAX"
+    Default="30"
+    Description="Max login attempts per client IP per 15 minutes. The client IP comes from the cf-connecting-ip, x-real-ip, or first x-forwarded-for header. Clients can forge these unless your reverse proxy overwrites all three; see the README Rate Limiting section."
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false">30</Config>
+  <Config
+    Name="Guest Rate Limit"
+    Target="GUEST_RATE_LIMIT_MAX"
+    Default="10"
+    Description="Per client IP per hour, applied separately to guest receipt uploads, guest splits, and claim sessions."
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false">10</Config>
+  <Config
+    Name="Guest Upload Global Limit"
+    Target="GUEST_UPLOAD_GLOBAL_LIMIT"
+    Default="100"
+    Description="Max guest receipt uploads per hour across all guests combined."
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false">100</Config>
+  <Config
+    Name="Guest AI Scan Global Limit"
+    Target="GUEST_AI_GLOBAL_LIMIT"
+    Default="100"
+    Description="Max guest AI receipt scans per hour across all guests combined."
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false">100</Config>
 
   <!-- Misc -->
   <Config

@@ -19,7 +19,7 @@ Please do not open a public GitHub issue for security vulnerabilities.
 
 ## Supported Versions
 
-This project is self-hosted and users are responsible for keeping their instance up to date. Security fixes will be released as new versions — always run the latest image.
+This project is self-hosted and users are responsible for keeping their instance up to date. ShareTab no longer publishes numbered releases (the last was v0.8.0); each push to `main` is published as a new build. Security fixes ship in the next build and reach the `:stable` image when that build is promoted, so run the current `:stable` (or `:latest`) image, or rebuild from the current `main`. See [Upgrading](README.md#upgrading).
 
 ## Scope
 

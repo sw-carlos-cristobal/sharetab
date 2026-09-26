@@ -1,5 +1,78 @@
 # Changelog
 
+ShareTab stopped publishing numbered (semver) versions after v0.8.0. Each push to `main` is now released as a build: see [GitHub Releases](https://github.com/sw-carlos-cristobal/sharetab/releases) (tags `build/YYYY.MM.DD.N`) for the commits in each build. This file is no longer updated per release; the section below summarizes notable changes since v0.8.0.
+
+## Since v0.8.0 (rolling builds, 2026-05-08 onward)
+
+### Features
+
+- OIDC single sign-on (Authentik, Authelia, Keycloak, and other OpenID Connect providers), optional SSO auto-registration, and `DISABLE_PASSWORD_LOGIN` (#190)
+- admin toggle and `DISABLE_GUEST_UPLOADS` env var to turn off guest receipt uploads and AI scans (#200)
+- multi-currency expenses with automatic exchange-rate conversion (#149, #150)
+- claim sessions (added in v0.8.0) gained switching between people, splitting an item between people, auto-splitting multi-quantity items, joining as a group that pays a proportional share, a finalize button, conflict detection on save, My Splits history for signed-in users, and claiming from a group receipt scan (#101, #102, #112, #113, #114)
+- Venmo pay buttons on split results, claim pages, and group balances, for USD only and behind an admin toggle (#118, #119, #120, #121, #122)
+- translations for the remaining untranslated group-page text (#136) and the admin dashboard (#137)
+- commit hash shown in startup logs and the admin UI (#97)
+
+### Bug Fixes
+
+- enforce case-insensitive email uniqueness in the database (#194)
+- guest claim sessions: retry transaction conflicts and stop cross-session aborts (#202); rate-limit `guest.joinSession` per person and per share token (#207)
+- fresh Docker installs no longer crash-loop on the GuestSplit migration (#193)
+- SQL migrations in `prisma/migrations/` run automatically on container startup (#139)
+- security: 8 findings from a code review (#106), authorization checks on expense update/delete (#123), rate limits on guest split/claim creation (#124), HMAC-signed impersonation cookie (#125), Zod validation of JSON fields on financial paths (#133), fixes from a deep code audit (#157)
+
+### Removed
+
+- the `ocr` (Tesseract.js) receipt provider; nothing falls back to OCR any more (it used to be the automatic last resort, and the default was `openai,ocr`), so an install with no other working provider loses receipt scanning; `ocr` in `AI_PROVIDER_PRIORITY` is ignored (#143, #146)
+- semver release scripts and workflows, replaced by per-push build releases and a manual promote-to-stable workflow (8cea7c7, b4013b4)
+
+### Other Changes
+
+- `GuestSplit.status` converted to an enum and an `updatedAt` column added; the SQL migration for it runs on container startup (#127, #139)
+- strict TypeScript flags, Prettier, and lint hardening, with every gate in the required CI job (#165)
+- Dependabot configuration: grouped npm minor/patch and Actions updates, plus Docker base image updates (#168)
+
+## [v0.8.0] - 2026-05-08
+
+### Features
+
+- shareable guest split sessions + save-for-later fix (#93) (447e8e8)
+- add split line item for receipt item assignment (#92) (7123a68)
+
+### Bug Fixes
+
+- split item edge cases (rounded prices, index shift) (#94) (f52f2d0)
+- security: resolve Dependabot alerts for @anthropic-ai/sdk and postcss (6e4c428)
+- docker: remove BuildKit npm cache mounts causing EEXIST failures (13471b2)
+- docker: copy tesseract.js transitive deps for OCR worker (0e82856)
+
+### Other Changes
+
+- test: add e2e tests for admin AI provider UI (#91) (9949850)
+- chore(deps): bump icu-minify (#95), ip-address (#90), and @anthropic-ai/sdk (#89)
+
+**Full Changelog**: https://github.com/sw-carlos-cristobal/sharetab/compare/v0.7.0...v0.8.0
+
+## [v0.7.0] - 2026-04-27
+
+### Features
+
+- i18n: propagate locale to all formatCents call sites (#87) (5266efd)
+- admin: pagination, search, filtering, and sorting for admin tables (#86) (e159f09)
+- admin AI provider testing, OCR tuning, and perf docs (#85) (68c9746)
+- add ANTHROPIC_HEALTH_MODEL to Docker and Unraid templates (b3449a7)
+
+### Bug Fixes
+
+- reduce token drain from Meridian health poller (c02b9e9)
+
+### Other Changes
+
+- docs: add ANTHROPIC_HEALTH_MODEL to env example and README (0dcb0c7)
+
+**Full Changelog**: https://github.com/sw-carlos-cristobal/sharetab/compare/v0.6.2...v0.7.0
+
 ## [v0.6.2] - 2026-04-22
 
 ### Features
@@ -268,8 +341,4 @@
 
 **Full Changelog**: https://github.com/sw-carlos-cristobal/sharetab/compare/92b5f884079ffdf8ecf776d36364cce52e434216...v0.2.0
 
-All notable changes to ShareTab will be documented in this file.
-
-This project uses [Semantic Versioning](https://semver.org/) and [Conventional Commits](https://www.conventionalcommits.org/).
-
-Releases are created via the [Release workflow](../../actions/workflows/release.yml).
+The entries for v0.6.2 and earlier came from the semver release process, which used [Semantic Versioning](https://semver.org/) and [Conventional Commits](https://www.conventionalcommits.org/) and was retired after v0.8.0. The v0.7.0 and v0.8.0 entries were reconstructed from git history.

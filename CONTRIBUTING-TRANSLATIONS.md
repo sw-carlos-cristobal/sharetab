@@ -16,6 +16,8 @@ messages/
     expenses.json  # Expenses
     settings.json  # Settings
     admin.json     # Admin panel
+    split.json     # Guest bill splitting and claim sessions
+    splits.json    # My Splits (a signed-in user's guest splits)
   es/              # Spanish
     ...
 ```
@@ -32,7 +34,7 @@ messages/
 
 2. **Translate all values** in each JSON file. Never change the keys — only the values.
 
-3. **Register your locale** in `src/i18n/routing.ts`:
+3. **Register your locale** in `src/i18n/routing.ts` (add it to both `locales` and `languageConfig`), and add its number-formatting locale to `moneyLocales` in `src/lib/money.ts` (the type check fails until you do):
 
    ```ts
    export const locales = ['en', 'es', 'YOUR_LOCALE'] as const;
@@ -45,7 +47,7 @@ messages/
    };
    ```
 
-4. **Submit a PR.** The CI will validate that all keys match the English source.
+4. **Run `npm run lint:i18n`** to confirm your locale has exactly the keys English has, then **submit a PR.**
 
 ## Updating Existing Translations
 
@@ -68,4 +70,4 @@ npm run lint:i18n       # Validate keys match English
 
 ## Validation
 
-Run `npm run lint:i18n` to check that your locale has all the same keys as English. This also runs in CI on every PR that touches `messages/`.
+Run `npm run lint:i18n` to check that your locale has exactly the same keys as English (no missing or extra keys). CI doesn't run this check, so run it before you open a PR.
