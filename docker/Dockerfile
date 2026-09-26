@@ -13,18 +13,21 @@ COPY package.json package-lock.json ./
 COPY prisma ./prisma
 COPY prisma.config.ts ./
 RUN npm ci --legacy-peer-deps
+# The standalone trace can't follow what Meridian loads at runtime: libsql's
+# platform-native package (a computed require of @libsql/<target>) and the
+# Claude Code binary it locates. So stage Meridian's whole dependency closure
+# into /runtime-deps, outside /app so the build never sees it, for the runner
+# (see docker/stage-runtime-deps.mjs). Meridian hands the agent SDK the binary
+# it locates itself, @anthropic-ai/claude-code/bin/claude.exe (placed there by
+# claude-code's postinstall, as a hardlink or a copy), so the Linux binary
+# packages of both (each over 200 MiB) are left out.
+COPY docker/stage-runtime-deps.mjs ./docker/
+RUN node docker/stage-runtime-deps.mjs /runtime-deps @rynfar/meridian \
+      --exclude '@anthropic-ai/claude-agent-sdk-linux-*' \
+      --exclude '@anthropic-ai/claude-code-linux-*'
 COPY . .
 RUN npx prisma generate
 RUN npm run build
-# The standalone trace misses packages loaded with a dynamic import(), like
-# Meridian, and the native packages they pick at runtime, so stage Meridian's
-# whole dependency closure for the runner. Meridian hands the agent SDK the
-# Claude Code binary it resolves itself (@anthropic-ai/claude-code's
-# postinstall copies the platform binary to bin/claude.exe), so the ~230 MB
-# platform binary packages of both are left out.
-RUN node docker/stage-runtime-deps.mjs /app/.runtime-deps @rynfar/meridian \
-      --exclude '@anthropic-ai/claude-agent-sdk-*' \
-      --exclude '@anthropic-ai/claude-code-*'
 ARG COMMIT_SHA=unknown
 RUN echo "$COMMIT_SHA" > .commit-sha
 
@@ -50,7 +53,7 @@ COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./
 COPY --from=builder /app/src/generated ./src/generated
 # Meridian proxy and its dependencies (staged in the builder, see above)
-COPY --from=builder /app/.runtime-deps/node_modules ./node_modules
+COPY --from=builder /runtime-deps/node_modules ./node_modules
 # Install Prisma CLI in isolated dir to avoid conflict with standalone node_modules
 WORKDIR /prisma-cli
 RUN npm init -y && \
