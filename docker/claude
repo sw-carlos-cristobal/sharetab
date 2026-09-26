@@ -6,7 +6,7 @@ CLI_PATH="/app/node_modules/@anthropic-ai/claude-code/bin/claude.exe"
 CLAUDE_HOME="${CLAUDE_HOME:-/home/nextjs}"
 
 if [ ! -x "$CLI_PATH" ]; then
-  echo "Claude CLI not found at $CLI_PATH" >&2
+  echo "Claude CLI not found or not executable at $CLI_PATH" >&2
   exit 1
 fi
 

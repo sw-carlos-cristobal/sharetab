@@ -69,10 +69,12 @@ ADMIN_PASSWORD=$(openssl rand -hex 16)
 
 # ── Output ─────────────────────────────────────────────────────
 
+GROUP_OPEN=false
 section() {
   if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
-    echo "::endgroup::"
+    [[ "$GROUP_OPEN" == true ]] && echo "::endgroup::"
     echo "::group::$1"
+    GROUP_OPEN=true
   else
     printf '\n== %s\n' "$1"
   fi
@@ -95,7 +97,10 @@ if [[ -n "$MERIDIAN_AUTH" && "$KEEP" == true ]]; then
 fi
 
 cleanup() {
-  [[ -n "${GITHUB_ACTIONS:-}" ]] && echo "::endgroup::"
+  if [[ "$GROUP_OPEN" == true ]]; then
+    echo "::endgroup::"
+    GROUP_OPEN=false
+  fi
   if { [[ "$FAILED" == true ]] || [[ -n "${GITHUB_ACTIONS:-}" ]]; } &&
     docker inspect "$CONTAINER" >/dev/null 2>&1; then
     printf '\n== Container logs (last 200 lines)\n'

@@ -97,7 +97,7 @@ vi.mock('@/server/lib/logger', () => ({
 vi.mock('@/server/lib/rate-limit', () => ({
   checkRateLimit: vi.fn().mockReturnValue({ allowed: true }),
 }));
-const mockCreateProviderByName = vi.fn();
+const { mockCreateProviderByName } = vi.hoisted(() => ({ mockCreateProviderByName: vi.fn() }));
 vi.mock('@/server/ai/registry', () => ({
   getAIProvider: vi.fn().mockResolvedValue({
     name: 'mock-provider',
@@ -107,20 +107,24 @@ vi.mock('@/server/ai/registry', () => ({
   isProviderConfigured: vi.fn().mockReturnValue(true),
   clearProviderCache: vi.fn(),
 }));
-const mockStartMeridianProxy = vi.fn();
-const mockGetMeridianStartError = vi.fn();
+const { mockStartMeridianProxy, mockGetMeridianStartError } = vi.hoisted(() => ({
+  mockStartMeridianProxy: vi.fn(),
+  mockGetMeridianStartError: vi.fn(),
+}));
 vi.mock('@/server/ai/providers/meridian', () => ({
   startMeridianProxy: mockStartMeridianProxy,
   getMeridianStartError: mockGetMeridianStartError,
 }));
-const mockCheckMeridianHealth = vi.fn();
-const mockInvalidateMeridianHealthCache = vi.fn();
+const { mockCheckMeridianHealth, mockInvalidateMeridianHealthCache } = vi.hoisted(() => ({
+  mockCheckMeridianHealth: vi.fn(),
+  mockInvalidateMeridianHealthCache: vi.fn(),
+}));
 vi.mock('@/server/lib/auth-health-poller', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/server/lib/auth-health-poller')>()),
   checkMeridianHealth: mockCheckMeridianHealth,
   invalidateMeridianHealthCache: mockInvalidateMeridianHealthCache,
 }));
-const mockSubmitCode = vi.fn();
+const { mockSubmitCode } = vi.hoisted(() => ({ mockSubmitCode: vi.fn() }));
 vi.mock('@/server/lib/meridian-login', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/server/lib/meridian-login')>()),
   submitCode: mockSubmitCode,

@@ -1,8 +1,12 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const startProxyServer = vi.fn();
-const refreshIfNeeded = vi.fn();
-const proxyClose = vi.fn(async () => undefined);
+// vi.mock factories are hoisted above these declarations, so the mocks they
+// return come from vi.hoisted.
+const { startProxyServer, refreshIfNeeded, proxyClose } = vi.hoisted(() => ({
+  startProxyServer: vi.fn(),
+  refreshIfNeeded: vi.fn(),
+  proxyClose: vi.fn(async () => undefined),
+}));
 const proxyInstance = () => ({ close: proxyClose });
 
 vi.mock('@rynfar/meridian', () => ({ startProxyServer }));

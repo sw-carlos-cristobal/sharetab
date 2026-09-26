@@ -38,7 +38,8 @@ async function waitForMeridian(port: number): Promise<void> {
   for (let i = 0; i < 40; i++) {
     let res: Response;
     try {
-      res = await fetch(`http://127.0.0.1:${port}/health`);
+      // A listener that accepts but never answers must not stall the start.
+      res = await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(2_000) });
     } catch {
       await new Promise((r) => setTimeout(r, 250));
       continue;
@@ -76,14 +77,17 @@ async function ensureMeridian(): Promise<number> {
     }
     meridianPort = port;
     lastStartError = null;
-    console.log(`[meridian] proxy started on port ${port}`);
+    logger.info('meridian.start.ok', { port });
     return port;
   })().catch((err: unknown) => {
     // Forget the failed start so the next call tries again (after a new
     // login, for example) instead of failing until the server restarts.
     meridianStarting = null;
     lastStartError = (err instanceof Error ? err.message : String(err)) || 'Meridian proxy failed to start';
-    logger.error('meridian.start.failed', { error: lastStartError });
+    logger.error('meridian.start.failed', {
+      error: lastStartError,
+      ...(err instanceof Error && err.stack ? { stack: err.stack } : {}),
+    });
     throw err;
   });
 
