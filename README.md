@@ -476,6 +476,12 @@ BASE_URL=http://localhost:3000 npx playwright test --headed
 
 # Include AI-dependent tests (requires configured AI provider)
 BASE_URL=http://localhost:3000 RUN_AI_TESTS=1 npx playwright test
+
+# Build the Docker image and smoke test it (fresh install, upgrade restarts,
+# Meridian). Run before pushing Docker, entrypoint, SQL, or dependency changes.
+npm run test:docker
+# Same, against a remote Docker daemon
+DOCKER_HOST=ssh://user@host npm run test:docker
 ```
 
 Set `AUTH_RATE_LIMIT_MAX=9999` and `GUEST_RATE_LIMIT_MAX=9999` in `.env` to avoid rate limiting during repeated test runs.

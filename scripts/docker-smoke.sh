@@ -4,8 +4,9 @@
 # Boots the image the way a new install does (empty data volume, bundled
 # PostgreSQL, docker/entrypoint.sh), restarts it the way every existing
 # install does on upgrade, and checks what the Test workflow's
-# `npm run start` never exercises: the entrypoint, the hand-written SQL, and
-# the packages the Dockerfile adds beside the standalone build (Meridian).
+# `npm run start` never exercises: the entrypoint, the pre-push SQL
+# migrations, and the packages the Dockerfile adds beside the standalone
+# build (Meridian and what it loads at runtime).
 #
 # CI runs it on every pull request and before publishing an image. Run it
 # before pushing a Docker, entrypoint, or dependency change:
@@ -13,22 +14,32 @@
 #   scripts/docker-smoke.sh --build                              # local Docker
 #   DOCKER_HOST=ssh://user@host scripts/docker-smoke.sh --build  # remote Docker
 #
-# The container gets a unique name and publishes no ports, so it can run on
-# a host that already runs ShareTab.
+# Access to a Docker daemon is root-equivalent on its host; point DOCKER_HOST
+# only at a host where that is acceptable. The container gets a unique name
+# and publishes no ports, so it can run on a host that already runs ShareTab.
+# Everything it creates is labeled sharetab-smoke and removed on exit; if a
+# run is killed (SIGKILL skips the cleanup), remove the leftovers with:
+#   docker rm -f -v $(docker ps -aq --filter label=sharetab-smoke)
+#   docker volume rm $(docker volume ls -q --filter label=sharetab-smoke)
 #
 # Options:
 #   --build           build docker/Dockerfile from this checkout first
 #   --image <tag>     image to test (default: sharetab:smoke)
-#   --meridian-auth <host-dir-or-volume>
-#                     also extract a receipt through the Meridian proxy with
-#                     a Claude Max/Pro login. The login directory (a path on
-#                     the Docker host, or a volume) is copied into a scratch
-#                     volume on the host, so the original is never written
-#                     and the credentials never reach this machine. The
-#                     access token must be valid for 30+ more minutes:
-#                     refreshing it would rotate the refresh token and sign
-#                     out the install the directory belongs to.
-#   --keep            leave the container running afterwards
+#   --meridian-auth <absolute-host-path-or-volume>
+#                     local runs only: extract a receipt through Meridian with
+#                     a Claude Max/Pro login, via the admin "Test Receipt
+#                     Extraction" endpoint. The login directory (a path on the
+#                     Docker host, or a volume) is copied into a scratch
+#                     volume on the host that is removed afterwards, so the
+#                     original is never written and the credentials never
+#                     reach this machine. The access token must be valid for
+#                     30+ more minutes: a refresh would rotate the refresh
+#                     token and sign out the install the directory belongs to.
+#                     The script fails if one happened anyway.
+#   --keep            leave the container running afterwards (not with
+#                     --meridian-auth). It holds a smoke-test admin account
+#                     (credentials printed on exit) that other containers on
+#                     its Docker network can reach; remove it when done.
 set -euo pipefail
 
 IMAGE="sharetab:smoke"
@@ -53,6 +64,8 @@ cd "$(dirname "$0")/.."
 CONTAINER="sharetab-smoke-$$-$RANDOM"
 AUTH_VOLUME=""
 FAILED=true
+ADMIN_EMAIL="smoke-admin@example.com"
+ADMIN_PASSWORD=$(openssl rand -hex 16)
 
 # ── Output ─────────────────────────────────────────────────────
 
@@ -74,14 +87,22 @@ fail() {
   exit 1
 }
 
+if [[ -n "$MERIDIAN_AUTH" && -n "${GITHUB_ACTIONS:-}" ]]; then
+  fail "--meridian-auth is for local runs; CI logs are public."
+fi
+if [[ -n "$MERIDIAN_AUTH" && "$KEEP" == true ]]; then
+  fail "--keep would leave a copy of the Claude login on the Docker host; drop one of them."
+fi
+
 cleanup() {
   [[ -n "${GITHUB_ACTIONS:-}" ]] && echo "::endgroup::"
-  if [[ "$FAILED" == true ]] && docker inspect "$CONTAINER" >/dev/null 2>&1; then
+  if { [[ "$FAILED" == true ]] || [[ -n "${GITHUB_ACTIONS:-}" ]]; } &&
+    docker inspect "$CONTAINER" >/dev/null 2>&1; then
     printf '\n== Container logs (last 200 lines)\n'
     docker logs --tail 200 "$CONTAINER" 2>&1 || true
   fi
   if [[ "$KEEP" == true ]]; then
-    echo "Kept container $CONTAINER"
+    echo "Kept container $CONTAINER (admin: $ADMIN_EMAIL / $ADMIN_PASSWORD)"
     return
   fi
   docker rm -f -v "$CONTAINER" >/dev/null 2>&1 || true
@@ -128,6 +149,52 @@ has_email_index() {
   db -c "SELECT to_regclass('\"User_email_lower_key\"') IS NOT NULL"
 }
 
+# Copy the Claude login in $MERIDIAN_AUTH into a scratch volume owned by the
+# app user, and set AUTH_VOLUME. A host path must be absolute and must exist
+# (docker run fails otherwise); a volume name must exist (docker would
+# otherwise create an empty one).
+copy_meridian_auth() {
+  local source
+  if [[ "$MERIDIAN_AUTH" == /* ]]; then
+    source="type=bind,src=$MERIDIAN_AUTH,dst=/src,readonly"
+  elif [[ "$MERIDIAN_AUTH" == */* ]]; then
+    fail "--meridian-auth needs an absolute path on the Docker host or a volume name."
+  else
+    docker volume inspect "$MERIDIAN_AUTH" >/dev/null 2>&1 ||
+      fail "No volume named $MERIDIAN_AUTH on the Docker host."
+    source="type=volume,src=$MERIDIAN_AUTH,dst=/src,readonly"
+  fi
+  AUTH_VOLUME="$CONTAINER-claude"
+  docker volume create --label sharetab-smoke "$AUTH_VOLUME" >/dev/null
+  # uid 1001 is the image's nextjs user (docker/Dockerfile), which reads it.
+  docker run --rm --entrypoint /bin/sh --mount "$source" \
+    --mount "type=volume,src=$AUTH_VOLUME,dst=/dst" "$IMAGE" \
+    -c 'cp -a /src/. /dst/ && chown -R 1001:1001 /dst' ||
+    fail "Could not copy the Claude login from $MERIDIAN_AUTH."
+}
+
+# Prints a hash of the refresh token in the container's copy of the login.
+refresh_token_hash() {
+  docker exec "$CONTAINER" node -e "
+    const creds = JSON.parse(require('fs').readFileSync('/app/claude/.credentials.json', 'utf8'));
+    const token = creds.claudeAiOauth?.refreshToken ?? '';
+    console.log(require('crypto').createHash('sha256').update(token).digest('hex'));
+  "
+}
+
+# Runs scripts/docker-smoke-meridian.mjs in the container: signs in as an
+# admin and runs the admin "Test Receipt Extraction" endpoint with the
+# meridian provider, the path the app takes. Without a Claude login it
+# expects Meridian's own authentication error; with --meridian-auth, the
+# receipt's total.
+check_meridian_via_app() {
+  docker cp e2e/test-receipt.png "$CONTAINER:/tmp/smoke-receipt.png"
+  docker cp scripts/docker-smoke-meridian.mjs "$CONTAINER:/tmp/smoke-meridian.mjs"
+  docker exec -u nextjs -e LIVE="${MERIDIAN_AUTH:+1}" -e ADMIN_EMAIL="$ADMIN_EMAIL" \
+    -e ADMIN_PASSWORD="$ADMIN_PASSWORD" -e RECEIPT=/tmp/smoke-receipt.png "$CONTAINER" \
+    timeout 300 node /tmp/smoke-meridian.mjs
+}
+
 # ── Build ──────────────────────────────────────────────────────
 
 if [[ "$BUILD" == true ]]; then
@@ -141,36 +208,41 @@ fi
 section "Start on an empty database"
 auth_mount=()
 if [[ -n "$MERIDIAN_AUTH" ]]; then
-  AUTH_VOLUME="$CONTAINER-claude"
-  docker volume create "$AUTH_VOLUME" >/dev/null
-  docker run --rm --entrypoint /bin/sh \
-    -v "$MERIDIAN_AUTH:/src:ro" -v "$AUTH_VOLUME:/dst" "$IMAGE" \
-    -c 'cp -a /src/. /dst/'
-  auth_mount=(-v "$AUTH_VOLUME:/app/claude")
+  copy_meridian_auth
+  auth_mount=(--mount "type=volume,src=$AUTH_VOLUME,dst=/app/claude")
 fi
 secret=$(openssl rand -base64 32)
-docker run -d --name "$CONTAINER" \
+# ${auth_mount[@]+...} keeps an empty array from tripping set -u in bash < 4.4.
+docker run -d --name "$CONTAINER" --label sharetab-smoke \
   -e NEXTAUTH_SECRET="$secret" -e AUTH_SECRET="$secret" \
-  "${auth_mount[@]}" "$IMAGE" >/dev/null
+  -e AUTH_TRUST_HOST=true -e ADMIN_EMAIL="$ADMIN_EMAIL" \
+  ${auth_mount[@]+"${auth_mount[@]}"} "$IMAGE" >/dev/null
 wait_healthy "first start"
 # The tables exist, not just a reachable database (psql fails if either is
 # missing).
 db -c 'SELECT count(*) FROM "User"' -c 'SELECT count(*) FROM "GuestSplit"'
 
 section "Meridian proxy starts"
-# The standalone trace misses Meridian (a dynamic import) and the native
-# packages it loads, so the Dockerfile stages them. Starting the proxy on a
-# spare port fails unless the module and its dependencies load,
-# /etc/machine-id exists, and the Claude Code binary resolves. No Claude
-# login is needed to start it.
+# `claude --version` checks the Claude Code binary runs. Starting the proxy on
+# a spare port, as the app user, checks Meridian and everything it loads at
+# runtime (libsql's native package) are present and /etc/machine-id exists.
 docker exec "$CONTAINER" /usr/local/bin/claude --version || fail "The Claude Code binary did not run."
-docker exec -w /app "$CONTAINER" node -e "
+# startProxyServer resolves before the server listens, so poll /health.
+docker exec -u nextjs -e HOME=/home/nextjs -w /app "$CONTAINER" node -e "
   import('@rynfar/meridian')
     .then(async (m) => {
       await m.startProxyServer({ port: 3499, host: '127.0.0.1', silent: true });
-      const res = await fetch('http://127.0.0.1:3499/health');
-      console.log('health:', res.status, await res.text());
-      process.exit(0);
+      for (let i = 0; i < 40; i++) {
+        try {
+          const res = await fetch('http://127.0.0.1:3499/health');
+          console.log('health:', res.status, await res.text());
+          process.exit(0);
+        } catch {
+          await new Promise((r) => setTimeout(r, 250));
+        }
+      }
+      console.error('the proxy never answered /health');
+      process.exit(1);
     })
     .catch((err) => {
       console.error(err);
@@ -179,44 +251,25 @@ docker exec -w /app "$CONTAINER" node -e "
 " || fail "The Meridian proxy did not start."
 
 if [[ -n "$MERIDIAN_AUTH" ]]; then
-  section "Meridian extracts a receipt (live)"
+  section "Meridian extracts a receipt through the app (live)"
   # Refuse to run close to expiry: a refresh here would rotate the refresh
   # token the original install still holds.
   minutes_left=$(docker exec "$CONTAINER" node -e "
     const creds = JSON.parse(require('fs').readFileSync('/app/claude/.credentials.json', 'utf8'));
-    const expiresAt = creds.claudeAiOauth?.expiresAt ?? 0;
-    console.log(Math.floor((expiresAt - Date.now()) / 60000));
+    console.log(Math.floor(((creds.claudeAiOauth?.expiresAt ?? 0) - Date.now()) / 60000));
   ") || fail "No readable .credentials.json in $MERIDIAN_AUTH."
-  if (( minutes_left < 30 )); then
+  if ((minutes_left < 30)); then
     fail "The Claude access token expires in ${minutes_left} min; sign in again from the admin page first."
   fi
   echo "Access token valid for ${minutes_left} more minutes."
-  docker cp e2e/test-receipt.png "$CONTAINER:/tmp/smoke-receipt.png"
-  # Runs as the app user with the app's environment, like the provider.
-  docker exec -u nextjs -e HOME=/home/nextjs -e CLAUDE_DIR=/app/claude -w /app "$CONTAINER" \
-    timeout 240 node -e "
-      const fs = require('fs');
-      import('@rynfar/meridian').then(async (m) => {
-        await m.startProxyServer({ port: 3498, host: '127.0.0.1', silent: true });
-        const res = await fetch('http://127.0.0.1:3498/v1/messages', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', 'x-api-key': 'x', 'anthropic-version': '2023-06-01' },
-          body: JSON.stringify({
-            model: process.env.ANTHROPIC_MODEL || 'claude-opus-4-6',
-            max_tokens: 200,
-            messages: [{ role: 'user', content: [
-              { type: 'image', source: { type: 'base64', media_type: 'image/png',
-                data: fs.readFileSync('/tmp/smoke-receipt.png').toString('base64') } },
-              { type: 'text', text: 'What is the TOTAL on this receipt? Reply with only the number.' },
-            ] }],
-          }),
-        });
-        const body = await res.text();
-        console.log('status:', res.status);
-        console.log('body:', body.slice(0, 1000));
-        process.exit(res.ok && body.includes('376.68') ? 0 : 1);
-      }).catch((err) => { console.error(err); process.exit(1); });
-    " || fail "Meridian did not extract the receipt total (expected 376.68)."
+  token_before=$(refresh_token_hash)
+  check_meridian_via_app || fail "Meridian did not extract the receipt through the app."
+  if [[ "$(refresh_token_hash)" != "$token_before" ]]; then
+    fail "The Claude login was refreshed during the test, which rotates its refresh token; sign in again on the install $MERIDIAN_AUTH came from."
+  fi
+else
+  section "Meridian runs through the app"
+  check_meridian_via_app || fail "The app's Meridian provider did not run."
 fi
 
 section "Emails are unique ignoring case"

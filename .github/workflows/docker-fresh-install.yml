@@ -2,15 +2,15 @@ name: Docker Fresh Install
 
 # Builds the production image and runs scripts/docker-smoke.sh against it:
 # a fresh install on an empty data volume, restarts the way every existing
-# install does on upgrade, and the Meridian proxy starting inside the image.
-# The Test workflow runs the app with `npm run start` against its own
-# database, so it never exercises the entrypoint, the manual SQL migrations,
-# or the packages the Dockerfile adds. docker.yml runs the same script before
-# publishing an image; run it locally with `scripts/docker-smoke.sh --build`.
+# install does on upgrade, and the Meridian provider starting inside the image
+# and running through the app. The Test workflow runs the app with
+# `npm run start` against its own database, so it never exercises the
+# entrypoint, the pre-push SQL migrations, or the packages the Dockerfile
+# adds. Run it locally with `npm run test:docker`.
 
+# Pull requests (and manual runs): on main, docker.yml runs the same script
+# before it publishes the image.
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:

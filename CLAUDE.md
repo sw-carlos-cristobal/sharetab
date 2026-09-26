@@ -85,7 +85,7 @@ npx prisma db push   # Push schema without migration (dev only)
 - Theme: emerald/teal accent color (OKLCH), neutral backgrounds — defined in `globals.css`
 - `scripts/dev.mjs` — All-in-one dev script: starts embedded-postgres + Next.js dev server
 - `next.config.ts` sets `output: "standalone"` conditionally when `DOCKER_BUILD=1` (set by `docker/Dockerfile`)
-- The standalone trace misses packages loaded with a dynamic `import()` (Meridian) and the native packages they pick at runtime, so `docker/Dockerfile` stages their whole dependency closure with `docker/stage-runtime-deps.mjs`; add any new dynamically imported package there. `scripts/docker-smoke.sh` starts the Meridian proxy inside the built image to catch a missing one
+- The standalone trace follows static imports and requires but not a require whose name is computed at runtime (libsql loads its platform-native `@libsql/<target>` package that way) or a binary a package locates at runtime (Meridian finds `@anthropic-ai/claude-code/bin/claude.exe`). `docker/Dockerfile` stages the whole dependency closure of such a package with `docker/stage-runtime-deps.mjs`; stage any new package that loads native code or binaries that way there. `scripts/docker-smoke.sh` starts the Meridian proxy inside the built image to catch a missing one
 
 ## Responsive Layout Architecture
 
@@ -102,9 +102,9 @@ npx prisma db push   # Push schema without migration (dev only)
 
 ### Unit Tests (Vitest)
 
-- `npm test` — run all unit tests (~460 tests, <2s)
-- Tests live co-located with source: `src/**/*.test.ts`
-- Covers: `money.ts`, `split-calculator.ts`, `rate-limit.ts`, `upload-dir.ts`, `balance-calculator.ts`, `ai/registry.ts`, `ai/providers/openai-codex.ts`, `ai/providers/meridian.ts`, `lib/normalize-date.ts`, `lib/meridian-login.ts`, `lib/receipt-processor.ts`, `lib/auth-health-poller.ts`, `lib/openai-codex-login.ts`, `lib/auth-config.ts`, `lib/oidc-sign-in.ts`, `lib/user-email.ts`, `lib/password-login.ts`, `trpc/routers/admin.ts`, `trpc/routers/auth.ts`, `src/lib/sign-in-errors.ts`, `lib/guest-uploads.ts`, `lib/guest-join-limit.ts`, `trpc/routers/guest.ts`, `app/api/upload/route.ts`
+- `npm test` — run all unit tests (~490 tests, <2s)
+- Tests live co-located with source: `src/**/*.test.ts`, plus `docker/**/*.test.mjs` for the Docker build scripts
+- Covers: `money.ts`, `split-calculator.ts`, `rate-limit.ts`, `upload-dir.ts`, `balance-calculator.ts`, `ai/registry.ts`, `ai/providers/openai-codex.ts`, `ai/providers/meridian.ts`, `lib/normalize-date.ts`, `lib/meridian-login.ts`, `lib/receipt-processor.ts`, `lib/auth-health-poller.ts`, `lib/openai-codex-login.ts`, `lib/auth-config.ts`, `lib/oidc-sign-in.ts`, `lib/user-email.ts`, `lib/password-login.ts`, `trpc/routers/admin.ts`, `trpc/routers/auth.ts`, `src/lib/sign-in-errors.ts`, `lib/guest-uploads.ts`, `lib/guest-join-limit.ts`, `trpc/routers/guest.ts`, `app/api/upload/route.ts`, `docker/stage-runtime-deps.mjs`
 
 ### E2E Tests (Playwright)
 
@@ -134,7 +134,7 @@ npx prisma db push   # Push schema without migration (dev only)
 
 All-in-one container: PostgreSQL is bundled inside — no external database required. Requires `NEXTAUTH_SECRET` and `AUTH_SECRET` env vars.
 
-Run `npm run test:docker` before pushing a change to `docker/`, the entrypoint, `prisma/` SQL, or dependencies. It builds the image and runs `scripts/docker-smoke.sh`: fresh install on an empty volume, upgrade restarts, and the Meridian proxy starting. The container gets a unique name and publishes no ports, so it's safe on a host already running ShareTab; point `DOCKER_HOST=ssh://user@host` at a remote daemon when there's no local Docker. CI runs the same script on pull requests (Docker Fresh Install) and before `docker.yml` publishes `:latest`. `--meridian-auth <dir>` adds a live receipt extraction through Meridian using a copy of a Claude login directory on the Docker host (local use only; needs a token valid for 30+ minutes).
+Run `npm run test:docker` before pushing a change to `docker/`, the entrypoint, `prisma/` SQL, or dependencies. It builds the image and runs `scripts/docker-smoke.sh`: fresh install on an empty volume, upgrade restarts, and the Meridian provider starting and running through the app (it signs in as an admin and calls the admin "Test Receipt Extraction" endpoint). The container gets a unique name and publishes no ports, so it's safe on a host already running ShareTab; point `DOCKER_HOST=ssh://user@host` at a remote daemon when there's no local Docker (Docker access is root-equivalent on that host). CI runs the same script on pull requests (Docker Fresh Install), and `docker.yml` pushes the image it tested only after the script passes. `--meridian-auth <dir>` adds a live receipt extraction through Meridian using a scratch copy of a Claude login directory on the Docker host (local runs only; needs a token valid for 30+ minutes, and fails if the login was refreshed during the run).
 
 ```bash
 cd docker && docker compose up -d    # Start app (PostgreSQL included)

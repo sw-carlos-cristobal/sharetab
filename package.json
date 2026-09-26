@@ -35,7 +35,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "npx playwright test",
-    "test:docker": "scripts/docker-smoke.sh --build",
+    "test:docker": "bash scripts/docker-smoke.sh --build",
     "test:e2e:ui": "npx playwright test --ui",
     "test:ai:setup": "npx tsx e2e/ai-setup.ts",
     "test:ai": "RUN_AI_TESTS=1 npx playwright test ai-provider-test.spec.ts",
