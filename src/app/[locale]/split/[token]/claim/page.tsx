@@ -6,7 +6,18 @@ import { useLocale, useTranslations } from 'next-intl';
 import { trpc } from '@/lib/trpc';
 import { formatCents } from '@/lib/money';
 import { copyToClipboard } from '@/lib/clipboard';
-import { storedClaimIdentitySchema, type StoredClaimIdentity } from '@/lib/guest-session';
+import {
+  claimStorageKey,
+  joinKeyFor,
+  personalLinkHash,
+  readPersonalLinkToken,
+  resumeOutcome,
+  shouldRetryResume,
+  storedClaimIdentitySchema,
+  type ClaimIdentity,
+  type PendingJoin,
+  type StoredClaimIdentity,
+} from '@/lib/guest-session';
 import { calculateSplitTotals } from '@/lib/split-calculator';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,6 +34,7 @@ import {
   Pencil,
   X,
   Link2,
+  MonitorSmartphone,
   Scissors,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -34,7 +46,7 @@ function getStoredClaimIdentity(token: string): StoredClaimIdentity | null {
   if (typeof window === 'undefined') return null;
 
   try {
-    const raw = window.localStorage.getItem(`sharetab-claim:${token}`);
+    const raw = window.localStorage.getItem(claimStorageKey(token));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as unknown;
     const identity = storedClaimIdentitySchema.safeParse(parsed);
@@ -44,13 +56,32 @@ function getStoredClaimIdentity(token: string): StoredClaimIdentity | null {
   }
 }
 
+function removeStoredClaimIdentity(token: string) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(claimStorageKey(token));
+  } catch {
+    // Non-fatal, like setStoredClaimIdentity.
+  }
+}
+
 function setStoredClaimIdentity(token: string, identity: StoredClaimIdentity) {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(`sharetab-claim:${token}`, JSON.stringify(identity));
+    window.localStorage.setItem(claimStorageKey(token), JSON.stringify(identity));
   } catch {
     // Non-fatal: failing to persist rejoin state should not block the claim flow.
   }
+}
+
+// Take a personal link's token out of the address bar and this tab's history entry (the
+// browser's global history keeps the URL that was opened). Only called after the page has
+// mounted, by when Next.js has patched history.replaceState; called with null state, the
+// patched version keeps Next's internal history state (back/forward) and updates the router's
+// URL, so the token isn't written back from router memory later.
+function removePersonalLinkFromAddressBar() {
+  if (!readPersonalLinkToken(window.location.hash)) return;
+  window.history.replaceState(null, '', window.location.pathname + window.location.search);
 }
 
 export default function ClaimPage({ params }: { params: Promise<{ token: string }> }) {
@@ -107,9 +138,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     onSuccess: (_data, variables) => {
       const removedIdx = variables.targetIndex;
       if (removedIdx === myPersonIndex) {
-        if (typeof window !== 'undefined') {
-          window.localStorage.removeItem(`sharetab-claim:${token}`);
-        }
+        removeStoredClaimIdentity(token);
         setClaimedItems(new Map());
         setPersonIndex(null);
         setMyPersonIndex(null);
@@ -176,39 +205,160 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   });
 
   const autoRejoinAttempted = useRef(false);
-  // Set when a "rejoin as" button is clicked; its join starts 100ms later, before isPending is true
-  const rejoinScheduled = useRef(false);
+  // Set synchronously when a join or resume starts. `joining` below comes from React state,
+  // which only updates after a render, so a fast double tap could otherwise send two joins.
+  // The server would return the same person for both (same join key), but the second spends
+  // the per-person join limit and toasts again.
+  const joinInFlight = useRef(false);
+  // Person token from a personal link (#me=...) this page was opened with, if any
+  const linkedToken = useRef<string | null>(null);
+  // The person a personal link names, waiting for the user to confirm it's them
+  const [linkOffer, setLinkOffer] = useState<ClaimIdentity | null>(null);
+  // A personal link the user accepted, while it's looked up again: the card may have been open
+  // while people were removed, which would make its person index stale
+  const confirmedLinkToken = useRef<string | null>(null);
+  // The join this page sent and hasn't seen succeed (see startJoin). Kept in memory, not in
+  // storage: a stored pending key could be read and redeemed for the person before this device
+  // holds their token. A reload therefore can't replay a lost join.
+  const pendingJoin = useRef<PendingJoin | null>(null);
 
-  const joinSession = trpc.guest.joinSession.useMutation({
-    onSuccess: (data, variables) => {
-      setPersonIndex(data.personIndex);
-      setMyPersonIndex(data.personIndex);
-      setPersonToken(data.personToken);
-      setStoredClaimIdentity(token, {
-        name: variables.name,
-        personToken: data.personToken,
-      });
-      // Initialize claimed items from server assignments for ALL people
-      const map = new Map<number, Set<number>>();
-      if (session.data) {
-        for (const a of session.data.assignments) {
-          for (const pi of a.personIndices) {
-            if (!map.has(pi)) map.set(pi, new Set());
-            map.get(pi)!.add(a.itemIndex);
-          }
+  // Become this person on this device, and remember it for the next visit. Also settles any
+  // pending personal link, so its card can't come back later and switch this device again.
+  function adoptIdentity(identity: ClaimIdentity) {
+    setLinkOffer(null);
+    linkedToken.current = null;
+    confirmedLinkToken.current = null;
+    // A link left in the address bar (e.g. its lookup failed and the user joined instead) is
+    // settled too, so a reload doesn't offer it again
+    removePersonalLinkFromAddressBar();
+    setPersonIndex(identity.personIndex);
+    setMyPersonIndex(identity.personIndex);
+    setPersonToken(identity.personToken);
+    setStoredClaimIdentity(token, { name: identity.name, personToken: identity.personToken });
+    pendingJoin.current = null;
+    // Initialize claimed items from server assignments for ALL people
+    const map = new Map<number, Set<number>>();
+    if (session.data) {
+      for (const a of session.data.assignments) {
+        for (const pi of a.personIndices) {
+          if (!map.has(pi)) map.set(pi, new Set());
+          map.get(pi)!.add(a.itemIndex);
         }
       }
-      setClaimedItems(map);
+    }
+    setClaimedItems(map);
+  }
+
+  // The server returns the person under their current name, which may differ from the name
+  // typed (see startJoin)
+  const joinSession = trpc.guest.joinSession.useMutation({
+    onSuccess: (data) => {
+      adoptIdentity(data);
+      toast.success(t('joinedSession'));
     },
+    onError: (error) => toast.error(error.message),
     onSettled: () => {
-      rejoinScheduled.current = false;
+      joinInFlight.current = false;
     },
   });
-  // Toasts go on the joins the user starts; the automatic rejoin on page load stays silent
-  const joinToasts = {
-    onSuccess: () => toast.success(t('joinedSession')),
-    onError: (error: { message: string }) => toast.error(error.message),
-  };
+  // A returning device finds its person by token (names can be edited by anyone): the token
+  // this device stored, or one from a personal link. See resumeOutcome for what each answer
+  // does, and shouldRetryResume for which failures are retried.
+  const resumeSession = trpc.guest.resumeSession.useMutation({
+    retry: (failureCount, error) => shouldRetryResume(failureCount, error.data?.httpStatus),
+    onSuccess: (data, variables) => {
+      const confirmed = variables.personToken === confirmedLinkToken.current;
+      const fromLink = variables.personToken === linkedToken.current;
+      // The link got a definite answer (someone holds its token, or nobody does), so it can
+      // leave the address bar. After an error it stays, so a reload can try it again.
+      if (fromLink) removePersonalLinkFromAddressBar();
+      const outcome = resumeOutcome({
+        found: data !== null,
+        fromLink,
+        confirmed,
+        personToken: variables.personToken,
+        storedToken: getStoredClaimIdentity(token)?.personToken,
+      });
+      if (data && outcome === 'confirm') {
+        // Don't silently become someone else (a personal link can be mis-shared)
+        setLinkOffer({ ...data, personToken: variables.personToken });
+      } else if (data && outcome === 'adopt') {
+        adoptIdentity({ ...data, personToken: variables.personToken });
+        if (confirmed) toast.success(t('continuingAs', { name: data.name }));
+      } else if (outcome === 'linkInvalid') {
+        // The user opened a personal link on purpose, so say why it didn't work
+        toast.error(t('personalLinkInvalid'));
+        setLinkOffer(null);
+        setTimeout(resumeStoredIdentity, 0);
+      } else if (outcome === 'forget') {
+        removeStoredClaimIdentity(token);
+      } else if (outcome === 'stale') {
+        setTimeout(resumeStoredIdentity, 0);
+      }
+    },
+    onError: (error, variables) => {
+      if (variables.personToken !== linkedToken.current) return;
+      toast.error(error.message);
+      if (variables.personToken === confirmedLinkToken.current) {
+        // Accepting failed: keep the card and the link, so the user can accept again (on a
+        // fresh device nothing else would bring the link back)
+        confirmedLinkToken.current = null;
+        return;
+      }
+      setLinkOffer(null);
+      setTimeout(resumeStoredIdentity, 0);
+    },
+    onSettled: () => {
+      joinInFlight.current = false;
+    },
+  });
+  const joining = joinSession.isPending || resumeSession.isPending;
+
+  // Resume whoever this device is stored as: when a personal link doesn't work out, or when an
+  // answer came back for a token that's no longer stored. Called on the next tick from
+  // resumeSession callbacks (after its onSettled has run), and directly by declineLinkOffer.
+  // Does nothing while a join or resume is in flight: that request's answer decides, and it
+  // reads the link refs cleared here.
+  function resumeStoredIdentity() {
+    if (joinInFlight.current) return;
+    linkedToken.current = null;
+    confirmedLinkToken.current = null;
+    const stored = getStoredClaimIdentity(token);
+    if (!stored) return;
+    joinInFlight.current = true;
+    resumeSession.mutate({ token, personToken: stored.personToken });
+  }
+
+  // Look the link's token up again rather than trusting the card's person index. Does nothing
+  // once the card was declined, even in the same tick before it re-renders (declining clears
+  // linkedToken).
+  function acceptLinkOffer() {
+    if (!linkOffer || joinInFlight.current || linkedToken.current !== linkOffer.personToken) return;
+    joinInFlight.current = true;
+    confirmedLinkToken.current = linkOffer.personToken;
+    resumeSession.mutate({ token, personToken: linkOffer.personToken });
+  }
+
+  // Guarded like accept: both buttons can be tapped before `joining` disables them
+  function declineLinkOffer() {
+    if (joinInFlight.current) return;
+    setLinkOffer(null);
+    resumeStoredIdentity();
+  }
+
+  // A join sends the token this device stored (so the server returns that person, e.g. when
+  // resuming failed and they typed their name, which someone may have changed) and a join key.
+  // The join key is kept (in memory) until this device becomes someone, and reused only to retry
+  // the same name, so a join whose response was lost (e.g. a network drop) is replayed as the
+  // same person. The server mints new people's tokens itself.
+  function startJoin(input: { name: string; groupSize?: number }) {
+    if (joinInFlight.current) return;
+    joinInFlight.current = true;
+    const personToken = getStoredClaimIdentity(token)?.personToken;
+    const pending = joinKeyFor(input.name, pendingJoin.current);
+    pendingJoin.current = pending;
+    joinSession.mutate({ token, ...input, joinKey: pending.joinKey, ...(personToken ? { personToken } : {}) });
+  }
 
   // Initialize venmo handle from split record, then creator's profile as fallback
   useEffect(() => {
@@ -229,19 +379,37 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     }
   }, [session.data, profile.data?.venmoUsername, profile.isFetched, session.isLoading, authSession?.user, authStatus]);
 
-  // Auto-rejoin from localStorage when session data loads
+  // Read a personal link's token (it leaves the address bar once resumeSession answers for it)
+  useEffect(() => {
+    const linked = readPersonalLinkToken(window.location.hash);
+    if (linked) linkedToken.current = linked;
+    // A personal link pasted into a tab already on this page only changes the fragment;
+    // reload so it is read like a fresh open. Read the link from the event, not location.hash:
+    // in debug runs on one build, the URL had already been rewritten without the fragment
+    // between popstate and hashchange (the writer wasn't captured). Restore it, then reload.
+    const onHashChange = (event: HashChangeEvent) => {
+      if (!readPersonalLinkToken(new URL(event.newURL).hash)) return;
+      window.history.replaceState(null, '', event.newURL);
+      window.location.reload();
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
+  // Rejoin as the person this device joined as (or the one a personal link names) once the
+  // session loads, in any status: a finalized split still needs to know who you are. A
+  // personal link is tried first; for someone other than this device's person it asks first.
   useEffect(() => {
     if (autoRejoinAttempted.current || personIndex !== null || !session.data) return;
-    if (session.data.status !== 'CLAIMING') return;
 
-    const stored = getStoredClaimIdentity(token);
-    if (!stored) return;
+    const personToken = linkedToken.current ?? getStoredClaimIdentity(token)?.personToken;
+    if (!personToken) return;
 
+    // A join the user already started wins; resuming now could adopt a different person
+    if (joinInFlight.current) return;
     autoRejoinAttempted.current = true;
-    joinSession.mutate({
-      token,
-      name: stored.name,
-    });
+    joinInFlight.current = true;
+    resumeSession.mutate({ token, personToken });
   }, [session.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const claimItems = trpc.guest.claimItems.useMutation({
@@ -385,7 +553,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
       toast.error(t('pleaseEnterName'));
       return;
     }
-    joinSession.mutate({ token, name: trimmed, ...(groupSize > 1 ? { groupSize } : {}) }, joinToasts);
+    startJoin({ name: trimmed, ...(groupSize > 1 ? { groupSize } : {}) });
   }
 
   function toggleClaim(itemIndex: number) {
@@ -401,8 +569,37 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   }
 
   async function copyLink() {
-    if (await copyToClipboard(window.location.href)) {
+    // The plain share link; never carry a #fragment, which could hold a personal token
+    const url = new URL(window.location.href);
+    url.hash = '';
+    if (await copyToClipboard(url.toString())) {
       toast.success(t('linkCopied'));
+    } else {
+      toast.error(tc('actions.copyFailed'));
+    }
+  }
+
+  // Share this person's own link, so they can continue as themselves on another device
+  async function sharePersonalLink() {
+    if (!personToken) return;
+    const url = new URL(window.location.href);
+    url.search = '';
+    url.hash = personalLinkHash(personToken);
+    const link = url.toString();
+    // Web Share opens the device's share sheet (Messages, AirDrop, email); it only exists in a
+    // secure context (HTTPS or localhost), otherwise the link is copied
+    if (typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ title: t('personalLinkShareTitle'), url: link });
+        toast.warning(t('personalLinkShared'));
+        return;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        // Otherwise fall back to copying
+      }
+    }
+    if (await copyToClipboard(link)) {
+      toast.success(t('personalLinkCopied'));
     } else {
       toast.error(tc('actions.copyFailed'));
     }
@@ -470,10 +667,64 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   const data = session.data!;
   const currency = data.receiptData.currency;
 
+  // This person's own link for their other devices (joined or finalized view), with the
+  // warning shown before anything is sent
+  const personalLinkButton = personToken && (
+    <Button type="button" variant="outline" size="sm" onClick={sharePersonalLink} data-testid="personal-link-btn">
+      <MonitorSmartphone className="mr-2 h-4 w-4" />
+      {t('continueOnAnotherDevice')}
+    </Button>
+  );
+  const personalLinkHint = personToken && (
+    <p className="text-xs text-muted-foreground" data-testid="personal-link-hint">
+      {t('personalLinkHint')}
+    </p>
+  );
+
+  // Asks before this device becomes the person a personal link names. If this device joined
+  // as someone else, says so: continuing replaces them here, and only their own personal link
+  // brings them back.
+  const replacedIdentity = linkOffer && getStoredClaimIdentity(token);
+  const linkOfferCard = linkOffer && (
+    <Card className="border-primary/40" data-testid="personal-link-offer">
+      <CardContent className="space-y-3 py-4">
+        <p className="font-medium">{t('personalLinkOfferTitle', { name: linkOffer.name })}</p>
+        <p className="text-sm text-muted-foreground">{t('personalLinkOfferBody', { name: linkOffer.name })}</p>
+        {replacedIdentity && replacedIdentity.personToken !== linkOffer.personToken && (
+          <p className="text-sm text-muted-foreground" data-testid="personal-link-offer-replaces">
+            {t('personalLinkOfferReplaces', { current: replacedIdentity.name, name: linkOffer.name })}
+          </p>
+        )}
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            size="sm"
+            onClick={acceptLinkOffer}
+            disabled={joining}
+            data-testid="personal-link-accept"
+          >
+            {t('continueAs', { name: linkOffer.name })}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={declineLinkOffer}
+            disabled={joining}
+            data-testid="personal-link-decline"
+          >
+            {t('notThisPerson')}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
   // --- Finalized state ---
   if (data.status === 'FINALIZED') {
     return (
       <div className="space-y-6 pb-8">
+        {linkOfferCard}
         <div className="text-center space-y-2 pt-4">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
             <Check className="h-8 w-8 text-primary" />
@@ -575,6 +826,8 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
             <Link2 className="mr-2 h-4 w-4" />
             {t('copyLink')}
           </Button>
+          {personalLinkButton}
+          {personalLinkHint}
         </div>
       </div>
     );
@@ -669,6 +922,8 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
           </Card>
         )}
 
+        {linkOfferCard}
+
         {/* Join form */}
         <Card data-testid="claim-join-form">
           <CardHeader className="pb-2">
@@ -709,45 +964,44 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
                 <span className="text-xs text-muted-foreground">{t('groupSizeHint')}</span>
               </div>
             </div>
-            {/* Rejoin as existing participant */}
-            {data.people.length > 0 && (
+            {/* Join as a listed person nobody has joined as yet (e.g. the payer); people who
+                already joined can only be rejoined from the device holding their token. */}
+            {data.people.some((person) => !person.hasJoined) && (
               <div className="space-y-2">
-                <p className="text-xs text-muted-foreground">{t('orRejoinAs')}</p>
+                <p className="text-xs text-muted-foreground">{t('orJoinAs')}</p>
                 <div className="flex flex-wrap gap-2">
-                  {data.people.map((person, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      disabled={joinSession.isPending}
-                      onClick={() => {
-                        if (rejoinScheduled.current) return;
-                        rejoinScheduled.current = true;
-                        setName(person.name);
-                        setTimeout(() => {
-                          joinSession.mutate({ token, name: person.name }, joinToasts);
-                        }, 100);
-                      }}
-                      className="flex items-center gap-2 rounded-full bg-muted px-3 py-1.5 hover:bg-muted/80 transition-colors"
-                      data-testid={`rejoin-person-${idx}`}
-                    >
-                      <Avatar className="h-6 w-6">
-                        <AvatarFallback className={`text-[10px] font-semibold ${guestAvatarColor(idx)}`}>
-                          {getInitials(person.name)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="text-sm font-medium">{person.name}</span>
-                    </button>
-                  ))}
+                  {data.people.map((person, idx) =>
+                    person.hasJoined ? null : (
+                      <button
+                        key={idx}
+                        type="button"
+                        disabled={joining}
+                        onClick={() => {
+                          setName(person.name);
+                          startJoin({ name: person.name });
+                        }}
+                        className="flex items-center gap-2 rounded-full bg-muted px-3 py-1.5 hover:bg-muted/80 transition-colors disabled:opacity-50"
+                        data-testid={`rejoin-person-${idx}`}
+                      >
+                        <Avatar className="h-6 w-6">
+                          <AvatarFallback className={`text-[10px] font-semibold ${guestAvatarColor(idx)}`}>
+                            {getInitials(person.name)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-sm font-medium">{person.name}</span>
+                      </button>
+                    ),
+                  )}
                 </div>
               </div>
             )}
             <Button
               className="w-full"
               onClick={handleJoin}
-              disabled={!name.trim() || joinSession.isPending}
+              disabled={!name.trim() || joining}
               data-testid="claim-join-btn"
             >
-              {joinSession.isPending ? (
+              {joining ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   {t('joining')}
@@ -786,11 +1040,15 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
         </CardContent>
       </Card>
 
-      {/* Copy link */}
-      <Button type="button" variant="outline" size="sm" onClick={copyLink} data-testid="copy-link-btn">
-        <Link2 className="mr-2 h-4 w-4" />
-        {t('copyLink')}
-      </Button>
+      {/* Copy link, and this person's own link for their other devices */}
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={copyLink} data-testid="copy-link-btn">
+          <Link2 className="mr-2 h-4 w-4" />
+          {t('copyLink')}
+        </Button>
+        {personalLinkButton}
+      </div>
+      {personalLinkHint}
 
       {/* Receipt image viewer */}
       {data.receiptImagePath && (

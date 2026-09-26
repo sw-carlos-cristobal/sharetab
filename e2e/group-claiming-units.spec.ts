@@ -411,21 +411,13 @@ test.describe('Group claiming units', () => {
       paidByName: 'Couple',
     });
     const shareToken = (await createRes.json()).result?.data?.json?.shareToken;
-
-    // Join as a couple via API
-    const joinRes = await trpcMutation(ctx, 'guest.joinSession', {
-      token: shareToken,
-      name: 'Couple',
-      groupSize: 2,
-    });
-    expect(joinRes.ok()).toBe(true);
     await ctx.dispose();
 
     const browserCtx = await browser.newContext();
     const page = await browserCtx.newPage();
     await page.goto(`/en/split/${shareToken}/claim`);
 
-    // Join (rejoin) as Couple with groupSize=2
+    // Join as the creator "Couple" (nobody has joined as them yet) with groupSize=2
     await expect(page.getByTestId('claim-join-form')).toBeVisible({ timeout: 15000 });
     await page.getByTestId('claim-name-input').fill('Couple');
     await page.getByTestId('group-size-input').fill('2');

@@ -50,6 +50,7 @@ test.describe('Guest claiming sessions', () => {
     const joinBody = (await joinRes.json()).result?.data?.json;
     expect(joinBody.personIndex).toBe(1);
     expect(joinBody.personToken).toBeTruthy();
+    expect(joinBody.name).toBe('Bob');
 
     // Verify 2 people now
     const getRes2 = await trpcQuery(ctx, 'guest.getSession', { token: shareToken });
@@ -172,7 +173,7 @@ test.describe('Guest claiming sessions', () => {
     await ctx.dispose();
   });
 
-  test('joining with same name returns existing index', async () => {
+  test('rejoining under a name someone already joined as requires their token', async () => {
     const ctx = await request.newContext({ baseURL: BASE });
 
     const createRes = await trpcMutation(ctx, 'guest.createClaimSession', {
@@ -184,22 +185,19 @@ test.describe('Guest claiming sessions', () => {
     const shareToken = (await createRes.json()).result?.data?.json?.shareToken;
 
     // First join as Alice -- gets personToken
-    const join1 = await trpcMutation(ctx, 'guest.joinSession', {
-      token: shareToken,
-      name: 'Alice',
-    });
-    const result1 = (await join1.json()).result?.data?.json;
-    expect(result1.personIndex).toBe(0);
-    const personToken = result1.personToken;
+    const alice = await joinGuestSession(ctx, { token: shareToken, name: 'Alice' });
+    expect(alice.personIndex).toBe(0);
 
-    // Join again with the same name (case-insensitive) — no token needed
-    const join2 = await trpcMutation(ctx, 'guest.joinSession', {
-      token: shareToken,
-      name: 'alice',
-    });
-    const result2 = (await join2.json()).result?.data?.json;
-    expect(result2.personIndex).toBe(0);
-    expect(result2.personToken).toBe(personToken);
+    // Anyone else typing her name (case-insensitive) is refused and gets no token
+    const takeover = await trpcMutation(ctx, 'guest.joinSession', { token: shareToken, name: 'alice' });
+    expect(takeover.status()).toBe(409);
+    const takeoverBody = await takeover.text();
+    expect(takeoverBody).not.toContain(alice.personToken);
+    expect((await trpcError(takeover))?.data?.code).toBe('CONFLICT');
+
+    // The device holding her token rejoins as her
+    const rejoin = await joinGuestSession(ctx, { token: shareToken, name: 'alice', personToken: alice.personToken });
+    expect(rejoin).toEqual({ personIndex: 0, personToken: alice.personToken, name: 'Alice' });
 
     await ctx.dispose();
   });

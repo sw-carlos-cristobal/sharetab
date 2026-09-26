@@ -96,6 +96,25 @@ describe('checkJoinRateLimit', () => {
     expect(checkJoinRateLimit(quiet, 'Alice')).toBe(true);
   });
 
+  test('a device presenting its token is budgeted by that token, whatever name it types', () => {
+    const token = newToken();
+    const alicesToken = '11111111-1111-4111-8111-111111111111';
+    const typed = Array.from({ length: 11 }, (_, i) => `name ${i}`);
+    const results = typed.map((name) => checkJoinRateLimit(token, name, alicesToken));
+    expect(results.slice(0, 10)).toEqual(Array(10).fill(true));
+    expect(results[10]).toBe(false);
+  });
+
+  test("joins without Alice's token under her name don't use up her own device's budget", () => {
+    const token = newToken();
+    const alicesToken = '11111111-1111-4111-8111-111111111111';
+    // Someone with only the share link keeps trying "Alice" (each is refused by joinSession)
+    joinMany(token, Array(15).fill('Alice'));
+    expect(checkJoinRateLimit(token, 'Alice')).toBe(false);
+    // Alice's own device sends her stored token, so it still gets in
+    expect(checkJoinRateLimit(token, 'Alice', alicesToken)).toBe(true);
+  });
+
   test('keeps person budgets separate when a token or name contains the key separator', () => {
     const token = newToken();
     joinMany(`${token}:alice`, Array(10).fill('x'));
