@@ -63,6 +63,8 @@ const MERIDIAN_HEALTH_CACHE_TTL_MS = {
 
 // ─── Health check ─────────────────────────────────────────
 
+const CLAUDE_CODE_AUTH_FAILURE = /failed to authenticate|could not be refreshed/i;
+
 function getMeridianHealthCacheTtl(result: MeridianHealthResult): number {
   if (result.status !== 'healthy') {
     return MERIDIAN_HEALTH_CACHE_TTL_MS[result.status];
@@ -153,12 +155,21 @@ async function runMeridianHealthCheck(): Promise<MeridianHealthResult> {
 
     const probeBody = await probeRes.json().catch(() => null);
     const errorType = probeBody?.error?.type;
+    const errorMessage: unknown = probeBody?.error?.message;
 
-    if (errorType === 'authentication_error') {
+    // Meridian reports its own auth checks as authentication_error, but passes
+    // Claude Code's failures through as api_error (e.g. "Claude Code returned
+    // an error result: Failed to authenticate: OAuth session expired and could
+    // not be refreshed" once Claude Code has cleared a login whose refresh
+    // failed).
+    if (
+      errorType === 'authentication_error' ||
+      (typeof errorMessage === 'string' && CLAUDE_CODE_AUTH_FAILURE.test(errorMessage))
+    ) {
       return {
         status: 'unhealthy',
         ...(healthData.auth?.email !== undefined ? { email: healthData.auth.email } : {}),
-        error: probeBody?.error?.message ?? 'Authentication expired',
+        error: typeof errorMessage === 'string' ? errorMessage : 'Authentication expired',
       };
     }
 
