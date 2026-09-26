@@ -356,19 +356,10 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     }
   }, [session.data, profile.data?.venmoUsername, profile.isFetched, session.isLoading, authSession?.user, authStatus]);
 
-  // Read a personal link's token, then take it out of the address bar and this tab's history
-  // entry (the browser's global history keeps the URL that was opened).
+  // Read a personal link's token (the effect below takes it out of the address bar)
   useEffect(() => {
     const linked = readPersonalLinkToken(window.location.hash);
-    if (linked) {
-      linkedToken.current = linked;
-      const clean = window.location.pathname + window.location.search;
-      // Next.js patches history.replaceState once its own effects run, after this page's on
-      // first mount. Called on the next tick with null state, the patched version keeps Next's
-      // internal history state (back/forward) and updates the router's URL, so the token
-      // isn't written back from router memory later.
-      setTimeout(() => window.history.replaceState(null, '', clean), 0);
-    }
+    if (linked) linkedToken.current = linked;
     // A personal link pasted into a tab already on this page only changes the fragment;
     // reload so it is read like a fresh open. Read the link from the event, not location.hash:
     // in debug runs on one build, the URL had already been rewritten without the fragment
@@ -381,6 +372,17 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
+
+  // Take a personal link's token out of the address bar and this tab's history entry (the
+  // browser's global history keeps the URL that was opened), but only once the split has
+  // loaded: if loading fails, a reload can still use the link. By then Next.js has patched
+  // history.replaceState; called with null state, the patched version keeps Next's internal
+  // history state (back/forward) and updates the router's URL, so the token isn't written back
+  // from router memory later.
+  useEffect(() => {
+    if (!session.data || !readPersonalLinkToken(window.location.hash)) return;
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  }, [session.data]);
 
   // Rejoin as the person this device joined as (or the one a personal link names) once the
   // session loads, in any status: a finalized split still needs to know who you are. A

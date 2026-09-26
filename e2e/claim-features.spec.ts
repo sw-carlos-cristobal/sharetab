@@ -321,6 +321,27 @@ test.describe('Claim page — continue on another device', () => {
     await ctx.dispose();
   });
 
+  test('a personal link survives a failed first load, so a reload can still use it', async ({ page }) => {
+    const { ctx, shareToken } = await createSession('Flaky Load Diner');
+    const alice = await joinGuestSession(ctx, { token: shareToken, name: 'Alice' });
+
+    // The split fails to load (e.g. the read budget is spent): the token must stay in the URL
+    const isGetSession = (url: URL) => url.pathname.includes('guest.getSession');
+    await page.route(isGetSession, (route) => route.fulfill({ status: 500, body: 'unavailable' }));
+    await page.goto(`/en/split/${shareToken}/claim#me=${alice.personToken}`);
+    await page.waitForTimeout(2000);
+    expect(page.url()).toContain(`#me=${alice.personToken}`);
+
+    // Once it loads, the link works and only then leaves the address bar
+    await page.unroute(isGetSession);
+    await page.reload();
+    await expect(page.getByTestId('personal-link-offer')).toContainText("This is Alice's personal link", {
+      timeout: 15000,
+    });
+    await expect.poll(() => page.url()).not.toContain('#me=');
+    await ctx.dispose();
+  });
+
   test('a dead personal link on a device with no identity leaves the join form up', async ({ page }) => {
     const { ctx, shareToken } = await createSession('Dead Link Deli');
     await page.goto(`/en/split/${shareToken}/claim#me=${DEAD_TOKEN}`);

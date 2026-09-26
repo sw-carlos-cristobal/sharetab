@@ -633,7 +633,7 @@ export const guestRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      if (!checkJoinRateLimit(input.token, input.name)) {
+      if (!checkJoinRateLimit(input.token, input.name, input.personToken)) {
         throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'Too many requests. Please try again shortly.' });
       }
       return guestTransaction(ctx.db, async (tx) => {
