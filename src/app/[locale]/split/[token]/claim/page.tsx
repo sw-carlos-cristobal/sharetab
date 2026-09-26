@@ -228,6 +228,9 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     setLinkOffer(null);
     linkedToken.current = null;
     confirmedLinkToken.current = null;
+    // A link left in the address bar (e.g. its lookup failed and the user joined instead) is
+    // settled too, so a reload doesn't offer it again
+    removePersonalLinkFromAddressBar();
     setPersonIndex(identity.personIndex);
     setMyPersonIndex(identity.personIndex);
     setPersonToken(identity.personToken);
@@ -296,6 +299,12 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     onError: (error, variables) => {
       if (variables.personToken !== linkedToken.current) return;
       toast.error(error.message);
+      if (variables.personToken === confirmedLinkToken.current) {
+        // Accepting failed: keep the card and the link, so the user can accept again (on a
+        // fresh device nothing else would bring the link back)
+        confirmedLinkToken.current = null;
+        return;
+      }
       setLinkOffer(null);
       setTimeout(resumeStoredIdentity, 0);
     },

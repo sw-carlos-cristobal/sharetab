@@ -342,6 +342,51 @@ test.describe('Claim page — continue on another device', () => {
     await ctx.dispose();
   });
 
+  test('if accepting a personal link fails, the card stays so it can be accepted again', async ({ page }) => {
+    const { ctx, shareToken } = await createSession('Flaky Accept Diner');
+    const alice = await joinGuestSession(ctx, { token: shareToken, name: 'Alice' });
+    await page.goto(`/en/split/${shareToken}/claim#me=${alice.personToken}`);
+    await expect(page.getByTestId('personal-link-offer')).toBeVisible({ timeout: 15000 });
+
+    // The confirming lookup fails on every retry
+    const isResume = (url: URL) => url.pathname.includes('guest.resumeSession');
+    await page.route(isResume, (route) => route.fulfill({ status: 500, body: 'unavailable' }));
+    await page.getByTestId('personal-link-accept').click();
+    await page.waitForTimeout(5000);
+    await expect(page.getByTestId('personal-link-offer')).toBeVisible();
+    await expect(page.getByTestId('personal-link-accept')).toBeEnabled();
+
+    // Once the server answers again, accepting works
+    await page.unroute(isResume);
+    await page.getByTestId('personal-link-accept').click();
+    await expect(page.getByText('Alice (you)').first()).toBeVisible({ timeout: 15000 });
+    await ctx.dispose();
+  });
+
+  test('joining as someone else after a failed personal-link lookup drops the link', async ({ page }) => {
+    const { ctx, shareToken } = await createSession('Abandoned Link Diner');
+    const alice = await joinGuestSession(ctx, { token: shareToken, name: 'Alice' });
+    const isResume = (url: URL) => url.pathname.includes('guest.resumeSession');
+    await page.route(isResume, (route) => route.fulfill({ status: 500, body: 'unavailable' }));
+    await page.goto(`/en/split/${shareToken}/claim#me=${alice.personToken}`);
+    await expect(page.getByTestId('claim-join-form')).toBeVisible({ timeout: 15000 });
+    await page.waitForTimeout(5000);
+    expect(page.url()).toContain('#me=');
+
+    // The user gives up on the link and joins as themselves
+    await page.unroute(isResume);
+    await page.getByTestId('claim-name-input').fill('Dave');
+    await page.getByTestId('claim-join-btn').click();
+    await expect(page.getByText('Dave (you)').first()).toBeVisible({ timeout: 15000 });
+    await expect.poll(() => page.url()).not.toContain('#me=');
+
+    // A reload stays Dave and doesn't offer Alice's link again
+    await page.reload();
+    await expect(page.getByText('Dave (you)').first()).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId('personal-link-offer')).toHaveCount(0);
+    await ctx.dispose();
+  });
+
   test('a personal link survives a failed lookup, so a reload can still use it', async ({ page }) => {
     const { ctx, shareToken } = await createSession('Flaky Lookup Diner');
     const alice = await joinGuestSession(ctx, { token: shareToken, name: 'Alice' });
