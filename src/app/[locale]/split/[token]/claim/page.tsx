@@ -74,6 +74,16 @@ function setStoredClaimIdentity(token: string, identity: StoredClaimIdentity) {
   }
 }
 
+// Take a personal link's token out of the address bar and this tab's history entry (the
+// browser's global history keeps the URL that was opened). Only called after the page has
+// mounted, by when Next.js has patched history.replaceState; called with null state, the
+// patched version keeps Next's internal history state (back/forward) and updates the router's
+// URL, so the token isn't written back from router memory later.
+function removePersonalLinkFromAddressBar() {
+  if (!readPersonalLinkToken(window.location.hash)) return;
+  window.history.replaceState(null, '', window.location.pathname + window.location.search);
+}
+
 export default function ClaimPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params);
   const locale = useLocale();
@@ -255,9 +265,13 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     retry: (failureCount, error) => shouldRetryResume(failureCount, error.data?.httpStatus),
     onSuccess: (data, variables) => {
       const confirmed = variables.personToken === confirmedLinkToken.current;
+      const fromLink = variables.personToken === linkedToken.current;
+      // The link got a definite answer (someone holds its token, or nobody does), so it can
+      // leave the address bar. After an error it stays, so a reload can try it again.
+      if (fromLink) removePersonalLinkFromAddressBar();
       const outcome = resumeOutcome({
         found: data !== null,
-        fromLink: variables.personToken === linkedToken.current,
+        fromLink,
         confirmed,
         personToken: variables.personToken,
         storedToken: getStoredClaimIdentity(token)?.personToken,
@@ -356,7 +370,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     }
   }, [session.data, profile.data?.venmoUsername, profile.isFetched, session.isLoading, authSession?.user, authStatus]);
 
-  // Read a personal link's token (the effect below takes it out of the address bar)
+  // Read a personal link's token (it leaves the address bar once resumeSession answers for it)
   useEffect(() => {
     const linked = readPersonalLinkToken(window.location.hash);
     if (linked) linkedToken.current = linked;
@@ -372,17 +386,6 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
-
-  // Take a personal link's token out of the address bar and this tab's history entry (the
-  // browser's global history keeps the URL that was opened), but only once the split has
-  // loaded: if loading fails, a reload can still use the link. By then Next.js has patched
-  // history.replaceState; called with null state, the patched version keeps Next's internal
-  // history state (back/forward) and updates the router's URL, so the token isn't written back
-  // from router memory later.
-  useEffect(() => {
-    if (!session.data || !readPersonalLinkToken(window.location.hash)) return;
-    window.history.replaceState(null, '', window.location.pathname + window.location.search);
-  }, [session.data]);
 
   // Rejoin as the person this device joined as (or the one a personal link names) once the
   // session loads, in any status: a finalized split still needs to know who you are. A
