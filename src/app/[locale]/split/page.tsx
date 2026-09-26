@@ -882,7 +882,11 @@ export default function GuestSplitPage() {
               const isEditing = editingItem === itemIdx;
 
               return (
-                <Card key={itemIdx} className={assigned.size === 0 ? 'border-amber-300' : ''}>
+                <Card
+                  key={itemIdx}
+                  className={assigned.size === 0 ? 'border-amber-300' : ''}
+                  data-testid={`guest-item-card-${itemIdx}`}
+                >
                   <CardContent className="py-3">
                     {isEditing ? (
                       <div className="mb-2 space-y-2">
