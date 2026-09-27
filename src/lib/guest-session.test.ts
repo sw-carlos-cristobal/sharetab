@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 import {
   CLAIM_POLL_MS,
   CLAIM_POLL_RETRY_MS,
+  canAdoptAnswer,
   claimPollInterval,
   isGuestSessionToken,
   isSessionLost,
@@ -16,6 +17,7 @@ import {
 
 const TOKEN = '11111111-1111-4111-8111-111111111111';
 const OTHER = '22222222-2222-4222-8222-222222222222';
+const THIRD = '33333333-3333-4333-8333-333333333333';
 
 describe('personal link fragment', () => {
   test('round-trips a person token', () => {
@@ -63,12 +65,14 @@ describe('joinKeyFor', () => {
 });
 
 describe('resumeOutcome', () => {
-  // A resumeSession answer for TOKEN, with this device storing `storedToken`
+  // A resumeSession answer for TOKEN, with this device storing `storedToken` (and, unless given,
+  // storing the same when the request was sent)
   function outcome(answer: {
     found: boolean;
     fromLink?: boolean;
     confirmed?: boolean;
     storedToken?: string | undefined;
+    storedAtStart?: string | undefined;
   }) {
     return resumeOutcome({
       found: answer.found,
@@ -76,6 +80,7 @@ describe('resumeOutcome', () => {
       confirmed: answer.confirmed ?? false,
       personToken: TOKEN,
       storedToken: answer.storedToken,
+      storedAtStart: 'storedAtStart' in answer ? answer.storedAtStart : answer.storedToken,
     });
   }
 
@@ -95,6 +100,24 @@ describe('resumeOutcome', () => {
   test('a personal link the user already confirmed is adopted', () => {
     expect(outcome({ found: true, fromLink: true, confirmed: true, storedToken: OTHER })).toBe('adopt');
     expect(outcome({ found: true, fromLink: true, confirmed: true, storedToken: undefined })).toBe('adopt');
+  });
+
+  test('a confirmed personal link asks again when another tab stored someone else meanwhile (#213)', () => {
+    expect(
+      outcome({ found: true, fromLink: true, confirmed: true, storedAtStart: undefined, storedToken: OTHER }),
+    ).toBe('confirm');
+    expect(outcome({ found: true, fromLink: true, confirmed: true, storedAtStart: THIRD, storedToken: OTHER })).toBe(
+      'confirm',
+    );
+  });
+
+  test('a confirmed personal link is still adopted when storage was emptied or already holds its person', () => {
+    expect(
+      outcome({ found: true, fromLink: true, confirmed: true, storedAtStart: OTHER, storedToken: undefined }),
+    ).toBe('adopt');
+    expect(outcome({ found: true, fromLink: true, confirmed: true, storedAtStart: OTHER, storedToken: TOKEN })).toBe(
+      'adopt',
+    );
   });
 
   test('a personal link nobody holds is reported, whatever this device stored, even once confirmed', () => {
@@ -202,5 +225,30 @@ describe('isSessionLost', () => {
     expect(isSessionLost(true, 429)).toBe(false);
     expect(isSessionLost(true, 500)).toBe(false);
     expect(isSessionLost(true, undefined)).toBe(false);
+  });
+});
+
+describe('canAdoptAnswer', () => {
+  // A join or accepted personal link that returned TOKEN
+  const answer = (storedAtStart: string | undefined, storedNow: string | undefined) =>
+    canAdoptAnswer({ personToken: TOKEN, storedAtStart, storedNow });
+
+  test('adopts when storage is unchanged since the request was sent', () => {
+    expect(answer(undefined, undefined)).toBe(true);
+    expect(answer(OTHER, OTHER)).toBe(true);
+  });
+
+  test('adopts when storage already holds the person answered for', () => {
+    expect(answer(undefined, TOKEN)).toBe(true);
+    expect(answer(OTHER, TOKEN)).toBe(true);
+  });
+
+  test('adopts when storage was emptied meanwhile, since that replaces nobody', () => {
+    expect(answer(OTHER, undefined)).toBe(true);
+  });
+
+  test('refuses when another tab stored someone else while the request was out (#213)', () => {
+    expect(answer(undefined, OTHER)).toBe(false);
+    expect(answer(THIRD, OTHER)).toBe(false);
   });
 });

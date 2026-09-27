@@ -54,10 +54,32 @@ export function joinKeyFor(name: string, pending: PendingJoin | null, makeKey = 
 }
 
 /**
+ * Whether this device may become the person a join or an accepted personal link answered with,
+ * given the token it stored when the request was sent and the one stored now. Tabs of one
+ * browser share the stored identity, so another tab may have become someone else while the
+ * request was out; adopting the later answer would replace them, and the person they became
+ * would be left without a stored token (#213). Adopt only when that can't happen: storage is
+ * unchanged, empty (replacing nobody), or already holds the person answered for.
+ */
+export function canAdoptAnswer(answer: {
+  personToken: string;
+  storedAtStart: string | undefined;
+  storedNow: string | undefined;
+}): boolean {
+  return (
+    answer.storedNow === undefined ||
+    answer.storedNow === answer.storedAtStart ||
+    answer.storedNow === answer.personToken
+  );
+}
+
+/**
  * What the claim page does with a guest.resumeSession answer for `personToken`:
  * - adopt: become that person (this device's own stored token or own personal link, or a
- *   personal link the user confirmed);
- * - confirm: a personal link names someone other than this device's person, so ask first;
+ *   personal link the user confirmed, if no other tab became someone else meanwhile);
+ * - confirm: a personal link names someone other than this device's person, so ask first (or
+ *   again: another tab of this browser stored someone else while the confirmed lookup was out,
+ *   so the card now says who continuing replaces);
  * - linkInvalid: nobody holds a personal link's token, so say so and fall back to the stored identity;
  * - forget: nobody holds this device's stored token any more (e.g. the person was removed);
  * - stale: the stored token changed while the request was out (e.g. another tab joined), so
@@ -71,12 +93,23 @@ export function resumeOutcome(answer: {
   /** The user already accepted this personal link's card */
   confirmed: boolean;
   personToken: string;
+  /** The token this device stores now */
   storedToken: string | undefined;
+  /** The token it stored when the request was sent */
+  storedAtStart: string | undefined;
 }): ResumeOutcome {
   const isStored = answer.personToken === answer.storedToken;
   if (answer.fromLink) {
     if (!answer.found) return 'linkInvalid';
-    return answer.confirmed || isStored ? 'adopt' : 'confirm';
+    if (isStored) return 'adopt';
+    const stillConfirmed =
+      answer.confirmed &&
+      canAdoptAnswer({
+        personToken: answer.personToken,
+        storedAtStart: answer.storedAtStart,
+        storedNow: answer.storedToken,
+      });
+    return stillConfirmed ? 'adopt' : 'confirm';
   }
   if (!isStored) return 'stale';
   return answer.found ? 'adopt' : 'forget';

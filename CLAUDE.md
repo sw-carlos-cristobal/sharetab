@@ -65,7 +65,7 @@ npx prisma db push   # Push schema without migration (dev only)
 - `src/server/lib/signed-cookie.ts` — HMAC-SHA256 `signPayload` / `verifyAndParse` (keyed by `AUTH_SECRET`, falling back to `NEXTAUTH_SECRET`), used for the admin impersonation cookie
 - `src/server/lib/strip-undefined.ts` — `stripUndefined`: drops `undefined`-valued keys so optional zod output fits Prisma input types under `exactOptionalPropertyTypes`
 - `src/lib/venmo.ts` — Venmo handle normalization and pay deep links. Venmo pay links and the split page's handle input show only when the `venmoEnabled` SystemSetting is `'true'` (admin toggle, default off) and the currency is USD; the handle field in Settings always shows
-- `src/lib/guest-session.ts` — Claim-session identity helpers shared by client and server: `normalizeGuestName`, `isGuestSessionToken`, `storedClaimIdentitySchema` (the identity kept in localStorage), join idempotency keys (`newJoinKey` / `joinKeyFor`), `resumeOutcome` (what a device does with a stored token or a personal link), the personal-link hash helpers (`personalLinkHash` / `readPersonalLinkToken`, `…/claim#me=<token>`), and `needsMembershipCheck` (when the claim page asks the server whether its person was removed)
+- `src/lib/guest-session.ts` — Claim-session identity helpers shared by client and server: `normalizeGuestName`, `isGuestSessionToken`, `storedClaimIdentitySchema` (the identity kept in localStorage), join idempotency keys (`newJoinKey` / `joinKeyFor`), `resumeOutcome` (what a device does with a stored token or a personal link), `canAdoptAnswer` (whether a join or accepted personal link may still be adopted: another tab of the browser may have stored someone else while it was in flight), the personal-link hash helpers (`personalLinkHash` / `readPersonalLinkToken`, `…/claim#me=<token>`), and `needsMembershipCheck` (when the claim page asks the server whether its person was removed)
 - `src/lib/avatar.ts` — Shared avatar color and initials helpers
 - `src/lib/currencies.ts` — Currency list for the currency selector
 - `src/server/ai/providers/mock.ts` — Deterministic `mock` AI provider: accepted by `AI_PROVIDER_PRIORITY` but not listed as a selectable provider or in the admin test UI; CI runs the build and e2e suite with `AI_PROVIDER_PRIORITY=mock`
@@ -125,7 +125,7 @@ npx prisma db push   # Push schema without migration (dev only)
 
 ### Unit Tests (Vitest)
 
-- `npm test` — run all unit tests (~620 tests, about 2 seconds)
+- `npm test` — run all unit tests (~625 tests, about 2 seconds)
 - Tests live co-located with source: `src/**/*.test.ts`, plus `docker/**/*.test.mjs` for the Docker build scripts
 - Covers most of `src/server/lib/`, `src/lib/` money, split-calculator, sign-in-errors, avatar, guest-session, and claim-drafts, `ai/registry.ts`, `ai/providers/openai-codex.ts`, `ai/providers/meridian.ts`, the admin, auth, and guest routers, `app/api/upload/route.ts`, and `docker/stage-runtime-deps.mjs`. `git ls-files '*.test.ts' '*.test.mjs'` lists them
 

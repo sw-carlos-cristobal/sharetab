@@ -7,6 +7,7 @@ import { trpc } from '@/lib/trpc';
 import { formatCents } from '@/lib/money';
 import { copyToClipboard } from '@/lib/clipboard';
 import {
+  canAdoptAnswer,
   claimPollInterval,
   claimStorageKey,
   isSessionLost,
@@ -260,6 +261,10 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   // storage: a stored pending key could be read and redeemed for the person before this device
   // holds their token. A reload therefore can't replay a lost join.
   const pendingJoin = useRef<PendingJoin | null>(null);
+  // The token this device stored when the join or resume in flight was sent. Tabs of one browser
+  // share the stored identity, so another tab may become someone else before the answer comes
+  // back; see canAdoptAnswer (#213).
+  const storedWhenSent = useRef<string | undefined>(undefined);
 
   // Become this person on this device, and remember it for the next visit. Also settles any
   // pending personal link, so its card can't come back later and switch this device again.
@@ -288,6 +293,21 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   // typed (see startJoin)
   const joinSession = trpc.guest.joinSession.useMutation({
     onSuccess: (data) => {
+      const stored = getStoredClaimIdentity(token);
+      if (
+        stored &&
+        !canAdoptAnswer({
+          personToken: data.personToken,
+          storedAtStart: storedWhenSent.current,
+          storedNow: stored.personToken,
+        })
+      ) {
+        // Another tab of this browser became someone else while this join was out. Becoming the
+        // person joined here would replace them in storage, so continue as them instead (#213).
+        toast.warning(t('continuingAs', { name: stored.name }));
+        setTimeout(resumeStoredIdentity, 0);
+        return;
+      }
       adoptIdentity(data);
       toast.success(t('joinedSession'));
     },
@@ -313,9 +333,13 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
         confirmed,
         personToken: variables.personToken,
         storedToken: getStoredClaimIdentity(token)?.personToken,
+        storedAtStart: storedWhenSent.current,
       });
       if (data && outcome === 'confirm') {
-        // Don't silently become someone else (a personal link can be mis-shared)
+        // Don't silently become someone else (a personal link can be mis-shared). Also asks again
+        // when the user accepted but another tab became someone else meanwhile: the card now
+        // says who continuing replaces.
+        confirmedLinkToken.current = null;
         setLinkOffer({ ...data, personToken: variables.personToken });
       } else if (data && outcome === 'adopt') {
         adoptIdentity({ ...data, personToken: variables.personToken });
@@ -361,6 +385,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     const stored = getStoredClaimIdentity(token);
     if (!stored) return;
     joinInFlight.current = true;
+    storedWhenSent.current = stored.personToken;
     resumeSession.mutate({ token, personToken: stored.personToken });
   }
 
@@ -372,6 +397,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     if (!linkOffer || joinInFlight.current || linkedToken.current !== linkOffer.personToken) return;
     joinInFlight.current = true;
     confirmedLinkToken.current = linkOffer.personToken;
+    storedWhenSent.current = getStoredClaimIdentity(token)?.personToken;
     resumeSession.mutate({ token, personToken: linkOffer.personToken });
   }
 
@@ -391,6 +417,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     if (joinInFlight.current) return;
     joinInFlight.current = true;
     const personToken = getStoredClaimIdentity(token)?.personToken;
+    storedWhenSent.current = personToken;
     const pending = joinKeyFor(input.name, pendingJoin.current);
     pendingJoin.current = pending;
     joinSession.mutate({ token, ...input, joinKey: pending.joinKey, ...(personToken ? { personToken } : {}) });
@@ -445,6 +472,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     if (joinInFlight.current) return;
     autoRejoinAttempted.current = true;
     joinInFlight.current = true;
+    storedWhenSent.current = getStoredClaimIdentity(token)?.personToken;
     resumeSession.mutate({ token, personToken });
   }, [session.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
