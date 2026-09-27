@@ -7,8 +7,11 @@ export const storedClaimIdentitySchema = z.object({
   personToken: guestSessionTokenSchema,
 });
 export type StoredClaimIdentity = z.infer<typeof storedClaimIdentitySchema>;
-/** Who this device is in a claim session: the stored identity plus that person's current index. */
-export type ClaimIdentity = StoredClaimIdentity & { personIndex: number };
+/**
+ * Who this device is in a claim session: the stored identity plus that person's id, which
+ * (unlike their index) doesn't change when someone listed before them is removed.
+ */
+export type ClaimIdentity = StoredClaimIdentity & { personId: string };
 
 /** The localStorage key under which the claim page keeps this device's identity for a session. */
 export function claimStorageKey(shareToken: string): string {

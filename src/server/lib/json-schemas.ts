@@ -25,6 +25,7 @@ export const guestItemSchema = z.object({
 export type GuestItem = z.infer<typeof guestItemSchema>;
 
 export const guestPersonSchema = z.object({
+  id: z.string().optional(),
   name: z.string(),
   personToken: z.string().optional(),
   groupSize: z.number().int().min(1).optional(),

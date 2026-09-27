@@ -9,7 +9,7 @@ const mockDb = {
   systemSetting: { findUnique: vi.fn() },
   user: { findUnique: vi.fn() },
   receipt: { findUnique: vi.fn(), updateMany: vi.fn(), update: vi.fn() },
-  guestSplit: { findUnique: vi.fn(), update: vi.fn() },
+  guestSplit: { findUnique: vi.fn(), update: vi.fn(), create: vi.fn(), deleteMany: vi.fn() },
   // Interactive transactions run their callback against the same mocks.
   $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(mockDb)),
 };
@@ -146,20 +146,45 @@ const ALICE_TOKEN = '11111111-1111-4111-8111-111111111111';
 const OTHER_TOKEN = '22222222-2222-4222-8222-222222222222';
 const JOIN_KEY = '44444444-4444-4444-8444-444444444444';
 const DAY_MS = 24 * 60 * 60 * 1000;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+// The stable id claimSession gives the person at this index (see withIds)
+function pid(index: number) {
+  return `aaaaaaaa-0000-4000-8000-${String(index).padStart(12, '0')}`;
+}
+
+type TestPerson = {
+  id?: string;
+  name: string;
+  personToken?: string;
+  groupSize?: number;
+  join?: { key: string; name: string; expiresAt: number };
+};
+
+// People as saved since person ids exist: anyone without an id gets pid(their index)
+function withIds(people: TestPerson[]) {
+  return people.map((p, i) => ({ id: pid(i), ...p }));
+}
 
 // A person's record of the join that created them, still within its replay window
 function liveJoin(normalizedName: string) {
   return { key: JOIN_KEY, name: normalizedName, expiresAt: Date.now() + 60_000 };
 }
 
+// A claim session whose people get ids (withIds), unless `legacy` asks for them as saved
+// before person ids existed
 function claimSession(
-  people: {
-    name: string;
-    personToken?: string;
-    groupSize?: number;
-    join?: { key: string; name: string; expiresAt: number };
-  }[],
-  overrides: { status?: string; expiresAt?: Date } = {},
+  people: TestPerson[],
+  {
+    legacy = false,
+    ...overrides
+  }: {
+    status?: string;
+    expiresAt?: Date;
+    assignments?: { itemIndex: number; personIndices: number[] }[];
+    items?: { name: string; quantity: number; unitPrice: number; totalPrice: number }[];
+    legacy?: boolean;
+  } = {},
 ) {
   mockDb.guestSplit.findUnique.mockResolvedValue({
     id: 'gs1',
@@ -169,7 +194,7 @@ function claimSession(
     receiptId: null,
     receiptData: { subtotal: 0, tax: 0, tip: 0, total: 0, currency: 'USD' },
     items: [],
-    people,
+    people: legacy ? people : withIds(people),
     assignments: [],
     summary: null,
     paidByIndex: 0,
@@ -192,7 +217,12 @@ describe('guest.joinSession', () => {
     expect(joined.personIndex).toBe(1);
     expect(joined.name).toBe('Bob');
     expect(joined.personToken).toMatch(/^[0-9a-f-]{36}$/);
-    expect(savedPeople()).toEqual([{ name: 'Host' }, { name: 'Bob', personToken: joined.personToken }]);
+    expect(joined.personId).toMatch(UUID);
+    expect(joined.personId).not.toBe(pid(0));
+    expect(savedPeople()).toEqual([
+      { id: pid(0), name: 'Host' },
+      { id: joined.personId, name: 'Bob', personToken: joined.personToken },
+    ]);
   });
 
   test("mints a new person's token itself and remembers the caller's join key for a day", async () => {
@@ -203,8 +233,9 @@ describe('guest.joinSession', () => {
     expect(joined.personToken).toMatch(/^[0-9a-f-]{36}$/);
     expect(joined.personToken).not.toBe(JOIN_KEY);
     expect(savedPeople()).toEqual([
-      { name: 'Host' },
+      { id: pid(0), name: 'Host' },
       {
+        id: joined.personId,
         name: 'Bob',
         personToken: joined.personToken,
         join: { key: JOIN_KEY, name: 'bob', expiresAt: expect.any(Number) },
@@ -229,8 +260,11 @@ describe('guest.joinSession', () => {
     const joined = await (await caller()).joinSession({ token: 'share-1', name: ' host ', joinKey: JOIN_KEY });
     expect(joined.personIndex).toBe(0);
     expect(joined.name).toBe('Host');
+    // The seeded person keeps the id they already had
+    expect(joined.personId).toBe(pid(0));
     expect(savedPeople()).toEqual([
       {
+        id: pid(0),
         name: 'Host',
         personToken: joined.personToken,
         join: { key: JOIN_KEY, name: 'host', expiresAt: expect.any(Number) },
@@ -244,7 +278,7 @@ describe('guest.joinSession', () => {
     claimSession([{ name: 'Host' }, { name: 'Bobby', personToken: OTHER_TOKEN, join: liveJoin('bob') }]);
     expect(
       await (await caller()).joinSession({ token: 'share-1', name: 'BOB', joinKey: JOIN_KEY, groupSize: 3 }),
-    ).toEqual({ personIndex: 1, personToken: OTHER_TOKEN, name: 'Bobby' });
+    ).toEqual({ personIndex: 1, personId: pid(1), personToken: OTHER_TOKEN, name: 'Bobby' });
     // A replay changes nothing, not even the group size
     expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
   });
@@ -277,7 +311,7 @@ describe('guest.joinSession', () => {
       await (
         await caller()
       ).joinSession({ token: 'share-1', name: 'Carol', joinKey: JOIN_KEY, personToken: OTHER_TOKEN }),
-    ).toEqual({ personIndex: 2, personToken: OTHER_TOKEN, name: 'Bob' });
+    ).toEqual({ personIndex: 2, personId: pid(2), personToken: OTHER_TOKEN, name: 'Bob' });
   });
 
   test('ignores an expired join key', async () => {
@@ -298,6 +332,7 @@ describe('guest.joinSession', () => {
     claimSession([{ name: 'Host' }, { name: 'Alice S.', personToken: ALICE_TOKEN }]);
     expect(await (await caller()).joinSession({ token: 'share-1', name: 'Alice', personToken: ALICE_TOKEN })).toEqual({
       personIndex: 1,
+      personId: pid(1),
       personToken: ALICE_TOKEN,
       name: 'Alice S.',
     });
@@ -330,6 +365,7 @@ describe('guest.joinSession', () => {
     claimSession([{ name: 'Host' }, { name: 'Alice', personToken: ALICE_TOKEN }]);
     expect(await (await caller()).joinSession({ token: 'share-1', name: 'Alice', personToken: ALICE_TOKEN })).toEqual({
       personIndex: 1,
+      personId: pid(1),
       personToken: ALICE_TOKEN,
       name: 'Alice',
     });
@@ -339,7 +375,18 @@ describe('guest.joinSession', () => {
   test('updates the group size when the token holder rejoins with a new one', async () => {
     claimSession([{ name: 'Alice', personToken: ALICE_TOKEN }]);
     await (await caller()).joinSession({ token: 'share-1', name: 'Alice', personToken: ALICE_TOKEN, groupSize: 2 });
-    expect(savedPeople()).toEqual([{ name: 'Alice', personToken: ALICE_TOKEN, groupSize: 2 }]);
+    expect(savedPeople()).toEqual([{ id: pid(0), name: 'Alice', personToken: ALICE_TOKEN, groupSize: 2 }]);
+  });
+
+  test("gives people saved before person ids existed their ids, and returns the caller's", async () => {
+    claimSession([{ name: 'Host' }, { name: 'Alice', personToken: ALICE_TOKEN }], { legacy: true });
+    const joined = await (await caller()).joinSession({ token: 'share-1', name: 'Alice', personToken: ALICE_TOKEN });
+    const saved = savedPeople() as { id: string }[];
+    expect(saved).toEqual([
+      { id: expect.stringMatching(UUID), name: 'Host' },
+      { id: expect.stringMatching(UUID), name: 'Alice', personToken: ALICE_TOKEN },
+    ]);
+    expect(joined).toEqual({ personIndex: 1, personId: saved[1]!.id, personToken: ALICE_TOKEN, name: 'Alice' });
   });
 });
 
@@ -358,13 +405,14 @@ describe('guest.resumeSession', () => {
     claimSession([{ name: 'Host' }, { name: 'Alice S.', personToken: ALICE_TOKEN }]);
     expect(await (await caller()).resumeSession({ token: 'share-1', personToken: ALICE_TOKEN })).toEqual({
       personIndex: 1,
+      personId: pid(1),
       name: 'Alice S.',
     });
     expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
     // Reads only the fields it needs, not the (possibly large) items and assignments
     expect(mockDb.guestSplit.findUnique).toHaveBeenCalledWith({
       where: { shareToken: 'share-1' },
-      select: { expiresAt: true, people: true },
+      select: { id: true, expiresAt: true, people: true },
     });
   });
 
@@ -392,8 +440,17 @@ describe('guest.resumeSession', () => {
     claimSession([{ name: 'Alice', personToken: ALICE_TOKEN }], { status: 'FINALIZED' });
     expect(await (await caller()).resumeSession({ token: 'share-1', personToken: ALICE_TOKEN })).toEqual({
       personIndex: 0,
+      personId: pid(0),
       name: 'Alice',
     });
+  });
+
+  test("gives people saved before person ids existed their ids, and returns the caller's", async () => {
+    claimSession([{ name: 'Host' }, { name: 'Alice', personToken: ALICE_TOKEN }], { legacy: true });
+    const resumed = await (await caller()).resumeSession({ token: 'share-1', personToken: ALICE_TOKEN });
+    const saved = savedPeople() as { id: string }[];
+    expect(saved.map((p) => p.id)).toEqual([expect.stringMatching(UUID), expect.stringMatching(UUID)]);
+    expect(resumed).toEqual({ personIndex: 1, personId: saved[1]!.id, name: 'Alice' });
   });
 });
 
@@ -405,11 +462,38 @@ describe('guest.getSession people', () => {
     ]);
     const session = await (await caller()).getSession({ token: 'share-1' });
     expect(session.people).toEqual([
-      { name: 'Host', groupSize: 1, hasJoined: false },
-      { name: 'Alice', groupSize: 2, hasJoined: true },
+      { id: pid(0), name: 'Host', groupSize: 1, hasJoined: false },
+      { id: pid(1), name: 'Alice', groupSize: 2, hasJoined: true },
     ]);
     expect(JSON.stringify(session)).not.toContain(ALICE_TOKEN);
     expect(JSON.stringify(session)).not.toContain(JOIN_KEY);
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test('gives people saved before person ids existed their ids once, and lists the saved ids', async () => {
+    claimSession([{ name: 'Host' }, { name: 'Alice', personToken: ALICE_TOKEN }], { legacy: true });
+    const session = await (await caller()).getSession({ token: 'share-1' });
+    expect(mockDb.guestSplit.update).toHaveBeenCalledOnce();
+    const saved = savedPeople() as { id: string }[];
+    expect(saved).toEqual([
+      { id: expect.stringMatching(UUID), name: 'Host' },
+      { id: expect.stringMatching(UUID), name: 'Alice', personToken: ALICE_TOKEN },
+    ]);
+    expect(session.people.map((p) => p.id)).toEqual(saved.map((p) => p.id));
+  });
+
+  test('keeps the ids another request saved first', async () => {
+    // The first read has no ids; by the time the transaction reads again, another request gave them
+    const legacy = [{ name: 'Host' }, { name: 'Alice', personToken: ALICE_TOKEN }];
+    claimSession(legacy, { legacy: true });
+    const stored: unknown = await mockDb.guestSplit.findUnique();
+    mockDb.guestSplit.findUnique.mockClear();
+    mockDb.guestSplit.findUnique
+      .mockResolvedValueOnce(stored)
+      .mockResolvedValueOnce({ ...(stored as object), people: withIds(legacy) });
+    const session = await (await caller()).getSession({ token: 'share-1' });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+    expect(session.people.map((p) => p.id)).toEqual([pid(0), pid(1)]);
   });
 
   test("a finalized split's public result doesn't expose tokens or join keys either", async () => {
@@ -423,5 +507,149 @@ describe('guest.getSession people', () => {
     ]);
     expect(JSON.stringify(split)).not.toContain(ALICE_TOKEN);
     expect(JSON.stringify(split)).not.toContain(JOIN_KEY);
+  });
+});
+
+describe('guest.createClaimSession', () => {
+  test('gives the creator and the payer ids', async () => {
+    mockDb.guestSplit.create.mockResolvedValue({ id: 'gs1', shareToken: 'share-token-123' });
+    mockDb.guestSplit.deleteMany.mockResolvedValue({ count: 0 });
+    await (
+      await caller()
+    ).createClaimSession({
+      receiptData: { subtotal: 100, tax: 0, tip: 0, total: 100, currency: 'USD' },
+      items: [{ name: 'Tea', quantity: 1, unitPrice: 100, totalPrice: 100 }],
+      creatorName: 'Host',
+      paidByName: 'Payer',
+    });
+    const { people } = (mockDb.guestSplit.create.mock.calls[0]![0] as { data: { people: { id: string }[] } }).data;
+    expect(people).toEqual([
+      { id: expect.stringMatching(UUID), name: 'Host' },
+      { id: expect.stringMatching(UUID), name: 'Payer' },
+    ]);
+    expect(people[0]!.id).not.toBe(people[1]!.id);
+  });
+});
+
+function savedAssignments() {
+  const call = mockDb.guestSplit.update.mock.calls.at(-1)?.[0] as { data: { assignments: unknown } } | undefined;
+  return call?.data.assignments;
+}
+
+const D_TOKEN = '33333333-3333-4333-8333-333333333333';
+
+function items(n: number) {
+  return Array.from({ length: n }, (_, i) => ({ name: `Item ${i}`, quantity: 1, unitPrice: 100, totalPrice: 100 }));
+}
+
+// Issue #205: B (index 1) was removed on another device, so C moved from index 2 to 1 and D
+// from 3 to 2. C's page still had the old indexes. D has claimed item 1.
+function sessionAfterBWasRemoved() {
+  claimSession(
+    [
+      { id: pid(0), name: 'A', personToken: ALICE_TOKEN },
+      { id: pid(2), name: 'C', personToken: OTHER_TOKEN },
+      { id: pid(3), name: 'D', personToken: D_TOKEN },
+    ],
+    { items: items(3), assignments: [{ itemIndex: 1, personIndices: [2] }] },
+  );
+}
+
+describe('guest.claimItems', () => {
+  test("saves claims for the person the id names, wherever they are now, leaving others' alone", async () => {
+    sessionAfterBWasRemoved();
+    await (
+      await caller()
+    ).claimItems({ token: 'share-1', personToken: OTHER_TOKEN, personId: pid(2), claimedItemIndices: [0] });
+    expect(savedAssignments()).toEqual([
+      { itemIndex: 1, personIndices: [2] },
+      { itemIndex: 0, personIndices: [1] },
+    ]);
+  });
+
+  test('refuses an id nobody has any more with CONFLICT, and saves nothing', async () => {
+    sessionAfterBWasRemoved();
+    await expect(
+      (await caller()).claimItems({
+        token: 'share-1',
+        personToken: OTHER_TOKEN,
+        personId: pid(1),
+        claimedItemIndices: [0],
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test('still takes a person index (older clients)', async () => {
+    sessionAfterBWasRemoved();
+    await (
+      await caller()
+    ).claimItems({ token: 'share-1', personToken: OTHER_TOKEN, personIndex: 1, claimedItemIndices: [0] });
+    expect(savedAssignments()).toEqual([
+      { itemIndex: 1, personIndices: [2] },
+      { itemIndex: 0, personIndices: [1] },
+    ]);
+  });
+
+  test('refuses a request that names the person both ways, or neither', async () => {
+    sessionAfterBWasRemoved();
+    const api = await caller();
+    await expect(
+      api.claimItems({
+        token: 'share-1',
+        personToken: OTHER_TOKEN,
+        personIndex: 1,
+        personId: pid(2),
+        claimedItemIndices: [],
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(
+      api.claimItems({ token: 'share-1', personToken: OTHER_TOKEN, claimedItemIndices: [] }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('guest.removePerson', () => {
+  test('removes the person the id names, wherever they are now', async () => {
+    sessionAfterBWasRemoved();
+    await (await caller()).removePerson({ token: 'share-1', personToken: ALICE_TOKEN, targetId: pid(2) });
+    expect((savedPeople() as { id: string }[]).map((p) => p.id)).toEqual([pid(0), pid(3)]);
+    // D's claim moves down with D
+    expect(savedAssignments()).toEqual([{ itemIndex: 1, personIndices: [1] }]);
+  });
+
+  test('refuses an id nobody has any more with CONFLICT, and removes nobody', async () => {
+    sessionAfterBWasRemoved();
+    await expect(
+      (await caller()).removePerson({ token: 'share-1', personToken: ALICE_TOKEN, targetId: pid(1) }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test('refuses a request that names the person both ways', async () => {
+    sessionAfterBWasRemoved();
+    await expect(
+      (await caller()).removePerson({ token: 'share-1', personToken: ALICE_TOKEN, targetIndex: 1, targetId: pid(2) }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('guest.editPersonName', () => {
+  test('renames the person the id names, wherever they are now', async () => {
+    sessionAfterBWasRemoved();
+    await (
+      await caller()
+    ).editPersonName({ token: 'share-1', personToken: ALICE_TOKEN, targetId: pid(2), newName: 'Cee' });
+    expect((savedPeople() as { name: string }[]).map((p) => p.name)).toEqual(['A', 'Cee', 'D']);
+  });
+
+  test('refuses an id nobody has any more with CONFLICT, and renames nobody', async () => {
+    sessionAfterBWasRemoved();
+    await expect(
+      (await caller()).editPersonName({ token: 'share-1', personToken: ALICE_TOKEN, targetId: pid(1), newName: 'X' }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
   });
 });

@@ -128,6 +128,7 @@
     "removePerson": "Person entfernen",
     "removePersonConfirm": "Soll {name} aus dieser Sitzung entfernt werden? Die Auswahl wird ebenfalls entfernt.",
     "personRemoved": "Person entfernt",
+    "removedFromSession": "Jemand hat dich aus der Aufteilung entfernt. Tritt erneut bei, um weiterzumachen.",
     "copyLink": "Link kopieren",
     "linkCopied": "Link in die Zwischenablage kopiert",
     "splitItem": "Artikel aufteilen",

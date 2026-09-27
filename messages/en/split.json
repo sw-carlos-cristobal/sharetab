@@ -128,6 +128,7 @@
     "removePerson": "Remove person",
     "removePersonConfirm": "Remove {name} from this session? Their claims will be removed too.",
     "personRemoved": "Person removed",
+    "removedFromSession": "Someone removed you from this split. Join again to keep going.",
     "copyLink": "Copy link",
     "linkCopied": "Link copied to clipboard",
     "splitItem": "Split item",

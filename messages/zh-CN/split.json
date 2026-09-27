@@ -128,6 +128,7 @@
     "removePerson": "移除成员",
     "removePersonConfirm": "从此会话中移除{name}？其选择也将被移除。",
     "personRemoved": "成员已移除",
+    "removedFromSession": "有人已将你从分账中移除。请重新加入以继续。",
     "copyLink": "复制链接",
     "linkCopied": "链接已复制到剪贴板",
     "splitItem": "拆分项目",

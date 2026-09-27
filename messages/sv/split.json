@@ -128,6 +128,7 @@
     "removePerson": "Ta bort person",
     "removePersonConfirm": "Ta bort {name} från denna session? Deras val tas också bort.",
     "personRemoved": "Person borttagen",
+    "removedFromSession": "Någon tog bort dig från delningen. Gå med igen för att fortsätta.",
     "copyLink": "Kopiera länk",
     "linkCopied": "Länk kopierad till urklipp",
     "splitItem": "Dela artikel",

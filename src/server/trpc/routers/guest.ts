@@ -14,6 +14,13 @@ import { normalizeGuestName } from '@/lib/guest-session';
 import { getConfiguredProviderPriority } from '@/server/ai/registry';
 import { canUseGuestUploads } from '../../lib/guest-uploads';
 import { checkJoinRateLimit } from '../../lib/guest-join-limit';
+import {
+  assignPersonIds,
+  findTargetIndex,
+  hasPersonIds,
+  type GuestSessionPerson,
+  type IdentifiedGuestPerson,
+} from '../../lib/guest-people';
 
 async function getCreatorPayerVenmoHandle(
   db: typeof import('@/server/db').db,
@@ -31,15 +38,6 @@ async function getCreatorPayerVenmoHandle(
   return null;
 }
 
-type GuestSessionPerson = {
-  name: string;
-  personToken?: string;
-  groupSize?: number; // defaults to 1, > 1 means this person represents a group
-  // The join that created (or first claimed) this person: its idempotency key and the normalized
-  // name it was made with, replayable until expiresAt (epoch ms). See joinSession.
-  join?: { key: string; name: string; expiresAt: number };
-};
-
 // How long a join can be replayed with its join key (Stripe prunes idempotency keys once they are at least 24 hours old)
 const JOIN_REPLAY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
@@ -53,6 +51,49 @@ function toPublicPeople(people: GuestSessionPerson[]) {
     groupSize: groupSize ?? 1,
     hasJoined: !!personToken,
   }));
+}
+
+// The claim page's view of the people: public fields plus each person's id, which it uses to
+// target them (their index changes when someone listed before them is removed)
+function toClaimPeople(people: IdentifiedGuestPerson[]) {
+  return toPublicPeople(people).map((person, i) => ({ id: people[i]!.id, ...person }));
+}
+
+/**
+ * Gives people saved before ids existed their ids, once, and returns the session as read in
+ * that transaction (so its people and assignments are from the same moment). Keeps any ids
+ * another request saved first.
+ */
+async function savePersonIds(db: typeof import('@/server/db').db, sessionId: string) {
+  return guestTransaction(db, async (tx) => {
+    const session = await tx.guestSplit.findUnique({ where: { id: sessionId } });
+    if (!session) throw new TRPCError({ code: 'NOT_FOUND', message: 'Session not found' });
+    const current = session.people as GuestSessionPerson[];
+    if (hasPersonIds(current)) return session;
+    const people = assignPersonIds(current);
+    await tx.guestSplit.update({
+      where: { id: sessionId },
+      data: { people: people as unknown as Prisma.InputJsonValue },
+    });
+    return { ...session, people: people as unknown as Prisma.JsonValue };
+  });
+}
+
+// A request names the person it acts on by id (the claim page) or by index (older clients), not both
+function namesOnePerson(index: number | undefined, id: string | undefined) {
+  return (index === undefined) !== (id === undefined);
+}
+const NAME_ONE_PERSON = { message: 'Name the person by index or by id, not both' };
+
+/** The index of the person a request targets (see findTargetIndex), or a TRPCError. */
+function targetIndexOrThrow(people: GuestSessionPerson[], index: number | undefined, id: string | undefined): number {
+  const found = findTargetIndex(people, { index, id });
+  if (found >= 0) return found;
+  if (id !== undefined) {
+    // Removed since the caller last loaded the session
+    throw new TRPCError({ code: 'CONFLICT', message: 'That person is no longer in this split.' });
+  }
+  throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid person index' });
 }
 
 function cloneAssignments(assignments: { itemIndex: number; personIndices: number[] }[]) {
@@ -544,10 +585,10 @@ export const guestRouter = createTRPCRouter({
       const paidByName = input.paidByName.trim();
 
       // Tokens are assigned lazily when participants, including creator/paidBy, first join this session.
-      const people: GuestSessionPerson[] = [{ name: creatorName }];
+      const people: IdentifiedGuestPerson[] = [{ id: randomUUID(), name: creatorName }];
       let paidByIndex = 0;
       if (normalizeGuestName(paidByName) !== normalizeGuestName(creatorName)) {
-        people.push({ name: paidByName });
+        people.push({ id: randomUUID(), name: paidByName });
         paidByIndex = 1;
       }
 
@@ -645,7 +686,16 @@ export const guestRouter = createTRPCRouter({
         if (session.status !== GuestSplitStatus.CLAIMING)
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'Session is no longer accepting claims' });
 
-        const people = [...(session.people as GuestSessionPerson[])];
+        const stored = session.people as GuestSessionPerson[];
+        // People saved before ids existed get theirs now, and are saved even when the join
+        // changes nothing else, so the id returned is the one getSession lists
+        const idsMissing = !hasPersonIds(stored);
+        const people = assignPersonIds(stored);
+        const savePeople = () =>
+          tx.guestSplit.update({
+            where: { id: session.id },
+            data: { people: people as unknown as Prisma.InputJsonValue },
+          });
         const normalizedName = normalizeGuestName(input.name);
 
         // The caller already is someone, by the token their device stored: return them under their
@@ -655,14 +705,11 @@ export const guestRouter = createTRPCRouter({
         if (holderIndex >= 0) {
           const holder = people[holderIndex]!;
           // Update groupSize on rejoin only if explicitly provided and different
-          if (input.groupSize != null && input.groupSize !== (holder.groupSize ?? 1)) {
-            people[holderIndex] = { ...holder, groupSize: input.groupSize };
-            await tx.guestSplit.update({
-              where: { id: session.id },
-              data: { people: people as unknown as Prisma.InputJsonValue },
-            });
-          }
-          return { personIndex: holderIndex, personToken: holder.personToken!, name: holder.name };
+          const newGroupSize =
+            input.groupSize != null && input.groupSize !== (holder.groupSize ?? 1) ? input.groupSize : null;
+          if (newGroupSize !== null) people[holderIndex] = { ...holder, groupSize: newGroupSize };
+          if (newGroupSize !== null || idsMissing) await savePeople();
+          return { personIndex: holderIndex, personId: holder.id, personToken: holder.personToken!, name: holder.name };
         }
 
         // A replay of a join that already went through: the same person, unchanged
@@ -678,7 +725,13 @@ export const guestRouter = createTRPCRouter({
               message: 'This join request was already used with a different name.',
             });
           }
-          return { personIndex: replayIndex, personToken: replayed.personToken!, name: replayed.name };
+          if (idsMissing) await savePeople();
+          return {
+            personIndex: replayIndex,
+            personId: replayed.id,
+            personToken: replayed.personToken!,
+            name: replayed.name,
+          };
         }
 
         const personToken = randomUUID();
@@ -705,11 +758,8 @@ export const guestRouter = createTRPCRouter({
             ...joinRecord,
             ...(input.groupSize != null ? { groupSize: input.groupSize } : {}),
           };
-          await tx.guestSplit.update({
-            where: { id: session.id },
-            data: { people: people as unknown as Prisma.InputJsonValue },
-          });
-          return { personIndex: existingIndex, personToken, name: existingPerson.name };
+          await savePeople();
+          return { personIndex: existingIndex, personId: existingPerson.id, personToken, name: existingPerson.name };
         }
 
         if (people.length >= 100) {
@@ -717,18 +767,17 @@ export const guestRouter = createTRPCRouter({
         }
 
         const name = input.name.trim();
+        const personId = randomUUID();
         people.push({
+          id: personId,
           name,
           personToken,
           ...joinRecord,
           ...(input.groupSize != null ? { groupSize: input.groupSize } : {}),
         });
-        await tx.guestSplit.update({
-          where: { id: session.id },
-          data: { people: people as unknown as Prisma.InputJsonValue },
-        });
+        await savePeople();
 
-        return { personIndex: people.length - 1, personToken, name };
+        return { personIndex: people.length - 1, personId, personToken, name };
       });
     }),
 
@@ -751,26 +800,32 @@ export const guestRouter = createTRPCRouter({
       // Only what's needed: items and assignments can be large
       const session = await ctx.db.guestSplit.findUnique({
         where: { shareToken: input.token },
-        select: { expiresAt: true, people: true },
+        select: { id: true, expiresAt: true, people: true },
       });
       if (!session) throw new TRPCError({ code: 'NOT_FOUND', message: 'Session not found' });
       if (session.expiresAt < new Date()) throw new TRPCError({ code: 'NOT_FOUND', message: 'Session expired' });
 
-      const people = session.people as GuestSessionPerson[];
+      const stored = session.people as GuestSessionPerson[];
+      const people = (
+        hasPersonIds(stored) ? stored : (await savePersonIds(ctx.db, session.id)).people
+      ) as IdentifiedGuestPerson[];
       const personIndex = people.findIndex((p) => p.personToken === input.personToken);
       if (personIndex < 0) return null;
-      return { personIndex, name: people[personIndex]!.name };
+      return { personIndex, personId: people[personIndex]!.id, name: people[personIndex]!.name };
     }),
 
   editPersonName: publicProcedure
     .input(
-      z.object({
-        token: z.string(),
-        personToken: z.string().uuid(),
-        targetIndex: z.number().int().min(0),
-        newName: z.string().trim().min(1).max(100),
-        groupSize: z.number().int().min(1).max(20).optional(),
-      }),
+      z
+        .object({
+          token: z.string(),
+          personToken: z.string().uuid(),
+          targetIndex: z.number().int().min(0).optional(),
+          targetId: z.string().uuid().optional(),
+          newName: z.string().trim().min(1).max(100),
+          groupSize: z.number().int().min(1).max(20).optional(),
+        })
+        .refine((input) => namesOnePerson(input.targetIndex, input.targetId), NAME_ONE_PERSON),
     )
     .mutation(async ({ ctx, input }) => {
       const { allowed } = checkRateLimit(`guest-edit-name:${input.token}`, 10, 60 * 1000);
@@ -789,17 +844,14 @@ export const guestRouter = createTRPCRouter({
         const people = [...(session.people as GuestSessionPerson[])];
         const isParticipant = people.some((p) => p.personToken === input.personToken);
         if (!isParticipant) throw new TRPCError({ code: 'FORBIDDEN', message: 'Not a participant' });
-        if (input.targetIndex >= people.length)
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid person index' });
+        const targetIndex = targetIndexOrThrow(people, input.targetIndex, input.targetId);
 
         const normalizedNew = normalizeGuestName(input.newName);
-        const conflict = people.findIndex(
-          (p, i) => i !== input.targetIndex && normalizeGuestName(p.name) === normalizedNew,
-        );
+        const conflict = people.findIndex((p, i) => i !== targetIndex && normalizeGuestName(p.name) === normalizedNew);
         if (conflict >= 0) throw new TRPCError({ code: 'CONFLICT', message: 'Name already taken' });
 
-        people[input.targetIndex] = {
-          ...people[input.targetIndex]!,
+        people[targetIndex] = {
+          ...people[targetIndex]!,
           name: input.newName.trim(),
           ...(input.groupSize != null ? { groupSize: input.groupSize } : {}),
         };
@@ -813,11 +865,14 @@ export const guestRouter = createTRPCRouter({
 
   removePerson: publicProcedure
     .input(
-      z.object({
-        token: z.string(),
-        personToken: z.string().uuid(),
-        targetIndex: z.number().int().min(0),
-      }),
+      z
+        .object({
+          token: z.string(),
+          personToken: z.string().uuid(),
+          targetIndex: z.number().int().min(0).optional(),
+          targetId: z.string().uuid().optional(),
+        })
+        .refine((input) => namesOnePerson(input.targetIndex, input.targetId), NAME_ONE_PERSON),
     )
     .mutation(async ({ ctx, input }) => {
       const { allowed } = checkRateLimit(`guest-remove-person:${input.token}`, 10, 60 * 1000);
@@ -836,27 +891,26 @@ export const guestRouter = createTRPCRouter({
         const people = [...(session.people as GuestSessionPerson[])];
         const isParticipant = people.some((p) => p.personToken === input.personToken);
         if (!isParticipant) throw new TRPCError({ code: 'FORBIDDEN', message: 'Not a participant' });
-        if (input.targetIndex >= people.length)
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid person index' });
+        const targetIndex = targetIndexOrThrow(people, input.targetIndex, input.targetId);
         if (people.length <= 1) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Cannot remove the last person' });
 
-        people.splice(input.targetIndex, 1);
+        people.splice(targetIndex, 1);
 
         // Remap assignments: remove the person and shift indices down
         const assignments = (session.assignments as { itemIndex: number; personIndices: number[] }[])
           .map((a) => ({
             itemIndex: a.itemIndex,
             personIndices: a.personIndices
-              .filter((pi) => pi !== input.targetIndex)
-              .map((pi) => (pi > input.targetIndex ? pi - 1 : pi)),
+              .filter((pi) => pi !== targetIndex)
+              .map((pi) => (pi > targetIndex ? pi - 1 : pi)),
           }))
           .filter((a) => a.personIndices.length > 0);
 
         // Adjust paidByIndex
         let paidByIndex = session.paidByIndex;
-        if (input.targetIndex === paidByIndex) {
+        if (targetIndex === paidByIndex) {
           paidByIndex = 0;
-        } else if (input.targetIndex < paidByIndex) {
+        } else if (targetIndex < paidByIndex) {
           paidByIndex--;
         }
 
@@ -948,12 +1002,16 @@ export const guestRouter = createTRPCRouter({
 
   claimItems: publicProcedure
     .input(
-      z.object({
-        token: z.string(),
-        personIndex: z.number().int().min(0),
-        personToken: z.string().uuid(),
-        claimedItemIndices: z.array(z.number().int().min(0)).max(1000),
-      }),
+      z
+        .object({
+          token: z.string(),
+          // Whose claims these are: personId (the claim page), or personIndex (older clients)
+          personIndex: z.number().int().min(0).optional(),
+          personId: z.string().uuid().optional(),
+          personToken: z.string().uuid(),
+          claimedItemIndices: z.array(z.number().int().min(0)).max(1000),
+        })
+        .refine((input) => namesOnePerson(input.personIndex, input.personId), NAME_ONE_PERSON),
     )
     .mutation(async ({ ctx, input }) => {
       // Rate limit: 10 claims per token per minute
@@ -982,9 +1040,7 @@ export const guestRouter = createTRPCRouter({
         if (!isParticipant) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Invalid person token' });
         }
-        if (input.personIndex >= people.length) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid person index' });
-        }
+        const personIndex = targetIndexOrThrow(people, input.personIndex, input.personId);
 
         // Deduplicate claimed indices
         const claimedSet = new Set(input.claimedItemIndices);
@@ -999,7 +1055,7 @@ export const guestRouter = createTRPCRouter({
 
         // Remove this person from all current assignments
         for (const a of assignments) {
-          a.personIndices = a.personIndices.filter((pi) => pi !== input.personIndex);
+          a.personIndices = a.personIndices.filter((pi) => pi !== personIndex);
         }
 
         // Add this person to claimed items
@@ -1009,8 +1065,8 @@ export const guestRouter = createTRPCRouter({
             assignment = { itemIndex: itemIdx, personIndices: [] };
             assignments.push(assignment);
           }
-          if (!assignment.personIndices.includes(input.personIndex)) {
-            assignment.personIndices.push(input.personIndex);
+          if (!assignment.personIndices.includes(personIndex)) {
+            assignment.personIndices.push(personIndex);
           }
         }
 
@@ -1029,7 +1085,7 @@ export const guestRouter = createTRPCRouter({
           const assignment = assignmentMap.get(claimedIdx);
           if (assignment && assignment.personIndices.length > 1) {
             const otherNames = assignment.personIndices
-              .filter((pi) => pi !== input.personIndex)
+              .filter((pi) => pi !== personIndex)
               .map((pi) => people[pi]?.name ?? 'Someone');
             if (otherNames.length > 0) {
               conflicts.push({ itemIndex: claimedIdx, claimedBy: otherNames });
@@ -1051,11 +1107,12 @@ export const guestRouter = createTRPCRouter({
       });
     }
 
-    const session = await ctx.db.guestSplit.findUnique({
+    let session = await ctx.db.guestSplit.findUnique({
       where: { shareToken: input.token },
     });
     if (!session) throw new TRPCError({ code: 'NOT_FOUND', message: 'Session not found' });
     if (session.expiresAt < new Date()) throw new TRPCError({ code: 'NOT_FOUND', message: 'Session expired' });
+    if (!hasPersonIds(session.people as GuestSessionPerson[])) session = await savePersonIds(ctx.db, session.id);
 
     let receiptImagePath: string | null = null;
     if (session.receiptId) {
@@ -1080,7 +1137,8 @@ export const guestRouter = createTRPCRouter({
         currency: string;
       },
       items: session.items as { name: string; quantity: number; unitPrice: number; totalPrice: number }[],
-      people: toPublicPeople(session.people as GuestSessionPerson[]),
+      // Everyone has an id by now (savePersonIds above)
+      people: toClaimPeople(session.people as IdentifiedGuestPerson[]),
       assignments: session.assignments as { itemIndex: number; personIndices: number[] }[],
       summary: session.summary as
         { personIndex: number; name: string; itemTotal: number; tax: number; tip: number; total: number }[] | null,

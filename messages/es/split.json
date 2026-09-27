@@ -128,6 +128,7 @@
     "removePerson": "Eliminar persona",
     "removePersonConfirm": "¿Eliminar a {name} de esta sesión? Sus selecciones también se eliminarán.",
     "personRemoved": "Persona eliminada",
+    "removedFromSession": "Alguien te eliminó de la división. Vuelve a unirte para continuar.",
     "copyLink": "Copiar enlace",
     "linkCopied": "Enlace copiado al portapapeles",
     "splitItem": "Dividir artículo",
