@@ -469,7 +469,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
 
   const claimItems = trpc.guest.claimItems.useMutation({
     onSuccess: (result) => {
-      // saveClaims reloads the session and then drops the saved draft
+      // saveClaims reloads the session and then drops the saved draft (unless it was edited meanwhile)
       if (result.conflicts && result.conflicts.length > 0) {
         const names = [...new Set(result.conflicts.flatMap((c) => c.claimedBy))];
         toast.warning(t('claimConflict', { names: names.join(', '), count: result.conflicts.length }));
@@ -672,32 +672,36 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   async function saveClaims() {
     if (personIndex === null || activeId === null || !personToken) return;
     const claims = localClaims.get(personIndex) ?? new Set<number>();
+    // Saving until the reload below lands: before it, the session as loaded still shows the
+    // draft as unsaved, and Save would be enabled again
     setSaving(true);
     try {
-      // By id: if someone listed earlier was removed since the session last loaded, an index
-      // would now point at someone else
-      await claimItems.mutateAsync({
-        token,
-        personId: activeId,
-        personToken,
-        claimedItemIndices: Array.from(claims),
+      try {
+        // By id: if someone listed earlier was removed since the session last loaded, an index
+        // would now point at someone else
+        await claimItems.mutateAsync({
+          token,
+          personId: activeId,
+          personToken,
+          claimedItemIndices: Array.from(claims),
+        });
+      } catch {
+        return; // claimItems' onError has said why
+      }
+      // Reload with a new fetch (a poll already in flight may predate the save), then drop the
+      // draft unless it was edited meanwhile, so later changes to this person's claims from
+      // other devices show here instead of the draft
+      const reloaded = await session.refetch();
+      if (reloaded.status !== 'success') return;
+      setClaimedItems((prev) => {
+        if (prev.get(activeId) !== claims) return prev;
+        const next = new Map(prev);
+        next.delete(activeId);
+        return next;
       });
-    } catch {
-      return; // claimItems' onError has said why
     } finally {
       setSaving(false);
     }
-    // Reload with a new fetch (a poll already in flight may predate the save), then drop the
-    // draft unless it was edited meanwhile, so later changes to this person's claims from other
-    // devices show here instead of the draft
-    const reloaded = await session.refetch();
-    if (reloaded.status !== 'success') return;
-    setClaimedItems((prev) => {
-      if (prev.get(activeId) !== claims) return prev;
-      const next = new Map(prev);
-      next.delete(activeId);
-      return next;
-    });
   }
 
   // --- Loading state ---

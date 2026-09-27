@@ -141,7 +141,8 @@ describe('needsMembershipCheck', () => {
   });
 
   test('not before this device is anyone', () => {
-    expect(needsMembershipCheck({ ...check, personId: null })).toBe(false);
+    // Nobody is listed, so only the missing person stops the check
+    expect(needsMembershipCheck({ ...check, personId: null, isListed: () => false })).toBe(false);
   });
 
   test('not while the session lists them', () => {

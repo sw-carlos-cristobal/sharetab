@@ -177,7 +177,7 @@ test.describe('Claim page — someone else removes a person listed earlier', () 
       async (route) => {
         pollArrived();
         await pollsHeld;
-        // The page may have discarded this request (it refetched) or closed by now
+        // The page may have closed by now
         await route.continue().catch(() => {});
       },
     );
