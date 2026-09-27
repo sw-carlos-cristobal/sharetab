@@ -22,7 +22,7 @@
     - Claim sessions: share a receipt link so everyone claims their own items
     - Guest bill splitting with no account needed
     - Multi-currency expenses with automatic exchange-rate conversion
-    - Venmo pay links (optional, admin toggle)
+    - Venmo pay links (optional, admin toggle, USD only)
     - Pluggable AI providers: OpenAI, OpenAI-Codex (ChatGPT OAuth), Claude, Meridian (Claude Max), Ollama
     - Cross-group dashboard with debt simplification
     - 9 languages
