@@ -1,4 +1,12 @@
 import { randomUUID } from 'crypto';
+import { z } from 'zod';
+
+/** A person id as requests send it (personId / targetId), and as stored ids must be */
+export const personIdSchema = z.string().uuid();
+
+function isPersonId(id: unknown): id is string {
+  return personIdSchema.safeParse(id).success;
+}
 
 /** A person in a guest claim session's `people` JSON. */
 export type GuestSessionPerson = {
@@ -18,16 +26,17 @@ export type GuestSessionPerson = {
 
 export type IdentifiedGuestPerson = GuestSessionPerson & { id: string };
 
+// An id that isn't a UUID counts as missing: no request could name that person
 export function hasPersonIds(people: readonly GuestSessionPerson[]): people is IdentifiedGuestPerson[] {
-  return people.every((p) => typeof p.id === 'string' && p.id.length > 0);
+  return people.every((p) => isPersonId(p.id));
 }
 
-/** The people with an id each: anyone without one gets a new random id. */
+/** The people with an id each: anyone without a valid one gets a new random id. */
 export function assignPersonIds(
   people: readonly GuestSessionPerson[],
   newId: () => string = randomUUID,
 ): IdentifiedGuestPerson[] {
-  return people.map((p) => (p.id ? { ...p, id: p.id } : { ...p, id: newId() }));
+  return people.map((p) => (isPersonId(p.id) ? { ...p, id: p.id } : { ...p, id: newId() }));
 }
 
 /**

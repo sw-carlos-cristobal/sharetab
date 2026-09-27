@@ -18,6 +18,7 @@ import {
   assignPersonIds,
   findTargetIndex,
   hasPersonIds,
+  personIdSchema,
   type GuestSessionPerson,
   type IdentifiedGuestPerson,
 } from '../../lib/guest-people';
@@ -830,7 +831,7 @@ export const guestRouter = createTRPCRouter({
           token: z.string(),
           personToken: z.string().uuid(),
           targetIndex: z.number().int().min(0).optional(),
-          targetId: z.string().uuid().optional(),
+          targetId: personIdSchema.optional(),
           newName: z.string().trim().min(1).max(100),
           groupSize: z.number().int().min(1).max(20).optional(),
         })
@@ -879,7 +880,7 @@ export const guestRouter = createTRPCRouter({
           token: z.string(),
           personToken: z.string().uuid(),
           targetIndex: z.number().int().min(0).optional(),
-          targetId: z.string().uuid().optional(),
+          targetId: personIdSchema.optional(),
         })
         .refine((input) => namesOnePerson(input.targetIndex, input.targetId), NAME_ONE_PERSON),
     )
@@ -1016,7 +1017,7 @@ export const guestRouter = createTRPCRouter({
           token: z.string(),
           // Whose claims these are: personId (the claim page), or personIndex (older clients)
           personIndex: z.number().int().min(0).optional(),
-          personId: z.string().uuid().optional(),
+          personId: personIdSchema.optional(),
           personToken: z.string().uuid(),
           claimedItemIndices: z.array(z.number().int().min(0)).max(1000),
         })
@@ -1168,7 +1169,7 @@ export const guestRouter = createTRPCRouter({
           // Who is finalizing: personId (the claim page), or personIndex (older clients); must
           // be the holder of personToken
           personIndex: z.number().int().min(0).optional(),
-          personId: z.string().uuid().optional(),
+          personId: personIdSchema.optional(),
           personToken: z.string().uuid(),
           tipOverride: z.number().int().min(0).optional(),
         })

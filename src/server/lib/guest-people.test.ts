@@ -22,6 +22,10 @@ describe('hasPersonIds', () => {
   test('treats an empty id as missing', () => {
     expect(hasPersonIds([{ id: '', name: 'A' }])).toBe(false);
   });
+
+  test("treats an id that isn't a UUID as missing (requests can only name people by UUID)", () => {
+    expect(hasPersonIds([{ id: 'not-a-uuid', name: 'A' }])).toBe(false);
+  });
 });
 
 describe('assignPersonIds', () => {
@@ -37,6 +41,10 @@ describe('assignPersonIds', () => {
       { id: ID_B, name: 'B', groupSize: 2 },
       { id: ID_C, name: 'C' },
     ]);
+  });
+
+  test("replaces an id that isn't a UUID", () => {
+    expect(assignPersonIds([{ id: 'not-a-uuid', name: 'A' }], () => ID_A)).toEqual([{ id: ID_A, name: 'A' }]);
   });
 
   test('mints distinct random UUIDs by default', () => {
