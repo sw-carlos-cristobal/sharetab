@@ -62,10 +62,12 @@ Edit the specific namespace file (e.g., `messages/es/groups.json`). Reference `m
 
 ## Testing Locally
 
+First complete the dev environment setup in [CONTRIBUTING.md](CONTRIBUTING.md#dev-environment-setup) (`npm install`, `npx prisma generate`, and `cp .env.example .env`). Then:
+
 ```bash
-npm run dev:full        # Start the app
-# Navigate to /YOUR_LOCALE/login to see your translations
 npm run lint:i18n       # Validate keys match English
+npm run dev:full        # Start the app (keeps running; stop it with Ctrl+C)
+# Navigate to /YOUR_LOCALE/login to see your translations
 ```
 
 ## Validation

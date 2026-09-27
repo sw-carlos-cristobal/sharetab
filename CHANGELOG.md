@@ -2,7 +2,7 @@
 
 ShareTab stopped publishing numbered (semver) versions after v0.8.0. Each push to `main` is now released as a build: see [GitHub Releases](https://github.com/sw-carlos-cristobal/sharetab/releases) (tags `build/YYYY.MM.DD.N`) for the commits in each build. This file is no longer updated per release; the section below summarizes notable changes since v0.8.0.
 
-## Since v0.8.0 (rolling builds, 2026-05-08 onward)
+## Since v0.8.0 (rolling builds, 2026-05-08 through build 2026.09.26.5)
 
 ### Features
 
@@ -13,6 +13,8 @@ ShareTab stopped publishing numbered (semver) versions after v0.8.0. Each push t
 - Venmo pay buttons on split results, claim pages, and group balances, for USD only and behind an admin toggle (#118, #119, #120, #121, #122)
 - translations for the remaining untranslated group-page text (#136) and the admin dashboard (#137)
 - commit hash shown in startup logs and the admin UI (#97)
+- claim sessions: a person's identity now needs their token; personal links continue a session on another device, and rejoining under a taken name needs that person's link (#210)
+- default Claude model for the `claude` and `meridian` providers is now `claude-sonnet-5` (#215)
 
 ### Bug Fixes
 
@@ -20,6 +22,8 @@ ShareTab stopped publishing numbered (semver) versions after v0.8.0. Each push t
 - guest claim sessions: retry transaction conflicts and stop cross-session aborts (#202); rate-limit `guest.joinSession` per person and per share token (#207)
 - fresh Docker installs no longer crash-loop on the GuestSplit migration (#193)
 - SQL migrations in `prisma/migrations/` run automatically on container startup (#139)
+- Meridian receipt scanning restored in the Docker image; the OpenAI Codex default model is now `gpt-5.5`, since the backend rejects `gpt-5.4` for ChatGPT accounts; installs that saved `gpt-5.4` (the old `.env.example` and Unraid template did) must change it, see README Upgrading (#211)
+- a Claude login that Claude Code cleared after a failed refresh is reported as expired, so the re-login button and expiry email appear (#217)
 - security: 8 findings from a code review (#106), authorization checks on expense update/delete (#123), rate limits on guest split/claim creation (#124), HMAC-signed impersonation cookie (#125), Zod validation of JSON fields on financial paths (#133), fixes from a deep code audit (#157)
 
 ### Removed
@@ -32,6 +36,7 @@ ShareTab stopped publishing numbered (semver) versions after v0.8.0. Each push t
 - `GuestSplit.status` converted to an enum and an `updatedAt` column added; the SQL migration for it runs on container startup (#127, #139)
 - strict TypeScript flags, Prettier, and lint hardening, with every gate in the required CI job (#165)
 - Dependabot configuration: grouped npm minor/patch and Actions updates, plus Docker base image updates (#168)
+- Docker image smoke test (`npm run test:docker`, `scripts/docker-smoke.sh`); `docker.yml` pushes an image only after it passes (#211, #216)
 
 ## [v0.8.0] - 2026-05-08
 

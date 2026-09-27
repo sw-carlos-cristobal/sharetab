@@ -117,7 +117,7 @@ ShareTab is a free, self-hosted alternative to Splitwise for tracking shared exp
 - **Group expense tracking** with multiple split modes (equal, percentage, shares, exact, item-level)
 - **AI receipt scanning** -- photograph a receipt, AI extracts line items, assign items to group members with proportional tax/tip; zoomable/pannable receipt viewer; rescan with correction prompts
 - **Multi-currency** -- record an expense in any currency and ShareTab converts it to the group's currency at the exchange rate for the expense date (ECB rates from [frankfurter.app](https://frankfurter.app), no API key; the server needs outbound internet access). For a currency without an ECB rate, or when the lookup fails, enter the rate yourself (expenses created from a scanned receipt can't take a manual rate)
-- **Claim sessions** -- share a scanned receipt as a link so everyone picks their own items: split an item between people, join as a couple or group that pays a proportional share, and finalize when done; works for guest splits and group receipt scans, and signed-in users find their guest splits under **My Splits**
+- **Claim sessions** -- share a scanned receipt as a link so everyone picks their own items: split an item between people, join as a couple or group that pays a proportional share, and finalize when done. Each person gets a personal link for continuing as themselves on another device (send it only to yourself: anyone who has it can act as you in that split); rejoining under a name someone already took needs that person's link. Works for guest splits and group receipt scans, and signed-in users find their guest splits under **My Splits**
 - **Venmo payments** -- one-tap Venmo pay links on guest split results, claim sessions, and group balances; paying a group debt records the settlement after you confirm. USD only, and off by default: an admin enables it, users add their Venmo handle in Settings, and a guest split's creator (signed in) adds theirs on the split
 - **9 languages** -- English, Spanish, Swedish, French, German, Brazilian Portuguese, Japanese, Simplified Chinese, and Korean, with locale-aware money formatting; each user's choice is saved to their account
 - **Guest bill splitting** -- no account needed, shareable summary links; admins can turn off guest receipt uploads (admin toggle or `DISABLE_GUEST_UPLOADS`) so anonymous visitors can't upload receipt images or run AI scans (signed-in users with an active account keep access, so also limit who can create an account: Registration Control only covers password sign-up, while magic link, Google and OIDC auto-registration still create accounts; see [Security notes](#oidc-security-notes))
@@ -221,15 +221,21 @@ docker compose up -d --build
 
 ### Prebuilt images
 
-Each push to `main` starts an image build, and each build that finishes is published to the GitHub Container Registry. To run a prebuilt image instead of building one, replace the `build:` block and `image: sharetab:latest` in `docker/docker-compose.yml` with one of these tags, then upgrade from the `docker/` directory with `docker compose pull && docker compose up -d`:
+Each push to `main` starts an image build; each build that passes its smoke test is published to the GitHub Container Registry. To run a prebuilt image instead of building one, replace the `build:` block and `image: sharetab:latest` in `docker/docker-compose.yml` with one of these tags, then upgrade from the `docker/` directory with `docker compose pull && docker compose up -d`:
 
-| Tag                                           | What it is                                                                                                                                                                      |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ghcr.io/sw-carlos-cristobal/sharetab:stable` | A build the maintainer has promoted as stable. Recommended; the Unraid template uses this tag. It can lag `main`, so a feature described in this README may not be in it yet.   |
-| `ghcr.io/sw-carlos-cristobal/sharetab:latest` | The newest commit on `main`, whether or not it has been promoted, so it can include changes that haven't been tried outside CI.                                                 |
-| `ghcr.io/sw-carlos-cristobal/sharetab:<sha>`  | One specific commit (short SHA, e.g. `870a80e`), for pinning. A push that lands while the previous build is still running cancels that build, so not every commit has an image. |
+| Tag                                           | What it is                                                                                                                                                                                                                      |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ghcr.io/sw-carlos-cristobal/sharetab:stable` | A build the maintainer has promoted as stable. Recommended; the Unraid template uses this tag. It can lag `main`, so a feature described in this README may not be in it yet.                                                   |
+| `ghcr.io/sw-carlos-cristobal/sharetab:latest` | The newest build from `main` that passed its smoke test, whether or not it has been promoted, so it can include changes that haven't been tried outside CI. It can lag the newest commit while a build runs or after one fails. |
+| `ghcr.io/sw-carlos-cristobal/sharetab:<sha>`  | One specific commit (short SHA, e.g. `870a80e`), for pinning. A push that lands while the previous build is still running cancels that build, so not every commit has an image.                                                 |
 
 Each push to `main` also gets a GitHub release named `Build YYYY.MM.DD.N-<sha>` listing the changes since the previous build; see [Releases](../../releases). The `stable` git tag normally marks the commit `:stable` was built from ([browse it](../../tree/stable)); after a failed promotion (see [Releases](#releases)) the tag and the image can point at different commits. ShareTab no longer publishes numbered (semver) versions; the last was v0.8.0.
+
+### AI model defaults and Meridian (builds from 2026.09.26)
+
+- `OPENAI_CODEX_MODEL` now defaults to `gpt-5.5` (build `2026.09.26.2`, #211): the Codex backend rejects `gpt-5.4` for ChatGPT accounts. The old `.env.example` and Unraid template set `gpt-5.4` explicitly, and a saved value is kept on upgrade, so change it to `gpt-5.5` in your `.env` or template. Don't just blank it: outside Docker Compose an empty value is passed through as the model name instead of falling back to the default.
+- `ANTHROPIC_MODEL` now defaults to `claude-sonnet-5` for both the `claude` and `meridian` providers (build `2026.09.26.3`, #215). A value saved in your `.env` or template (the old defaults were `claude-sonnet-4-6` and, on Unraid, `claude-opus-4-6`) still wins; change it if you want the new default.
+- Meridian receipt scanning was broken in the Docker image in builds `2026.09.19.4` through `2026.09.26.1` and is fixed in `2026.09.26.2` (#211). If Meridian stopped working in that period, upgrading fixes it.
 
 ### Removed OCR provider
 
@@ -303,7 +309,7 @@ All configuration is done through environment variables. Copy `.env.example` to 
 | `OLLAMA_BASE_URL`        | Ollama server URL. Defaults to `http://localhost:11434`.                                                                                                                                                           |
 | `OLLAMA_MODEL`           | Ollama model name. Defaults to `llava`.                                                                                                                                                                            |
 
-The defaults above are what ShareTab uses when a variable is unset. The Unraid template sets `ANTHROPIC_MODEL=claude-opus-4-6`, so there the `claude` provider also uses Opus unless you change it, and its `OLLAMA_BASE_URL` is a placeholder (`http://192.168.1.x:11434`) to replace with your Ollama host. With Docker Compose, the values in `docker/.env` win for the variables `docker-compose.yml` passes to the container (a variable exported in your shell wins over `.env`; others in `.env`, such as `DATABASE_URL`, are ignored); the fallbacks in `docker-compose.yml` apply only to variables left unset or empty. `UPLOAD_DIR` is the exception: the Compose file fixes it at `/app/uploads`.
+The defaults above are what ShareTab uses when a variable is unset. The Unraid template's `OLLAMA_BASE_URL` is a placeholder (`http://192.168.1.x:11434`) to replace with your Ollama host. With Docker Compose, the values in `docker/.env` win for the variables `docker-compose.yml` passes to the container (a variable exported in your shell wins over `.env`; others in `.env`, such as `DATABASE_URL`, are ignored); the fallbacks in `docker-compose.yml` apply only to variables left unset or empty. `UPLOAD_DIR` is the exception: the Compose file fixes it at `/app/uploads`.
 
 **Using `ollama` in Docker:** `localhost` inside the container is the container itself, so set `OLLAMA_BASE_URL` to the address of the machine running Ollama.
 
@@ -333,14 +339,14 @@ The bundled Docker Compose setup persists `/app/claude` automatically. If you us
 
 ### AI Provider Performance
 
-Benchmarked on a set of receipt photos (grocery, coffee shop, restaurant). Results represent typical single-receipt extraction.
+Benchmarked on a set of receipt photos (grocery, coffee shop, restaurant) in April 2026, before the current model defaults (`gpt-5.5` for Codex, `claude-sonnet-5` for Claude). Results represent typical single-receipt extraction. The Meridian row is from #215, which measured the current default, `claude-sonnet-5`.
 
-| Provider                         | Speed  | Item Accuracy | Cost                                | Notes                                                            |
-| -------------------------------- | ------ | ------------- | ----------------------------------- | ---------------------------------------------------------------- |
-| **OpenAI Codex** (ChatGPT OAuth) | ~6 s   | 5/5 items     | Free (uses ChatGPT subscription)    | **Recommended.** Best balance of speed and accuracy.             |
-| **Meridian** (Claude OAuth)      | ~16 s  | 5/5 items     | Free (uses Claude Max subscription) | Same accuracy, but 2–3x slower.                                  |
-| **OpenAI** (API key)             | ~4 s   | 5/5 items     | Pay-per-token                       | Fastest, but requires an API key and costs money.                |
-| **Ollama** (local LLM)           | Varies | Varies        | Free, fully local                   | Depends on model and hardware. Requires a running Ollama server. |
+| Provider                         | Speed        | Item Accuracy                  | Cost                                | Notes                                                                 |
+| -------------------------------- | ------------ | ------------------------------ | ----------------------------------- | --------------------------------------------------------------------- |
+| **OpenAI Codex** (ChatGPT OAuth) | ~6 s (April) | 5/5 items                      | Free (uses ChatGPT subscription)    | **Recommended.** Best balance of speed and accuracy.                  |
+| **Meridian** (Claude OAuth)      | 7–10 s       | Every total right (3 receipts) | Free (uses Claude Max subscription) | With `claude-sonnet-5`; the April run with an older model took ~16 s. |
+| **OpenAI** (API key)             | ~4 s         | 5/5 items                      | Pay-per-token                       | Fastest, but requires an API key and costs money.                     |
+| **Ollama** (local LLM)           | Varies       | Varies                         | Free, fully local                   | Depends on model and hardware. Requires a running Ollama server.      |
 
 **Recommendation:** Use `openai-codex` as your primary provider. It delivers the same accuracy as API-key providers at no additional cost (it piggybacks on your existing ChatGPT Plus/Pro subscription). Set your priority to:
 
@@ -464,7 +470,7 @@ The client IP comes from the `cf-connecting-ip`, `x-real-ip`, or `x-forwarded-fo
 
 A proxy that forwards no client address makes every user share the proxy's IP, so the per-IP limits apply to everyone combined: 30 sign-in attempts (successful or not) in 15 minutes block password login for everyone, and registrations and guest uploads are capped the same way. The per-email and global limits apply either way.
 
-Guest receipts and claim sessions also have fixed limits that no variable changes. Per share link, per minute: 200 joins (10 per person), 10 item-claim saves, 10 item splits, 10 name edits, 10 person removals, and 120 reads. Per guest receipt, per hour: 3 AI scans and 10 item lookups; per client IP, 20 guest AI scans per hour. A split's creator can change its Venmo handle 10 times per minute. Counters are kept in memory and reset when ShareTab restarts.
+Guest receipts and claim sessions also have fixed limits that no variable changes. Per share link, per minute: 200 joins (10 per person), 10 item-claim saves, 10 item splits, 10 name edits, 10 person removals, 120 reads, and 120 rejoin lookups. Per guest receipt, per hour: 3 AI scans and 10 item lookups; per client IP, 20 guest AI scans per hour. A split's creator can change its Venmo handle 10 times per minute. Counters are kept in memory and reset when ShareTab restarts.
 
 ## Tech Stack
 
@@ -511,7 +517,9 @@ Demo accounts after seeding: `alice@example.com`, `bob@example.com`, `charlie@ex
 # Unit tests (Vitest)
 npm test
 
-# E2E tests (requires dev server running)
+# E2E tests (requires dev server running; install the browser once first, with
+# --with-deps on Linux; see CONTRIBUTING.md for the settings the full suite expects)
+npx playwright install chromium
 BASE_URL=http://localhost:3000 npx playwright test
 
 # E2E with visible browser
@@ -534,7 +542,7 @@ Set `AUTH_RATE_LIMIT_MAX=9999`, `AUTH_IP_RATE_LIMIT_MAX=9999`, `REGISTER_RATE_LI
 There are no version bumps or release branches. Each push to `main` is released automatically:
 
 - [auto-release.yml](.github/workflows/auto-release.yml) tags the commit `build/YYYY.MM.DD.N` and creates a GitHub release listing the commits since the previous build.
-- [docker.yml](.github/workflows/docker.yml) builds the image and pushes it as `ghcr.io/sw-carlos-cristobal/sharetab:latest` and `:<short-sha>`.
+- [docker.yml](.github/workflows/docker.yml) builds the image, runs `scripts/docker-smoke.sh` against it (the same checks as `npm run test:docker`), and pushes it as `ghcr.io/sw-carlos-cristobal/sharetab:latest` and `:<short-sha>` only if they pass.
 
 To promote a build to `stable` (the tag the Unraid template uses), run the **Promote to Stable** workflow ([promote-stable.yml](.github/workflows/promote-stable.yml)) with a build tag or commit SHA; it defaults to the head of `main`. It moves the `stable` git tag, then retags that commit's image as `:stable`. If that commit has no image, the run fails after the git tag has already moved, so the `stable` git tag and the `:stable` image then point at different commits until a later promotion succeeds.
 

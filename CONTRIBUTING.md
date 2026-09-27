@@ -26,12 +26,14 @@ The committed `.npmrc` sets `legacy-peer-deps=true` (CI and the Dockerfile pass 
 The easiest way is the all-in-one script — it starts an embedded PostgreSQL instance (PostgreSQL 18; Docker and CI use PostgreSQL 16) and the Next.js dev server together:
 
 ```bash
+cp .env.example .env   # its DATABASE_URL already points at the embedded database
 npm run dev:full
 ```
 
-Or if you have your own PostgreSQL running, copy `.env.example` to `.env`, set `DATABASE_URL`, then:
+Or if you have your own PostgreSQL running, copy `.env.example` to `.env`, set `DATABASE_URL`, then create the schema and start the server:
 
 ```bash
+npx prisma db push
 npm run dev
 ```
 
@@ -57,16 +59,25 @@ This creates three demo users you can log in with:
 npm test
 ```
 
-Runs ~460 fast Vitest tests (about 2 seconds). Tests sit next to the code they cover (`src/**/*.test.ts`): money and split math, balance computation, rate limiting, exchange rates, sign-in and OIDC policy, guest sessions, AI providers, and the admin, auth, and guest routers.
+Runs ~540 fast Vitest tests (about 2 seconds). Tests sit next to the code they cover (`src/**/*.test.ts`, plus `docker/**/*.test.mjs` for the Docker build scripts): money and split math, balance computation, rate limiting, exchange rates, sign-in and OIDC policy, guest sessions, AI providers, and the admin, auth, and guest routers.
 
 ### E2E tests
 
 ```bash
+npx playwright install chromium   # once, to download the browser (add --with-deps on Linux for its system libraries)
 npm run dev:full   # in one terminal
 BASE_URL=http://localhost:3000 npx playwright test   # in another
 ```
 
 Tip: set `AUTH_RATE_LIMIT_MAX=9999`, `AUTH_IP_RATE_LIMIT_MAX=9999`, `REGISTER_RATE_LIMIT_MAX=9999`, and `GUEST_RATE_LIMIT_MAX=9999` in `.env` to lift the per-email and per-IP limits during test runs (the global guest caps and the fixed guest limits still apply). Every local request counts against one IP, because Next.js adds an `x-forwarded-for` header to local requests.
+
+The full suite also expects the settings CI uses. In `.env`, for the server: `ADMIN_EMAIL=alice@example.com` (the admin tests sign in as the seeded Alice), `AI_PROVIDER_PRIORITY=mock` (deterministic receipt scans), and `EMAIL_SERVER_HOST=localhost` with `EMAIL_SERVER_PORT=2525`, with `node scripts/mock-smtp.mjs 2525` running (it accepts all mail and delivers nothing). Playwright doesn't read `.env`, and the magic-link tests skip unless the test process itself sees `EMAIL_SERVER_HOST`, so pass it on the command line too:
+
+```bash
+EMAIL_SERVER_HOST=localhost BASE_URL=http://localhost:3000 npx playwright test
+```
+
+See the "Run tests" step in `.github/workflows/test.yml`.
 
 ### Linting
 

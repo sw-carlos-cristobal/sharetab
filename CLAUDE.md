@@ -63,7 +63,7 @@ npx prisma db push   # Push schema without migration (dev only)
 - `src/server/lib/signed-cookie.ts` — HMAC-SHA256 `signPayload` / `verifyAndParse` (keyed by `AUTH_SECRET`, falling back to `NEXTAUTH_SECRET`), used for the admin impersonation cookie
 - `src/server/lib/strip-undefined.ts` — `stripUndefined`: drops `undefined`-valued keys so optional zod output fits Prisma input types under `exactOptionalPropertyTypes`
 - `src/lib/venmo.ts` — Venmo handle normalization and pay deep links. Venmo pay links and the split page's handle input show only when the `venmoEnabled` SystemSetting is `'true'` (admin toggle, default off) and the currency is USD; the handle field in Settings always shows
-- `src/lib/guest-session.ts` — Claim-session identity helpers shared by client and server: `normalizeGuestName` (trim + lowercase, also the per-person join rate-limit key), `isGuestSessionToken`, and `storedClaimIdentitySchema` for the identity kept in localStorage to rejoin a session
+- `src/lib/guest-session.ts` — Claim-session identity helpers shared by client and server: `normalizeGuestName`, `isGuestSessionToken`, `storedClaimIdentitySchema` (the identity kept in localStorage), join idempotency keys (`newJoinKey` / `joinKeyFor`), `resumeOutcome` (what a device does with a stored token or a personal link), and the personal-link hash helpers (`personalLinkHash` / `readPersonalLinkToken`, `…/claim#me=<token>`)
 - `src/lib/avatar.ts` — Shared avatar color and initials helpers
 - `src/lib/currencies.ts` — Currency list for the currency selector
 - `src/server/ai/providers/mock.ts` — Deterministic `mock` AI provider: accepted by `AI_PROVIDER_PRIORITY` but not listed as a selectable provider or in the admin test UI; CI runs the build and e2e suite with `AI_PROVIDER_PRIORITY=mock`
@@ -83,7 +83,7 @@ npx prisma db push   # Push schema without migration (dev only)
 - `src/i18n/request.ts` — Server-side locale resolution for next-intl
 - `src/i18n/navigation.ts` — Locale-aware `Link`, `redirect`, `usePathname`, `useRouter`
 - `messages/{locale}/` — Translation files with namespaces: admin, auth, common, dashboard, expenses, groups, settings, split, splits
-- `docker/` — Dockerfile (multi-stage), docker-compose.yml (builds from the checkout), entrypoint.sh (starts bundled PostgreSQL, runs the SQL phases, starts Node)
+- `docker/` — Dockerfile (multi-stage), docker-compose.yml (builds from the checkout), entrypoint.sh (starts bundled PostgreSQL, runs the SQL phases, starts Node; also writes `/etc/machine-id` when missing, since Meridian won't start without one, so a container with a read-only `/etc` needs it mounted)
 - `unraid/sharetab.xml` — Unraid template (runs `ghcr.io/sw-carlos-cristobal/sharetab:stable`); keep its variables in sync with `.env.example` and `docker/docker-compose.yml`
 
 ## Key Conventions
@@ -122,9 +122,9 @@ npx prisma db push   # Push schema without migration (dev only)
 
 ### Unit Tests (Vitest)
 
-- `npm test` — run all unit tests (~490 tests, <2s)
+- `npm test` — run all unit tests (~540 tests, <2s)
 - Tests live co-located with source: `src/**/*.test.ts`, plus `docker/**/*.test.mjs` for the Docker build scripts
-- Covers most of `src/server/lib/`, `src/lib/` money, split-calculator, sign-in-errors, and avatar, `ai/registry.ts`, `ai/providers/openai-codex.ts`, `ai/providers/meridian.ts`, the admin, auth, and guest routers, `app/api/upload/route.ts`, and `docker/stage-runtime-deps.mjs`. `git ls-files '*.test.ts' '*.test.mjs'` lists them
+- Covers most of `src/server/lib/`, `src/lib/` money, split-calculator, sign-in-errors, avatar, and guest-session, `ai/registry.ts`, `ai/providers/openai-codex.ts`, `ai/providers/meridian.ts`, the admin, auth, and guest routers, `app/api/upload/route.ts`, and `docker/stage-runtime-deps.mjs`. `git ls-files '*.test.ts' '*.test.mjs'` lists them
 
 ### E2E Tests (Playwright)
 
@@ -153,9 +153,9 @@ npx prisma db push   # Push schema without migration (dev only)
 ## CI and Releases
 
 - `test.yml` — the required `test` check on PRs: `npm audit --omit=dev --audit-level=high`, `format:check`, `lint`, `tsc --noEmit`, unit tests, `prisma db push` + `prisma/after-push/*.sql` + seed, `build`, then the Playwright suite against `npm run start`
-- `docker-fresh-install.yml` — boots the production image on an empty volume, then restarts it, to exercise `docker/entrypoint.sh` and both SQL phases
+- `docker-fresh-install.yml` — on pull requests, builds the production image and runs `scripts/docker-smoke.sh` against it (fresh install on an empty volume, upgrade restarts, the entrypoint's SQL phases, Meridian startup)
 - `audit.yml` — scheduled npm audit; `auto-assign.yml` — assigns new issues to the owner; Dependabot (`.github/dependabot.yml`) groups npm minor/patch updates (majors come individually) and Actions updates, and also updates the Docker base image
-- No semver releases (retired after v0.8.0): don't bump `package.json` `version` or edit `CHANGELOG.md` for new changes. Each push to `main` runs `auto-release.yml` (tag `build/YYYY.MM.DD.N` + GitHub release listing commits since the previous build) and `docker.yml` (`ghcr.io/sw-carlos-cristobal/sharetab:latest` and `:<short-sha>`). The manual `promote-stable.yml` workflow moves the `stable` git tag and image tag to a chosen build
+- No semver releases (retired after v0.8.0): don't bump `package.json` `version` or edit `CHANGELOG.md` for new changes. Each push to `main` runs `auto-release.yml` (tag `build/YYYY.MM.DD.N` + GitHub release listing commits since the previous build) and `docker.yml` (builds the image, smoke-tests it with `scripts/docker-smoke.sh`, then pushes `ghcr.io/sw-carlos-cristobal/sharetab:latest` and `:<short-sha>`). The manual `promote-stable.yml` workflow moves the `stable` git tag and image tag to a chosen build
 
 ## Docker
 
