@@ -91,6 +91,26 @@ export function shouldRetryResume(failureCount: number, httpStatus: number | und
   return failureCount < 2 && (httpStatus ?? 500) >= 500;
 }
 
+/**
+ * Whether the claim page should ask the server (guest.resumeSession) if this device's person
+ * is still in the session: someone on another device may have removed them. Only when the
+ * session as loaded doesn't list them; at most once per load (loadedAt is the load's time,
+ * checkedThrough the last checked load's); never for a load from before this device became
+ * that person (checkedThrough is set to that moment), since a join's answer arrives before a
+ * load lists the new person; and not while a join, resume or earlier check is in flight.
+ */
+export function needsMembershipCheck(check: {
+  personId: string | null;
+  isListed: (personId: string) => boolean;
+  loadedAt: number;
+  checkedThrough: number;
+  busy: boolean;
+}): boolean {
+  return (
+    check.personId !== null && !check.busy && check.loadedAt > check.checkedThrough && !check.isListed(check.personId)
+  );
+}
+
 // A personal link is the claim page URL with this device's person token in the #fragment,
 // so the same person can continue on another device. Browsers never send the fragment to
 // the server, so the token stays out of request URLs, and so out of access logs and Referer

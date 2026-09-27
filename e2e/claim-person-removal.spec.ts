@@ -165,8 +165,9 @@ test.describe('Claim page — someone else removes a person listed earlier', () 
     await expect(page.getByTestId('personal-link-offer')).toBeVisible({ timeout: 15000 });
 
     // Hold the page's session polls, so it keeps the view from before the removal. Wait until a
-    // poll is held: the page runs one session fetch at a time, so none sent before the route
-    // can still come back with the removal in it.
+    // poll is held: until the page refetches on its own (it doesn't while the card is open),
+    // an interval poll waits for the fetch in flight, so none sent before the route can still
+    // come back with the removal in it.
     let releasePolls = () => {};
     const pollsHeld = new Promise<void>((resolve) => (releasePolls = resolve));
     let pollArrived = () => {};
@@ -176,7 +177,7 @@ test.describe('Claim page — someone else removes a person listed earlier', () 
       async (route) => {
         pollArrived();
         await pollsHeld;
-        // The page may have given up on this request by now (e.g. it refetched)
+        // The page may have discarded this request (it refetched) or closed by now
         await route.continue().catch(() => {});
       },
     );

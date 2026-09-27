@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 import {
   isGuestSessionToken,
   joinKeyFor,
+  needsMembershipCheck,
   newJoinKey,
   personalLinkHash,
   readPersonalLinkToken,
@@ -122,5 +123,38 @@ describe('shouldRetryResume', () => {
     expect(shouldRetryResume(0, 404)).toBe(false);
     expect(shouldRetryResume(0, 429)).toBe(false);
     expect(shouldRetryResume(0, 400)).toBe(false);
+  });
+});
+
+describe('needsMembershipCheck', () => {
+  const ME = 'aaaaaaaa-0000-4000-8000-000000000001';
+  const check = {
+    personId: ME as string | null,
+    isListed: (id: string) => id !== ME,
+    loadedAt: 2000,
+    checkedThrough: 1000,
+    busy: false,
+  };
+
+  test("asks when a load made since the last check doesn't list this device's person", () => {
+    expect(needsMembershipCheck(check)).toBe(true);
+  });
+
+  test('not before this device is anyone', () => {
+    expect(needsMembershipCheck({ ...check, personId: null })).toBe(false);
+  });
+
+  test('not while the session lists them', () => {
+    expect(needsMembershipCheck({ ...check, isListed: () => true })).toBe(false);
+  });
+
+  test('at most once per load, and not for a load from before this device became them', () => {
+    // checkedThrough is the last checked load, or when this device became the person
+    expect(needsMembershipCheck({ ...check, checkedThrough: 2000 })).toBe(false);
+    expect(needsMembershipCheck({ ...check, checkedThrough: 2500 })).toBe(false);
+  });
+
+  test('not while a join, resume or earlier check is in flight', () => {
+    expect(needsMembershipCheck({ ...check, busy: true })).toBe(false);
   });
 });

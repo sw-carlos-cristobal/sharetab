@@ -9,6 +9,7 @@ import { copyToClipboard } from '@/lib/clipboard';
 import {
   claimStorageKey,
   joinKeyFor,
+  needsMembershipCheck,
   personalLinkHash,
   readPersonalLinkToken,
   resumeOutcome,
@@ -156,7 +157,8 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
 
   // This device's person is gone (removed here or on another device): back to the join form.
   // The stored identity goes only if it's still that person (another tab may have joined since).
-  // The page then stays on the join form: it doesn't resume whoever another tab stored.
+  // The page then stays on the join form: it doesn't resume whoever another tab stored on its
+  // own (joining again from the form still returns that stored person; see startJoin).
   function forgetIdentity(removedToken: string) {
     if (getStoredClaimIdentity(token)?.personToken === removedToken) removeStoredClaimIdentity(token);
     autoRejoinAttempted.current = true;
@@ -267,7 +269,10 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     // Unsaved edits were made as whoever this device was before. Saved claims show from the
     // session as loaded, whose indexes are its own, so nothing is carried over from it.
     setClaimedItems(new Map());
-    // Someone who just joined isn't in the session as loaded yet
+    // Someone who just joined isn't in the session as loaded yet. Loads from before now don't
+    // count for the membership check; this refetch drops any poll sent before now, so the
+    // next load is from after the join.
+    membershipCheckedThrough.current = Date.now();
     void session.refetch();
   }
 
@@ -436,28 +441,35 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   }, [session.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Someone on another device may remove this device's person. Their id missing from the session
-  // doesn't prove it: a join's answer arrives before the session lists the new person (so each
-  // join costs one of these checks), so ask the server by token, at most once per session load.
-  const checkedLoadAt = useRef(0);
+  // as loaded doesn't prove it, so ask the server by token (see needsMembershipCheck).
+  // The time of the last load checked, or of becoming this device's person (see adoptIdentity)
+  const membershipCheckedThrough = useRef(0);
   const checkMembership = trpc.guest.resumeSession.useMutation({
     onSuccess: (data, variables) => {
       if (data !== null || identityRef.current?.personToken !== variables.personToken) return;
       forgetIdentity(variables.personToken);
-      // A finalized split can't be joined again, so only say so while it's still open
-      if (session.data?.status !== 'FINALIZED') toast.warning(t('removedFromSession'));
+      // A finalized split can't be joined again, so only say so while it's still open. Read from
+      // the query cache: this callback may run with an older render's session.
+      if (utils.guest.getSession.getData({ token })?.status !== 'FINALIZED') toast.warning(t('removedFromSession'));
     },
   });
   useEffect(() => {
-    if (!session.data || identity === null || indexById.has(identity.personId)) return;
-    if (joinInFlight.current || checkMembership.isPending || checkedLoadAt.current === session.dataUpdatedAt) return;
-    checkedLoadAt.current = session.dataUpdatedAt;
+    if (!session.data || identity === null) return;
+    const check = needsMembershipCheck({
+      personId: identity.personId,
+      isListed: (personId) => indexById.has(personId),
+      loadedAt: session.dataUpdatedAt,
+      checkedThrough: membershipCheckedThrough.current,
+      busy: joinInFlight.current || checkMembership.isPending,
+    });
+    if (!check) return;
+    membershipCheckedThrough.current = session.dataUpdatedAt;
     checkMembership.mutate({ token, personToken: identity.personToken });
   }, [session.data, session.dataUpdatedAt, identity, indexById]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const claimItems = trpc.guest.claimItems.useMutation({
     onSuccess: (result) => {
-      // Sync local Map from server after save so hasAnyUnsavedChanges resets
-      session.refetch();
+      // saveClaims reloads the session and then drops the saved draft
       if (result.conflicts && result.conflicts.length > 0) {
         const names = [...new Set(result.conflicts.flatMap((c) => c.claimedBy))];
         toast.warning(t('claimConflict', { names: names.join(', '), count: result.conflicts.length }));
@@ -659,9 +671,9 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
 
   async function saveClaims() {
     if (personIndex === null || activeId === null || !personToken) return;
+    const claims = localClaims.get(personIndex) ?? new Set<number>();
     setSaving(true);
     try {
-      const claims = localClaims.get(personIndex) ?? new Set<number>();
       // By id: if someone listed earlier was removed since the session last loaded, an index
       // would now point at someone else
       await claimItems.mutateAsync({
@@ -670,19 +682,22 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
         personToken,
         claimedItemIndices: Array.from(claims),
       });
-      // Once the session shows what was saved, drop the draft unless it was edited meanwhile, so
-      // later changes to this person's claims from other devices show here instead of the draft
-      const reloaded = await session.refetch({ cancelRefetch: false });
-      if (reloaded.status !== 'success') return;
-      setClaimedItems((prev) => {
-        if (prev.get(activeId) !== claims) return prev;
-        const next = new Map(prev);
-        next.delete(activeId);
-        return next;
-      });
+    } catch {
+      return; // claimItems' onError has said why
     } finally {
       setSaving(false);
     }
+    // Reload with a new fetch (a poll already in flight may predate the save), then drop the
+    // draft unless it was edited meanwhile, so later changes to this person's claims from other
+    // devices show here instead of the draft
+    const reloaded = await session.refetch();
+    if (reloaded.status !== 'success') return;
+    setClaimedItems((prev) => {
+      if (prev.get(activeId) !== claims) return prev;
+      const next = new Map(prev);
+      next.delete(activeId);
+      return next;
+    });
   }
 
   // --- Loading state ---

@@ -797,7 +797,9 @@ export const guestRouter = createTRPCRouter({
     .input(z.object({ token: z.string().max(64), personToken: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       // A claim page load resumes a few times at most (a personal link, accepting it, the stored
-      // identity), plus retries on server errors. Per share token like getSession's read budget,
+      // identity), plus retries on server errors, plus one membership check per session load
+      // that no longer lists the device's person (i.e. once they were removed; see
+      // needsMembershipCheck). Per share token like getSession's read budget,
       // not per IP: diners share NAT and client IP headers are client-supplied (the same reasons
       // as for joinSession).
       const { allowed } = checkRateLimit(`guest-resume:${input.token}`, 120, 60 * 1000);
