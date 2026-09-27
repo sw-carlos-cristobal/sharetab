@@ -71,7 +71,7 @@ BASE_URL=http://localhost:3000 npx playwright test   # in another
 
 Tip: set `AUTH_RATE_LIMIT_MAX=9999`, `AUTH_IP_RATE_LIMIT_MAX=9999`, `REGISTER_RATE_LIMIT_MAX=9999`, and `GUEST_RATE_LIMIT_MAX=9999` in `.env` to lift the per-email and per-IP limits during test runs (the global guest caps and the fixed guest limits still apply). Every local request counts against one IP, because Next.js adds an `x-forwarded-for` header to local requests.
 
-The full suite also expects the settings CI uses. In `.env`, for the server: `ADMIN_EMAIL=alice@example.com` (the admin tests sign in as the seeded Alice), `AI_PROVIDER_PRIORITY=mock` (deterministic receipt scans), and `EMAIL_SERVER_HOST=localhost` with `EMAIL_SERVER_PORT=2525`, with `node scripts/mock-smtp.mjs 2525` running (it accepts all mail and delivers nothing). Playwright doesn't read `.env`, and the magic-link tests skip unless the test process itself sees `EMAIL_SERVER_HOST`, so pass it on the command line too:
+The full suite also expects the settings CI uses. In `.env`, for the server: `ADMIN_EMAIL=alice@example.com` (the admin tests sign in as the seeded Alice), `AI_PROVIDER_PRIORITY=mock` (deterministic receipt scans), and `EMAIL_SERVER_HOST=localhost` with `EMAIL_SERVER_PORT=2525`, with `node scripts/mock-smtp.mjs 2525` running (it accepts all mail and delivers nothing). Playwright doesn't read `.env`, and the two magic-link tests that send mail skip unless the test process itself sees `EMAIL_SERVER_HOST` (the other magic-link tests fail unless the server has it), so pass it on the command line too:
 
 ```bash
 EMAIL_SERVER_HOST=localhost BASE_URL=http://localhost:3000 npx playwright test

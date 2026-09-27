@@ -122,7 +122,7 @@ npx prisma db push   # Push schema without migration (dev only)
 
 ### Unit Tests (Vitest)
 
-- `npm test` — run all unit tests (~540 tests, <2s)
+- `npm test` — run all unit tests (~540 tests, about 2 seconds)
 - Tests live co-located with source: `src/**/*.test.ts`, plus `docker/**/*.test.mjs` for the Docker build scripts
 - Covers most of `src/server/lib/`, `src/lib/` money, split-calculator, sign-in-errors, avatar, and guest-session, `ai/registry.ts`, `ai/providers/openai-codex.ts`, `ai/providers/meridian.ts`, the admin, auth, and guest routers, `app/api/upload/route.ts`, and `docker/stage-runtime-deps.mjs`. `git ls-files '*.test.ts' '*.test.mjs'` lists them
 
@@ -165,5 +165,5 @@ Run `npm run test:docker` before pushing a change to `docker/`, the entrypoint, 
 
 ```bash
 cd docker && docker compose up -d --build    # Build and start app (PostgreSQL included)
-docker compose exec sharetab su-exec postgres pg_dump -U sharetab sharetab > backup.sql  # Backup
+docker compose exec sharetab su-exec postgres pg_dump -U sharetab sharetab > backup.sql  # Backup (default DB_USER/DB_NAME; see README Backups)
 ```

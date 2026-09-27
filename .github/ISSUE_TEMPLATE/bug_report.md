@@ -28,7 +28,8 @@ What actually happened.
   <!-- Prebuilt image: the commit is next to the version in the admin dashboard's System Health section and in the container startup log. Built with Docker Compose: run `git rev-parse --short HEAD` in your checkout. -->
 - Browser (if UI bug):
 - AI provider (if receipt scanning bug):
-- Deployment type: Docker / bare metal / dev
+- How you run ShareTab: Unraid template / Docker Compose built from this repo / Docker Compose with a prebuilt image / other container setup / bare metal / dev server
+- Host OS / platform:
 - Reverse proxy / CDN, if any (e.g. nginx, Traefik, Cloudflare, none):
 
 ## Logs / Screenshots
