@@ -3,8 +3,8 @@ import { Prisma, type PrismaClient } from '@/generated/prisma/client';
 import { logger } from './logger';
 import { transactionConflictCode, withTransactionRetry, TRANSACTION_RETRY_ATTEMPTS } from './transaction-retry';
 
-// Every claim-session transaction in the guest router reads one GuestSplit row by
-// shareToken and writes back only that row. Under Repeatable Read, a concurrent committed
+// Every claim-session transaction in the guest router reads one GuestSplit row (by
+// shareToken, or by id when saving person ids) and writes back only that row. Under Repeatable Read, a concurrent committed
 // write to that row makes the later writer's UPDATE fail with a serialization failure,
 // which guestTransaction re-runs, so no update is lost. Serializable also aborted
 // transactions on *different* sessions, which surfaced as random join/claim failures

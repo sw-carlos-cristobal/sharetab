@@ -4,8 +4,9 @@ import { randomUUID } from 'crypto';
 export type GuestSessionPerson = {
   // Identifies the person for as long as they are in the session. Their array index changes
   // when someone listed before them is removed, so the claim page targets people by id.
-  // Public (getSession lists everyone's). People saved before ids existed have none until a
-  // read gives them one (see assignPersonIds).
+  // Public (getSession lists everyone's). People saved without one (claim sessions from before
+  // ids existed, and quick splits from guest.createSplit) get one the first time getSession,
+  // resumeSession or joinSession loads them (see assignPersonIds).
   id?: string;
   name: string;
   personToken?: string;
@@ -31,13 +32,14 @@ export function assignPersonIds(
 
 /**
  * The index of the person a request targets: by id, wherever that person is now, or by array
- * index (older clients). -1 when there is no such person, e.g. the id's person was removed.
+ * index (older clients, and API callers such as the e2e suite). -1 when there is no such
+ * person, e.g. the id's person was removed.
  */
 export function findTargetIndex(
-  people: readonly GuestSessionPerson[],
+  people: readonly { id?: string | undefined }[],
   target: { index?: number | undefined; id?: string | undefined },
 ): number {
-  if (target.id !== undefined) return people.findIndex((p) => !!p.id && p.id === target.id);
+  if (target.id !== undefined) return people.findIndex((p) => p.id === target.id);
   if (target.index !== undefined && target.index < people.length) return target.index;
   return -1;
 }

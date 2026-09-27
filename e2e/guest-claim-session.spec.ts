@@ -197,7 +197,12 @@ test.describe('Guest claiming sessions', () => {
 
     // The device holding her token rejoins as her
     const rejoin = await joinGuestSession(ctx, { token: shareToken, name: 'alice', personToken: alice.personToken });
-    expect(rejoin).toEqual({ personIndex: 0, personToken: alice.personToken, name: 'Alice' });
+    expect(rejoin).toEqual({
+      personIndex: 0,
+      personId: alice.personId,
+      personToken: alice.personToken,
+      name: 'Alice',
+    });
 
     await ctx.dispose();
   });

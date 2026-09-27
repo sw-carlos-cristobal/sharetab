@@ -55,7 +55,7 @@ This creates three demo users you can log in with:
 npm test
 ```
 
-Runs ~278 fast Vitest tests (under 1 second). These cover money utilities, split calculations, balance computation, AI providers, admin routes, and more.
+Runs ~580 fast Vitest tests (about 2 seconds). These cover money utilities, split calculations, balance computation, AI providers, admin routes, and more.
 
 ### E2E tests
 

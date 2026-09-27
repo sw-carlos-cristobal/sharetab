@@ -41,28 +41,28 @@ async function getCreatorPayerVenmoHandle(
 // How long a join can be replayed with its join key (Stripe prunes idempotency keys once they are at least 24 hours old)
 const JOIN_REPLAY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
-function toPublicPeople(people: GuestSessionPerson[]) {
+function toPublicPerson({ name, groupSize, personToken }: GuestSessionPerson) {
   // Never includes personToken or join: no guest procedure returns another person's token
   // (a client gets its own from joinSession; the admin export is the only place tokens leave in bulk).
   // hasJoined tells the claim page which names are still free to join as (the results page,
   // which reads getSplit, ignores it).
-  return people.map(({ name, groupSize, personToken }) => ({
-    name,
-    groupSize: groupSize ?? 1,
-    hasJoined: !!personToken,
-  }));
+  return { name, groupSize: groupSize ?? 1, hasJoined: !!personToken };
+}
+
+function toPublicPeople(people: GuestSessionPerson[]) {
+  return people.map(toPublicPerson);
 }
 
 // The claim page's view of the people: public fields plus each person's id, which it uses to
 // target them (their index changes when someone listed before them is removed)
 function toClaimPeople(people: IdentifiedGuestPerson[]) {
-  return toPublicPeople(people).map((person, i) => ({ id: people[i]!.id, ...person }));
+  return people.map((person) => ({ id: person.id, ...toPublicPerson(person) }));
 }
 
 /**
- * Gives people saved before ids existed their ids, once, and returns the session as read in
- * that transaction (so its people and assignments are from the same moment). Keeps any ids
- * another request saved first.
+ * Gives people saved without an id their ids, once, and returns the session as read in that
+ * transaction (so its people and assignments are from the same moment). Keeps any ids another
+ * request saved first.
  */
 async function savePersonIds(db: typeof import('@/server/db').db, sessionId: string) {
   return guestTransaction(db, async (tx) => {
@@ -79,14 +79,19 @@ async function savePersonIds(db: typeof import('@/server/db').db, sessionId: str
   });
 }
 
-// A request names the person it acts on by id (the claim page) or by index (older clients), not both
+// A request names the person it acts on by exactly one of: id (the claim page), or index
+// (older clients, and API callers such as the e2e suite)
 function namesOnePerson(index: number | undefined, id: string | undefined) {
   return (index === undefined) !== (id === undefined);
 }
-const NAME_ONE_PERSON = { message: 'Name the person by index or by id, not both' };
+const NAME_ONE_PERSON = { message: 'Name the person by exactly one of index or id' };
 
 /** The index of the person a request targets (see findTargetIndex), or a TRPCError. */
-function targetIndexOrThrow(people: GuestSessionPerson[], index: number | undefined, id: string | undefined): number {
+function targetIndexOrThrow(
+  people: readonly { id?: string | undefined }[],
+  index: number | undefined,
+  id: string | undefined,
+): number {
   const found = findTargetIndex(people, { index, id });
   if (found >= 0) return found;
   if (id !== undefined) {
@@ -687,8 +692,9 @@ export const guestRouter = createTRPCRouter({
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'Session is no longer accepting claims' });
 
         const stored = session.people as GuestSessionPerson[];
-        // People saved before ids existed get theirs now, and are saved even when the join
-        // changes nothing else, so the id returned is the one getSession lists
+        // People saved without an id get theirs now, and are saved even when the join changes
+        // nothing else, so the id returned is the one getSession lists. Done here rather than
+        // with savePersonIds, so it's one write in this transaction with the join's own changes.
         const idsMissing = !hasPersonIds(stored);
         const people = assignPersonIds(stored);
         const savePeople = () =>
@@ -784,8 +790,9 @@ export const guestRouter = createTRPCRouter({
   // How a returning device finds its person: by the token it stored when it joined, not by
   // name, since anyone in the session can rename anyone. A mutation so the token travels in
   // the request body, not a URL. Returns null when nobody holds the token any more. Doesn't
-  // require CLAIMING: it only maps a token the caller holds to the index and name getSession
-  // already shows, and the claim page also calls it on finalized splits (personal links work there).
+  // require CLAIMING: it only maps a token the caller holds to the index, id and name getSession
+  // already shows, and the claim page also calls it on finalized splits (personal links work
+  // there). Like getSession, it saves ids for people who have none yet (savePersonIds).
   resumeSession: publicProcedure
     .input(z.object({ token: z.string().max(64), personToken: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
@@ -1153,12 +1160,17 @@ export const guestRouter = createTRPCRouter({
 
   finalizeSession: publicProcedure
     .input(
-      z.object({
-        token: z.string(),
-        personIndex: z.number().int().min(0),
-        personToken: z.string().uuid(),
-        tipOverride: z.number().int().min(0).optional(),
-      }),
+      z
+        .object({
+          token: z.string(),
+          // Who is finalizing: personId (the claim page), or personIndex (older clients); must
+          // be the holder of personToken
+          personIndex: z.number().int().min(0).optional(),
+          personId: z.string().uuid().optional(),
+          personToken: z.string().uuid(),
+          tipOverride: z.number().int().min(0).optional(),
+        })
+        .refine((input) => namesOnePerson(input.personIndex, input.personId), NAME_ONE_PERSON),
     )
     .mutation(async ({ ctx, input }) => {
       const { shareToken, finalizeLog } = await guestTransaction(ctx.db, async (tx) => {
@@ -1175,11 +1187,7 @@ export const guestRouter = createTRPCRouter({
         const assignments = parseGuestAssignments(session.assignments);
         const receiptData = parseExtractedData(session.receiptData);
 
-        if (input.personIndex >= people.length) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid person index' });
-        }
-
-        const person = people[input.personIndex];
+        const person = people[targetIndexOrThrow(people, input.personIndex, input.personId)];
         if (!person?.personToken || person.personToken !== input.personToken) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Invalid person token' });
         }

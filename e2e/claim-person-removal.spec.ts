@@ -147,7 +147,7 @@ test.describe('Claim page — someone else removes a person listed earlier', () 
   });
 
   test("becoming someone from a stale view doesn't show a removed person's claims as theirs", async ({ browser }) => {
-    // Host claimed the tea; Alice's personal link is opened on a new device
+    // Ann claimed the tea; Alice's personal link is opened on a new device
     const { ctx, shareToken } = await createSession('Stale Claims Bar');
     const host = await joinGuestSession(ctx, { token: shareToken, name: 'Ann' });
     const alice = await joinGuestSession(ctx, { token: shareToken, name: 'Alice' });
@@ -164,13 +164,23 @@ test.describe('Claim page — someone else removes a person listed earlier', () 
     await page.goto(`/en/split/${shareToken}/claim#me=${alice.personToken}`);
     await expect(page.getByTestId('personal-link-offer')).toBeVisible({ timeout: 15000 });
 
-    // Hold the page's session polls, so it keeps the view from before the removal
+    // Hold the page's session polls, so it keeps the view from before the removal. Wait until a
+    // poll is held: the page runs one session fetch at a time, so none sent before the route
+    // can still come back with the removal in it.
     let releasePolls = () => {};
     const pollsHeld = new Promise<void>((resolve) => (releasePolls = resolve));
-    await page.route('**/api/trpc/guest.getSession*', async (route) => {
-      await pollsHeld;
-      await route.continue();
-    });
+    let pollArrived = () => {};
+    const firstPollHeld = new Promise<void>((resolve) => (pollArrived = resolve));
+    await page.route(
+      (url) => url.pathname.includes('guest.getSession'),
+      async (route) => {
+        pollArrived();
+        await pollsHeld;
+        // The page may have given up on this request by now (e.g. it refetched)
+        await route.continue().catch(() => {});
+      },
+    );
+    await firstPollHeld;
 
     // Ann is removed (her tea claim goes with her), so Alice moves into Ann's place
     const removed = await trpcMutation(ctx, 'guest.removePerson', {

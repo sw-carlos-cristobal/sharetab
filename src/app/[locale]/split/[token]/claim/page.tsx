@@ -99,7 +99,9 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   // is removed, on any device. Indexes are looked up in the session as last loaded (below).
   // This device's person, once it joined or resumed
   const [identity, setIdentityState] = useState<{ personId: string; personToken: string } | null>(null);
-  // The same, for mutation callbacks: they see the render their request was sent from
+  // The same, for mutation callbacks: they can run with an older render's closure (TanStack
+  // Query only hands a pending mutation each render's options after that render commits), so
+  // they read this device's identity from this ref, which setIdentity updates at once
   const identityRef = useRef(identity);
   // Who "Claiming for" is set to (this device's person unless the user picked someone else)
   const [activePersonId, setActivePersonId] = useState<string | null>(null);
@@ -154,8 +156,10 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
 
   // This device's person is gone (removed here or on another device): back to the join form.
   // The stored identity goes only if it's still that person (another tab may have joined since).
+  // The page then stays on the join form: it doesn't resume whoever another tab stored.
   function forgetIdentity(removedToken: string) {
     if (getStoredClaimIdentity(token)?.personToken === removedToken) removeStoredClaimIdentity(token);
+    autoRejoinAttempted.current = true;
     setIdentity(null);
     setActivePersonId(null);
     setClaimedItems(new Map());
@@ -184,6 +188,8 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
           next.delete(removedId);
           return next;
         });
+        // Show the people list without them now, not at the next poll
+        void session.refetch();
       }
       toast.success(t('personRemoved'));
     },
@@ -238,7 +244,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   // The person a personal link names, waiting for the user to confirm it's them
   const [linkOffer, setLinkOffer] = useState<ClaimIdentity | null>(null);
   // A personal link the user accepted, while it's looked up again: the card may have been open
-  // while people were removed, which would make its person index stale
+  // while its person was removed
   const confirmedLinkToken = useRef<string | null>(null);
   // The join this page sent and hasn't seen succeed (see startJoin). Kept in memory, not in
   // storage: a stored pending key could be read and redeemed for the person before this device
@@ -345,7 +351,8 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     resumeSession.mutate({ token, personToken: stored.personToken });
   }
 
-  // Look the link's token up again rather than trusting the card's person index. Does nothing
+  // Look the link's token up again rather than trusting the card (its person may have been
+  // removed since it opened). Does nothing
   // once the card was declined, even in the same tick before it re-renders (declining clears
   // linkedToken).
   function acceptLinkOffer() {
@@ -429,14 +436,15 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   }, [session.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Someone on another device may remove this device's person. Their id missing from the session
-  // doesn't prove it (a join's answer can arrive before the session lists the new person), so
-  // ask the server by token, at most once per session load.
+  // doesn't prove it: a join's answer arrives before the session lists the new person (so each
+  // join costs one of these checks), so ask the server by token, at most once per session load.
   const checkedLoadAt = useRef(0);
   const checkMembership = trpc.guest.resumeSession.useMutation({
     onSuccess: (data, variables) => {
       if (data !== null || identityRef.current?.personToken !== variables.personToken) return;
       forgetIdentity(variables.personToken);
-      toast.warning(t('removedFromSession'));
+      // A finalized split can't be joined again, so only say so while it's still open
+      if (session.data?.status !== 'FINALIZED') toast.warning(t('removedFromSession'));
     },
   });
   useEffect(() => {
@@ -661,6 +669,16 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
         personId: activeId,
         personToken,
         claimedItemIndices: Array.from(claims),
+      });
+      // Once the session shows what was saved, drop the draft unless it was edited meanwhile, so
+      // later changes to this person's claims from other devices show here instead of the draft
+      const reloaded = await session.refetch({ cancelRefetch: false });
+      if (reloaded.status !== 'success') return;
+      setClaimedItems((prev) => {
+        if (prev.get(activeId) !== claims) return prev;
+        const next = new Map(prev);
+        next.delete(activeId);
+        return next;
       });
     } finally {
       setSaving(false);
@@ -1513,6 +1531,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
           {/* Finalize button -- only when no unsaved changes and all items claimed */}
           {!hasAnyUnsavedChanges &&
             personToken &&
+            myPersonId !== null &&
             myPersonIndex !== null &&
             !finalizeSession.isPending &&
             allItemsClaimed && (
@@ -1523,7 +1542,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
                   if (confirm(t('finalizeConfirm'))) {
                     finalizeSession.mutate({
                       token,
-                      personIndex: myPersonIndex,
+                      personId: myPersonId,
                       personToken,
                     });
                   }

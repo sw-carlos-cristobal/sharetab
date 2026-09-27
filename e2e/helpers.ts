@@ -87,7 +87,7 @@ export async function joinGuestSession(
 ) {
   const res = await trpcMutation(ctx, 'guest.joinSession', input);
   const body = await res.text();
-  let joined: { personIndex?: unknown; personToken?: unknown; name?: unknown } | undefined;
+  let joined: { personIndex?: unknown; personId?: unknown; personToken?: unknown; name?: unknown } | undefined;
   try {
     joined = res.ok() ? JSON.parse(body)?.result?.data?.json : undefined;
   } catch {
@@ -95,12 +95,13 @@ export async function joinGuestSession(
   }
   if (
     typeof joined?.personIndex !== 'number' ||
+    typeof joined.personId !== 'string' ||
     typeof joined.personToken !== 'string' ||
     typeof joined.name !== 'string'
   ) {
     throw new Error(`guest.joinSession failed (${res.status()}): ${body}`);
   }
-  return joined as { personIndex: number; personToken: string; name: string };
+  return joined as { personIndex: number; personId: string; personToken: string; name: string };
 }
 
 /**

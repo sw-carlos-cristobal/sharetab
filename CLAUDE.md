@@ -48,6 +48,7 @@ npx prisma db push   # Push schema without migration (dev only)
 - `src/server/lib/env.ts` — `parseBooleanValue`: the boolean env vocabulary (true/1/yes/on, false/0/no/off) shared by `auth-config.ts` and `guest-uploads.ts`
 - `src/server/lib/guest-uploads.ts` — Guest receipt upload kill switch: admin toggle (`guestUploadsEnabled` SystemSetting, default on, cached 10s, save via `saveGuestUploadsSetting`) overridden by `DISABLE_GUEST_UPLOADS=true` (the admin save is refused while it is set; an unrecognized value logs a warning and is ignored). When off, `canUseGuestUploads` refuses anonymous callers at `/api/upload?guest=true` (403) and `guest.processReceipt` (FORBIDDEN); signed-in users with an active (not suspended) account share the Quick Split path and keep access
 - `src/server/lib/guest-join-limit.ts` — `checkJoinRateLimit` for `guest.joinSession`: 10 joins/min per person (share token + the caller's person token when it sends one, else + normalized name) and 200/min per share token (twice the 100-person session cap). The session budget is peeked before the person budget is spent, so a refused call consumes nothing. A client rotating names can use up the per-token budget (accepted, like the other per-token guest limits)
+- `src/server/lib/guest-people.ts` — Claim-session people and their stable public `id`: a person's array index shifts when someone listed before them is removed, so the claim page targets people by id (`claimItems` `personId`, `removePerson`/`editPersonName` `targetId`, `finalizeSession` `personId`; an unknown id is CONFLICT, and the index inputs still work for older clients and the e2e suite). `createClaimSession`/`joinSession` mint ids; people saved without one get theirs the first time `getSession`, `resumeSession` or `joinSession` loads them
 - `src/server/trpc/init.ts` — tRPC context, `publicProcedure`, `protectedProcedure`, `groupMemberProcedure`
 - `src/server/trpc/router.ts` — Root app router (exports `AppRouter` type)
 - `src/server/trpc/routers/` — Individual routers: auth, groups, expenses, balances, settlements, activity, receipts, guest, admin
@@ -57,6 +58,7 @@ npx prisma db push   # Push schema without migration (dev only)
 - `src/components/providers.tsx` — Client-side tRPC + React Query + SessionProvider + ThemeProvider wrapper
 - `src/lib/trpc.ts` — Client-side tRPC React hooks
 - `src/lib/utils.ts` — `cn()` utility for Tailwind class merging
+- `src/lib/claim-drafts.ts` — The claim page keeps unsaved claim edits by person id; `draftsByIndex` places them at each person's index in the session as last loaded (dropping removed people), `sameClaims` compares claim sets
 - `src/generated/prisma/` — Auto-generated Prisma client (do not edit, gitignored)
 - `prisma/schema.prisma` — Database schema (money stored as Int cents)
 - `prisma.config.ts` — Prisma v7 config (datasource URL lives here, not in schema.prisma)
@@ -102,9 +104,9 @@ npx prisma db push   # Push schema without migration (dev only)
 
 ### Unit Tests (Vitest)
 
-- `npm test` — run all unit tests (~490 tests, <2s)
+- `npm test` — run all unit tests (~580 tests, <2s)
 - Tests live co-located with source: `src/**/*.test.ts`, plus `docker/**/*.test.mjs` for the Docker build scripts
-- Covers: `money.ts`, `split-calculator.ts`, `rate-limit.ts`, `upload-dir.ts`, `balance-calculator.ts`, `ai/registry.ts`, `ai/providers/openai-codex.ts`, `ai/providers/meridian.ts`, `lib/normalize-date.ts`, `lib/meridian-login.ts`, `lib/receipt-processor.ts`, `lib/auth-health-poller.ts`, `lib/openai-codex-login.ts`, `lib/auth-config.ts`, `lib/oidc-sign-in.ts`, `lib/user-email.ts`, `lib/password-login.ts`, `trpc/routers/admin.ts`, `trpc/routers/auth.ts`, `src/lib/sign-in-errors.ts`, `lib/guest-uploads.ts`, `lib/guest-join-limit.ts`, `trpc/routers/guest.ts`, `app/api/upload/route.ts`, `docker/stage-runtime-deps.mjs`
+- Covers: `money.ts`, `split-calculator.ts`, `rate-limit.ts`, `upload-dir.ts`, `balance-calculator.ts`, `ai/registry.ts`, `ai/providers/openai-codex.ts`, `ai/providers/meridian.ts`, `lib/normalize-date.ts`, `lib/meridian-login.ts`, `lib/receipt-processor.ts`, `lib/auth-health-poller.ts`, `lib/openai-codex-login.ts`, `lib/auth-config.ts`, `lib/oidc-sign-in.ts`, `lib/user-email.ts`, `lib/password-login.ts`, `trpc/routers/admin.ts`, `trpc/routers/auth.ts`, `src/lib/sign-in-errors.ts`, `lib/guest-uploads.ts`, `lib/guest-join-limit.ts`, `lib/guest-people.ts`, `src/lib/claim-drafts.ts`, `trpc/routers/guest.ts`, `app/api/upload/route.ts`, `docker/stage-runtime-deps.mjs`
 
 ### E2E Tests (Playwright)
 

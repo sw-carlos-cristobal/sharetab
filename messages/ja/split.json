@@ -128,7 +128,7 @@
     "removePerson": "メンバーを削除",
     "removePersonConfirm": "{name}をこのセッションから削除しますか？選択も削除されます。",
     "personRemoved": "メンバーを削除しました",
-    "removedFromSession": "他の参加者があなたを割り勘から削除しました。続けるにはもう一度参加してください。",
+    "removedFromSession": "誰かがあなたを割り勘から削除しました。続けるにはもう一度参加してください。",
     "copyLink": "リンクをコピー",
     "linkCopied": "リンクをクリップボードにコピーしました",
     "splitItem": "アイテムを分割",

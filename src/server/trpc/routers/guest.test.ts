@@ -378,6 +378,16 @@ describe('guest.joinSession', () => {
     expect(savedPeople()).toEqual([{ id: pid(0), name: 'Alice', personToken: ALICE_TOKEN, groupSize: 2 }]);
   });
 
+  test('a replayed join on people saved before person ids existed saves their ids too', async () => {
+    claimSession([{ name: 'Host' }, { name: 'Bob', personToken: OTHER_TOKEN, join: liveJoin('bob') }], {
+      legacy: true,
+    });
+    const joined = await (await caller()).joinSession({ token: 'share-1', name: 'Bob', joinKey: JOIN_KEY });
+    const saved = savedPeople() as { id: string }[];
+    expect(saved.map((p) => p.id)).toEqual([expect.stringMatching(UUID), expect.stringMatching(UUID)]);
+    expect(joined).toEqual({ personIndex: 1, personId: saved[1]!.id, personToken: OTHER_TOKEN, name: 'Bob' });
+  });
+
   test("gives people saved before person ids existed their ids, and returns the caller's", async () => {
     claimSession([{ name: 'Host' }, { name: 'Alice', personToken: ALICE_TOKEN }], { legacy: true });
     const joined = await (await caller()).joinSession({ token: 'share-1', name: 'Alice', personToken: ALICE_TOKEN });
@@ -479,6 +489,17 @@ describe('guest.getSession people', () => {
       { id: expect.stringMatching(UUID), name: 'Host' },
       { id: expect.stringMatching(UUID), name: 'Alice', personToken: ALICE_TOKEN },
     ]);
+    expect(session.people.map((p) => p.id)).toEqual(saved.map((p) => p.id));
+  });
+
+  test('gives ids to the people of a finalized split saved before person ids existed', async () => {
+    claimSession([{ name: 'Host' }, { name: 'Alice', personToken: ALICE_TOKEN }], {
+      legacy: true,
+      status: 'FINALIZED',
+    });
+    const session = await (await caller()).getSession({ token: 'share-1' });
+    const saved = savedPeople() as { id: string }[];
+    expect(saved.map((p) => p.id)).toEqual([expect.stringMatching(UUID), expect.stringMatching(UUID)]);
     expect(session.people.map((p) => p.id)).toEqual(saved.map((p) => p.id));
   });
 
@@ -651,5 +672,109 @@ describe('guest.editPersonName', () => {
       (await caller()).editPersonName({ token: 'share-1', personToken: ALICE_TOKEN, targetId: pid(1), newName: 'X' }),
     ).rejects.toMatchObject({ code: 'CONFLICT' });
     expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+});
+
+// The issue's three-person case: A, B, C joined and B was removed, so C is second and the old
+// index 2 is past the end
+function sessionAfterBWasRemovedFromThree() {
+  claimSession(
+    [
+      { id: pid(0), name: 'A', personToken: ALICE_TOKEN },
+      { id: pid(2), name: 'C', personToken: OTHER_TOKEN },
+    ],
+    { items: items(2) },
+  );
+}
+
+describe('guest.claimItems with three people', () => {
+  test('an id still finds the person whose old index is now past the end', async () => {
+    sessionAfterBWasRemovedFromThree();
+    await (
+      await caller()
+    ).claimItems({ token: 'share-1', personToken: OTHER_TOKEN, personId: pid(2), claimedItemIndices: [0] });
+    expect(savedAssignments()).toEqual([{ itemIndex: 0, personIndices: [1] }]);
+  });
+
+  test('the old index is refused as out of range', async () => {
+    sessionAfterBWasRemovedFromThree();
+    await expect(
+      (await caller()).claimItems({
+        token: 'share-1',
+        personToken: OTHER_TOKEN,
+        personIndex: 2,
+        claimedItemIndices: [0],
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST', message: 'Invalid person index' });
+  });
+});
+
+describe('guest.removePerson and guest.editPersonName by index (older clients)', () => {
+  test('removePerson still takes an index', async () => {
+    sessionAfterBWasRemoved();
+    await (await caller()).removePerson({ token: 'share-1', personToken: ALICE_TOKEN, targetIndex: 1 });
+    expect((savedPeople() as { id: string }[]).map((p) => p.id)).toEqual([pid(0), pid(3)]);
+  });
+
+  test('editPersonName still takes an index', async () => {
+    sessionAfterBWasRemoved();
+    await (
+      await caller()
+    ).editPersonName({ token: 'share-1', personToken: ALICE_TOKEN, targetIndex: 1, newName: 'Cee' });
+    expect((savedPeople() as { name: string }[]).map((p) => p.name)).toEqual(['A', 'Cee', 'D']);
+  });
+
+  test('both refuse a request that names the person both ways, or neither', async () => {
+    sessionAfterBWasRemoved();
+    const api = await caller();
+    const base = { token: 'share-1', personToken: ALICE_TOKEN };
+    await expect(api.removePerson(base)).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(api.editPersonName({ ...base, newName: 'X' })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(api.editPersonName({ ...base, targetIndex: 1, targetId: pid(2), newName: 'X' })).rejects.toMatchObject(
+      { code: 'BAD_REQUEST' },
+    );
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('guest.finalizeSession', () => {
+  function savedStatus() {
+    const call = mockDb.guestSplit.update.mock.calls.at(-1)?.[0] as { data: { status?: string } } | undefined;
+    return call?.data.status;
+  }
+
+  test('finalizes as the person the id names, wherever they are now', async () => {
+    sessionAfterBWasRemoved();
+    await (await caller()).finalizeSession({ token: 'share-1', personToken: OTHER_TOKEN, personId: pid(2) });
+    expect(savedStatus()).toBe('FINALIZED');
+  });
+
+  test('refuses an id nobody has any more with CONFLICT', async () => {
+    sessionAfterBWasRemoved();
+    await expect(
+      (await caller()).finalizeSession({ token: 'share-1', personToken: OTHER_TOKEN, personId: pid(1) }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test("refuses someone else's id with the caller's token", async () => {
+    sessionAfterBWasRemoved();
+    await expect(
+      (await caller()).finalizeSession({ token: 'share-1', personToken: OTHER_TOKEN, personId: pid(3) }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test('still takes an index (older clients), and refuses both or neither', async () => {
+    sessionAfterBWasRemoved();
+    const api = await caller();
+    await expect(
+      api.finalizeSession({ token: 'share-1', personToken: OTHER_TOKEN, personIndex: 1, personId: pid(2) }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(api.finalizeSession({ token: 'share-1', personToken: OTHER_TOKEN })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    await api.finalizeSession({ token: 'share-1', personToken: OTHER_TOKEN, personIndex: 1 });
+    expect(savedStatus()).toBe('FINALIZED');
   });
 });

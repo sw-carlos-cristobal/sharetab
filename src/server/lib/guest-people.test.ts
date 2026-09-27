@@ -47,7 +47,7 @@ describe('assignPersonIds', () => {
 });
 
 describe('findTargetIndex', () => {
-  // B was removed: C and D moved down one place
+  // B was removed: C moved down one place
   const people = [
     { id: ID_A, name: 'A' },
     { id: ID_C, name: 'C' },
@@ -70,6 +70,7 @@ describe('findTargetIndex', () => {
   });
 
   test('never matches a person without an id', () => {
-    expect(findTargetIndex([{ name: 'A' }], { id: ID_A })).toBe(-1);
+    const noIds: { id?: string; name: string }[] = [{ name: 'A' }];
+    expect(findTargetIndex(noIds, { id: ID_A })).toBe(-1);
   });
 });
