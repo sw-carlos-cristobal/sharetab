@@ -6,6 +6,7 @@ import { createTRPCRouter, publicProcedure, protectedProcedure } from '../init';
 import { processReceiptImage } from '../../lib/receipt-processor';
 import { logger } from '../../lib/logger';
 import { checkRateLimit, refundRateLimit } from '../../lib/rate-limit';
+import { checkClaimWriteRateLimit, checkSessionReadRateLimit } from '../../lib/guest-session-limits';
 import { getClientIp } from '../../lib/client-ip';
 import { guestTransaction } from '../../lib/guest-transaction';
 import { parseExtractedData, parseGuestItems, parseGuestPeople, parseGuestAssignments } from '../../lib/json-schemas';
@@ -838,8 +839,7 @@ export const guestRouter = createTRPCRouter({
         .refine((input) => namesOnePerson(input.targetIndex, input.targetId), NAME_ONE_PERSON),
     )
     .mutation(async ({ ctx, input }) => {
-      const { allowed } = checkRateLimit(`guest-edit-name:${input.token}`, 10, 60 * 1000);
-      if (!allowed) {
+      if (!checkClaimWriteRateLimit('edit-name', input.token, input.personToken)) {
         throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'Too many requests. Please try again shortly.' });
       }
       return guestTransaction(ctx.db, async (tx) => {
@@ -885,8 +885,7 @@ export const guestRouter = createTRPCRouter({
         .refine((input) => namesOnePerson(input.targetIndex, input.targetId), NAME_ONE_PERSON),
     )
     .mutation(async ({ ctx, input }) => {
-      const { allowed } = checkRateLimit(`guest-remove-person:${input.token}`, 10, 60 * 1000);
-      if (!allowed) {
+      if (!checkClaimWriteRateLimit('remove-person', input.token, input.personToken)) {
         throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'Too many requests. Please try again shortly.' });
       }
       return guestTransaction(ctx.db, async (tx) => {
@@ -950,8 +949,7 @@ export const guestRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { allowed } = checkRateLimit(`guest-split-item:${input.token}`, 10, 60 * 1000);
-      if (!allowed) {
+      if (!checkClaimWriteRateLimit('split-item', input.token, input.personToken)) {
         throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'Too many requests. Please try again shortly.' });
       }
       return guestTransaction(ctx.db, async (tx) => {
@@ -1024,9 +1022,7 @@ export const guestRouter = createTRPCRouter({
         .refine((input) => namesOnePerson(input.personIndex, input.personId), NAME_ONE_PERSON),
     )
     .mutation(async ({ ctx, input }) => {
-      // Rate limit: 10 claims per token per minute
-      const { allowed: claimAllowed } = checkRateLimit(`guest-claim:${input.token}`, 10, 60 * 1000);
-      if (!claimAllowed) {
+      if (!checkClaimWriteRateLimit('claim', input.token, input.personToken)) {
         throw new TRPCError({
           code: 'TOO_MANY_REQUESTS',
           message: 'Too many claim attempts. Please try again shortly.',
@@ -1108,9 +1104,7 @@ export const guestRouter = createTRPCRouter({
     }),
 
   getSession: publicProcedure.input(z.object({ token: z.string() })).query(async ({ ctx, input }) => {
-    // Rate limit: 120 reads per token per minute (polled every 3s = ~20/min)
-    const { allowed: readAllowed } = checkRateLimit(`guest-session-read:${input.token}`, 120, 60 * 1000);
-    if (!readAllowed) {
+    if (!checkSessionReadRateLimit(input.token)) {
       throw new TRPCError({
         code: 'TOO_MANY_REQUESTS',
         message: 'Too many requests. Please try again shortly.',

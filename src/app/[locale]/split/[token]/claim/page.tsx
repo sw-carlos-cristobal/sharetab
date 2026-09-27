@@ -7,7 +7,9 @@ import { trpc } from '@/lib/trpc';
 import { formatCents } from '@/lib/money';
 import { copyToClipboard } from '@/lib/clipboard';
 import {
+  claimPollInterval,
   claimStorageKey,
+  isSessionLost,
   joinKeyFor,
   needsMembershipCheck,
   personalLinkHash,
@@ -133,7 +135,13 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   });
   const session = trpc.guest.getSession.useQuery(
     { token },
-    { refetchInterval: (query) => (query.state.data?.status === 'FINALIZED' || query.state.error ? false : 3000) },
+    {
+      refetchInterval: (query) =>
+        claimPollInterval({
+          finalized: query.state.data?.status === 'FINALIZED',
+          error: query.state.error && { httpStatus: query.state.error.data?.httpStatus },
+        }),
+    },
   );
 
   // Where each person is in the session as last loaded
@@ -715,7 +723,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   }
 
   // --- Error state ---
-  if (session.error) {
+  if (session.error && isSessionLost(session.data !== undefined, session.error.data?.httpStatus)) {
     return (
       <div className="text-center space-y-6 py-20">
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-muted">

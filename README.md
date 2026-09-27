@@ -470,7 +470,7 @@ The client IP comes from the `cf-connecting-ip`, `x-real-ip`, or `x-forwarded-fo
 
 A proxy that forwards no client address makes every user share the proxy's IP, so the per-IP limits apply to everyone combined: 30 sign-in attempts (successful or not) in 15 minutes block password login for everyone, and registrations and guest uploads are capped the same way. The per-email and global limits apply either way.
 
-Guest receipts and claim sessions also have fixed limits that no variable changes. Per share link, per minute: 200 joins (10 per person), 10 item-claim saves, 10 item splits, 10 name edits, 10 person removals, 120 reads, and 120 rejoin lookups. Per guest receipt, per hour: 3 AI scans and 10 item lookups; per client IP, 20 guest AI scans per hour. A split's creator can change its Venmo handle 10 times per minute. Counters are kept in memory and reset when ShareTab restarts.
+Guest receipts and claim sessions also have fixed limits that no variable changes. Per share link, per minute: 200 joins (10 per person); 300 each of item-claim saves, item splits, name edits, and person removals (30 of each per person); 3000 reads; and 120 rejoin lookups. Per guest receipt, per hour: 3 AI scans and 10 item lookups; per client IP, 20 guest AI scans per hour. A split's creator can change its Venmo handle 10 times per minute. Counters are kept in memory and reset when ShareTab restarts.
 
 ## Tech Stack
 

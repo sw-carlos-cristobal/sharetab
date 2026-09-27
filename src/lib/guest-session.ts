@@ -91,6 +91,36 @@ export function shouldRetryResume(failureCount: number, httpStatus: number | und
   return failureCount < 2 && (httpStatus ?? 500) >= 500;
 }
 
+/** How often the claim page reloads the session while claims are open. */
+export const CLAIM_POLL_MS = 3000;
+/** How often it tries again after a reload failed: rate limited, a server error, or offline. */
+export const CLAIM_POLL_RETRY_MS = 15000;
+
+/**
+ * When the claim page next reloads the session (guest.getSession), or false to stop: once the
+ * split is finalized, or once the session is gone (404: expired or deleted). After any other
+ * failure it keeps trying, less often, so a viewer who was rate limited or briefly offline goes
+ * back to seeing other people's claims without reloading the page (#204).
+ */
+export function claimPollInterval(poll: {
+  finalized: boolean;
+  error: { httpStatus: number | undefined } | null;
+}): number | false {
+  if (poll.finalized) return false;
+  if (poll.error === null) return CLAIM_POLL_MS;
+  return poll.error.httpStatus === 404 ? false : CLAIM_POLL_RETRY_MS;
+}
+
+/**
+ * After guest.getSession failed, whether the claim page gives up on the session and shows the
+ * not-found screen: when it never loaded, or the server says it's gone (404). A session already
+ * on screen stays there through any other failed reload while the poll tries again, instead of
+ * a rate-limited or dropped request replacing the page (#204).
+ */
+export function isSessionLost(loaded: boolean, httpStatus: number | undefined): boolean {
+  return !loaded || httpStatus === 404;
+}
+
 /**
  * Whether the claim page should ask the server (guest.resumeSession) if this device's person
  * is still in the session: someone on another device may have removed them. Only when the

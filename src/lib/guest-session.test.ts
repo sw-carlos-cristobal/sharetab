@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'vitest';
 import {
+  CLAIM_POLL_MS,
+  CLAIM_POLL_RETRY_MS,
+  claimPollInterval,
   isGuestSessionToken,
+  isSessionLost,
   joinKeyFor,
   needsMembershipCheck,
   newJoinKey,
@@ -157,5 +161,46 @@ describe('needsMembershipCheck', () => {
 
   test('not while a join, resume or earlier check is in flight', () => {
     expect(needsMembershipCheck({ ...check, busy: true })).toBe(false);
+  });
+});
+
+describe('claimPollInterval', () => {
+  test('reloads the session every 3 seconds while claims are open', () => {
+    expect(CLAIM_POLL_MS).toBe(3000);
+    expect(claimPollInterval({ finalized: false, error: null })).toBe(CLAIM_POLL_MS);
+  });
+
+  test('stops once the split is finalized', () => {
+    expect(claimPollInterval({ finalized: true, error: null })).toBe(false);
+    expect(claimPollInterval({ finalized: true, error: { httpStatus: 429 } })).toBe(false);
+  });
+
+  test('stops once the session is gone', () => {
+    expect(claimPollInterval({ finalized: false, error: { httpStatus: 404 } })).toBe(false);
+  });
+
+  test('keeps trying, less often, after being rate limited, a server error or a lost connection (#204)', () => {
+    expect(CLAIM_POLL_RETRY_MS).toBeGreaterThan(CLAIM_POLL_MS);
+    expect(claimPollInterval({ finalized: false, error: { httpStatus: 429 } })).toBe(CLAIM_POLL_RETRY_MS);
+    expect(claimPollInterval({ finalized: false, error: { httpStatus: 500 } })).toBe(CLAIM_POLL_RETRY_MS);
+    expect(claimPollInterval({ finalized: false, error: { httpStatus: undefined } })).toBe(CLAIM_POLL_RETRY_MS);
+  });
+});
+
+describe('isSessionLost', () => {
+  test('gives up on a session that never loaded', () => {
+    expect(isSessionLost(false, 404)).toBe(true);
+    expect(isSessionLost(false, 429)).toBe(true);
+    expect(isSessionLost(false, undefined)).toBe(true);
+  });
+
+  test('gives up on a loaded session the server says is gone', () => {
+    expect(isSessionLost(true, 404)).toBe(true);
+  });
+
+  test('keeps a loaded session on screen when a reload is rate limited or fails (#204)', () => {
+    expect(isSessionLost(true, 429)).toBe(false);
+    expect(isSessionLost(true, 500)).toBe(false);
+    expect(isSessionLost(true, undefined)).toBe(false);
   });
 });

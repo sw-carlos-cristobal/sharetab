@@ -576,6 +576,67 @@ function sessionAfterBWasRemoved() {
   );
 }
 
+describe('claim-session write limits (#204)', () => {
+  const writes = [
+    {
+      action: 'claim',
+      call: (api: Awaited<ReturnType<typeof caller>>) =>
+        api.claimItems({ token: 'share-1', personToken: ALICE_TOKEN, personId: pid(1), claimedItemIndices: [0] }),
+    },
+    {
+      action: 'edit-name',
+      call: (api: Awaited<ReturnType<typeof caller>>) =>
+        api.editPersonName({ token: 'share-1', personToken: ALICE_TOKEN, targetId: pid(1), newName: 'X' }),
+    },
+    {
+      action: 'remove-person',
+      call: (api: Awaited<ReturnType<typeof caller>>) =>
+        api.removePerson({ token: 'share-1', personToken: ALICE_TOKEN, targetId: pid(1) }),
+    },
+    {
+      action: 'split-item',
+      call: (api: Awaited<ReturnType<typeof caller>>) =>
+        api.splitClaimItem({ token: 'share-1', personToken: ALICE_TOKEN, itemIndex: 0, splitQuantity: 1 }),
+    },
+  ];
+
+  test.each(writes)(
+    "$action: refuses with TOO_MANY_REQUESTS once the caller's own budget is spent",
+    async ({ action, call }) => {
+      checkRateLimit.mockReturnValue({ allowed: false, retryAfterMs: 30_000 });
+      await expect(call(await caller())).rejects.toMatchObject({ code: 'TOO_MANY_REQUESTS' });
+      expect(checkRateLimit).toHaveBeenCalledWith(
+        `guest-${action}-person:${JSON.stringify(['share-1', ALICE_TOKEN])}`,
+        30,
+        60_000,
+      );
+      expect(mockDb.$transaction).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each(writes)(
+    "$action: refuses with TOO_MANY_REQUESTS once the share token's budget is spent, spending nothing",
+    async ({ action, call }) => {
+      peekRateLimit.mockReturnValue({ allowed: false, retryAfterMs: 30_000 });
+      await expect(call(await caller())).rejects.toMatchObject({ code: 'TOO_MANY_REQUESTS' });
+      expect(peekRateLimit).toHaveBeenCalledWith(`guest-${action}:share-1`, 300);
+      expect(checkRateLimit).not.toHaveBeenCalled();
+      expect(mockDb.$transaction).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe('guest.getSession read limit (#204)', () => {
+  test("refuses with TOO_MANY_REQUESTS once the share token's read budget is spent", async () => {
+    checkRateLimit.mockReturnValue({ allowed: false, retryAfterMs: 30_000 });
+    await expect((await caller()).getSession({ token: 'share-1' })).rejects.toMatchObject({
+      code: 'TOO_MANY_REQUESTS',
+    });
+    expect(checkRateLimit).toHaveBeenCalledWith('guest-session-read:share-1', 3000, 60_000);
+    expect(mockDb.guestSplit.findUnique).not.toHaveBeenCalled();
+  });
+});
+
 describe('guest.claimItems', () => {
   test("saves claims for the person the id names, wherever they are now, leaving others' alone", async () => {
     sessionAfterBWasRemoved();
