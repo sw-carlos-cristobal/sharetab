@@ -32,8 +32,15 @@ import {
   toggleEdit,
   withEdits,
   type ClaimEdits,
+  type SaveOutcome,
 } from '@/lib/claim-drafts';
-import { SAVE_ATTEMPT_TIMEOUT_MS, failedSaveOutcome, settleSave } from '@/lib/claim-save';
+import {
+  SAVE_ATTEMPT_TIMEOUT_MS,
+  failedSaveOutcome,
+  saveRetryDelay,
+  settleSave,
+  type SaveReload,
+} from '@/lib/claim-save';
 import { calculateSplitTotals } from '@/lib/split-calculator';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -58,8 +65,8 @@ import { Link } from '@/i18n/navigation';
 import { buildVenmoPayUrl, isValidVenmoHandle } from '@/lib/venmo';
 import { getInitials, guestAvatarColor } from '@/lib/avatar';
 
-// Waits `ms`, or until `signal` aborts
-function wait(ms: number, signal: AbortSignal) {
+// Resolves after `ms`, or as soon as `signal` aborts
+function sleep(ms: number, signal: AbortSignal) {
   return new Promise<void>((resolve) => {
     const done = () => {
       clearTimeout(timer);
@@ -68,8 +75,43 @@ function wait(ms: number, signal: AbortSignal) {
     };
     const timer = setTimeout(done, ms);
     signal.addEventListener('abort', done);
+    if (signal.aborted) done();
   });
 }
+
+// Resolves once the browser says it's online (at once if it is now), or as soon as `signal` aborts
+function whenOnline(signal: AbortSignal) {
+  return new Promise<void>((resolve) => {
+    const done = () => {
+      window.removeEventListener('online', done);
+      signal.removeEventListener('abort', done);
+      resolve();
+    };
+    window.addEventListener('online', done);
+    signal.addEventListener('abort', done);
+    if (navigator.onLine || signal.aborted) done();
+  });
+}
+
+// A signal that aborts after `ms`, or as soon as `signal` does; `release` when done with it
+function abortAfter(ms: number, signal: AbortSignal) {
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  const timer = setTimeout(abort, ms);
+  signal.addEventListener('abort', abort);
+  if (signal.aborted) abort();
+  return {
+    signal: controller.signal,
+    release: () => {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', abort);
+    },
+  };
+}
+
+// How one claim save attempt ended: the answer's conflicts when stored, the server's message
+// when refused
+type SaveAttempt = { outcome: SaveOutcome; conflicts: { claimedBy: string[] }[]; message?: string };
 
 function getStoredClaimIdentity(token: string): StoredClaimIdentity | null {
   if (typeof window === 'undefined') return null;
@@ -143,12 +185,15 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   // Counts the times unsaved changes were discarded (this device became someone else, or no one),
   // so a save in flight across that doesn't bring its changes back afterwards
   const editsReset = useRef(0);
-  // Whether the page is still open, and a signal that wakes a save it's still sending (see
-  // settleSave) to stop: aborted when the page closes or its unsaved changes are discarded
+  // Whether the page is still open, and a signal that stops a save it's still sending (see
+  // settleSave), waking its waits and abandoning its request: aborted when the page closes or
+  // its unsaved changes are discarded. Made afresh on mount, since React may unmount and mount
+  // the page again (Strict Mode, Fast Refresh) with its refs kept.
   const mounted = useRef(true);
   const stopSaves = useRef(new AbortController());
   useEffect(() => {
     mounted.current = true;
+    stopSaves.current = new AbortController();
     return () => {
       mounted.current = false;
       stopSaves.current.abort();
@@ -754,7 +799,8 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
       next.delete(activeId);
       return next;
     });
-    // Saving until the reload below lands, so Save isn't enabled again in between
+    // Saving until the save is settled (sent, sent again while unanswered, and reloaded), so Save
+    // isn't enabled again in between
     setSaving(true);
     const resetsBefore = editsReset.current;
     const stop = stopSaves.current.signal;
@@ -766,53 +812,73 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     // saved for this person on other items are kept (#226). One save key for every attempt, so
     // the server stores the save once however often it's sent (#238).
     const request = { token, personId: activeId, personToken, saveKey: newRequestKey(), ...editsToSave(edits) };
-    // What the last attempt got back: the answer's conflicts, or why it failed
-    const last: { conflicts: { claimedBy: string[] }[]; failure: unknown } = { conflicts: [], failure: null };
-    // One attempt, abandoned after SAVE_ATTEMPT_TIMEOUT_MS (sending it again is safe)
-    const send = async (retry: boolean) => {
-      const timeout = new AbortController();
-      const timer = setTimeout(() => timeout.abort(), SAVE_ATTEMPT_TIMEOUT_MS);
+    // One attempt, through the plain client rather than a mutation hook, so it can be abandoned
+    // after SAVE_ATTEMPT_TIMEOUT_MS or when the save stops (sending it again is safe), and so it
+    // fails at once when offline instead of pausing (settleSave waits for the device instead)
+    const send = async (retry: boolean): Promise<SaveAttempt> => {
+      const limit = abortAfter(SAVE_ATTEMPT_TIMEOUT_MS, stop);
       try {
-        last.conflicts = (await utils.client.guest.claimItems.mutate(request, { signal: timeout.signal })).conflicts;
-        return 'saved' as const;
+        const { conflicts } = await utils.client.guest.claimItems.mutate(request, { signal: limit.signal });
+        return { outcome: 'saved', conflicts };
       } catch (error) {
-        last.failure = error;
-        const httpStatus =
-          error instanceof TRPCClientError && typeof error.data?.httpStatus === 'number'
-            ? error.data.httpStatus
-            : undefined;
-        return failedSaveOutcome(httpStatus, retry);
+        const answered = error instanceof TRPCClientError && typeof error.data?.httpStatus === 'number';
+        const httpStatus = answered ? (error.data.httpStatus as number) : undefined;
+        return {
+          outcome: failedSaveOutcome(httpStatus, retry),
+          conflicts: [],
+          ...(answered ? { message: error.message } : {}),
+        };
       } finally {
-        clearTimeout(timer);
+        limit.release();
+      }
+    };
+    // One reload, given up on after SAVE_ATTEMPT_TIMEOUT_MS (a paused or hung fetch) or when the
+    // save stops
+    const reload = async (): Promise<SaveReload> => {
+      const limit = abortAfter(SAVE_ATTEMPT_TIMEOUT_MS, stop);
+      try {
+        const cut = new Promise<SaveReload>((resolve) =>
+          limit.signal.addEventListener('abort', () => resolve('failed')),
+        );
+        return await Promise.race([reloadSession(), cut]);
+      } finally {
+        limit.release();
       }
     };
     try {
       // An attempt that got no answer may have been stored, so it's sent again until an answer
       // says (settleSave). Otherwise its changes would stay as unsaved edits after it was stored,
       // and could undo a later change from another device at the next save (#238).
-      const { outcome, reloaded } = await settleSave({
+      const { attempt, reloaded } = await settleSave({
         send,
-        reload: reloadSession,
-        wait: (ms) => wait(ms, stop),
+        reload,
+        wait: (retry) => sleep(saveRetryDelay(retry), stop),
+        online: () => whenOnline(stop),
         going,
       });
       if (editsReset.current !== resetsBefore) return;
       const savedNow = savedClaimsOf(activeId);
       setClaimEdits((prev) => {
         const next = new Map(prev);
-        const kept = editsAfterSave({ outcome, reloaded, savedNow, sent: edits, since: prev.get(activeId) });
+        const kept = editsAfterSave({
+          outcome: attempt.outcome,
+          reloaded,
+          savedNow,
+          sent: edits,
+          since: prev.get(activeId),
+        });
         if (kept.size > 0) next.set(activeId, kept);
         else next.delete(activeId);
         return next;
       });
       // Said once the outcome is settled (no toast per attempt while it's sent again), and not
       // for a save abandoned because the page closed or the person was removed
-      if (!mounted.current || (outcome === 'unknown' && !going())) return;
-      if (outcome !== 'saved') {
-        toast.error(last.failure instanceof Error ? last.failure.message : String(last.failure));
-      } else if (last.conflicts.length > 0) {
-        const names = [...new Set(last.conflicts.flatMap((c) => c.claimedBy))];
-        toast.warning(t('claimConflict', { names: names.join(', '), count: last.conflicts.length }));
+      if (!mounted.current || (attempt.outcome === 'unknown' && !going())) return;
+      if (attempt.outcome !== 'saved') {
+        toast.error(attempt.message ?? tc('errors.generic'));
+      } else if (attempt.conflicts.length > 0) {
+        const names = [...new Set(attempt.conflicts.flatMap((c) => c.claimedBy))];
+        toast.warning(t('claimConflict', { names: names.join(', '), count: attempt.conflicts.length }));
       } else {
         toast.success(t('claimsSavedToast'));
       }
@@ -835,7 +901,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
 
   // Loads the session again: 'gone' when the server says it no longer exists (the page then
   // shows that, and trying again won't help)
-  async function reloadSession(): Promise<'loaded' | 'failed' | 'gone'> {
+  async function reloadSession(): Promise<SaveReload> {
     const result = await session.refetch();
     if (result.status === 'success') return 'loaded';
     return isSessionLost(true, result.error?.data?.httpStatus) ? 'gone' : 'failed';

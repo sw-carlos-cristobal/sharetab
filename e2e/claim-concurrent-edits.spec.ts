@@ -316,7 +316,9 @@ test.describe('Claim page — two devices edit the same person (#226)', () => {
     release();
 
     // Reloads keep failing: the page keeps the pie in the save, and keeps trying. One reload is
-    // four requests (the query's own three retries), so a fifth means the page is on its second
+    // four requests (the query's own three retries), so by the fifth failed request the first
+    // reload has failed (a poll may be among them); the checks below and sawUnsavedChanges are
+    // what tell the fix apart
     await expect.poll(() => failedReloads, { timeout: 30000 }).toBeGreaterThanOrEqual(5);
     await expect(page.getByTestId('save-claims-btn')).toBeDisabled();
     await expect(page.getByTestId('claim-item-2')).toHaveAttribute('aria-pressed', 'true');
@@ -417,7 +419,7 @@ test.describe('Claim page — two devices edit the same person (#226)', () => {
 });
 
 test.describe('guest.claimItems save keys (#238)', () => {
-  test('a save sent again with its key is stored once, even when both copies arrive together', async () => {
+  test('a save sent again with its key is not applied again, and both of two copies sent at once answer saved', async () => {
     const ctx = await request.newContext({ baseURL: BASE });
     const createRes = await trpcMutation(ctx, 'guest.createClaimSession', {
       receiptData: { merchantName: 'Save Key Diner', subtotal: 3000, tax: 0, tip: 0, total: 3000, currency: 'USD' },
@@ -457,7 +459,8 @@ test.describe('guest.claimItems save keys (#238)', () => {
     // The same key with other changes is refused
     expect((await forCat(pieKey, { addItemIndices: [1] })).status()).toBe(409);
 
-    // Two copies of one save at once: one stores it, the other finds its key
+    // Two copies of one save at once (a smoke check: they may not overlap, and adding an item
+    // twice looks like adding it once): both answer saved, and the key is kept
     const teaKey = '99999999-9999-4999-8999-000000000002';
     const both = await Promise.all([forCat(teaKey, { addItemIndices: [0] }), forCat(teaKey, { addItemIndices: [0] })]);
     for (const res of both) expect(res.ok(), await res.text()).toBe(true);

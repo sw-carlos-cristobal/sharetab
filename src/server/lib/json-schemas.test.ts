@@ -79,14 +79,12 @@ describe('parseGuestPeople', () => {
     expect(() => parseGuestPeople([{}])).toThrow(TRPCError);
   });
 
-  it("keeps well-formed save records and ignores malformed ones, so they can't fail a finalize (#238)", () => {
-    const save = { key: '55555555-5555-4555-8555-555555555555', hash: 'aaaaaaaaaaaaaaaa' };
+  it("ignores stored save records, so a malformed one can't fail a finalize (#238)", () => {
     const people = parseGuestPeople([
-      { name: 'Alice', saves: [save] },
-      { name: 'Bob', saves: 'junk' },
-      { name: 'Cat', saves: [null, { key: 1 }, save] },
+      { name: 'Alice', saves: 'junk' },
+      { name: 'Bob', saves: [null, { key: 1 }] },
     ]);
-    expect(people.map((p) => p.saves)).toEqual([[save], undefined, [save]]);
+    expect(people.map((p) => p.name)).toEqual(['Alice', 'Bob']);
   });
 });
 

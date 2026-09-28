@@ -3,12 +3,15 @@ import { CLAIM_POLL_RETRY_MS } from './guest-session';
 
 /**
  * How many times the claim page sends one save (with the same save key) before it stops waiting
- * to learn whether it was stored: waits of 45 to 90 seconds in all between attempts that got no
- * answer. Past that the save's changes stay as unsaved edits, as before #238.
+ * to learn whether it was stored, and how many times it reloads after a stored save before it
+ * stops waiting for a reload to land. Attempts wait for the device to be online, so an outage
+ * doesn't use them up; the waits between them add up to 45 to 90 seconds, plus up to
+ * SAVE_ATTEMPT_TIMEOUT_MS for each attempt that hangs. Past that, editsAfterSave keeps what it
+ * can't settle.
  */
 export const SAVE_ATTEMPTS = 10;
 
-/** How long the claim page waits for the answer to one save attempt before sending it again. */
+/** How long the claim page waits for the answer to one save attempt, or one reload, before giving up on it. */
 export const SAVE_ATTEMPT_TIMEOUT_MS = 30_000;
 
 /**
@@ -16,17 +19,20 @@ export const SAVE_ATTEMPT_TIMEOUT_MS = 30_000;
  * (undefined when no answer came). `retry`: the attempt sent a save again, with the same save
  * key, after an earlier attempt of it got no answer; the server answers a retry of a stored save
  * as stored (#238).
- * - No answer, or a server error: unknown. A server error can come after the save was stored
- *   (e.g. the connection dropped at commit), and sending it again is safe.
- * - A retry rate limited (429) or that lost to other writes (409, the transaction's retries ran
- *   out): unknown. It stored nothing, but an earlier attempt may have.
- * - Any other client error: refused. For a first attempt nothing was stored; for a retry the
- *   refusal is for good (the session was finalized or is gone, or the caller was removed), and
- *   whatever an earlier attempt stored no longer matters.
+ * - No answer, or a server error other than 503: unknown. The error can come after the save was
+ *   stored (e.g. the connection dropped at commit), and sending it again is safe.
+ * - A first attempt refused with any other status stored nothing: a client error, 409 (the
+ *   person is no longer in the split, or the transaction's retries ran out), 429 (rate limited)
+ *   or 503 (busy: the transaction rolled back; #203 doesn't retry it).
+ * - A retry answered 409, 429 or 503 stored nothing itself, but an earlier attempt may have:
+ *   unknown. (A 409 can also mean the person was removed; the page then stops at its next poll,
+ *   which no longer lists them.)
+ * - A retry refused otherwise is refused for good (the session was finalized or is gone, or the
+ *   caller was removed): whatever an earlier attempt stored no longer matters.
  */
 export function failedSaveOutcome(httpStatus: number | undefined, retry: boolean): SaveOutcome {
-  if (httpStatus === undefined || httpStatus >= 500) return 'unknown';
-  if (retry && (httpStatus === 429 || httpStatus === 409)) return 'unknown';
+  if (httpStatus === undefined || (httpStatus >= 500 && httpStatus !== 503)) return 'unknown';
+  if (retry && (httpStatus === 409 || httpStatus === 429 || httpStatus === 503)) return 'unknown';
   return 'refused';
 }
 
@@ -41,34 +47,44 @@ export function saveRetryDelay(attempt: number, random: () => number = Math.rand
   return ceiling / 2 + (random() * ceiling) / 2;
 }
 
-/**
- * Sends a save until the answer settles whether it was stored (up to SAVE_ATTEMPTS), then
- * reloads the session. A stored save reloads until a reload lands (or the session is gone), so
- * its changes stay in the save in flight rather than showing as unsaved changes the server
- * already has; any other outcome reloads once. Stops, without reloading, as soon as `going()`
- * turns false (the page closed, or its unsaved changes were discarded).
- */
-export async function settleSave(steps: {
-  send: (retry: boolean) => Promise<SaveOutcome>;
-  reload: () => Promise<'loaded' | 'failed' | 'gone'>;
-  wait: (ms: number) => Promise<void>;
-  going: () => boolean;
-  delay?: (attempt: number) => number;
-}): Promise<{ outcome: SaveOutcome; reloaded: boolean }> {
-  const delay = steps.delay ?? saveRetryDelay;
-  let outcome = await steps.send(false);
-  for (let attempt = 1; outcome === 'unknown' && attempt < SAVE_ATTEMPTS && steps.going(); attempt++) {
-    await steps.wait(delay(attempt - 1));
-    if (!steps.going()) break;
-    outcome = await steps.send(true);
-  }
-  if (!steps.going()) return { outcome, reloaded: false };
+/** A reload of the session: landed, failed, or gone (the server says the session no longer exists). */
+export type SaveReload = 'loaded' | 'failed' | 'gone';
 
-  let reload = await steps.reload();
-  for (let attempt = 0; reload === 'failed' && outcome === 'saved' && steps.going(); attempt++) {
-    await steps.wait(delay(attempt));
-    if (!steps.going()) break;
-    reload = await steps.reload();
+/**
+ * Sends a save until an answer settles whether it was stored, then reloads the session:
+ * - an unknown outcome is sent again (same request, same save key) after `wait(attempt)` and
+ *   `online()`, up to SAVE_ATTEMPTS sends;
+ * - a stored save reloads until a reload lands, the session is gone, or SAVE_ATTEMPTS reloads
+ *   failed, so its changes stay in the save in flight rather than showing as unsaved changes the
+ *   server already has; any other outcome reloads once.
+ * Stops at its next step, without reloading, once `going()` is false (the page closed, its
+ * unsaved changes were discarded, or the person was removed). Returns the last attempt.
+ */
+export async function settleSave<Attempt extends { outcome: SaveOutcome }>(io: {
+  send: (retry: boolean) => Promise<Attempt>;
+  reload: () => Promise<SaveReload>;
+  wait: (attempt: number) => Promise<void>;
+  online: () => Promise<void>;
+  going: () => boolean;
+}): Promise<{ attempt: Attempt; reloaded: boolean }> {
+  let attempt = await io.send(false);
+  for (let sent = 1; attempt.outcome === 'unknown' && sent < SAVE_ATTEMPTS && io.going(); sent++) {
+    await io.wait(sent - 1);
+    await io.online();
+    if (!io.going()) break;
+    attempt = await io.send(true);
   }
-  return { outcome, reloaded: reload === 'loaded' };
+  if (!io.going()) return { attempt, reloaded: false };
+
+  let reload = await io.reload();
+  for (
+    let tries = 1;
+    reload === 'failed' && attempt.outcome === 'saved' && tries < SAVE_ATTEMPTS && io.going();
+    tries++
+  ) {
+    await io.wait(tries - 1);
+    if (!io.going()) break;
+    reload = await io.reload();
+  }
+  return { attempt, reloaded: reload === 'loaded' };
 }
