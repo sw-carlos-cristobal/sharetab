@@ -1,5 +1,14 @@
 import { describe, expect, test } from 'vitest';
-import { draftsByIndex, editsToSave, hasEdits, restoreEdits, stackEdits, toggleEdit, withEdits } from './claim-drafts';
+import {
+  draftsByIndex,
+  editsAfterSave,
+  editsToSave,
+  hasEdits,
+  restoreEdits,
+  stackEdits,
+  toggleEdit,
+  withEdits,
+} from './claim-drafts';
 
 describe('draftsByIndex', () => {
   test("puts each person's unsaved claims at their index in the people list the page has now", () => {
@@ -177,5 +186,39 @@ describe('stackEdits', () => {
     // The next poll loads what the save stored: the tap-off is still there, waiting to be saved
     expect(withEdits(new Set([2]), kept)).toEqual(new Set());
     expect(hasEdits(new Set([2]), kept)).toBe(true);
+  });
+});
+
+describe('editsAfterSave', () => {
+  // Claimed item 2 and saved; tapped it off while the save was out
+  const sent = new Map([[2, true]]);
+  const since = new Map([[2, false]]);
+
+  test('saved and reloaded: only the changes made since remain', () => {
+    expect(editsAfterSave({ outcome: 'saved', reloaded: true, savedNow: new Set([2]), sent, since })).toEqual(since);
+  });
+
+  test('refused by the server (nothing stored): the sent changes come back under the newer ones', () => {
+    const kept = editsAfterSave({
+      outcome: 'refused',
+      reloaded: true,
+      savedNow: new Set(),
+      sent: new Map([[1, true]]),
+      since: undefined,
+    });
+    expect(kept).toEqual(new Map([[1, true]]));
+  });
+
+  test('no answer (it may still be stored): every change is kept, whatever the reload shows (#226 review)', () => {
+    // The reload came back before the save committed, showing item 2 unclaimed
+    const kept = editsAfterSave({ outcome: 'unknown', reloaded: true, savedNow: new Set(), sent, since });
+    // Once the commit shows up, the tap-off still wins and is waiting to be saved
+    expect(withEdits(new Set([2]), kept)).toEqual(new Set());
+    expect(hasEdits(new Set([2]), kept)).toBe(true);
+  });
+
+  test('saved but not reloaded: every change is kept', () => {
+    const kept = editsAfterSave({ outcome: 'saved', reloaded: false, savedNow: new Set(), sent, since });
+    expect(kept).toEqual(new Map([[2, false]]));
   });
 });

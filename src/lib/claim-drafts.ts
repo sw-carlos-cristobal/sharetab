@@ -94,3 +94,32 @@ export function restoreEdits(
 export function stackEdits(older: ClaimEdits, newer: ClaimEdits | undefined): Map<number, boolean> {
   return new Map([...older, ...(newer ?? [])]);
 }
+
+/**
+ * How a save ended: stored ('saved'), refused by the server (an error answer: nothing was
+ * stored), or unknown (no answer, e.g. a dropped connection or a proxy's error page: the server
+ * may have stored it, even after the page reloaded).
+ */
+export type SaveOutcome = 'saved' | 'refused' | 'unknown';
+
+/**
+ * A person's unsaved changes once a save of `sent` has ended and the page has reloaded (or
+ * tried to), given the changes made meanwhile (`since`, judged against the claims with the save
+ * applied). Only when the answer settles what's stored are changes compared with the claims:
+ * - saved and reloaded: the claims shown include it, so only the changes made since remain;
+ * - refused: nothing was stored, so the sent changes come back under the newer ones
+ *   (restoreEdits, compared with the claims as reloaded);
+ * - otherwise (no answer, or saved but not reloaded): the claims the page has may not show what
+ *   was stored, now or later, so every change is kept as it is (stackEdits).
+ */
+export function editsAfterSave(save: {
+  outcome: SaveOutcome;
+  reloaded: boolean;
+  savedNow: ReadonlySet<number>;
+  sent: ClaimEdits;
+  since: ClaimEdits | undefined;
+}): Map<number, boolean> {
+  if (save.outcome === 'saved' && save.reloaded) return new Map(save.since);
+  if (save.outcome === 'refused') return restoreEdits(save.savedNow, save.sent, save.since);
+  return stackEdits(save.sent, save.since);
+}

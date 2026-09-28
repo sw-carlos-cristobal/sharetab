@@ -3,6 +3,7 @@
 import { use, useState, useMemo, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useLocale, useTranslations } from 'next-intl';
+import { TRPCClientError } from '@trpc/client';
 import { trpc } from '@/lib/trpc';
 import { formatCents } from '@/lib/money';
 import { copyToClipboard } from '@/lib/clipboard';
@@ -24,13 +25,13 @@ import {
 } from '@/lib/guest-session';
 import {
   draftsByIndex,
+  editsAfterSave,
   editsToSave,
   hasEdits,
-  restoreEdits,
-  stackEdits,
   toggleEdit,
   withEdits,
   type ClaimEdits,
+  type SaveOutcome,
 } from '@/lib/claim-drafts';
 import { calculateSplitTotals } from '@/lib/split-calculator';
 import { Button } from '@/components/ui/button';
@@ -571,12 +572,12 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   // Check if ANY person has unsaved local edits (not just the currently selected one). A save in
   // flight counts too: until it lands, finalizing could lock in the claims from before it
   const hasAnyUnsavedChanges = useMemo(() => {
-    if (savingEdits.size > 0) return true;
+    if (savingByIndex.size > 0) return true;
     for (const [pIdx, edits] of localEdits) {
       if (hasEdits(baseClaimsMap.get(pIdx) ?? new Set<number>(), edits)) return true;
     }
     return false;
-  }, [savingEdits, localEdits, baseClaimsMap]);
+  }, [savingByIndex, localEdits, baseClaimsMap]);
 
   // All items have at least one saved claimant
   const allItemsClaimed = useMemo(() => {
@@ -745,33 +746,27 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     setSaving(true);
     const resetsBefore = editsReset.current;
     try {
-      let saved = false;
+      let outcome: SaveOutcome = 'unknown';
       try {
         // By id: if someone listed earlier was removed since the session last loaded, an index
         // would now point at someone else. Only the items changed here are sent, so claims
         // another device saved for this person on other items are kept (#226)
         await claimItems.mutateAsync({ token, personId: activeId, personToken, ...editsToSave(edits) });
-        saved = true;
-      } catch {
-        // claimItems' onError has said why
+        outcome = 'saved';
+      } catch (error) {
+        // claimItems' onError has said why. An error answer from the server means nothing was
+        // stored; no answer (a dropped connection, a proxy's error page) means it may have been
+        const answered = error instanceof TRPCClientError && typeof error.data?.httpStatus === 'number';
+        outcome = answered ? 'refused' : 'unknown';
       }
-      // Reload with a new fetch (a poll already in flight may predate the save), whether or not the
-      // save went through: the claims it stored are on screen before its changes leave the save in
-      // flight, and after an error the reload shows whether it was stored anyway (the answer can
-      // be lost after the server stored it)
-      const reloaded = await session.refetch();
-      // Put the changes back unless they're saved and on screen, or were discarded meanwhile
-      if (!(saved && reloaded.status === 'success') && editsReset.current === resetsBefore) {
+      // Reload with a new fetch (a poll already in flight may predate the save), so the claims it
+      // stored are on screen before its changes leave the save in flight
+      const reloaded = (await session.refetch()).status === 'success';
+      if (editsReset.current === resetsBefore) {
         const savedNow = savedClaimsOf(activeId);
         setClaimEdits((prev) => {
           const next = new Map(prev);
-          // Reloaded: compared with the claims as they are now, the sent changes that weren't
-          // stored come back under the ones made since. Not reloaded: the claims the page has may
-          // predate what was stored, so every change is kept as it is (see stackEdits)
-          const kept =
-            reloaded.status === 'success'
-              ? restoreEdits(savedNow, edits, prev.get(activeId))
-              : stackEdits(edits, prev.get(activeId));
+          const kept = editsAfterSave({ outcome, reloaded, savedNow, sent: edits, since: prev.get(activeId) });
           if (kept.size > 0) next.set(activeId, kept);
           else next.delete(activeId);
           return next;
