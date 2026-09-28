@@ -1,5 +1,5 @@
 import { test, expect, request, type Page } from '@playwright/test';
-import { joinGuestSession, trpcMutation, trpcQuery, trpcResult } from './helpers';
+import { joinGuestSession, personIdByName, trpcMutation, trpcQuery, trpcResult } from './helpers';
 import { claimStorageKey } from '../src/lib/guest-session';
 
 const BASE = process.env.BASE_URL || 'http://localhost:3001';
@@ -61,7 +61,7 @@ async function fourPeople(page: Page, merchantName: string) {
   // Dee claims the cake
   const deeClaims = await trpcMutation(ctx, 'guest.claimItems', {
     token: shareToken,
-    personIndex: dee.personIndex,
+    personId: dee.personId,
     personToken: dee.personToken,
     claimedItemIndices: [1],
   });
@@ -81,7 +81,7 @@ async function annRemovesBob(
   const removed = await trpcMutation(ctx, 'guest.removePerson', {
     token: shareToken,
     personToken: annToken,
-    targetIndex: 1,
+    targetId: await personIdByName(ctx, shareToken, 'Bob'),
   });
   expect(removed.ok(), await removed.text()).toBe(true);
   await expect(page.getByTestId('switch-person-3')).toHaveCount(0, { timeout: 15000 });
@@ -132,7 +132,7 @@ test.describe('Claim page — someone else removes a person listed earlier', () 
     const removed = await trpcMutation(ctx, 'guest.removePerson', {
       token: shareToken,
       personToken: ann.personToken,
-      targetIndex: 2,
+      targetId: await personIdByName(ctx, shareToken, 'Cat'),
     });
     expect(removed.ok(), await removed.text()).toBe(true);
 
@@ -153,7 +153,7 @@ test.describe('Claim page — someone else removes a person listed earlier', () 
     const alice = await joinGuestSession(ctx, { token: shareToken, name: 'Alice' });
     const hostClaims = await trpcMutation(ctx, 'guest.claimItems', {
       token: shareToken,
-      personIndex: host.personIndex,
+      personId: host.personId,
       personToken: host.personToken,
       claimedItemIndices: [0],
     });
@@ -187,7 +187,7 @@ test.describe('Claim page — someone else removes a person listed earlier', () 
     const removed = await trpcMutation(ctx, 'guest.removePerson', {
       token: shareToken,
       personToken: alice.personToken,
-      targetIndex: 0,
+      targetId: host.personId,
     });
     expect(removed.ok(), await removed.text()).toBe(true);
     await page.getByTestId('personal-link-accept').click();

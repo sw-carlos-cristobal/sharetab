@@ -81,13 +81,6 @@ async function savePersonIds(db: typeof import('@/server/db').db, sessionId: str
   });
 }
 
-// A request names the person it acts on by exactly one of: id (the claim page), or index
-// (older clients, and API callers such as the e2e suite)
-function namesOnePerson(index: number | undefined, id: string | undefined) {
-  return (index === undefined) !== (id === undefined);
-}
-const NAME_ONE_PERSON = { message: 'Name the person by exactly one of index or id' };
-
 /** A claimItems request sends either the person's whole claim set, or the items added and removed. */
 function claimsOneWay(claimed: number[] | undefined, added: number[] | undefined, removed: number[] | undefined) {
   return (claimed !== undefined) !== (added !== undefined || removed !== undefined);
@@ -109,19 +102,12 @@ const shareTokenSchema = z.string().max(64);
 /** A receipt id as sent by the client: a cuid, capped like a share token (getReceiptItems builds a limiter key from it). */
 const receiptIdSchema = z.string().max(64);
 
-/** The index of the person a request targets (see findTargetIndex), or a TRPCError. */
-function targetIndexOrThrow(
-  people: readonly { id?: string | undefined }[],
-  index: number | undefined,
-  id: string | undefined,
-): number {
-  const found = findTargetIndex(people, { index, id });
+/** The index of the person a request targets by id (see findTargetIndex), or a TRPCError. */
+function targetIndexOrThrow(people: readonly { id?: string | undefined }[], id: string): number {
+  const found = findTargetIndex(people, id);
   if (found >= 0) return found;
-  if (id !== undefined) {
-    // Removed since the caller last loaded the session
-    throw new TRPCError({ code: 'CONFLICT', message: 'That person is no longer in this split.' });
-  }
-  throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid person index' });
+  // Removed since the caller last loaded the session
+  throw new TRPCError({ code: 'CONFLICT', message: 'That person is no longer in this split.' });
 }
 
 function cloneAssignments(assignments: { itemIndex: number; personIndices: number[] }[]) {
@@ -847,16 +833,14 @@ export const guestRouter = createTRPCRouter({
 
   editPersonName: publicProcedure
     .input(
-      z
-        .object({
-          token: shareTokenSchema,
-          personToken: z.string().uuid(),
-          targetIndex: z.number().int().min(0).optional(),
-          targetId: personIdSchema.optional(),
-          newName: z.string().trim().min(1).max(100),
-          groupSize: z.number().int().min(1).max(20).optional(),
-        })
-        .refine((input) => namesOnePerson(input.targetIndex, input.targetId), NAME_ONE_PERSON),
+      z.object({
+        token: shareTokenSchema,
+        personToken: z.string().uuid(),
+        // Who to rename, by id (see targetIndexOrThrow)
+        targetId: personIdSchema,
+        newName: z.string().trim().min(1).max(100),
+        groupSize: z.number().int().min(1).max(20).optional(),
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       if (!checkClaimWriteRateLimit('edit-name', input.token, input.personToken)) {
@@ -874,7 +858,7 @@ export const guestRouter = createTRPCRouter({
         const people = [...(session.people as GuestSessionPerson[])];
         const isParticipant = people.some((p) => p.personToken === input.personToken);
         if (!isParticipant) throw new TRPCError({ code: 'FORBIDDEN', message: 'Not a participant' });
-        const targetIndex = targetIndexOrThrow(people, input.targetIndex, input.targetId);
+        const targetIndex = targetIndexOrThrow(people, input.targetId);
 
         const normalizedNew = normalizeGuestName(input.newName);
         const conflict = people.findIndex((p, i) => i !== targetIndex && normalizeGuestName(p.name) === normalizedNew);
@@ -895,14 +879,12 @@ export const guestRouter = createTRPCRouter({
 
   removePerson: publicProcedure
     .input(
-      z
-        .object({
-          token: shareTokenSchema,
-          personToken: z.string().uuid(),
-          targetIndex: z.number().int().min(0).optional(),
-          targetId: personIdSchema.optional(),
-        })
-        .refine((input) => namesOnePerson(input.targetIndex, input.targetId), NAME_ONE_PERSON),
+      z.object({
+        token: shareTokenSchema,
+        personToken: z.string().uuid(),
+        // Who to remove, by id (see targetIndexOrThrow)
+        targetId: personIdSchema,
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       if (!checkClaimWriteRateLimit('remove-person', input.token, input.personToken)) {
@@ -920,7 +902,7 @@ export const guestRouter = createTRPCRouter({
         const people = [...(session.people as GuestSessionPerson[])];
         const isParticipant = people.some((p) => p.personToken === input.personToken);
         if (!isParticipant) throw new TRPCError({ code: 'FORBIDDEN', message: 'Not a participant' });
-        const targetIndex = targetIndexOrThrow(people, input.targetIndex, input.targetId);
+        const targetIndex = targetIndexOrThrow(people, input.targetId);
         if (people.length <= 1) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Cannot remove the last person' });
 
         people.splice(targetIndex, 1);
@@ -1033,9 +1015,8 @@ export const guestRouter = createTRPCRouter({
       z
         .object({
           token: shareTokenSchema,
-          // Whose claims these are: personId (the claim page), or personIndex (older clients)
-          personIndex: z.number().int().min(0).optional(),
-          personId: personIdSchema.optional(),
+          // Whose claims these are, by id (see targetIndexOrThrow)
+          personId: personIdSchema,
           personToken: z.string().uuid(),
           // The person's whole claim set, replacing what is stored (older clients) ...
           claimedItemIndices: z.array(z.number().int().min(0)).max(1000).optional(),
@@ -1044,7 +1025,6 @@ export const guestRouter = createTRPCRouter({
           addItemIndices: z.array(z.number().int().min(0)).max(1000).optional(),
           removeItemIndices: z.array(z.number().int().min(0)).max(1000).optional(),
         })
-        .refine((input) => namesOnePerson(input.personIndex, input.personId), NAME_ONE_PERSON)
         .refine(
           (input) => claimsOneWay(input.claimedItemIndices, input.addItemIndices, input.removeItemIndices),
           CLAIMS_ONE_WAY,
@@ -1076,7 +1056,7 @@ export const guestRouter = createTRPCRouter({
         if (!isParticipant) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Invalid person token' });
         }
-        const personIndex = targetIndexOrThrow(people, input.personIndex, input.personId);
+        const personIndex = targetIndexOrThrow(people, input.personId);
 
         for (const idx of [
           ...(input.claimedItemIndices ?? []),
@@ -1197,17 +1177,13 @@ export const guestRouter = createTRPCRouter({
 
   finalizeSession: publicProcedure
     .input(
-      z
-        .object({
-          token: shareTokenSchema,
-          // Who is finalizing: personId (the claim page), or personIndex (older clients); must
-          // be the holder of personToken
-          personIndex: z.number().int().min(0).optional(),
-          personId: personIdSchema.optional(),
-          personToken: z.string().uuid(),
-          tipOverride: z.number().int().min(0).optional(),
-        })
-        .refine((input) => namesOnePerson(input.personIndex, input.personId), NAME_ONE_PERSON),
+      z.object({
+        token: shareTokenSchema,
+        // Who is finalizing, by id; must be the holder of personToken
+        personId: personIdSchema,
+        personToken: z.string().uuid(),
+        tipOverride: z.number().int().min(0).optional(),
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       const { shareToken, finalizeLog } = await guestTransaction(ctx.db, async (tx) => {
@@ -1224,7 +1200,7 @@ export const guestRouter = createTRPCRouter({
         const assignments = parseGuestAssignments(session.assignments);
         const receiptData = parseExtractedData(session.receiptData);
 
-        const person = people[targetIndexOrThrow(people, input.personIndex, input.personId)];
+        const person = people[targetIndexOrThrow(people, input.personId)];
         if (!person?.personToken || person.personToken !== input.personToken) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Invalid person token' });
         }

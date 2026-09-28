@@ -152,13 +152,13 @@ test.describe('Group claiming units', () => {
     // Both claim the shared nachos
     await trpcMutation(ctx, 'guest.claimItems', {
       token: shareToken,
-      personIndex: coupleData.personIndex,
+      personId: coupleData.personId,
       personToken: coupleData.personToken,
       claimedItemIndices: [0],
     });
     await trpcMutation(ctx, 'guest.claimItems', {
       token: shareToken,
-      personIndex: charlieData.personIndex,
+      personId: charlieData.personId,
       personToken: charlieData.personToken,
       claimedItemIndices: [0],
     });
@@ -166,7 +166,7 @@ test.describe('Group claiming units', () => {
     // Finalize
     const finalizeRes = await trpcMutation(ctx, 'guest.finalizeSession', {
       token: shareToken,
-      personIndex: coupleData.personIndex,
+      personId: coupleData.personId,
       personToken: coupleData.personToken,
     });
     expect(finalizeRes.ok()).toBe(true);
@@ -222,13 +222,13 @@ test.describe('Group claiming units', () => {
     // Both claim the shared item
     await trpcMutation(ctx, 'guest.claimItems', {
       token: shareToken,
-      personIndex: aliceData.personIndex,
+      personId: aliceData.personId,
       personToken: aliceData.personToken,
       claimedItemIndices: [0],
     });
     await trpcMutation(ctx, 'guest.claimItems', {
       token: shareToken,
-      personIndex: bobData.personIndex,
+      personId: bobData.personId,
       personToken: bobData.personToken,
       claimedItemIndices: [0],
     });
@@ -236,7 +236,7 @@ test.describe('Group claiming units', () => {
     // Finalize
     await trpcMutation(ctx, 'guest.finalizeSession', {
       token: shareToken,
-      personIndex: aliceData.personIndex,
+      personId: aliceData.personId,
       personToken: aliceData.personToken,
     });
 
@@ -282,7 +282,7 @@ test.describe('Group claiming units', () => {
     const charlieData = await joinGuestSession(ctx, { token: shareToken, name: 'Charlie' });
     await trpcMutation(ctx, 'guest.claimItems', {
       token: shareToken,
-      personIndex: charlieData.personIndex,
+      personId: charlieData.personId,
       personToken: charlieData.personToken,
       claimedItemIndices: [2],
     });
@@ -466,13 +466,13 @@ test.describe('Group claiming units', () => {
     const shareToken = (await createRes.json()).result?.data?.json?.shareToken;
 
     // Join as solo
-    const { personToken } = await joinGuestSession(ctx, { token: shareToken, name: 'Alice' });
+    const { personToken, personId } = await joinGuestSession(ctx, { token: shareToken, name: 'Alice' });
 
     // Edit to group size 3
     const editRes = await trpcMutation(ctx, 'guest.editPersonName', {
       token: shareToken,
       personToken,
-      targetIndex: 0,
+      targetId: personId,
       newName: 'Alice & Friends',
       groupSize: 3,
     });

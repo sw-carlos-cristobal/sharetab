@@ -40,15 +40,10 @@ export function assignPersonIds(
 }
 
 /**
- * The index of the person a request targets: by id, wherever that person is now, or by array
- * index (older clients, and API callers such as the e2e suite). -1 when there is no such
- * person, e.g. the id's person was removed.
+ * The index of the person a request targets, by their id, wherever that person is now (an index
+ * could name whoever moved into that place after someone listed earlier was removed, #225).
+ * -1 when nobody has the id, e.g. the person was removed.
  */
-export function findTargetIndex(
-  people: readonly { id?: string | undefined }[],
-  target: { index?: number | undefined; id?: string | undefined },
-): number {
-  if (target.id !== undefined) return people.findIndex((p) => p.id === target.id);
-  if (target.index !== undefined && target.index < people.length) return target.index;
-  return -1;
+export function findTargetIndex(people: readonly { id?: string | undefined }[], id: string): number {
+  return people.findIndex((p) => p.id === id);
 }

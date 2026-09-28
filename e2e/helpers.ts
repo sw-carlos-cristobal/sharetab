@@ -105,6 +105,21 @@ export async function joinGuestSession(
 }
 
 /**
+ * The id of the person listed under `name` in a claim session: the claim-session mutations name
+ * people by id (#225), and a person who joined on a page has no join result to read it from.
+ */
+export async function personIdByName(
+  ctx: Awaited<ReturnType<typeof request.newContext>>,
+  token: string,
+  name: string,
+): Promise<string> {
+  const session = await trpcResult(await trpcQuery(ctx, 'guest.getSession', { token }));
+  const person = (session?.people as { id: string; name: string }[] | undefined)?.find((p) => p.name === name);
+  if (!person) throw new Error(`Nobody named ${name} in claim session ${token}`);
+  return person.id;
+}
+
+/**
  * Give a browser context the stored identity of the device that joined a claim session as
  * this person: the claim page keeps { name, personToken } in localStorage and resumes with
  * the token on load. Joining as someone who already joined requires their token, so a

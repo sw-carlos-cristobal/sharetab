@@ -62,23 +62,15 @@ describe('findTargetIndex', () => {
   ];
 
   test('finds a person by id wherever they are now', () => {
-    expect(findTargetIndex(people, { id: ID_C })).toBe(1);
+    expect(findTargetIndex(people, ID_C)).toBe(1);
   });
 
   test('is -1 for an id nobody has (the person was removed)', () => {
-    expect(findTargetIndex(people, { id: ID_B })).toBe(-1);
-  });
-
-  test('takes an index as is when it is in range', () => {
-    expect(findTargetIndex(people, { index: 1 })).toBe(1);
-  });
-
-  test('is -1 for an index past the end', () => {
-    expect(findTargetIndex(people, { index: 2 })).toBe(-1);
+    expect(findTargetIndex(people, ID_B)).toBe(-1);
   });
 
   test('never matches a person without an id', () => {
     const noIds: { id?: string; name: string }[] = [{ name: 'A' }];
-    expect(findTargetIndex(noIds, { id: ID_A })).toBe(-1);
+    expect(findTargetIndex(noIds, ID_A)).toBe(-1);
   });
 });

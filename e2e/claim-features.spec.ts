@@ -1,6 +1,7 @@
 import { test, expect, request } from '@playwright/test';
 import {
   joinGuestSession,
+  personIdByName,
   rememberClaimIdentity,
   trpcMutation,
   trpcResult,
@@ -214,7 +215,7 @@ test.describe('Claim page — rejoin buttons', () => {
     const removed = await trpcMutation(ctx, 'guest.removePerson', {
       token: shareToken,
       personToken: host.personToken,
-      targetIndex: 1,
+      targetId: await personIdByName(ctx, shareToken, 'Carol'),
     });
     expect(removed.ok(), await removed.text()).toBe(true);
     await page.reload();
@@ -423,7 +424,7 @@ test.describe('Claim page — continue on another device', () => {
     const alice = await joinGuestSession(ctx, { token: shareToken, name: 'Alice' });
     const finalize = await trpcMutation(ctx, 'guest.finalizeSession', {
       token: shareToken,
-      personIndex: alice.personIndex,
+      personId: alice.personId,
       personToken: alice.personToken,
     });
     expect(finalize.ok(), await finalize.text()).toBe(true);
@@ -512,7 +513,7 @@ test.describe('Claim page — continue on another device', () => {
     // Once the split is finalized, the old card must not come back and offer to switch
     const finalize = await trpcMutation(ctx, 'guest.finalizeSession', {
       token: shareToken,
-      personIndex: alice.personIndex,
+      personId: alice.personId,
       personToken: alice.personToken,
     });
     expect(finalize.ok(), await finalize.text()).toBe(true);
@@ -554,7 +555,7 @@ test.describe('Claim page — continue on another device', () => {
     const removed = await trpcMutation(ctx, 'guest.removePerson', {
       token: shareToken,
       personToken: alice.personToken,
-      targetIndex: 0,
+      targetId: await personIdByName(ctx, shareToken, 'Host'),
     });
     expect(removed.ok(), await removed.text()).toBe(true);
     await page.getByTestId('personal-link-accept').click();

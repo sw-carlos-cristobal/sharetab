@@ -130,11 +130,11 @@ describe('share tokens longer than any real one (#208)', () => {
     ['getSession', (api) => api.getSession({ token: long })],
     ['getSplit', (api) => api.getSplit({ token: long })],
     ['resumeSession', (api) => api.resumeSession({ token: long, personToken })],
-    ['editPersonName', (api) => api.editPersonName({ token: long, personToken, targetIndex: 0, newName: 'X' })],
-    ['removePerson', (api) => api.removePerson({ token: long, personToken, targetIndex: 0 })],
+    ['editPersonName', (api) => api.editPersonName({ token: long, personToken, targetId: pid(0), newName: 'X' })],
+    ['removePerson', (api) => api.removePerson({ token: long, personToken, targetId: pid(0) })],
     ['splitClaimItem', (api) => api.splitClaimItem({ token: long, personToken, itemIndex: 0, splitQuantity: 1 })],
-    ['claimItems', (api) => api.claimItems({ token: long, personToken, personIndex: 0, claimedItemIndices: [] })],
-    ['finalizeSession', (api) => api.finalizeSession({ token: long, personToken, personIndex: 0 })],
+    ['claimItems', (api) => api.claimItems({ token: long, personToken, personId: pid(0), claimedItemIndices: [] })],
+    ['finalizeSession', (api) => api.finalizeSession({ token: long, personToken, personId: pid(0) })],
   ];
 
   test.each(calls)('%s refuses it before any rate limit or database read', async (_name, call) => {
@@ -839,31 +839,16 @@ describe('guest.claimItems', () => {
     expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
   });
 
-  test('still takes a person index (older clients)', async () => {
-    sessionAfterBWasRemoved();
-    await (
-      await caller()
-    ).claimItems({ token: 'share-1', personToken: OTHER_TOKEN, personIndex: 1, claimedItemIndices: [0] });
-    expect(savedAssignments()).toEqual([
-      { itemIndex: 1, personIndices: [2] },
-      { itemIndex: 0, personIndices: [1] },
-    ]);
-  });
-
-  test('refuses a request that names the person both ways, or neither', async () => {
+  test('refuses a person index, which can name whoever moved into that place, and no id at all (#225)', async () => {
     sessionAfterBWasRemoved();
     const api = await caller();
+    // Index inputs are gone from the schema; an older client (or a direct caller) can still send one
+    const claimItems = api.claimItems as unknown as (input: Record<string, unknown>) => Promise<unknown>;
     await expect(
-      api.claimItems({
-        token: 'share-1',
-        personToken: OTHER_TOKEN,
-        personIndex: 1,
-        personId: pid(2),
-        claimedItemIndices: [],
-      }),
+      claimItems({ token: 'share-1', personToken: OTHER_TOKEN, personIndex: 1, claimedItemIndices: [0] }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
     await expect(
-      api.claimItems({ token: 'share-1', personToken: OTHER_TOKEN, claimedItemIndices: [] }),
+      claimItems({ token: 'share-1', personToken: OTHER_TOKEN, claimedItemIndices: [0] }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
     expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
   });
@@ -886,11 +871,17 @@ describe('guest.removePerson', () => {
     expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
   });
 
-  test('refuses a request that names the person both ways', async () => {
+  test('refuses a target index, and no id at all (#225)', async () => {
     sessionAfterBWasRemoved();
-    await expect(
-      (await caller()).removePerson({ token: 'share-1', personToken: ALICE_TOKEN, targetIndex: 1, targetId: pid(2) }),
-    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    const removePerson = (await caller()).removePerson as unknown as (
+      input: Record<string, unknown>,
+    ) => Promise<unknown>;
+    await expect(removePerson({ token: 'share-1', personToken: ALICE_TOKEN, targetIndex: 1 })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    await expect(removePerson({ token: 'share-1', personToken: ALICE_TOKEN })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
     expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
   });
 });
@@ -933,44 +924,17 @@ describe('guest.claimItems with three people', () => {
     ).claimItems({ token: 'share-1', personToken: OTHER_TOKEN, personId: pid(2), claimedItemIndices: [0] });
     expect(savedAssignments()).toEqual([{ itemIndex: 0, personIndices: [1] }]);
   });
-
-  test('the old index is refused as out of range', async () => {
-    sessionAfterBWasRemovedFromThree();
-    await expect(
-      (await caller()).claimItems({
-        token: 'share-1',
-        personToken: OTHER_TOKEN,
-        personIndex: 2,
-        claimedItemIndices: [0],
-      }),
-    ).rejects.toMatchObject({ code: 'BAD_REQUEST', message: 'Invalid person index' });
-  });
 });
 
-describe('guest.removePerson and guest.editPersonName by index (older clients)', () => {
-  test('removePerson still takes an index', async () => {
+describe('guest.editPersonName by index (#225)', () => {
+  test('refuses a target index, and no id at all', async () => {
     sessionAfterBWasRemoved();
-    await (await caller()).removePerson({ token: 'share-1', personToken: ALICE_TOKEN, targetIndex: 1 });
-    expect((savedPeople() as { id: string }[]).map((p) => p.id)).toEqual([pid(0), pid(3)]);
-  });
-
-  test('editPersonName still takes an index', async () => {
-    sessionAfterBWasRemoved();
-    await (
-      await caller()
-    ).editPersonName({ token: 'share-1', personToken: ALICE_TOKEN, targetIndex: 1, newName: 'Cee' });
-    expect((savedPeople() as { name: string }[]).map((p) => p.name)).toEqual(['A', 'Cee', 'D']);
-  });
-
-  test('both refuse a request that names the person both ways, or neither', async () => {
-    sessionAfterBWasRemoved();
-    const api = await caller();
-    const base = { token: 'share-1', personToken: ALICE_TOKEN };
-    await expect(api.removePerson(base)).rejects.toMatchObject({ code: 'BAD_REQUEST' });
-    await expect(api.editPersonName({ ...base, newName: 'X' })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
-    await expect(api.editPersonName({ ...base, targetIndex: 1, targetId: pid(2), newName: 'X' })).rejects.toMatchObject(
-      { code: 'BAD_REQUEST' },
-    );
+    const editPersonName = (await caller()).editPersonName as unknown as (
+      input: Record<string, unknown>,
+    ) => Promise<unknown>;
+    const base = { token: 'share-1', personToken: ALICE_TOKEN, newName: 'X' };
+    await expect(editPersonName({ ...base, targetIndex: 1 })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(editPersonName(base)).rejects.toMatchObject({ code: 'BAD_REQUEST' });
     expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
   });
 });
@@ -1003,16 +967,17 @@ describe('guest.finalizeSession', () => {
     expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
   });
 
-  test('still takes an index (older clients), and refuses both or neither', async () => {
+  test('refuses a person index, and no id at all (#225)', async () => {
     sessionAfterBWasRemoved();
-    const api = await caller();
-    await expect(
-      api.finalizeSession({ token: 'share-1', personToken: OTHER_TOKEN, personIndex: 1, personId: pid(2) }),
-    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
-    await expect(api.finalizeSession({ token: 'share-1', personToken: OTHER_TOKEN })).rejects.toMatchObject({
+    const finalizeSession = (await caller()).finalizeSession as unknown as (
+      input: Record<string, unknown>,
+    ) => Promise<unknown>;
+    await expect(finalizeSession({ token: 'share-1', personToken: OTHER_TOKEN, personIndex: 1 })).rejects.toMatchObject(
+      { code: 'BAD_REQUEST' },
+    );
+    await expect(finalizeSession({ token: 'share-1', personToken: OTHER_TOKEN })).rejects.toMatchObject({
       code: 'BAD_REQUEST',
     });
-    await api.finalizeSession({ token: 'share-1', personToken: OTHER_TOKEN, personIndex: 1 });
-    expect(savedStatus()).toBe('FINALIZED');
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
   });
 });

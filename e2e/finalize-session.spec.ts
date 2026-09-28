@@ -30,10 +30,10 @@ test.describe('Finalize claim session', () => {
       token: shareToken,
       name: 'Alice',
     });
-    const { personToken } = (await joinRes.json()).result?.data?.json;
+    const { personToken, personId } = (await joinRes.json()).result?.data?.json;
     await trpcMutation(ctx, 'guest.claimItems', {
       token: shareToken,
-      personIndex: 0,
+      personId,
       personToken,
       claimedItemIndices: [0, 1],
     });
@@ -127,7 +127,7 @@ test.describe('Finalize claim session', () => {
     const bobData = (await joinBob.json()).result?.data?.json;
     await trpcMutation(ctx, 'guest.claimItems', {
       token: shareToken,
-      personIndex: bobData.personIndex,
+      personId: bobData.personId,
       personToken: bobData.personToken,
       claimedItemIndices: [1],
     });
@@ -215,13 +215,13 @@ test.describe('Finalize claim session', () => {
 
     await trpcMutation(ctx, 'guest.claimItems', {
       token: shareToken,
-      personIndex: aliceData.personIndex,
+      personId: aliceData.personId,
       personToken: aliceData.personToken,
       claimedItemIndices: [0],
     });
     await trpcMutation(ctx, 'guest.claimItems', {
       token: shareToken,
-      personIndex: bobData.personIndex,
+      personId: bobData.personId,
       personToken: bobData.personToken,
       claimedItemIndices: [1],
     });
@@ -229,7 +229,7 @@ test.describe('Finalize claim session', () => {
     // Finalize
     const finalizeRes = await trpcMutation(ctx, 'guest.finalizeSession', {
       token: shareToken,
-      personIndex: aliceData.personIndex,
+      personId: aliceData.personId,
       personToken: aliceData.personToken,
     });
     expect(finalizeRes.ok()).toBe(true);
