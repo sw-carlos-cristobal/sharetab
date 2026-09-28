@@ -2,6 +2,7 @@ import { randomBytes, createHash } from 'crypto';
 import { readFileSync, writeFileSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { logger } from './logger';
+import { describeTokenError, MALFORMED_TOKEN_RESPONSE, readTokenBody } from './oauth-token-response';
 
 // ─── Constants ───────────────────────────────────────────
 
@@ -40,39 +41,7 @@ function generateCodeChallenge(verifier: string): string {
 }
 
 // ─── Token responses ────────────────────────────────────
-// Token endpoint bodies can carry credentials. The only parts that reach a log
-// line or an error message (which the admin audit log stores) are the status,
-// a known OAuth error code, and a numeric expires_in.
-
-// The error codes RFC 6749 defines: §5.2 for the token endpoint, and §4.1.2.1
-// for authorization responses, which some servers also return from the token
-// endpoint
-const OAUTH_ERROR_CODES = new Set([
-  'invalid_request',
-  'invalid_client',
-  'invalid_grant',
-  'unauthorized_client',
-  'unsupported_grant_type',
-  'invalid_scope',
-  'access_denied',
-  'unsupported_response_type',
-  'server_error',
-  'temporarily_unavailable',
-]);
-
-/**
- * The status and error code of a failed token request: all that is logged or
- * shown. The code is kept only if it is one RFC 6749 defines. Anything else in
- * the body (other error values, error_description, extra fields, a proxy's
- * error page) can echo the code or token that was sent.
- */
-async function describeTokenError(res: Response): Promise<{ status: number; error?: string }> {
-  const body: unknown = await res.json().catch(() => null);
-  const error = body && typeof body === 'object' && 'error' in body ? body.error : undefined;
-  return typeof error === 'string' && OAUTH_ERROR_CODES.has(error)
-    ? { status: res.status, error }
-    : { status: res.status };
-}
+// See oauth-token-response.ts for what may reach a log line or error message.
 
 interface TokenResponse {
   access_token: string;
@@ -91,12 +60,8 @@ interface TokenResponse {
  * checked.
  */
 async function readTokenResponse(res: Response): Promise<TokenResponse> {
-  const body: unknown = await res.json().catch(() => null);
-  if (!body || typeof body !== 'object') throw new Error('Malformed token response');
-  const { access_token, refresh_token, expires_in, subscription_type, rate_limit_tier } = body as Record<
-    string,
-    unknown
-  >;
+  const body = await readTokenBody(res);
+  const { access_token, refresh_token, expires_in, subscription_type, rate_limit_tier } = body;
   const optionalString = (value: unknown) => value === undefined || typeof value === 'string';
   if (
     typeof access_token !== 'string' ||
@@ -106,9 +71,9 @@ async function readTokenResponse(res: Response): Promise<TokenResponse> {
     !optionalString(subscription_type) ||
     !optionalString(rate_limit_tier)
   ) {
-    throw new Error('Malformed token response');
+    throw new Error(MALFORMED_TOKEN_RESPONSE);
   }
-  return body as TokenResponse;
+  return body as unknown as TokenResponse;
 }
 
 // ─── Credential path ────────────────────────────────────

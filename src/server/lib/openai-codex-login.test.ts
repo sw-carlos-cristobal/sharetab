@@ -4,6 +4,39 @@ vi.mock('@/server/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+async function loggedText(): Promise<string> {
+  const { logger } = await import('@/server/lib/logger');
+  return JSON.stringify(
+    [logger.info, logger.warn, logger.error, logger.debug].flatMap((fn) => vi.mocked(fn).mock.calls),
+  );
+}
+
+// Fails if any 6-character stretch of `secret` appears in `text` (as in meridian-login.test.ts)
+function expectNoPartOf(secret: string, text: string | undefined) {
+  if (secret.length < 6) throw new Error('expectNoPartOf needs a secret of 6+ characters');
+  for (let i = 0; i + 6 <= secret.length; i++) {
+    expect(text ?? '').not.toContain(secret.slice(i, i + 6));
+  }
+}
+
+/** A JWT-shaped token the login code can decode, expiring `inSeconds` from now */
+function jwtExpiringIn(inSeconds: number) {
+  return [
+    'header',
+    Buffer.from(
+      JSON.stringify({
+        exp: Math.floor(Date.now() / 1000) + inSeconds,
+        'https://api.openai.com/auth': { chatgpt_account_id: 'acct_123' },
+      }),
+    ).toString('base64url'),
+    'sig',
+  ].join('.');
+}
+
+const CODE = 'ac_CODESECRET0123456789';
+const REFRESH_TOKEN = 'rt_REFRESHSECRET0123456789';
+const LEAKY_TOKEN = 'eyLEAKYACCESSTOKEN0123456789';
+
 describe('OpenAICodexLogin', () => {
   const originalEnv = process.env;
 
@@ -300,6 +333,178 @@ describe('OpenAICodexLogin', () => {
     await checkOpenAICodexHealth({ force: true });
 
     expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  describe('token-endpoint text stays out of errors, logs and stored status (#220)', () => {
+    // Stored auth whose access token has expired, so the next use refreshes it
+    function expiredStoredAuth() {
+      const writeFileSync = vi.fn();
+      const expired = jwtExpiringIn(-60);
+      vi.doMock('fs', () => ({
+        mkdirSync: vi.fn(),
+        readFileSync: () =>
+          JSON.stringify({
+            auth_mode: 'Chatgpt',
+            tokens: { id_token: expired, access_token: expired, refresh_token: REFRESH_TOKEN, account_id: 'acct_123' },
+          }),
+        writeFileSync,
+        unlinkSync: vi.fn(),
+      }));
+      return { writeFileSync };
+    }
+
+    async function exchange(response: Response) {
+      vi.doMock('fs', () => ({
+        mkdirSync: vi.fn(),
+        readFileSync: vi.fn(),
+        writeFileSync: vi.fn(),
+        unlinkSync: vi.fn(),
+      }));
+      const { startLogin, submitCode } = await import('./openai-codex-login');
+      await startLogin();
+      vi.mocked(fetch).mockResolvedValueOnce(response);
+      return submitCode(CODE);
+    }
+
+    test('a failed exchange reports only the status and an RFC 6749 error code, not the body', async () => {
+      const result = await exchange(
+        new Response(JSON.stringify({ error: 'invalid_grant', error_description: `code ${CODE} was used` }), {
+          status: 400,
+        }),
+      );
+      expect(result).toEqual({ success: false, error: 'Token exchange failed (400): invalid_grant' });
+      expectNoPartOf(CODE, result.error);
+      expectNoPartOf(CODE, await loggedText());
+    });
+
+    test('a failed exchange whose body is not JSON reports only the status', async () => {
+      const result = await exchange(new Response(`<html>bad code ${CODE}</html>`, { status: 502 }));
+      expect(result).toEqual({ success: false, error: 'Token exchange failed (502)' });
+      expectNoPartOf(CODE, await loggedText());
+    });
+
+    test('a malformed success body on exchange fails with a fixed error', async () => {
+      const result = await exchange(new Response(`${LEAKY_TOKEN} is not JSON`, { status: 200 }));
+      expect(result).toEqual({ success: false, error: 'Malformed token response' });
+      expectNoPartOf(LEAKY_TOKEN, await loggedText());
+    });
+
+    test('a wrongly typed success body on exchange saves nothing and quotes nothing', async () => {
+      const result = await exchange(
+        new Response(JSON.stringify({ id_token: 42, access_token: LEAKY_TOKEN, refresh_token: ['x'] }), {
+          status: 200,
+        }),
+      );
+      expect(result).toEqual({ success: false, error: 'Token exchange response did not include all required tokens' });
+      expectNoPartOf(LEAKY_TOKEN, result.error);
+    });
+
+    // A JWT-shaped token whose payload isn't JSON: a JSON parser's message would quote it
+    const UNDECODABLE_JWT = [
+      'header',
+      Buffer.from('ENDPOINTSECRET0123456789 is not JSON').toString('base64url'),
+      'sig',
+    ].join('.');
+
+    test('an exchange returning a token whose claims do not decode fails with a fixed error', async () => {
+      const result = await exchange(
+        new Response(
+          JSON.stringify({ id_token: UNDECODABLE_JWT, access_token: UNDECODABLE_JWT, refresh_token: 'rt_x' }),
+          { status: 200 },
+        ),
+      );
+      expect(result).toEqual({ success: false, error: 'Malformed token response' });
+      expectNoPartOf('ENDPOINTSECRET0123456789', await loggedText());
+    });
+
+    test("the health check's refresh returning a token whose claims do not decode is degraded with a fixed error", async () => {
+      expiredStoredAuth();
+      vi.mocked(fetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ id_token: UNDECODABLE_JWT, access_token: UNDECODABLE_JWT }), { status: 200 }),
+      );
+      const { checkOpenAICodexHealth } = await import('./openai-codex-login');
+      const result = await checkOpenAICodexHealth();
+      expect(result).toMatchObject({ status: 'degraded', error: 'Malformed token response' });
+      expectNoPartOf('ENDPOINTSECRET0123456789', JSON.stringify(result));
+      expectNoPartOf('ENDPOINTSECRET0123456789', await loggedText());
+    });
+
+    test('a refresh answering an empty refresh_token keeps the stored one', async () => {
+      const { writeFileSync } = expiredStoredAuth();
+      const fresh = jwtExpiringIn(3600);
+      vi.mocked(fetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ id_token: fresh, access_token: fresh, refresh_token: '' }), { status: 200 }),
+      );
+      const { refreshIfNeeded } = await import('./openai-codex-login');
+      expect(await refreshIfNeeded()).toBe(true);
+      const saved = JSON.parse(writeFileSync.mock.calls[0]![1] as string) as { tokens: { refresh_token: string } };
+      expect(saved.tokens.refresh_token).toBe(REFRESH_TOKEN);
+    });
+
+    test('a failed refresh logs only the status and an RFC 6749 error code', async () => {
+      const { writeFileSync } = expiredStoredAuth();
+      vi.mocked(fetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: 'invalid_grant', error_description: `token ${REFRESH_TOKEN}` }), {
+          status: 400,
+        }),
+      );
+      const { refreshIfNeeded } = await import('./openai-codex-login');
+      expect(await refreshIfNeeded()).toBe(false);
+      expect(writeFileSync).not.toHaveBeenCalled();
+      const { logger } = await import('@/server/lib/logger');
+      expect(logger.warn).toHaveBeenCalledWith('openaiCodex.refresh.failed', { status: 400, error: 'invalid_grant' });
+      expectNoPartOf(REFRESH_TOKEN, await loggedText());
+    });
+
+    test('a malformed refresh response fails with a fixed error', async () => {
+      const { writeFileSync } = expiredStoredAuth();
+      vi.mocked(fetch).mockResolvedValueOnce(new Response(`${LEAKY_TOKEN} is not JSON`, { status: 200 }));
+      const { refreshIfNeeded } = await import('./openai-codex-login');
+      await expect(refreshIfNeeded()).rejects.toThrow(new Error('Malformed token response'));
+      expect(writeFileSync).not.toHaveBeenCalled();
+    });
+
+    test('a wrongly typed refresh response saves nothing', async () => {
+      const { writeFileSync } = expiredStoredAuth();
+      vi.mocked(fetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ id_token: 42, access_token: LEAKY_TOKEN }), { status: 200 }),
+      );
+      const { refreshIfNeeded } = await import('./openai-codex-login');
+      expect(await refreshIfNeeded()).toBe(false);
+      expect(writeFileSync).not.toHaveBeenCalled();
+      expectNoPartOf(LEAKY_TOKEN, await loggedText());
+    });
+
+    test("the health check's first refresh failing is a degraded status, not an unhandled error", async () => {
+      expiredStoredAuth();
+      vi.mocked(fetch).mockResolvedValueOnce(new Response(`${LEAKY_TOKEN} is not JSON`, { status: 200 }));
+      const { checkOpenAICodexHealth } = await import('./openai-codex-login');
+      const result = await checkOpenAICodexHealth();
+      expect(result).toMatchObject({ status: 'degraded', error: 'Malformed token response', accountId: 'acct_123' });
+      expectNoPartOf(LEAKY_TOKEN, JSON.stringify(result));
+      expectNoPartOf(LEAKY_TOKEN, await loggedText());
+    });
+
+    test('a malformed response to the refresh after a 401 is a degraded status with a fixed error', async () => {
+      const current = jwtExpiringIn(3600);
+      vi.doMock('fs', () => ({
+        mkdirSync: vi.fn(),
+        readFileSync: () =>
+          JSON.stringify({
+            auth_mode: 'Chatgpt',
+            tokens: { id_token: current, access_token: current, refresh_token: REFRESH_TOKEN, account_id: 'acct_123' },
+          }),
+        writeFileSync: vi.fn(),
+        unlinkSync: vi.fn(),
+      }));
+      vi.mocked(fetch)
+        .mockResolvedValueOnce(new Response('unauthorized', { status: 401 }))
+        .mockResolvedValueOnce(new Response(`${LEAKY_TOKEN} is not JSON`, { status: 200 }));
+      const { checkOpenAICodexHealth } = await import('./openai-codex-login');
+      const result = await checkOpenAICodexHealth();
+      expect(result).toMatchObject({ status: 'degraded', error: 'Malformed token response' });
+      expectNoPartOf(LEAKY_TOKEN, JSON.stringify(result));
+    });
   });
 
   test('logout clears pending login and removes auth file', async () => {
