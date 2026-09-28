@@ -78,6 +78,16 @@ describe('parseGuestPeople', () => {
   it('rejects person without name', () => {
     expect(() => parseGuestPeople([{}])).toThrow(TRPCError);
   });
+
+  it("keeps well-formed save records and ignores malformed ones, so they can't fail a finalize (#238)", () => {
+    const save = { key: '55555555-5555-4555-8555-555555555555', hash: 'aaaaaaaaaaaaaaaa' };
+    const people = parseGuestPeople([
+      { name: 'Alice', saves: [save] },
+      { name: 'Bob', saves: 'junk' },
+      { name: 'Cat', saves: [null, { key: 1 }, save] },
+    ]);
+    expect(people.map((p) => p.saves)).toEqual([[save], undefined, [save]]);
+  });
 });
 
 describe('parseGuestAssignments', () => {

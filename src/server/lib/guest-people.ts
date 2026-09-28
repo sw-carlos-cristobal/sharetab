@@ -23,7 +23,8 @@ export type GuestSessionPerson = {
   // name it was made with, replayable until expiresAt (epoch ms). See guest.joinSession.
   join?: { key: string; name: string; expiresAt: number };
   // The last saves this person's token sent to guest.claimItems with a save key: the key and a
-  // digest of the changes, so a retry of a save whose answer was lost isn't applied twice (#238)
+  // digest of the changes, so a retry of a save whose answer was lost isn't applied twice (#238).
+  // Read through validSaveRecords (json-schemas.ts), which skips malformed records.
   saves?: { key: string; hash: string }[];
 };
 

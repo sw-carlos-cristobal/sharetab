@@ -9,7 +9,13 @@ import { checkRateLimit, checkTokenRateLimit, refundRateLimit } from '../../lib/
 import { checkClaimWriteRateLimit, checkSessionReadRateLimit } from '../../lib/guest-session-limits';
 import { getClientIp } from '../../lib/client-ip';
 import { guestTransaction } from '../../lib/guest-transaction';
-import { parseExtractedData, parseGuestItems, parseGuestPeople, parseGuestAssignments } from '../../lib/json-schemas';
+import {
+  parseExtractedData,
+  parseGuestItems,
+  parseGuestPeople,
+  parseGuestAssignments,
+  validSaveRecords,
+} from '../../lib/json-schemas';
 import { calculateSplitTotals } from '@/lib/split-calculator';
 import { normalizeGuestName } from '@/lib/guest-session';
 import { getConfiguredProviderPriority } from '@/server/ai/registry';
@@ -44,7 +50,7 @@ async function getCreatorPayerVenmoHandle(
 const JOIN_REPLAY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 function toPublicPerson({ name, groupSize, personToken }: GuestSessionPerson) {
-  // Never includes personToken or join: no guest procedure returns another person's token
+  // Never includes personToken, join or saves: no guest procedure returns another person's token
   // (a client gets its own from joinSession; the admin export is the only place tokens leave in bulk).
   // hasJoined tells the claim page which names are still free to join as (the results page,
   // which reads getSplit, ignores it).
@@ -93,13 +99,18 @@ function addsAndRemovesApart(added: number[] | undefined, removed: number[] | un
 }
 const ADD_OR_REMOVE = { message: 'An item cannot be both added and removed' };
 
-// How many save keys claimItems remembers per person: the claim page has one save out at a time,
-// and only its own person's other devices (a personal link) add keys to the same list
+// How many save keys claimItems remembers per person, newest last. A claim page has one save out
+// at a time and stops sending it again after SAVE_ATTEMPTS (src/lib/claim-save.ts); a key it's
+// still sending drops out only if other tabs or devices holding the same person token (another
+// tab of the browser, a personal link) make this many saves meanwhile. Kept by count, not age, to
+// bound the people JSON, which every poll reads.
 const SAVE_KEYS_KEPT = 10;
 
 /**
  * A digest of what a claimItems request changes, kept with its save key: a retry must send the
- * same changes as the save it retries (like a join key's name). Item order doesn't matter.
+ * same changes as the save it retries (like a join key's name). Item order doesn't matter. The
+ * first 96 bits of a SHA-256 are plenty to tell a caller's own requests apart, and keep the
+ * record small.
  */
 function claimChangesHash(input: {
   personId: string;
@@ -114,22 +125,19 @@ function claimChangesHash(input: {
     sorted(input.addItemIndices),
     sorted(input.removeItemIndices),
   ];
-  return createHash('sha256').update(JSON.stringify(changes)).digest('base64url');
+  return createHash('sha256').update(JSON.stringify(changes)).digest('base64url').slice(0, 16);
 }
 
-/** The items in a person's claims that someone else has claimed too, with their names. */
+/** The items a person has claimed that someone else has claimed too, with their names. */
 function claimConflicts(
   assignments: { itemIndex: number; personIndices: number[] }[],
   people: GuestSessionPerson[],
   personIndex: number,
-  claimed: Iterable<number>,
 ) {
-  const byItem = new Map(assignments.map((a) => [a.itemIndex, a]));
   const conflicts: { itemIndex: number; claimedBy: string[] }[] = [];
-  for (const itemIndex of claimed) {
-    const otherNames = (byItem.get(itemIndex)?.personIndices ?? [])
-      .filter((pi) => pi !== personIndex)
-      .map((pi) => people[pi]?.name ?? 'Someone');
+  for (const { itemIndex, personIndices } of assignments) {
+    if (!personIndices.includes(personIndex)) continue;
+    const otherNames = personIndices.filter((pi) => pi !== personIndex).map((pi) => people[pi]?.name ?? 'Someone');
     if (otherNames.length > 0) conflicts.push({ itemIndex, claimedBy: otherNames });
   }
   return conflicts;
@@ -1092,8 +1100,6 @@ export const guestRouter = createTRPCRouter({
         });
         if (!session) throw new TRPCError({ code: 'NOT_FOUND', message: 'Session not found' });
         if (session.expiresAt < new Date()) throw new TRPCError({ code: 'NOT_FOUND', message: 'Session expired' });
-        if (session.status !== GuestSplitStatus.CLAIMING)
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Session is no longer accepting claims' });
 
         const people = session.people as GuestSessionPerson[];
         const items = session.items as { name: string; quantity: number; unitPrice: number; totalPrice: number }[];
@@ -1105,24 +1111,23 @@ export const guestRouter = createTRPCRouter({
         }
 
         // A retry of a save that was stored: answer as stored, without applying it again. Checked
-        // before the person and item checks, since what those check may have changed since.
-        const caller = people[callerIndex]!;
-        const callerSaves = Array.isArray(caller.saves) ? caller.saves : [];
-        const hash = input.saveKey ? claimChangesHash(input) : null;
-        const earlier = input.saveKey ? callerSaves.find((save) => save.key === input.saveKey) : undefined;
-        if (earlier) {
-          if (earlier.hash !== hash) {
+        // before the status, person and item checks, since what those check may have changed
+        // since (e.g. someone finalized the split after the save was stored).
+        const callerSaves = validSaveRecords(people[callerIndex]!.saves);
+        const save = input.saveKey ? { key: input.saveKey, hash: claimChangesHash(input) } : null;
+        const earlier = save ? callerSaves.find((record) => record.key === save.key) : undefined;
+        if (save && earlier) {
+          if (earlier.hash !== save.hash) {
             throw new TRPCError({ code: 'CONFLICT', message: 'This save was already sent with different changes.' });
           }
           // Conflicts as stored now (none if the person has been removed since)
-          const stored = session.assignments as { itemIndex: number; personIndices: number[] }[];
           const storedIndex = findTargetIndex(people, input.personId);
-          const claimed = stored.filter((a) => a.personIndices.includes(storedIndex)).map((a) => a.itemIndex);
-          return {
-            success: true,
-            conflicts: storedIndex < 0 ? [] : claimConflicts(stored, people, storedIndex, claimed),
-          };
+          const stored = session.assignments as { itemIndex: number; personIndices: number[] }[];
+          return { success: true, conflicts: storedIndex < 0 ? [] : claimConflicts(stored, people, storedIndex) };
         }
+
+        if (session.status !== GuestSplitStatus.CLAIMING)
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Session is no longer accepting claims' });
 
         const personIndex = targetIndexOrThrow(people, input.personId);
 
@@ -1168,7 +1173,6 @@ export const guestRouter = createTRPCRouter({
         const cleanedAssignments = assignments.filter((a) => a.personIndices.length > 0);
 
         // The save key goes on the caller's person with this save, newest last
-        const save = input.saveKey && hash ? { key: input.saveKey, hash } : null;
         const withSaveKey = save
           ? people.map((person, index) =>
               index === callerIndex ? { ...person, saves: [...callerSaves, save].slice(-SAVE_KEYS_KEPT) } : person,
@@ -1184,7 +1188,7 @@ export const guestRouter = createTRPCRouter({
         });
 
         // Check for conflicts: items in this person's claim set that are also claimed by others
-        return { success: true, conflicts: claimConflicts(cleanedAssignments, people, personIndex, claimedSet) };
+        return { success: true, conflicts: claimConflicts(cleanedAssignments, people, personIndex) };
       });
     }),
 

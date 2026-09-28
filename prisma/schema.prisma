@@ -398,7 +398,7 @@ model GuestSplit {
   receiptId   String?
   receiptData Json     // {merchantName, date, subtotal, tax, tip, total, currency}
   items       Json     // [{name, quantity, unitPrice, totalPrice}]
-  people      Json     // [{name}]
+  people      Json     // [{id, name, personToken?, groupSize?, join?, saves?}] (see src/server/lib/guest-people.ts)
   assignments Json     // [{itemIndex, personIndices}]
   summary     Json?    // [{name, itemTotal, tax, tip, total}]
   paidByIndex      Int              @default(0)

@@ -193,6 +193,8 @@ describe('guest.joinSession rate limit', () => {
 const ALICE_TOKEN = '11111111-1111-4111-8111-111111111111';
 const OTHER_TOKEN = '22222222-2222-4222-8222-222222222222';
 const JOIN_KEY = '44444444-4444-4444-8444-444444444444';
+// A save key Alice's device recorded with an earlier claim save
+const ALICE_SAVE = { key: '77777777-7777-4777-8777-777777777777', hash: 'aaaaaaaaaaaaaaaa' };
 const DAY_MS = 24 * 60 * 60 * 1000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -514,10 +516,10 @@ describe('guest.resumeSession', () => {
 });
 
 describe('guest.getSession people', () => {
-  test('says which people have joined without exposing their tokens or join keys', async () => {
+  test('says which people have joined without exposing their tokens, join keys or save keys', async () => {
     claimSession([
       { name: 'Host' },
-      { name: 'Alice', personToken: ALICE_TOKEN, groupSize: 2, join: liveJoin('alice') },
+      { name: 'Alice', personToken: ALICE_TOKEN, groupSize: 2, join: liveJoin('alice'), saves: [ALICE_SAVE] },
     ]);
     const session = await (await caller()).getSession({ token: 'share-1' });
     expect(session.people).toEqual([
@@ -526,6 +528,7 @@ describe('guest.getSession people', () => {
     ]);
     expect(JSON.stringify(session)).not.toContain(ALICE_TOKEN);
     expect(JSON.stringify(session)).not.toContain(JOIN_KEY);
+    expect(JSON.stringify(session)).not.toContain(ALICE_SAVE.key);
     expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
   });
 
@@ -566,10 +569,11 @@ describe('guest.getSession people', () => {
     expect(session.people.map((p) => p.id)).toEqual([pid(0), pid(1)]);
   });
 
-  test("a finalized split's public result doesn't expose tokens or join keys either", async () => {
-    claimSession([{ name: 'Host' }, { name: 'Alice', personToken: ALICE_TOKEN, join: liveJoin('alice') }], {
-      status: 'FINALIZED',
-    });
+  test("a finalized split's public result doesn't expose tokens, join keys or save keys either", async () => {
+    claimSession(
+      [{ name: 'Host' }, { name: 'Alice', personToken: ALICE_TOKEN, join: liveJoin('alice'), saves: [ALICE_SAVE] }],
+      { status: 'FINALIZED' },
+    );
     const split = await (await caller()).getSplit({ token: 'share-1' });
     expect(split.people).toEqual([
       { name: 'Host', groupSize: 1, hasJoined: false },
@@ -577,6 +581,7 @@ describe('guest.getSession people', () => {
     ]);
     expect(JSON.stringify(split)).not.toContain(ALICE_TOKEN);
     expect(JSON.stringify(split)).not.toContain(JOIN_KEY);
+    expect(JSON.stringify(split)).not.toContain(ALICE_SAVE.key);
   });
 });
 
@@ -913,6 +918,51 @@ describe('guest.claimItems with a save key (#238)', () => {
     ).claimItems({ token: 'share-1', personToken: ALICE_TOKEN, personId: pid(1), addItemIndices: [2] });
     const call = mockDb.guestSplit.update.mock.calls.at(-1)?.[0] as { data: Record<string, unknown> };
     expect(call.data).not.toHaveProperty('people');
+  });
+
+  test('a retry of a stored save answers saved even after the split was finalized', async () => {
+    session([]);
+    const api = await caller();
+    await api.claimItems(forCat({ addItemIndices: [2] }));
+    const stored = mockDb.guestSplit.update.mock.calls.at(-1)?.[0] as {
+      data: { people: TestPerson[]; assignments: { itemIndex: number; personIndices: number[] }[] };
+    };
+    claimSession(stored.data.people, { items: items(3), assignments: stored.data.assignments, status: 'FINALIZED' });
+    mockDb.guestSplit.update.mockClear();
+    expect(await api.claimItems(forCat({ addItemIndices: [2] }))).toEqual({ success: true, conflicts: [] });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+    // A new save is still refused
+    await expect(
+      api.claimItems({ ...forCat({ addItemIndices: [1] }), saveKey: '88888888-8888-4888-8888-888888888888' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+
+  test('a retry of a stored save answers saved, with no conflicts, after the person was removed', async () => {
+    session([]);
+    const api = await caller();
+    await api.claimItems(forCat({ addItemIndices: [2] }));
+    const stored = mockDb.guestSplit.update.mock.calls.at(-1)?.[0] as { data: { people: TestPerson[] } };
+    // Cat was removed, and her claims with her
+    claimSession([stored.data.people[0]!], { items: items(3), assignments: [] });
+    mockDb.guestSplit.update.mockClear();
+    expect(await api.claimItems(forCat({ addItemIndices: [2] }))).toEqual({ success: true, conflicts: [] });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test('records a short digest of the changes, not the changes', async () => {
+    session([]);
+    await (await caller()).claimItems(forCat({ addItemIndices: [0, 1, 2] }));
+    const people = savedPeople() as { saves?: { hash: string }[] }[];
+    expect(people[0]!.saves?.[0]?.hash).toMatch(/^[A-Za-z0-9_-]{16}$/);
+  });
+
+  test('ignores save records that are not well formed, and drops them with the next save', async () => {
+    const junk = [null, 'x', { key: 1, hash: 'y' }, { key: SAVE_KEY }] as unknown as { key: string; hash: string }[];
+    session([], junk);
+    await (await caller()).claimItems(forCat({ addItemIndices: [2] }));
+    expect(savedAssignments()).toEqual([{ itemIndex: 2, personIndices: [1] }]);
+    const people = savedPeople() as { saves?: { key: string }[] }[];
+    expect(people[0]!.saves?.map((s) => s.key)).toEqual([SAVE_KEY]);
   });
 
   test('refuses a save key that is not a UUID', async () => {
