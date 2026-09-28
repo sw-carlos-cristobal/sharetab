@@ -1,5 +1,5 @@
 import { normalizeGuestName } from '@/lib/guest-session';
-import { checkRateLimit, peekRateLimit } from './rate-limit';
+import { checkTokenRateLimit, peekTokenRateLimit } from './rate-limit';
 
 /**
  * Joins per person per minute: per share token and the caller's person token when it sends one,
@@ -43,9 +43,9 @@ export function checkJoinRateLimit(token: string, name: string, personToken?: st
   const person = personToken ? ['token', personToken] : ['name', normalizeGuestName(name)];
   const personKey = `guest-join-person:${JSON.stringify([token, ...person])}`;
 
-  if (!peekRateLimit(sessionKey, JOIN_LIMIT_PER_SESSION).allowed) return false;
-  if (!checkRateLimit(personKey, JOIN_LIMIT_PER_PERSON, JOIN_WINDOW_MS).allowed) return false;
+  if (!peekTokenRateLimit(sessionKey, JOIN_LIMIT_PER_SESSION).allowed) return false;
+  if (!checkTokenRateLimit(personKey, JOIN_LIMIT_PER_PERSON, JOIN_WINDOW_MS).allowed) return false;
   // Synchronous since the peek, so the session budget still has room
-  checkRateLimit(sessionKey, JOIN_LIMIT_PER_SESSION, JOIN_WINDOW_MS);
+  checkTokenRateLimit(sessionKey, JOIN_LIMIT_PER_SESSION, JOIN_WINDOW_MS);
   return true;
 }

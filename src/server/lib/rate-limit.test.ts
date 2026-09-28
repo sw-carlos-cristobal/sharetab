@@ -4,7 +4,15 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 vi.useFakeTimers();
 
 // Dynamic import to ensure timer mock is in place
-const { checkRateLimit, peekRateLimit, refundRateLimit, parsePositiveInt } = await import('./rate-limit');
+const {
+  checkRateLimit,
+  peekRateLimit,
+  refundRateLimit,
+  parsePositiveInt,
+  MAX_RATE_LIMIT_KEYS,
+  checkTokenRateLimit,
+  peekTokenRateLimit,
+} = await import('./rate-limit');
 
 describe('parsePositiveInt', () => {
   test('parses a valid positive integer', () => {
@@ -143,5 +151,70 @@ describe('checkRateLimit', () => {
     const stillBlocked = checkRateLimit(key, 1, 10000);
     expect(stillBlocked.allowed).toBe(false);
     expect(stillBlocked.retryAfterMs).toBeLessThan(firstRetry);
+  });
+});
+
+describe('the token store: keys built from client-sent tokens (#208)', () => {
+  beforeEach(() => {
+    vi.advanceTimersByTime(999999999);
+  });
+
+  // Fills the limiter with `count` new one-attempt keys
+  function fill(prefix: string, count: number) {
+    for (let i = 0; i < count; i++) checkTokenRateLimit(`${prefix}-${i}`, 1, 60000);
+  }
+
+  test('holds up to the cap', () => {
+    fill('cap', MAX_RATE_LIMIT_KEYS);
+    // Every key is still spent
+    expect(checkTokenRateLimit('cap-0', 1, 60000).allowed).toBe(false);
+    expect(checkTokenRateLimit(`cap-${MAX_RATE_LIMIT_KEYS - 1}`, 1, 60000).allowed).toBe(false);
+  });
+
+  test('a new key past the cap evicts the oldest window, not the newest', () => {
+    fill('evict', MAX_RATE_LIMIT_KEYS);
+    checkTokenRateLimit('evict-new', 1, 60000);
+    // The oldest key was dropped, so it starts over; the newest are still spent
+    expect(checkTokenRateLimit('evict-0', 1, 60000).allowed).toBe(true);
+    expect(checkTokenRateLimit('evict-new', 1, 60000).allowed).toBe(false);
+    expect(checkTokenRateLimit(`evict-${MAX_RATE_LIMIT_KEYS - 1}`, 1, 60000).allowed).toBe(false);
+  });
+
+  test('evicts the oldest windows first (here expired ones), keeping newer live ones', () => {
+    // Half the cap in short windows that expire, then the rest in long ones
+    for (let i = 0; i < MAX_RATE_LIMIT_KEYS / 2; i++) checkTokenRateLimit(`short-${i}`, 1, 1000);
+    for (let i = 0; i < MAX_RATE_LIMIT_KEYS / 2; i++) checkTokenRateLimit(`long-${i}`, 1, 600000);
+    vi.advanceTimersByTime(2000);
+    checkTokenRateLimit('after-expiry', 1, 60000);
+    // The first long window is still there: the expired short ones made the room
+    expect(checkTokenRateLimit('long-0', 1, 600000).allowed).toBe(false);
+  });
+
+  test('a key whose window resets moves to the back of the eviction order', () => {
+    checkTokenRateLimit('renewed', 1, 1000);
+    vi.advanceTimersByTime(2000);
+    // Its window resets now, after the others below would have been added
+    fill('others', MAX_RATE_LIMIT_KEYS - 1);
+    checkTokenRateLimit('renewed', 1, 60000);
+    checkTokenRateLimit('one-more', 1, 60000);
+    // The oldest window is others-0, not the renewed key
+    expect(checkTokenRateLimit('renewed', 1, 60000).allowed).toBe(false);
+    expect(checkTokenRateLimit('others-0', 1, 60000).allowed).toBe(true);
+  });
+
+  test('peekTokenRateLimit reads the token store without spending', () => {
+    checkTokenRateLimit('peeked', 1, 60000);
+    expect(peekTokenRateLimit('peeked', 1).allowed).toBe(false);
+    expect(peekTokenRateLimit('never-seen', 1).allowed).toBe(true);
+  });
+
+  test("flooding it doesn't evict login, per-IP or global counters in the main store", () => {
+    checkRateLimit('login-ip:203.0.113.9', 1, 15 * 60000);
+    checkRateLimit('login:alice@example.com', 1, 15 * 60000);
+    checkRateLimit('guest-process-global', 1, 60 * 60000);
+    fill('flood', MAX_RATE_LIMIT_KEYS + 10);
+    expect(checkRateLimit('login-ip:203.0.113.9', 1, 15 * 60000).allowed).toBe(false);
+    expect(checkRateLimit('login:alice@example.com', 1, 15 * 60000).allowed).toBe(false);
+    expect(checkRateLimit('guest-process-global', 1, 60 * 60000).allowed).toBe(false);
   });
 });
