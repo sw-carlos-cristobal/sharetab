@@ -99,6 +99,42 @@ test.describe('Claim page — two devices edit the same person (#226)', () => {
     await ctx.dispose();
   });
 
+  test('tapping an item back while its save is in flight keeps that tap', async ({ page }) => {
+    const { ctx, shareToken } = await annClaimingForCat(page, 'Two Taps Diner');
+
+    // Hold the save's answer, so the second tap lands while it's in flight
+    let release = () => {};
+    const released = new Promise<void>((resolve) => (release = resolve));
+    let saveSent = () => {};
+    const sent = new Promise<void>((resolve) => (saveSent = resolve));
+    await page.route(
+      (url) => url.pathname.includes('guest.claimItems'),
+      async (route) => {
+        const response = await route.fetch();
+        saveSent();
+        await released;
+        await route.fulfill({ response }).catch(() => {});
+      },
+      { times: 1 },
+    );
+
+    await page.getByTestId('claim-item-2').click();
+    await page.getByTestId('save-claims-btn').click();
+    await sent;
+    await page.getByTestId('claim-item-2').click();
+    release();
+    await expect(page.getByText('Claims saved!').first()).toBeVisible({ timeout: 15000 });
+
+    // The save stored the pie; the second tap is still here, waiting to be saved
+    expect(await claimsOf(ctx, shareToken, 'Cat')).toEqual(['Pie']);
+    await expect(page.getByTestId('claim-item-2')).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByText('Unsaved changes').first()).toBeVisible();
+    await save(page);
+    expect(await claimsOf(ctx, shareToken, 'Cat')).toEqual([]);
+
+    await ctx.dispose();
+  });
+
   test("another device's saves show under changes not saved yet", async ({ page }) => {
     const { ctx, catSaves } = await annClaimingForCat(page, 'Two Devices Cafe');
 

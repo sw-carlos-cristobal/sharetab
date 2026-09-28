@@ -54,6 +54,16 @@ describe('toggleEdit', () => {
     expect(toggleEdit(new Set([0]), edits, 2)).toEqual(new Map());
   });
 
+  test('tapping an item back while its save is in flight keeps the change, judged against the claims being saved', () => {
+    // Claimed item 2 and pressed Save; before it lands, tapped item 2 again
+    const saving = new Map([[2, true]]);
+    const edits = toggleEdit(withEdits(new Set(), saving), saving, 2);
+    expect(edits).toEqual(new Map([[2, false]]));
+    // Once the save lands, the item shows unclaimed again, still to be saved
+    expect(withEdits(new Set([2]), edits)).toEqual(new Set());
+    expect(hasEdits(new Set([2]), edits)).toBe(true);
+  });
+
   test('keeps the other changes', () => {
     const edits = new Map([[1, true]]);
     expect(toggleEdit(new Set(), edits, 2)).toEqual(

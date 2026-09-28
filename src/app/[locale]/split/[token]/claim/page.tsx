@@ -113,6 +113,9 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   // first edit here; people without one show their saved claims.
   // Unsaved claim changes by person id (see ClaimEdits)
   const [claimEdits, setClaimEdits] = useState<Map<string, ClaimEdits>>(new Map());
+  // The changes a save in flight is sending, by person id. A tap meanwhile is judged against the
+  // claims as they'll be once it lands, so tapping an item back isn't taken for a no-op
+  const savingEdits = useRef(new Map<string, ClaimEdits>());
   const [saving, setSaving] = useState(false);
   const [showImage, setShowImage] = useState(false);
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
@@ -637,7 +640,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
 
   function toggleClaim(itemIndex: number) {
     if (personIndex === null || activeId === null) return;
-    const saved = serverClaimsMap.get(personIndex) ?? new Set<number>();
+    const saved = withEdits(serverClaimsMap.get(personIndex) ?? new Set<number>(), savingEdits.current.get(activeId));
     setClaimEdits((prev) => {
       const next = new Map(prev);
       const edits = toggleEdit(saved, prev.get(activeId), itemIndex);
@@ -700,6 +703,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     if (personIndex === null || activeId === null || !personToken) return;
     const edits = localEdits.get(personIndex);
     if (!edits) return;
+    savingEdits.current.set(activeId, edits);
     // Saving until the reload below lands: before it, the session as loaded still shows the
     // draft as unsaved, and Save would be enabled again
     setSaving(true);
@@ -724,6 +728,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
         return next;
       });
     } finally {
+      savingEdits.current.delete(activeId);
       setSaving(false);
     }
   }
