@@ -16,6 +16,10 @@ describe('draftsByIndex', () => {
     );
   });
 
+  test('keeps a draft whose value is falsy', () => {
+    expect(draftsByIndex(new Map([['a', 0]]), [{ id: 'a' }])).toEqual(new Map([[0, 0]]));
+  });
+
   test("drops the drafts of people who aren't in the list (removed)", () => {
     const drafts = new Map([['b', new Map([[0, true]])]]);
     expect(draftsByIndex(drafts, [{ id: 'a' }, { id: 'c' }])).toEqual(new Map());

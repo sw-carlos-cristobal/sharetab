@@ -118,9 +118,8 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   const identityRef = useRef(identity);
   // Who "Claiming for" is set to (this device's person unless the user picked someone else)
   const [activePersonId, setActivePersonId] = useState<string | null>(null);
-  // Unsaved claim edits by person id. A person's set is copied from their saved claims on their
-  // first edit here; people without one show their saved claims.
-  // Unsaved claim changes by person id (see ClaimEdits)
+  // Unsaved claim changes by person id: the items tapped, shown over the person's saved claims
+  // (see ClaimEdits); people without any show their saved claims
   const [claimEdits, setClaimEdits] = useState<Map<string, ClaimEdits>>(new Map());
   // The changes a save in flight is sending, by person id. Saving moves a person's changes here,
   // and taps meanwhile are new changes on top of them (judged against the claims as they'll be
@@ -569,13 +568,15 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     return hasEdits(baseClaimsMap.get(personIndex) ?? new Set<number>(), localEdits.get(personIndex));
   }, [localEdits, baseClaimsMap, personIndex]);
 
-  // Check if ANY person has unsaved local edits (not just the currently selected one)
+  // Check if ANY person has unsaved local edits (not just the currently selected one). A save in
+  // flight counts too: until it lands, finalizing could lock in the claims from before it
   const hasAnyUnsavedChanges = useMemo(() => {
+    if (savingEdits.size > 0) return true;
     for (const [pIdx, edits] of localEdits) {
       if (hasEdits(baseClaimsMap.get(pIdx) ?? new Set<number>(), edits)) return true;
     }
     return false;
-  }, [localEdits, baseClaimsMap]);
+  }, [savingEdits, localEdits, baseClaimsMap]);
 
   // All items have at least one saved claimant
   const allItemsClaimed = useMemo(() => {
@@ -729,7 +730,8 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   }
 
   async function saveClaims() {
-    if (personIndex === null || activeId === null || !personToken) return;
+    // Not while a split is in flight: it shifts the item indexes the changes are keyed by
+    if (personIndex === null || activeId === null || !personToken || splitClaimItem.isPending) return;
     const edits = localEdits.get(personIndex);
     if (!edits) return;
     // The changes move into the save in flight; taps from now on are new changes on top of it
@@ -1516,10 +1518,12 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
                                 type="button"
                                 size="sm"
                                 className="h-7 text-xs"
-                                disabled={splitClaimItem.isPending || !validQty}
+                                // Not while a save is in flight: splitting shifts the item indexes its
+                                // changes are keyed by
+                                disabled={splitClaimItem.isPending || saving || !validQty}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  if (!validQty || !personToken) return;
+                                  if (!validQty || !personToken || saving) return;
                                   splitClaimItem.mutate({
                                     token,
                                     personToken,
@@ -1668,7 +1672,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
           <Button
             className="w-full h-14"
             onClick={saveClaims}
-            disabled={saving || !hasUnsavedChanges}
+            disabled={saving || splitClaimItem.isPending || !hasUnsavedChanges}
             data-testid="save-claims-btn"
           >
             {saving ? (

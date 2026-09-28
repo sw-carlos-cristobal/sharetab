@@ -16,7 +16,7 @@ export function draftsByIndex<T>(drafts: ReadonlyMap<string, T>, people: readonl
   const byIndex = new Map<number, T>();
   people.forEach((person, index) => {
     const draft = drafts.get(person.id);
-    if (draft) byIndex.set(index, draft);
+    if (draft !== undefined) byIndex.set(index, draft);
   });
   return byIndex;
 }

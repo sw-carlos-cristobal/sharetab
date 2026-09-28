@@ -170,6 +170,41 @@ test.describe('Claim page — two devices edit the same person (#226)', () => {
     await ctx.dispose();
   });
 
+  test('Finalize stays hidden while a save is in flight', async ({ page }) => {
+    const { ctx, catSaves } = await annClaimingForCat(page, 'Finalize Wait Diner');
+    // Cat has claimed everything, so the split could be finalized
+    await catSaves([0, 1, 2]);
+    await expect(page.getByTestId('finalize-btn')).toBeVisible({ timeout: 15000 });
+
+    let release = () => {};
+    const released = new Promise<void>((resolve) => (release = resolve));
+    let saveSent = () => {};
+    const sent = new Promise<void>((resolve) => (saveSent = resolve));
+    await page.route(
+      (url) => url.pathname.includes('guest.claimItems'),
+      async (route) => {
+        const response = await route.fetch();
+        saveSent();
+        await released;
+        await route.fulfill({ response }).catch(() => {});
+      },
+      { times: 1 },
+    );
+
+    // Ann unclaims the tea for Cat and saves; until the save lands, Finalize can't be pressed
+    await page.getByTestId('claim-item-0').click();
+    await expect(page.getByTestId('finalize-btn')).toHaveCount(0);
+    await page.getByTestId('save-claims-btn').click();
+    await sent;
+    await expect(page.getByTestId('finalize-btn')).toHaveCount(0);
+    release();
+    await expect(page.getByText('Claims saved!').first()).toBeVisible({ timeout: 15000 });
+    // The tea is nobody's now, so the split still can't be finalized
+    await expect(page.getByTestId('finalize-btn')).toHaveCount(0);
+
+    await ctx.dispose();
+  });
+
   test("another device's saves show under changes not saved yet", async ({ page }) => {
     const { ctx, catSaves } = await annClaimingForCat(page, 'Two Devices Cafe');
 
