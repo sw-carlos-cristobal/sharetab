@@ -1252,7 +1252,8 @@ export const guestRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { allowed } = checkRateLimit(`venmo-handle:${ctx.user.id}:${input.token}`, 10, 60 * 1000);
+      // Keyed by the client-sent share token before it's checked, so it goes in the capped token store
+      const { allowed } = checkTokenRateLimit(`venmo-handle:${ctx.user.id}:${input.token}`, 10, 60 * 1000);
       if (!allowed) {
         throw new TRPCError({
           code: 'TOO_MANY_REQUESTS',
