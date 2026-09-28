@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { extractTextFromCodexStream, isCodexSseResponse } from './openai-codex';
+import { extractTextFromCodexStream, isCodexSseResponse, resolveCodexModel } from './openai-codex';
 
 describe('extractTextFromCodexStream', () => {
   test('returns final message text from streamed events', () => {
@@ -41,5 +41,21 @@ describe('extractTextFromCodexStream', () => {
 
     expect(isCodexSseResponse(body, 'text/event-stream')).toBe(true);
     expect(isCodexSseResponse(body, 'application/json')).toBe(true);
+  });
+});
+
+describe('resolveCodexModel', () => {
+  test('uses the model configured', () => {
+    expect(resolveCodexModel('gpt-5.4-mini')).toBe('gpt-5.4-mini');
+  });
+
+  test('falls back to the default when unset, blank or only spaces (e.g. a blanked Unraid field, #222)', () => {
+    expect(resolveCodexModel(undefined)).toBe('gpt-5.5');
+    expect(resolveCodexModel('')).toBe('gpt-5.5');
+    expect(resolveCodexModel('   ')).toBe('gpt-5.5');
+  });
+
+  test('trims the spaces around a configured model', () => {
+    expect(resolveCodexModel(' gpt-5.5 ')).toBe('gpt-5.5');
   });
 });
