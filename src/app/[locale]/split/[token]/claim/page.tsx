@@ -27,6 +27,7 @@ import {
   editsToSave,
   hasEdits,
   restoreEdits,
+  stackEdits,
   toggleEdit,
   withEdits,
   type ClaimEdits,
@@ -125,6 +126,14 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   // and taps meanwhile are new changes on top of them (judged against the claims as they'll be
   // once it lands); if it fails, restoreEdits puts the sent changes back under the new ones
   const [savingEdits, setSavingEdits] = useState<Map<string, ClaimEdits>>(new Map());
+  // Counts the times unsaved changes were discarded (this device became someone else, or no one),
+  // so a save in flight across that doesn't bring its changes back afterwards
+  const editsReset = useRef(0);
+  function discardEdits() {
+    editsReset.current += 1;
+    setClaimEdits(new Map());
+    setSavingEdits(new Map());
+  }
   const [saving, setSaving] = useState(false);
   const [showImage, setShowImage] = useState(false);
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
@@ -186,7 +195,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     autoRejoinAttempted.current = true;
     setIdentity(null);
     setActivePersonId(null);
-    setClaimEdits(new Map());
+    discardEdits();
     setEditingPersonId(null);
   }
 
@@ -288,7 +297,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     pendingJoin.current = null;
     // Unsaved edits were made as whoever this device was before. Saved claims show from the
     // session as loaded, whose indexes are its own, so nothing is carried over from it.
-    setClaimEdits(new Map());
+    discardEdits();
     // Someone who just joined isn't in the session as loaded yet. Loads from before now don't
     // count for the membership check; this refetch drops any poll sent before now, so the
     // next load is from after the join.
@@ -732,6 +741,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     });
     // Saving until the reload below lands, so Save isn't enabled again in between
     setSaving(true);
+    const resetsBefore = editsReset.current;
     try {
       let saved = false;
       try {
@@ -746,14 +756,19 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
       // After a save, reload with a new fetch (a poll already in flight may predate it), so the
       // claims it stored are on screen before its changes leave the save in flight
       const reloaded = saved ? await session.refetch() : null;
-      if (reloaded?.status !== 'success') {
-        // Not saved (or saved but not reloaded, until the next poll shows it): the changes come
-        // back as unsaved, under any made since
-        const since = savedClaimsOf(activeId);
+      // Put the changes back unless they were discarded meanwhile, or saved and on screen
+      if (reloaded?.status !== 'success' && editsReset.current === resetsBefore) {
+        // Not saved: they come back as unsaved, under any made since (compared with the saved
+        // claims as loaded, which are still current). Saved but not reloaded: the claims as
+        // loaded predate the save, so every change is kept as it is until a poll loads what the
+        // save stored (see stackEdits)
+        const savedBefore = savedClaimsOf(activeId);
         setClaimEdits((prev) => {
           const next = new Map(prev);
-          const restored = restoreEdits(since, edits, prev.get(activeId));
-          if (restored.size > 0) next.set(activeId, restored);
+          const kept = saved
+            ? stackEdits(edits, prev.get(activeId))
+            : restoreEdits(savedBefore, edits, prev.get(activeId));
+          if (kept.size > 0) next.set(activeId, kept);
           else next.delete(activeId);
           return next;
         });

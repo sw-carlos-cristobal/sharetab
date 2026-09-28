@@ -85,3 +85,12 @@ export function restoreEdits(
   }
   return restored;
 }
+
+/**
+ * Newer changes stacked over older ones, keeping every change (none is compared with the saved
+ * claims). For a save that stored its changes but whose reload failed: the claims the page has
+ * are from before it, so comparing with them would drop changes that undo what it stored.
+ */
+export function stackEdits(older: ClaimEdits, newer: ClaimEdits | undefined): Map<number, boolean> {
+  return new Map([...older, ...(newer ?? [])]);
+}

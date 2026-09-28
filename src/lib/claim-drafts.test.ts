@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { draftsByIndex, editsToSave, hasEdits, restoreEdits, toggleEdit, withEdits } from './claim-drafts';
+import { draftsByIndex, editsToSave, hasEdits, restoreEdits, stackEdits, toggleEdit, withEdits } from './claim-drafts';
 
 describe('draftsByIndex', () => {
   test("puts each person's unsaved claims at their index in the people list the page has now", () => {
@@ -141,5 +141,37 @@ describe('restoreEdits', () => {
 
   test('drops changes that match the saved claims', () => {
     expect(restoreEdits(new Set([2]), new Map([[2, true]]), new Map([[3, false]]))).toEqual(new Map());
+  });
+});
+
+describe('stackEdits', () => {
+  test('puts newer changes over older ones, keeping every change', () => {
+    expect(
+      stackEdits(
+        new Map([
+          [1, true],
+          [2, true],
+        ]),
+        new Map([[2, false]]),
+      ),
+    ).toEqual(
+      new Map([
+        [1, true],
+        [2, false],
+      ]),
+    );
+    expect(stackEdits(new Map([[1, true]]), undefined)).toEqual(new Map([[1, true]]));
+  });
+
+  test('a tap made during a save that stored but did not reload survives the next poll', () => {
+    // Saved item 2 (stored); tapped it off meanwhile; the reload failed, so the page still has
+    // the claims from before the save
+    const sent = new Map([[2, true]]);
+    const since = toggleEdit(withEdits(new Set(), sent), undefined, 2);
+    const kept = stackEdits(sent, since);
+    expect(withEdits(new Set(), kept)).toEqual(new Set());
+    // The next poll loads what the save stored: the tap-off is still there, waiting to be saved
+    expect(withEdits(new Set([2]), kept)).toEqual(new Set());
+    expect(hasEdits(new Set([2]), kept)).toBe(true);
   });
 });
