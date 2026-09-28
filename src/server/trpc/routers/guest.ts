@@ -94,6 +94,8 @@ const NAME_ONE_PERSON = { message: 'Name the person by exactly one of index or i
  * new key on every request), without a database read in front of the limiter (#208).
  */
 const shareTokenSchema = z.string().max(64);
+/** A receipt id as sent by the client: a cuid, capped like a share token (getReceiptItems builds a limiter key from it). */
+const receiptIdSchema = z.string().max(64);
 
 /** The index of the person a request targets (see findTargetIndex), or a TRPCError. */
 function targetIndexOrThrow(
@@ -250,7 +252,7 @@ export const guestRouter = createTRPCRouter({
   }),
 
   processReceipt: publicProcedure
-    .input(z.object({ receiptId: z.string(), correctionHint: z.string().max(500).optional() }))
+    .input(z.object({ receiptId: receiptIdSchema, correctionHint: z.string().max(500).optional() }))
     .mutation(async ({ ctx, input }) => {
       // Kill switch for unauthenticated AI spend. Checked first so an
       // anonymous caller on a disabled install does no receipt lookup and
@@ -356,7 +358,7 @@ export const guestRouter = createTRPCRouter({
       }
     }),
 
-  getReceiptItems: publicProcedure.input(z.object({ receiptId: z.string() })).query(async ({ ctx, input }) => {
+  getReceiptItems: publicProcedure.input(z.object({ receiptId: receiptIdSchema })).query(async ({ ctx, input }) => {
     // Rate limit: 10 lookups per receipt per hour to mitigate enumeration.
     // Guest receipt IDs are CUIDs (25 chars of randomness) making brute force
     // infeasible, but rate limiting adds defense-in-depth.
@@ -403,7 +405,7 @@ export const guestRouter = createTRPCRouter({
   createSplit: publicProcedure
     .input(
       z.object({
-        receiptId: z.string().optional(),
+        receiptId: receiptIdSchema.optional(),
         receiptData: receiptDataSchema,
         items: z.array(itemSchema).min(1).max(100),
         people: z
@@ -577,7 +579,7 @@ export const guestRouter = createTRPCRouter({
   createClaimSession: publicProcedure
     .input(
       z.object({
-        receiptId: z.string().optional(),
+        receiptId: receiptIdSchema.optional(),
         receiptData: receiptDataSchema,
         items: z.array(itemSchema).min(1).max(100),
         creatorName: z.string().trim().min(1).max(100),

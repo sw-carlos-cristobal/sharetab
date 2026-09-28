@@ -144,6 +144,14 @@ describe('share tokens longer than any real one (#208)', () => {
     expect(mockDb.guestSplit.findUnique).not.toHaveBeenCalled();
   });
 
+  test('getReceiptItems and processReceipt refuse an oversized receipt id the same way', async () => {
+    const api = await caller(signedIn);
+    await expect(api.getReceiptItems({ receiptId: long })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(api.processReceipt({ receiptId: long })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(checkRateLimit).not.toHaveBeenCalled();
+    expect(mockDb.receipt.findUnique).not.toHaveBeenCalled();
+  });
+
   test('a signed-in caller gets the same for expireSession and setPayerVenmoHandle', async () => {
     const api = await caller(signedIn);
     await expect(api.expireSession({ token: long })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
