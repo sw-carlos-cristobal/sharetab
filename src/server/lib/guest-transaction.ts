@@ -23,11 +23,12 @@ export const GUEST_TRANSACTION_ISOLATION = Prisma.TransactionIsolationLevel.Repe
  * A conflict that outlasts the retry budget becomes a CONFLICT error with a generic
  * message, so the raw database error never reaches the client.
  *
- * Prisma's transaction manager errors (P2028: no pool connection freed up within maxWait,
- * or the transaction ran past its timeout) become SERVICE_UNAVAILABLE without a retry,
- * since retrying would add load while the pool is full (#203). They all get the same
- * handling rather than being told apart by message, which isn't a stable API; the log
- * keeps Prisma's message.
+ * Prisma's transaction manager errors (P2028) become SERVICE_UNAVAILABLE without a retry
+ * (#203). P2028 covers several transaction lifecycle failures, e.g. no pool connection
+ * freeing up within maxWait, the transaction running past its timeout, or a transaction
+ * already closed or not found; retrying the pool case would add load while the pool is
+ * full. They all get the same handling rather than being told apart by message, which
+ * isn't a stable API; the log keeps Prisma's message.
  */
 export async function guestTransaction<T>(
   db: Pick<PrismaClient, '$transaction'>,
