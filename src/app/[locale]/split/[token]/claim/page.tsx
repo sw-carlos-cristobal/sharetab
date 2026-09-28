@@ -14,6 +14,7 @@ import {
   isSessionLost,
   joinKeyFor,
   needsMembershipCheck,
+  newRequestKey,
   personalLinkHash,
   readPersonalLinkToken,
   resumeOutcome,
@@ -27,7 +28,9 @@ import {
   draftsByIndex,
   editsAfterSave,
   editsToSave,
+  failedSaveOutcome,
   hasEdits,
+  saveRetryDelay,
   toggleEdit,
   withEdits,
   type ClaimEdits,
@@ -56,6 +59,10 @@ import { toast } from 'sonner';
 import { Link } from '@/i18n/navigation';
 import { buildVenmoPayUrl, isValidVenmoHandle } from '@/lib/venmo';
 import { getInitials, guestAvatarColor } from '@/lib/avatar';
+
+function delay(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
 
 function getStoredClaimIdentity(token: string): StoredClaimIdentity | null {
   if (typeof window === 'undefined') return null;
@@ -129,6 +136,14 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   // Counts the times unsaved changes were discarded (this device became someone else, or no one),
   // so a save in flight across that doesn't bring its changes back afterwards
   const editsReset = useRef(0);
+  // Whether the page is still open: a save it's still sending stops when it closes
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   function discardEdits() {
     editsReset.current += 1;
     setClaimEdits(new Map());
@@ -519,20 +534,8 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     checkMembership.mutate({ token, personToken: identity.personToken });
   }, [session.data, session.dataUpdatedAt, identity, indexById]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const claimItems = trpc.guest.claimItems.useMutation({
-    onSuccess: (result) => {
-      // saveClaims reloads the session and then drops the saved draft (unless it was edited meanwhile)
-      if (result.conflicts && result.conflicts.length > 0) {
-        const names = [...new Set(result.conflicts.flatMap((c) => c.claimedBy))];
-        toast.warning(t('claimConflict', { names: names.join(', '), count: result.conflicts.length }));
-      } else {
-        toast.success(t('claimsSavedToast'));
-      }
-    },
-    onError: (error) => {
-      toast.error(error.message);
-    },
-  });
+  // saveClaims says how each save went: it may send one several times (see sendSave)
+  const claimItems = trpc.guest.claimItems.useMutation();
 
   // --- Derived state ---
   const hasJoined = identity !== null;
@@ -745,23 +748,31 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     // Saving until the reload below lands, so Save isn't enabled again in between
     setSaving(true);
     const resetsBefore = editsReset.current;
+    // Until the page closes, or its unsaved changes are discarded (it became someone else)
+    const stillSaving = () => mounted.current && editsReset.current === resetsBefore;
+    // By id: if someone listed earlier was removed since the session last loaded, an index would
+    // now point at someone else. Only the items changed here are sent, so claims another device
+    // saved for this person on other items are kept (#226). One save key for every attempt, so
+    // the server stores the save once however often it's sent (#238).
+    const request = { token, personId: activeId, personToken, saveKey: newRequestKey(), ...editsToSave(edits) };
     try {
-      let outcome: SaveOutcome = 'unknown';
-      try {
-        // By id: if someone listed earlier was removed since the session last loaded, an index
-        // would now point at someone else. Only the items changed here are sent, so claims
-        // another device saved for this person on other items are kept (#226)
-        await claimItems.mutateAsync({ token, personId: activeId, personToken, ...editsToSave(edits) });
-        outcome = 'saved';
-      } catch (error) {
-        // claimItems' onError has said why. An error answer from the server means nothing was
-        // stored; no answer (a dropped connection, a proxy's error page) means it may have been
-        const answered = error instanceof TRPCClientError && typeof error.data?.httpStatus === 'number';
-        outcome = answered ? 'refused' : 'unknown';
+      // An attempt that got no answer may have been stored, so it's sent again until the answer
+      // says. Otherwise its changes would stay as unsaved edits after it was stored, and could
+      // undo a later change from another device at the next save (#238).
+      let outcome = await sendSave(request, false);
+      for (let attempt = 0; outcome === 'unknown' && stillSaving(); attempt++) {
+        await delay(saveRetryDelay(attempt));
+        if (stillSaving()) outcome = await sendSave(request, true);
       }
       // Reload with a new fetch (a poll already in flight may predate the save), so the claims it
-      // stored are on screen before its changes leave the save in flight
-      const reloaded = (await session.refetch()).status === 'success';
+      // stored are on screen before its changes leave the save in flight. Until a reload lands
+      // they stay there, rather than showing as unsaved changes the server already has.
+      let reload = await reloadSession();
+      for (let attempt = 0; reload === 'failed' && outcome !== 'unknown' && stillSaving(); attempt++) {
+        await delay(saveRetryDelay(attempt));
+        if (stillSaving()) reload = await reloadSession();
+      }
+      const reloaded = reload === 'loaded';
       if (editsReset.current === resetsBefore) {
         const savedNow = savedClaimsOf(activeId);
         setClaimEdits((prev) => {
@@ -780,6 +791,37 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
       });
       setSaving(false);
     }
+  }
+
+  // Sends a save once and says how it ended. A first failure says why; while a retry's answer is
+  // still unknown it stays quiet, so a page that's offline doesn't show a toast per attempt.
+  async function sendSave(request: Parameters<typeof claimItems.mutateAsync>[0], retry: boolean): Promise<SaveOutcome> {
+    try {
+      const result = await claimItems.mutateAsync(request);
+      if (result.conflicts && result.conflicts.length > 0) {
+        const names = [...new Set(result.conflicts.flatMap((c) => c.claimedBy))];
+        toast.warning(t('claimConflict', { names: names.join(', '), count: result.conflicts.length }));
+      } else {
+        toast.success(t('claimsSavedToast'));
+      }
+      return 'saved';
+    } catch (error) {
+      const httpStatus =
+        error instanceof TRPCClientError && typeof error.data?.httpStatus === 'number'
+          ? error.data.httpStatus
+          : undefined;
+      const outcome = failedSaveOutcome(httpStatus, retry);
+      if (!retry || outcome === 'refused') toast.error(error instanceof Error ? error.message : String(error));
+      return outcome;
+    }
+  }
+
+  // Loads the session again: 'gone' when the server says it no longer exists (the page then
+  // shows that, and trying again won't help)
+  async function reloadSession(): Promise<'loaded' | 'failed' | 'gone'> {
+    const result = await session.refetch();
+    if (result.status === 'success') return 'loaded';
+    return isSessionLost(true, result.error?.data?.httpStatus) ? 'gone' : 'failed';
   }
 
   // A person's saved claims in the session as last loaded (read from the query cache, since

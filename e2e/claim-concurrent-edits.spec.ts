@@ -65,6 +65,32 @@ async function save(page: Page) {
   await expect(page.getByText('Claims saved!').first()).toBeVisible({ timeout: 15000 });
 }
 
+/** The save key of every claim save the page sends, in order. */
+function recordSaveKeys(page: Page) {
+  const keys: string[] = [];
+  page.on('request', (req) => {
+    if (!new URL(req.url()).pathname.includes('guest.claimItems')) return;
+    keys.push(/"saveKey":"([0-9a-f-]{36})"/.exec(req.postData() ?? '')?.[1] ?? '');
+  });
+  return keys;
+}
+
+/**
+ * Whether "Unsaved changes" appears on the page from now on (it's absent when this is called).
+ * Read it with sawUnsavedChanges.
+ */
+async function watchForUnsavedChanges(page: Page) {
+  await page.evaluate(() => {
+    const w = window as unknown as { sawUnsavedChanges: boolean };
+    w.sawUnsavedChanges = false;
+    new MutationObserver(() => {
+      if (document.body.innerText.includes('Unsaved changes')) w.sawUnsavedChanges = true;
+    }).observe(document.body, { subtree: true, childList: true, characterData: true });
+  });
+}
+const sawUnsavedChanges = (page: Page) =>
+  page.evaluate(() => (window as unknown as { sawUnsavedChanges: boolean }).sawUnsavedChanges);
+
 test.describe('Claim page — two devices edit the same person (#226)', () => {
   test('claiming an item for someone keeps the items their own device saved meanwhile', async ({ page }) => {
     const { ctx, shareToken, catSaves } = await annClaimingForCat(page, 'Two Devices Diner');
@@ -137,10 +163,14 @@ test.describe('Claim page — two devices edit the same person (#226)', () => {
     await ctx.dispose();
   });
 
-  test('tapping an item off and on while its save fails keeps it claimed, still to be saved', async ({ page }) => {
+  test('a save that got no answer is sent again until it is stored, keeping taps made meanwhile (#238)', async ({
+    page,
+  }) => {
     const { ctx, shareToken } = await annClaimingForCat(page, 'Failed Save Diner');
+    const saveKeys = recordSaveKeys(page);
 
-    // Hold the save, then fail it once the item has been tapped off and on again
+    // Hold the save, then drop it before it reaches the server, once the item has been tapped
+    // off and on again
     let fail = () => {};
     const failed = new Promise<void>((resolve) => (fail = resolve));
     let saveSent = () => {};
@@ -162,12 +192,103 @@ test.describe('Claim page — two devices edit the same person (#226)', () => {
     await page.getByTestId('claim-item-2').click();
     fail();
 
-    // Nothing was stored; the pie is still claimed here, waiting to be saved
-    await expect(page.getByTestId('claim-item-2')).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByText('Unsaved changes').first()).toBeVisible({ timeout: 15000 });
-    await expect.poll(() => claimsOf(ctx, shareToken, 'Cat'), { timeout: 15000 }).toEqual([]);
-    await save(page);
+    // The page sends the save again with the same key, and it's stored; the taps cancelled out
     await expect.poll(() => claimsOf(ctx, shareToken, 'Cat'), { timeout: 15000 }).toEqual(['Pie']);
+    await expect(page.getByTestId('save-claims-btn')).toHaveText('Claims saved', { timeout: 15000 });
+    await expect(page.getByTestId('claim-item-2')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByText('Unsaved changes')).toHaveCount(0);
+    expect(saveKeys).toHaveLength(2);
+    expect(saveKeys[0]).toMatch(/^[0-9a-f-]{36}$/);
+    expect(saveKeys[1]).toBe(saveKeys[0]);
+
+    await ctx.dispose();
+  });
+
+  test("a save whose answer was lost doesn't come back to undo another device's later change (#238)", async ({
+    page,
+  }) => {
+    const { ctx, shareToken, catSaves } = await annClaimingForCat(page, 'Lost Answer Cafe');
+    const saveKeys = recordSaveKeys(page);
+
+    // The save reaches the server and is stored, but its answer never arrives
+    await page.route(
+      (url) => url.pathname.includes('guest.claimItems'),
+      async (route) => {
+        await route.fetch();
+        await route.abort('connectionreset').catch(() => {});
+      },
+      { times: 1 },
+    );
+
+    // Ann claims the pie for Cat and saves
+    await page.getByTestId('claim-item-2').click();
+    await page.getByTestId('save-claims-btn').click();
+    await expect(page.getByTestId('save-claims-btn')).toHaveText('Claims saved', { timeout: 15000 });
+    await expect.poll(() => claimsOf(ctx, shareToken, 'Cat'), { timeout: 15000 }).toEqual(['Pie']);
+
+    // Later, Cat's own phone unclaims the pie: Ann's page shows that, with nothing to save
+    await catSaves([]);
+    await expect(page.getByTestId('claim-item-2')).toHaveAttribute('aria-pressed', 'false', { timeout: 15000 });
+    await expect(page.getByText('Unsaved changes')).toHaveCount(0);
+    await expect(page.getByTestId('save-claims-btn')).toBeDisabled();
+    expect(await claimsOf(ctx, shareToken, 'Cat')).toEqual([]);
+
+    // It learned the save was stored by sending it again with the same key
+    expect(saveKeys).toHaveLength(2);
+    expect(saveKeys[1]).toBe(saveKeys[0]);
+
+    await ctx.dispose();
+  });
+
+  test('a stored save whose reload fails never shows its changes as unsaved (#238)', async ({ page }) => {
+    const { ctx, shareToken } = await annClaimingForCat(page, 'Failed Reload Diner');
+
+    // Once the save is stored, every session reload fails until `failing` is turned off
+    let failing = false;
+    let failedReloads = 0;
+    await page.route(
+      (url) => url.pathname.includes('guest.getSession'),
+      async (route) => {
+        if (!failing) return route.continue().catch(() => {});
+        failedReloads += 1;
+        await route.fulfill({ status: 500, body: 'unavailable' }).catch(() => {});
+      },
+    );
+    let release = () => {};
+    const released = new Promise<void>((resolve) => (release = resolve));
+    let saveSent = () => {};
+    const sent = new Promise<void>((resolve) => (saveSent = resolve));
+    await page.route(
+      (url) => url.pathname.includes('guest.claimItems'),
+      async (route) => {
+        const response = await route.fetch();
+        saveSent();
+        await released;
+        failing = true;
+        await route.fulfill({ response }).catch(() => {});
+      },
+      { times: 1 },
+    );
+
+    await page.getByTestId('claim-item-2').click();
+    await page.getByTestId('save-claims-btn').click();
+    await sent;
+    // The pie is in the save now, not an unsaved change; watch from here until the save ends
+    await expect(page.getByText('Unsaved changes')).toHaveCount(0);
+    await watchForUnsavedChanges(page);
+    release();
+
+    // Reloads keep failing: the page keeps the pie in the save, and keeps trying
+    await expect.poll(() => failedReloads, { timeout: 20000 }).toBeGreaterThanOrEqual(2);
+    await expect(page.getByTestId('save-claims-btn')).toBeDisabled();
+    await expect(page.getByTestId('claim-item-2')).toHaveAttribute('aria-pressed', 'true');
+
+    // Once a reload lands, the save is done, with nothing left to save
+    failing = false;
+    await expect(page.getByTestId('save-claims-btn')).toHaveText('Claims saved', { timeout: 20000 });
+    await expect(page.getByTestId('claim-item-2')).toHaveAttribute('aria-pressed', 'true');
+    expect(await sawUnsavedChanges(page)).toBe(false);
+    expect(await claimsOf(ctx, shareToken, 'Cat')).toEqual(['Pie']);
 
     await ctx.dispose();
   });
