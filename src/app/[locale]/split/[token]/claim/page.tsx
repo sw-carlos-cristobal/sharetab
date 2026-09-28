@@ -761,8 +761,15 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     const resetsBefore = editsReset.current;
     const stop = stopSaves.current.signal;
     // Until the page closes, its unsaved changes are discarded (it became someone else), or the
-    // person is removed (their changes go with them)
-    const going = () => mounted.current && !stop.aborted && editsReset.current === resetsBefore && isListed(activeId);
+    // person claimed for, or this device's own person, is removed: their changes go with them,
+    // and a removed person's token would only get the save refused
+    const saverId = myPersonId;
+    const going = () =>
+      mounted.current &&
+      !stop.aborted &&
+      editsReset.current === resetsBefore &&
+      isListed(activeId) &&
+      (saverId === null || isListed(saverId));
     // By id: if someone listed earlier was removed since the session last loaded, an index would
     // now point at someone else. Only the items changed here are sent, so claims another device
     // saved for this person on other items are kept (#226). One save key for every attempt, so

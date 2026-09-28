@@ -1,5 +1,5 @@
 import { test, expect, request, type Page } from '@playwright/test';
-import { joinGuestSession, trpcMutation, trpcQuery, trpcResult } from './helpers';
+import { joinGuestSession, personIdByName, trpcMutation, trpcQuery, trpcResult } from './helpers';
 
 const BASE = process.env.BASE_URL || 'http://localhost:3001';
 
@@ -58,7 +58,7 @@ async function annClaimingForCat(page: Page, merchantName: string) {
     });
     expect(res.ok(), await res.text()).toBe(true);
   };
-  return { ctx, shareToken, catSaves };
+  return { ctx, shareToken, cat, catSaves };
 }
 
 // Checks after a save poll the stored claims (claimsOf) rather than wait for the "Claims saved!"
@@ -273,6 +273,40 @@ test.describe('Claim page — two devices edit the same person (#226)', () => {
     // It learned the save was stored by sending it again with the same key
     expect(saveKeys).toHaveLength(2);
     expect(saveKeys[1]).toBe(saveKeys[0]);
+
+    await ctx.dispose();
+  });
+
+  test('a save stops, without an error, once the person saving is removed (#238)', async ({ page }) => {
+    const { ctx, shareToken, cat } = await annClaimingForCat(page, 'Removed Saver Diner');
+    const saveKeys = recordSaveKeys(page);
+
+    // Ann's save for Cat is stored but its answer is lost, and meanwhile Cat's phone removes Ann
+    await page.route(
+      (url) => url.pathname.includes('guest.claimItems'),
+      async (route) => {
+        await route.fetch();
+        const annId = await personIdByName(ctx, shareToken, 'Ann');
+        const removed = await trpcMutation(ctx, 'guest.removePerson', {
+          token: shareToken,
+          personToken: cat.personToken,
+          targetId: annId,
+        });
+        expect(removed.ok(), await removed.text()).toBe(true);
+        await route.abort('connectionreset').catch(() => {});
+      },
+      { times: 1 },
+    );
+
+    await page.getByTestId('claim-item-2').click();
+    await page.getByTestId('save-claims-btn').click();
+
+    // The page forgets Ann (she was removed) instead of sending the save again with her
+    // now-invalid token and showing that refusal
+    await expect(page.getByTestId('claim-join-form')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText('Invalid person token')).toHaveCount(0);
+    expect(saveKeys).toHaveLength(1);
+    expect(await claimsOf(ctx, shareToken, 'Cat')).toEqual(['Pie']);
 
     await ctx.dispose();
   });
