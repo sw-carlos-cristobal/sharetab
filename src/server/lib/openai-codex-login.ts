@@ -2,6 +2,7 @@ import { randomBytes, createHash } from 'crypto';
 import { mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'fs';
 import { dirname, join } from 'path';
 import { logger } from './logger';
+import { describeTokenError, readTokenBody } from './oauth-token-response';
 
 const CLIENT_ID = process.env.OPENAI_CODEX_CLIENT_ID ?? 'app_EMoamEEZ73f0CkXaXp7hrann';
 const AUTHORIZE_ENDPOINT = 'https://auth.openai.com/oauth/authorize';
@@ -228,26 +229,25 @@ async function refreshAuth(force = false): Promise<ParsedStoredAuth | null> {
   });
 
   if (!response.ok) {
-    logger.warn('openaiCodex.refresh.failed', { status: response.status });
+    // Only the status and an RFC 6749 error code: the body can echo the refresh token
+    logger.warn('openaiCodex.refresh.failed', await describeTokenError(response));
     return null;
   }
 
-  const refreshed = (await response.json()) as {
-    id_token?: string;
-    access_token?: string;
-    refresh_token?: string;
-  };
-
-  if (!refreshed.id_token || !refreshed.access_token) {
+  // Throws a fixed error for a body that isn't a JSON object (see readTokenBody)
+  const { id_token, access_token, refresh_token } = await readTokenBody(response);
+  if (
+    typeof id_token !== 'string' ||
+    !id_token ||
+    typeof access_token !== 'string' ||
+    !access_token ||
+    (refresh_token !== undefined && typeof refresh_token !== 'string')
+  ) {
     logger.warn('openaiCodex.refresh.invalidResponse');
     return null;
   }
 
-  writeStoredAuth({
-    id_token: refreshed.id_token,
-    access_token: refreshed.access_token,
-    refresh_token: refreshed.refresh_token ?? stored.refreshToken,
-  });
+  writeStoredAuth({ id_token, access_token, refresh_token: refresh_token ?? stored.refreshToken });
 
   return readStoredAuth();
 }
@@ -340,21 +340,25 @@ export async function submitCode(codeOrUrl: string): Promise<{ success: boolean;
     });
 
     if (!response.ok) {
-      const text = await response.text();
+      // Only the status and an RFC 6749 error code: the body can echo the code that was sent
+      const failure = await describeTokenError(response);
       cleanup();
       return {
         success: false,
-        error: `Token exchange failed (${response.status}): ${text}`,
+        error: `Token exchange failed (${failure.status})${failure.error ? `: ${failure.error}` : ''}`,
       };
     }
 
-    const tokens = (await response.json()) as {
-      id_token?: string;
-      access_token?: string;
-      refresh_token?: string;
-    };
-
-    if (!tokens.id_token || !tokens.access_token || !tokens.refresh_token) {
+    // Throws a fixed error for a body that isn't a JSON object (see readTokenBody)
+    const { id_token, access_token, refresh_token } = await readTokenBody(response);
+    if (
+      typeof id_token !== 'string' ||
+      !id_token ||
+      typeof access_token !== 'string' ||
+      !access_token ||
+      typeof refresh_token !== 'string' ||
+      !refresh_token
+    ) {
       cleanup();
       return {
         success: false,
@@ -362,13 +366,7 @@ export async function submitCode(codeOrUrl: string): Promise<{ success: boolean;
       };
     }
 
-    writeStoredAuth(
-      tokens as {
-        access_token: string;
-        refresh_token: string;
-        id_token: string;
-      },
-    );
+    writeStoredAuth({ id_token, access_token, refresh_token });
     cleanup();
     return { success: true };
   } catch (error) {
@@ -424,7 +422,18 @@ export async function retryAfterUnauthorized(): Promise<ParsedStoredAuth | null>
 }
 
 async function runOpenAICodexHealthCheck(): Promise<HealthStatus> {
-  const stored = await refreshAuth(false);
+  let stored: ParsedStoredAuth | null;
+  try {
+    stored = await refreshAuth(false);
+  } catch (error) {
+    // A refresh that fails outright (network, malformed response) leaves auth in doubt, not gone
+    const current = readStoredAuth();
+    return {
+      status: 'degraded',
+      ...(current ? { email: current.email, planType: current.planType, accountId: current.accountId } : {}),
+      error: error instanceof Error ? error.message : 'Health check failed',
+    };
+  }
   if (!stored) {
     return { status: 'not_authenticated' };
   }
