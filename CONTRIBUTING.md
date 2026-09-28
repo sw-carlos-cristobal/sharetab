@@ -106,7 +106,7 @@ TypeScript runs in strict mode with extra checks, including `exactOptionalProper
 npm run lint:i18n   # every locale has exactly the keys English has
 ```
 
-CI doesn't run this check, so run it whenever you add or change UI text. See [CONTRIBUTING-TRANSLATIONS.md](CONTRIBUTING-TRANSLATIONS.md).
+CI runs it too; run it locally whenever you add or change UI text. See [CONTRIBUTING-TRANSLATIONS.md](CONTRIBUTING-TRANSLATIONS.md).
 
 ## Making Changes
 
