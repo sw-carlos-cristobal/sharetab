@@ -220,6 +220,55 @@ describe('MeridianHealthPoller', () => {
     expect(result.status).toBe('healthy');
   });
 
+  describe('when /health answers email: null (Meridian 1.71.0 for an unknown account, #218)', () => {
+    const health = (status: string, extra: Record<string, unknown> = {}) =>
+      new Response(JSON.stringify({ status, auth: { loggedIn: true, email: null }, ...extra }), { status: 200 });
+    const probe = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
+
+    test.each([
+      ['health reports unhealthy', () => [health('unhealthy', { error: null })], undefined],
+      ['the probe succeeds', () => [health('healthy'), probe(200, { id: 'msg_1', content: [] })], undefined],
+      [
+        'the probe fails authentication',
+        () => [health('healthy'), probe(401, { error: { type: 'authentication_error', message: 'expired' } })],
+        undefined,
+      ],
+      [
+        'the probe hits a non-auth API error',
+        () => [health('healthy'), probe(429, { error: { type: 'rate_limit_error', message: 'slow down' } })],
+        undefined,
+      ],
+      ['the token expiry is far away (no probe)', () => [health('healthy')], Date.now() + 12 * 60 * 60 * 1000],
+    ])('leaves email out when %s', async (_case, responses, expiry) => {
+      if (expiry !== undefined) mockGetStoredMeridianTokenExpiry.mockReturnValue(expiry);
+      for (const response of responses()) vi.mocked(fetch).mockResolvedValueOnce(response);
+
+      const { checkMeridianHealth } = await import('./auth-health-poller');
+      const result = await checkMeridianHealth();
+      expect(result).not.toHaveProperty('email');
+      expect(Object.values(result)).not.toContain(null);
+    });
+
+    test('leaves email out when the probe times out', async () => {
+      vi.mocked(fetch)
+        .mockResolvedValueOnce(health('healthy'))
+        .mockRejectedValueOnce(new Error('AbortError: signal timed out'));
+
+      const { checkMeridianHealth } = await import('./auth-health-poller');
+      const result = await checkMeridianHealth();
+      expect(result.status).toBe('degraded');
+      expect(result).not.toHaveProperty('email');
+    });
+
+    test('still copies a string email', async () => {
+      vi.mocked(fetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: 'unhealthy', auth: { email: 'user@test.com' } }), { status: 503 }),
+      );
+      const { checkMeridianHealth } = await import('./auth-health-poller');
+      expect((await checkMeridianHealth()).email).toBe('user@test.com');
+    });
+  });
+
   test('checkMeridianHealth returns not_running on fetch error', async () => {
     vi.mocked(fetch).mockRejectedValueOnce(new Error('ECONNREFUSED'));
 

@@ -88,12 +88,19 @@ function getMeridianHealthCacheTtl(result: MeridianHealthResult): number {
   return MERIDIAN_HEALTH_CACHE_TTL_MS.healthyLongLived;
 }
 
+/** The account email from Meridian's /health answer, when it gives one (it may send null). */
+function accountEmail(healthData: { auth?: { email?: unknown } }): { email?: string } {
+  const email = healthData.auth?.email;
+  return typeof email === 'string' ? { email } : {};
+}
+
 async function runMeridianHealthCheck(): Promise<MeridianHealthResult> {
   const port = process.env.MERIDIAN_PORT ?? '3457';
   const baseUrl = `http://127.0.0.1:${port}`;
 
   // Step 1: Check if proxy is running at all
-  let healthData: { status?: string; auth?: { email?: string }; error?: string };
+  // Untrusted JSON: Meridian answers "email": null when it doesn't know the account (1.71.0)
+  let healthData: { status?: unknown; auth?: { email?: unknown }; error?: unknown };
   try {
     const res = await fetch(`${baseUrl}/health`, {
       signal: AbortSignal.timeout(10_000),
@@ -107,8 +114,8 @@ async function runMeridianHealthCheck(): Promise<MeridianHealthResult> {
   if (healthData.status !== 'healthy' && healthData.status !== 'degraded') {
     return {
       status: 'unhealthy',
-      ...(healthData.auth?.email !== undefined ? { email: healthData.auth.email } : {}),
-      ...(healthData.error !== undefined ? { error: healthData.error } : {}),
+      ...accountEmail(healthData),
+      ...(typeof healthData.error === 'string' ? { error: healthData.error } : {}),
     };
   }
 
@@ -120,7 +127,7 @@ async function runMeridianHealthCheck(): Promise<MeridianHealthResult> {
   if (storedExpiry && storedExpiry - Date.now() > 2 * 60 * 60 * 1000) {
     return {
       status: healthData.status === 'degraded' ? 'degraded' : 'healthy',
-      ...(healthData.auth?.email !== undefined ? { email: healthData.auth.email } : {}),
+      ...accountEmail(healthData),
     };
   }
 
@@ -149,7 +156,7 @@ async function runMeridianHealthCheck(): Promise<MeridianHealthResult> {
       }
       return {
         status: 'healthy',
-        ...(healthData.auth?.email !== undefined ? { email: healthData.auth.email } : {}),
+        ...accountEmail(healthData),
       };
     }
 
@@ -168,7 +175,7 @@ async function runMeridianHealthCheck(): Promise<MeridianHealthResult> {
     ) {
       return {
         status: 'unhealthy',
-        ...(healthData.auth?.email !== undefined ? { email: healthData.auth.email } : {}),
+        ...accountEmail(healthData),
         error: typeof errorMessage === 'string' ? errorMessage : 'Authentication expired',
       };
     }
@@ -176,13 +183,13 @@ async function runMeridianHealthCheck(): Promise<MeridianHealthResult> {
     // Other API errors (rate limit, overloaded, etc.) — proxy and auth are fine
     return {
       status: healthData.status === 'degraded' ? 'degraded' : 'healthy',
-      ...(healthData.auth?.email !== undefined ? { email: healthData.auth.email } : {}),
+      ...accountEmail(healthData),
     };
   } catch {
     // Probe timed out or failed — proxy is up but something is wrong
     return {
       status: 'degraded',
-      ...(healthData.auth?.email !== undefined ? { email: healthData.auth.email } : {}),
+      ...accountEmail(healthData),
       error: 'Auth verification probe timed out',
     };
   }
