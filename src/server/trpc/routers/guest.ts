@@ -5,7 +5,7 @@ import { Prisma, GuestSplitStatus } from '@/generated/prisma/client';
 import { createTRPCRouter, publicProcedure, protectedProcedure } from '../init';
 import { processReceiptImage } from '../../lib/receipt-processor';
 import { logger } from '../../lib/logger';
-import { checkRateLimit, refundRateLimit } from '../../lib/rate-limit';
+import { checkRateLimit, checkTokenRateLimit, refundRateLimit } from '../../lib/rate-limit';
 import { checkClaimWriteRateLimit, checkSessionReadRateLimit } from '../../lib/guest-session-limits';
 import { getClientIp } from '../../lib/client-ip';
 import { guestTransaction } from '../../lib/guest-transaction';
@@ -360,7 +360,7 @@ export const guestRouter = createTRPCRouter({
     // Rate limit: 10 lookups per receipt per hour to mitigate enumeration.
     // Guest receipt IDs are CUIDs (25 chars of randomness) making brute force
     // infeasible, but rate limiting adds defense-in-depth.
-    const { allowed } = checkRateLimit(`guest-items:${input.receiptId}`, 10, 60 * 60 * 1000);
+    const { allowed } = checkTokenRateLimit(`guest-items:${input.receiptId}`, 10, 60 * 60 * 1000);
     if (!allowed) {
       throw new TRPCError({
         code: 'TOO_MANY_REQUESTS',
@@ -810,7 +810,7 @@ export const guestRouter = createTRPCRouter({
       // needsMembershipCheck). Per share token like getSession's read budget,
       // not per IP: diners share NAT and client IP headers are client-supplied (the same reasons
       // as for joinSession).
-      const { allowed } = checkRateLimit(`guest-resume:${input.token}`, 120, 60 * 1000);
+      const { allowed } = checkTokenRateLimit(`guest-resume:${input.token}`, 120, 60 * 1000);
       if (!allowed) {
         throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'Too many requests. Please try again shortly.' });
       }

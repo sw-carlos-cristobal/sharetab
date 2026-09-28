@@ -1,4 +1,4 @@
-import { checkRateLimit, peekRateLimit } from './rate-limit';
+import { checkTokenRateLimit, peekTokenRateLimit } from './rate-limit';
 
 /**
  * Saves of one kind per person per minute (the caller's person token). One every two seconds,
@@ -42,10 +42,10 @@ export function checkClaimWriteRateLimit(action: ClaimWriteAction, token: string
   // JSON-encoded so a token containing ':' can't land on another pair's key
   const personKey = `guest-${action}-person:${JSON.stringify([token, personToken])}`;
 
-  if (!peekRateLimit(sessionKey, WRITE_LIMIT_PER_SESSION).allowed) return false;
-  if (!checkRateLimit(personKey, WRITE_LIMIT_PER_PERSON, WINDOW_MS).allowed) return false;
+  if (!peekTokenRateLimit(sessionKey, WRITE_LIMIT_PER_SESSION).allowed) return false;
+  if (!checkTokenRateLimit(personKey, WRITE_LIMIT_PER_PERSON, WINDOW_MS).allowed) return false;
   // Synchronous since the peek, so the session budget still has room
-  checkRateLimit(sessionKey, WRITE_LIMIT_PER_SESSION, WINDOW_MS);
+  checkTokenRateLimit(sessionKey, WRITE_LIMIT_PER_SESSION, WINDOW_MS);
   return true;
 }
 
@@ -55,5 +55,5 @@ export function checkClaimWriteRateLimit(action: ClaimWriteAction, token: string
  * so that a full session's pages never reach it.
  */
 export function checkSessionReadRateLimit(token: string): boolean {
-  return checkRateLimit(`guest-session-read:${token}`, READ_LIMIT_PER_SESSION, WINDOW_MS).allowed;
+  return checkTokenRateLimit(`guest-session-read:${token}`, READ_LIMIT_PER_SESSION, WINDOW_MS).allowed;
 }

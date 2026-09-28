@@ -24,7 +24,15 @@ const { processReceiptImage, checkRateLimit, peekRateLimit } = vi.hoisted(() => 
   peekRateLimit: vi.fn(),
 }));
 vi.mock('@/server/lib/receipt-processor', () => ({ processReceiptImage }));
-vi.mock('@/server/lib/rate-limit', () => ({ checkRateLimit, peekRateLimit, refundRateLimit: vi.fn() }));
+// The token store's functions share the main ones' mocks: these tests check which key and limit a
+// procedure uses, not which store it lands in (rate-limit.test.ts covers that)
+vi.mock('@/server/lib/rate-limit', () => ({
+  checkRateLimit,
+  peekRateLimit,
+  refundRateLimit: vi.fn(),
+  checkTokenRateLimit: checkRateLimit,
+  peekTokenRateLimit: peekRateLimit,
+}));
 vi.mock('@/server/ai/registry', () => ({ getConfiguredProviderPriority: vi.fn().mockReturnValue([]) }));
 
 type Session = { user: { id: string } } | null;
