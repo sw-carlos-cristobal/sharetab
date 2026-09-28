@@ -225,12 +225,20 @@ test.describe('Guest claiming sessions', () => {
     });
     const { personId, personToken } = (await joinRes.json()).result?.data?.json;
 
-    // Finalize
-    await trpcMutation(ctx, 'guest.finalizeSession', {
+    // Claim everything (a split finalizes only once every item is claimed, #237), then finalize
+    const claimed = await trpcMutation(ctx, 'guest.claimItems', {
+      token: shareToken,
+      personId,
+      personToken,
+      claimedItemIndices: [0, 1],
+    });
+    expect(claimed.ok(), await claimed.text()).toBe(true);
+    const finalized = await trpcMutation(ctx, 'guest.finalizeSession', {
       token: shareToken,
       personId,
       personToken,
     });
+    expect(finalized.ok(), await finalized.text()).toBe(true);
 
     // Try to claim items on finalized session
     const claimRes = await trpcMutation(ctx, 'guest.claimItems', {

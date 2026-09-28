@@ -33,15 +33,33 @@ async function createSessionWithToken() {
   return { ctx, authed, shareToken, personToken, aliceId, bobId };
 }
 
+/** Alice claims the only item (a split finalizes only once every item is claimed, #237) and finalizes. */
+async function finalizeAsAlice(
+  ctx: Awaited<ReturnType<typeof request.newContext>>,
+  shareToken: string,
+  aliceId: string,
+  personToken: string,
+) {
+  const claimed = await trpcMutation(ctx, 'guest.claimItems', {
+    token: shareToken,
+    personId: aliceId,
+    personToken,
+    claimedItemIndices: [0],
+  });
+  expect(claimed.ok(), await claimed.text()).toBe(true);
+  const finalized = await trpcMutation(ctx, 'guest.finalizeSession', {
+    token: shareToken,
+    personId: aliceId,
+    personToken,
+  });
+  expect(finalized.ok(), await finalized.text()).toBe(true);
+}
+
 test.describe('Session mutation guards — finalized', () => {
   test('editPersonName rejects finalized sessions', async () => {
     const { ctx, authed, shareToken, personToken, aliceId } = await createSessionWithToken();
 
-    await trpcMutation(ctx, 'guest.finalizeSession', {
-      token: shareToken,
-      personId: aliceId,
-      personToken,
-    });
+    await finalizeAsAlice(ctx, shareToken, aliceId, personToken);
 
     const res = await trpcMutation(ctx, 'guest.editPersonName', {
       token: shareToken,
@@ -57,11 +75,7 @@ test.describe('Session mutation guards — finalized', () => {
   test('removePerson rejects finalized sessions', async () => {
     const { ctx, authed, shareToken, personToken, aliceId, bobId } = await createSessionWithToken();
 
-    await trpcMutation(ctx, 'guest.finalizeSession', {
-      token: shareToken,
-      personId: aliceId,
-      personToken,
-    });
+    await finalizeAsAlice(ctx, shareToken, aliceId, personToken);
 
     const res = await trpcMutation(ctx, 'guest.removePerson', {
       token: shareToken,
@@ -76,11 +90,7 @@ test.describe('Session mutation guards — finalized', () => {
   test('splitClaimItem rejects finalized sessions', async () => {
     const { ctx, authed, shareToken, personToken, aliceId } = await createSessionWithToken();
 
-    await trpcMutation(ctx, 'guest.finalizeSession', {
-      token: shareToken,
-      personId: aliceId,
-      personToken,
-    });
+    await finalizeAsAlice(ctx, shareToken, aliceId, personToken);
 
     const res = await trpcMutation(ctx, 'guest.splitClaimItem', {
       token: shareToken,

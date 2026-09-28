@@ -422,6 +422,14 @@ test.describe('Claim page — continue on another device', () => {
   test('a personal link works on a finalized split too', async ({ browser }) => {
     const { ctx, shareToken } = await createSession('Finalized Link Pub');
     const alice = await joinGuestSession(ctx, { token: shareToken, name: 'Alice' });
+    // A split finalizes only once every item is claimed (#237)
+    const claimed = await trpcMutation(ctx, 'guest.claimItems', {
+      token: shareToken,
+      personId: alice.personId,
+      personToken: alice.personToken,
+      claimedItemIndices: [0],
+    });
+    expect(claimed.ok(), await claimed.text()).toBe(true);
     const finalize = await trpcMutation(ctx, 'guest.finalizeSession', {
       token: shareToken,
       personId: alice.personId,
@@ -511,6 +519,14 @@ test.describe('Claim page — continue on another device', () => {
     await expect(page.getByText('Dave (you)').first()).toBeVisible({ timeout: 15000 });
 
     // Once the split is finalized, the old card must not come back and offer to switch
+    // A split finalizes only once every item is claimed (#237)
+    const claimed = await trpcMutation(ctx, 'guest.claimItems', {
+      token: shareToken,
+      personId: alice.personId,
+      personToken: alice.personToken,
+      claimedItemIndices: [0],
+    });
+    expect(claimed.ok(), await claimed.text()).toBe(true);
     const finalize = await trpcMutation(ctx, 'guest.finalizeSession', {
       token: shareToken,
       personId: alice.personId,

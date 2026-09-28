@@ -1205,6 +1205,19 @@ export const guestRouter = createTRPCRouter({
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Invalid person token' });
         }
 
+        // Every item needs a claimant. The claim page only offers Finalize when it sees that, but
+        // it checks the session as last loaded, so a removal that commits after its check (another
+        // device, or a save whose answer was lost) would otherwise finalize a split with an item
+        // nobody pays for (#237). Checked here, inside the transaction: at Repeatable Read, a
+        // removal committed after this read makes the update below fail and the retry sees it.
+        const claimed = new Set(assignments.filter((a) => a.personIndices.length > 0).map((a) => a.itemIndex));
+        if (items.some((_, index) => !claimed.has(index))) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'Every item needs someone before the split can be finalized.',
+          });
+        }
+
         const tip = input.tipOverride ?? receiptData.tip;
 
         // Build personWeights from each person's groupSize for proportional splitting

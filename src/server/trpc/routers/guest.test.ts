@@ -945,10 +945,63 @@ describe('guest.finalizeSession', () => {
     return call?.data.status;
   }
 
+  // As sessionAfterBWasRemoved, with every item claimed
+  function everyItemClaimed() {
+    claimSession(
+      [
+        { id: pid(0), name: 'A', personToken: ALICE_TOKEN },
+        { id: pid(2), name: 'C', personToken: OTHER_TOKEN },
+        { id: pid(3), name: 'D', personToken: D_TOKEN },
+      ],
+      {
+        items: items(3),
+        assignments: [
+          { itemIndex: 0, personIndices: [0] },
+          { itemIndex: 1, personIndices: [2] },
+          { itemIndex: 2, personIndices: [1, 2] },
+        ],
+      },
+    );
+  }
+
   test('finalizes as the person the id names, wherever they are now', async () => {
-    sessionAfterBWasRemoved();
+    everyItemClaimed();
     await (await caller()).finalizeSession({ token: 'share-1', personToken: OTHER_TOKEN, personId: pid(2) });
     expect(savedStatus()).toBe('FINALIZED');
+  });
+
+  test('refuses while an item has nobody, and finalizes nothing (#237)', async () => {
+    // Items 0 and 2 are unclaimed
+    sessionAfterBWasRemoved();
+    await expect(
+      (await caller()).finalizeSession({ token: 'share-1', personToken: OTHER_TOKEN, personId: pid(2) }),
+    ).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: 'Every item needs someone before the split can be finalized.',
+    });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test('counts an item whose claimants were all removed as unclaimed', async () => {
+    claimSession([{ id: pid(0), name: 'A', personToken: ALICE_TOKEN }], {
+      items: items(1),
+      assignments: [{ itemIndex: 0, personIndices: [] }],
+    });
+    await expect(
+      (await caller()).finalizeSession({ token: 'share-1', personToken: ALICE_TOKEN, personId: pid(0) }),
+    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test('checks the caller before the claims: a bad id or token is still CONFLICT or FORBIDDEN', async () => {
+    sessionAfterBWasRemoved();
+    const api = await caller();
+    await expect(
+      api.finalizeSession({ token: 'share-1', personToken: OTHER_TOKEN, personId: pid(1) }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    await expect(
+      api.finalizeSession({ token: 'share-1', personToken: OTHER_TOKEN, personId: pid(3) }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 
   test('refuses an id nobody has any more with CONFLICT', async () => {

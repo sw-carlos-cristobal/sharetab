@@ -1,5 +1,5 @@
 import { test, expect, request } from '@playwright/test';
-import { rememberClaimIdentity, trpcMutation } from './helpers';
+import { joinGuestSession, rememberClaimIdentity, trpcError, trpcMutation } from './helpers';
 
 const BASE = process.env.BASE_URL || 'http://localhost:3001';
 
@@ -252,6 +252,49 @@ test.describe('Finalize claim session', () => {
     const aliceSummary = session.summary.find((s: { name: string }) => s.name === 'Alice');
     const bobSummary = session.summary.find((s: { name: string }) => s.name === 'Bob');
     expect(aliceSummary.total).toBeGreaterThan(bobSummary.total);
+
+    await ctx.dispose();
+  });
+
+  test('API: finalizeSession refuses while an item has nobody, then finalizes once it does (#237)', async () => {
+    const ctx = await request.newContext({ baseURL: BASE });
+    const createRes = await trpcMutation(ctx, 'guest.createClaimSession', {
+      receiptData: { merchantName: 'Unclaimed Item', subtotal: 2000, tax: 0, tip: 0, total: 2000, currency: 'USD' },
+      items: [
+        { name: 'Pizza', quantity: 1, unitPrice: 1200, totalPrice: 1200 },
+        { name: 'Pasta', quantity: 1, unitPrice: 800, totalPrice: 800 },
+      ],
+      creatorName: 'Alice',
+      paidByName: 'Alice',
+    });
+    const shareToken = (await createRes.json()).result?.data?.json?.shareToken;
+    const alice = await joinGuestSession(ctx, { token: shareToken, name: 'Alice' });
+    const claim = (claimedItemIndices: number[]) =>
+      trpcMutation(ctx, 'guest.claimItems', {
+        token: shareToken,
+        personId: alice.personId,
+        personToken: alice.personToken,
+        claimedItemIndices,
+      });
+    const finalize = () =>
+      trpcMutation(ctx, 'guest.finalizeSession', {
+        token: shareToken,
+        personId: alice.personId,
+        personToken: alice.personToken,
+      });
+
+    // Only the pizza is claimed
+    expect((await claim([0])).ok()).toBe(true);
+    const refused = await finalize();
+    expect(refused.status()).toBe(412);
+    const err = await trpcError(refused);
+    expect(err?.data?.code).toBe('PRECONDITION_FAILED');
+    expect(err?.message).toBe('Every item needs someone before the split can be finalized.');
+
+    // Once the pasta is claimed too, the split finalizes
+    expect((await claim([0, 1])).ok()).toBe(true);
+    const finalized = await finalize();
+    expect(finalized.ok(), await finalized.text()).toBe(true);
 
     await ctx.dispose();
   });
