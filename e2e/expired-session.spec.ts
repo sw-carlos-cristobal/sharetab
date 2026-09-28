@@ -1,5 +1,5 @@
 import { test, expect, request } from '@playwright/test';
-import { trpcMutation, trpcQuery, trpcResult, trpcError, authedContext, users } from './helpers';
+import { trpcMutation, trpcError, authedContext, personIdByName, users } from './helpers';
 
 const BASE = process.env.BASE_URL || 'http://localhost:3001';
 
@@ -27,9 +27,8 @@ async function createSessionWithToken() {
     name: 'Alice',
   });
   const { personToken, personId: aliceId } = (await joinRes.json()).result?.data?.json;
-  // Bob is the payer, listed second; the guards below target people by id
-  const session = await trpcResult(await trpcQuery(ctx, 'guest.getSession', { token: shareToken }));
-  const bobId: string = session.people[1].id;
+  // Bob is the payer; the guards below target people by id
+  const bobId = await personIdByName(ctx, shareToken, 'Bob');
 
   return { ctx, authed, shareToken, personToken, aliceId, bobId };
 }
