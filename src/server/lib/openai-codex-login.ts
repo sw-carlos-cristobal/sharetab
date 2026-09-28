@@ -2,7 +2,7 @@ import { randomBytes, createHash } from 'crypto';
 import { mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'fs';
 import { dirname, join } from 'path';
 import { logger } from './logger';
-import { describeTokenError, readTokenBody } from './oauth-token-response';
+import { describeTokenError, MALFORMED_TOKEN_RESPONSE, readTokenBody } from './oauth-token-response';
 
 const CLIENT_ID = process.env.OPENAI_CODEX_CLIENT_ID ?? 'app_EMoamEEZ73f0CkXaXp7hrann';
 const AUTHORIZE_ENDPOINT = 'https://auth.openai.com/oauth/authorize';
@@ -105,12 +105,24 @@ function getCredentialPath(): string {
   return join(codexHome, 'auth.json');
 }
 
+/**
+ * A JWT's claims. The token comes from the token endpoint (or the credentials file written from
+ * it), and a JSON parser's message would quote the decoded payload, so a payload that isn't a
+ * JSON object fails with a fixed error (see oauth-token-response.ts).
+ */
 function decodeJwtClaims(token: string): OpenAICodexClaims {
   const [, payload] = token.split('.');
-  if (!payload) throw new Error('Invalid JWT');
+  if (!payload) throw new Error(MALFORMED_TOKEN_RESPONSE);
   const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
   const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
-  return JSON.parse(Buffer.from(padded, 'base64').toString('utf8')) as OpenAICodexClaims;
+  let claims: unknown;
+  try {
+    claims = JSON.parse(Buffer.from(padded, 'base64').toString('utf8'));
+  } catch {
+    throw new Error(MALFORMED_TOKEN_RESPONSE);
+  }
+  if (!claims || typeof claims !== 'object' || Array.isArray(claims)) throw new Error(MALFORMED_TOKEN_RESPONSE);
+  return claims as OpenAICodexClaims;
 }
 
 function parseStoredAuth(raw: string): ParsedStoredAuth | null {

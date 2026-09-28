@@ -399,6 +399,36 @@ describe('OpenAICodexLogin', () => {
       expectNoPartOf(LEAKY_TOKEN, result.error);
     });
 
+    // A JWT-shaped token whose payload isn't JSON: a JSON parser's message would quote it
+    const UNDECODABLE_JWT = [
+      'header',
+      Buffer.from('ENDPOINTSECRET0123456789 is not JSON').toString('base64url'),
+      'sig',
+    ].join('.');
+
+    test('an exchange returning a token whose claims do not decode fails with a fixed error', async () => {
+      const result = await exchange(
+        new Response(
+          JSON.stringify({ id_token: UNDECODABLE_JWT, access_token: UNDECODABLE_JWT, refresh_token: 'rt_x' }),
+          { status: 200 },
+        ),
+      );
+      expect(result).toEqual({ success: false, error: 'Malformed token response' });
+      expectNoPartOf('ENDPOINTSECRET0123456789', await loggedText());
+    });
+
+    test("the health check's refresh returning a token whose claims do not decode is degraded with a fixed error", async () => {
+      expiredStoredAuth();
+      vi.mocked(fetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ id_token: UNDECODABLE_JWT, access_token: UNDECODABLE_JWT }), { status: 200 }),
+      );
+      const { checkOpenAICodexHealth } = await import('./openai-codex-login');
+      const result = await checkOpenAICodexHealth();
+      expect(result).toMatchObject({ status: 'degraded', error: 'Malformed token response' });
+      expectNoPartOf('ENDPOINTSECRET0123456789', JSON.stringify(result));
+      expectNoPartOf('ENDPOINTSECRET0123456789', await loggedText());
+    });
+
     test('a failed refresh logs only the status and an RFC 6749 error code', async () => {
       const { writeFileSync } = expiredStoredAuth();
       vi.mocked(fetch).mockResolvedValueOnce(
