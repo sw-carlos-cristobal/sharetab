@@ -1,6 +1,30 @@
 const attempts = new Map<string, { count: number; resetAt: number }>();
 
 /**
+ * The most keys the limiter holds at once. A caller can mint keys (a made-up share token or
+ * person token makes a new one on every request), and entries are otherwise only swept once a
+ * minute after their window ends, so without a cap the map grows with the request rate (#208).
+ * At the cap, a new key evicts the oldest window (usually already expired; the periodic sweep
+ * below clears the rest). Evicting keeps new callers limited correctly; the cost is that a
+ * client minting keys faster than the cap per window can reset the oldest callers' counters
+ * early. Eviction takes the front of the map only, so a full map costs O(1) per new key rather
+ * than a scan.
+ */
+export const MAX_RATE_LIMIT_KEYS = 50_000;
+
+// Starts a new window for a key, making room first. Map iteration follows insertion order, so
+// the key is deleted and re-added to put it at the back: the front is always the oldest window.
+function startWindow(key: string, now: number, windowMs: number) {
+  attempts.delete(key);
+  while (attempts.size >= MAX_RATE_LIMIT_KEYS) {
+    const oldest = attempts.keys().next();
+    if (oldest.done) break;
+    attempts.delete(oldest.value);
+  }
+  attempts.set(key, { count: 1, resetAt: now + windowMs });
+}
+
+/**
  * Parse a positive integer from an env value, falling back when unset or
  * invalid. Without this, a non-numeric value becomes NaN and every
  * `count >= NaN` comparison is false — silently disabling the limiter.
@@ -19,7 +43,7 @@ export function checkRateLimit(
   const entry = attempts.get(key);
 
   if (!entry || now > entry.resetAt) {
-    attempts.set(key, { count: 1, resetAt: now + windowMs });
+    startWindow(key, now, windowMs);
     return { allowed: true, retryAfterMs: 0 };
   }
 

@@ -114,6 +114,38 @@ describe('guest.processReceipt with guest uploads enabled', () => {
   });
 });
 
+describe('share tokens longer than any real one (#208)', () => {
+  // Share tokens are 25-character cuids; 64 leaves room and bounds the limiter keys built from them
+  const long = 'x'.repeat(65);
+  const personToken = '11111111-1111-4111-8111-111111111111';
+  const calls: [string, (api: Awaited<ReturnType<typeof caller>>) => Promise<unknown>][] = [
+    ['getSession', (api) => api.getSession({ token: long })],
+    ['getSplit', (api) => api.getSplit({ token: long })],
+    ['resumeSession', (api) => api.resumeSession({ token: long, personToken })],
+    ['editPersonName', (api) => api.editPersonName({ token: long, personToken, targetIndex: 0, newName: 'X' })],
+    ['removePerson', (api) => api.removePerson({ token: long, personToken, targetIndex: 0 })],
+    ['splitClaimItem', (api) => api.splitClaimItem({ token: long, personToken, itemIndex: 0, splitQuantity: 1 })],
+    ['claimItems', (api) => api.claimItems({ token: long, personToken, personIndex: 0, claimedItemIndices: [] })],
+    ['finalizeSession', (api) => api.finalizeSession({ token: long, personToken, personIndex: 0 })],
+  ];
+
+  test.each(calls)('%s refuses it before any rate limit or database read', async (_name, call) => {
+    await expect(call(await caller())).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(checkRateLimit).not.toHaveBeenCalled();
+    expect(peekRateLimit).not.toHaveBeenCalled();
+    expect(mockDb.guestSplit.findUnique).not.toHaveBeenCalled();
+  });
+
+  test('a signed-in caller gets the same for expireSession and setPayerVenmoHandle', async () => {
+    const api = await caller(signedIn);
+    await expect(api.expireSession({ token: long })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(api.setPayerVenmoHandle({ token: long, handle: 'someone' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    expect(checkRateLimit).not.toHaveBeenCalled();
+  });
+});
+
 describe('guest.joinSession rate limit', () => {
   test('refuses with TOO_MANY_REQUESTS before opening a transaction', async () => {
     checkRateLimit.mockReturnValue({ allowed: false, retryAfterMs: 30_000 });

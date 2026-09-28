@@ -4,7 +4,8 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 vi.useFakeTimers();
 
 // Dynamic import to ensure timer mock is in place
-const { checkRateLimit, peekRateLimit, refundRateLimit, parsePositiveInt } = await import('./rate-limit');
+const { checkRateLimit, peekRateLimit, refundRateLimit, parsePositiveInt, MAX_RATE_LIMIT_KEYS } =
+  await import('./rate-limit');
 
 describe('parsePositiveInt', () => {
   test('parses a valid positive integer', () => {
@@ -143,5 +144,54 @@ describe('checkRateLimit', () => {
     const stillBlocked = checkRateLimit(key, 1, 10000);
     expect(stillBlocked.allowed).toBe(false);
     expect(stillBlocked.retryAfterMs).toBeLessThan(firstRetry);
+  });
+});
+
+describe('the number of keys held (#208)', () => {
+  beforeEach(() => {
+    vi.advanceTimersByTime(999999999);
+  });
+
+  // Fills the limiter with `count` new one-attempt keys
+  function fill(prefix: string, count: number) {
+    for (let i = 0; i < count; i++) checkRateLimit(`${prefix}-${i}`, 1, 60000);
+  }
+
+  test('holds up to the cap', () => {
+    fill('cap', MAX_RATE_LIMIT_KEYS);
+    // Every key is still spent
+    expect(checkRateLimit('cap-0', 1, 60000).allowed).toBe(false);
+    expect(checkRateLimit(`cap-${MAX_RATE_LIMIT_KEYS - 1}`, 1, 60000).allowed).toBe(false);
+  });
+
+  test('a new key past the cap evicts the oldest window, not the newest', () => {
+    fill('evict', MAX_RATE_LIMIT_KEYS);
+    checkRateLimit('evict-new', 1, 60000);
+    // The oldest key was dropped, so it starts over; the newest are still spent
+    expect(checkRateLimit('evict-0', 1, 60000).allowed).toBe(true);
+    expect(checkRateLimit('evict-new', 1, 60000).allowed).toBe(false);
+    expect(checkRateLimit(`evict-${MAX_RATE_LIMIT_KEYS - 1}`, 1, 60000).allowed).toBe(false);
+  });
+
+  test('evicts the oldest windows first (here expired ones), keeping newer live ones', () => {
+    // Half the cap in short windows that expire, then the rest in long ones
+    for (let i = 0; i < MAX_RATE_LIMIT_KEYS / 2; i++) checkRateLimit(`short-${i}`, 1, 1000);
+    for (let i = 0; i < MAX_RATE_LIMIT_KEYS / 2; i++) checkRateLimit(`long-${i}`, 1, 600000);
+    vi.advanceTimersByTime(2000);
+    checkRateLimit('after-expiry', 1, 60000);
+    // The first long window is still there: the expired short ones made the room
+    expect(checkRateLimit('long-0', 1, 600000).allowed).toBe(false);
+  });
+
+  test('a key whose window resets moves to the back of the eviction order', () => {
+    checkRateLimit('renewed', 1, 1000);
+    vi.advanceTimersByTime(2000);
+    // Its window resets now, after the others below would have been added
+    fill('others', MAX_RATE_LIMIT_KEYS - 1);
+    checkRateLimit('renewed', 1, 60000);
+    checkRateLimit('one-more', 1, 60000);
+    // The oldest window is others-0, not the renewed key
+    expect(checkRateLimit('renewed', 1, 60000).allowed).toBe(false);
+    expect(checkRateLimit('others-0', 1, 60000).allowed).toBe(true);
   });
 });

@@ -88,6 +88,13 @@ function namesOnePerson(index: number | undefined, id: string | undefined) {
 }
 const NAME_ONE_PERSON = { message: 'Name the person by exactly one of index or id' };
 
+/**
+ * A share token as sent by the client. Real ones are 25-character cuids; the cap bounds the
+ * rate-limit keys built from a token before the session is looked up (a made-up token makes a
+ * new key on every request), without a database read in front of the limiter (#208).
+ */
+const shareTokenSchema = z.string().max(64);
+
 /** The index of the person a request targets (see findTargetIndex), or a TRPCError. */
 function targetIndexOrThrow(
   people: readonly { id?: string | undefined }[],
@@ -153,7 +160,7 @@ function cleanupExpiredSplits(db: typeof import('@/server/db').db, logPrefix: st
 }
 
 export const guestRouter = createTRPCRouter({
-  expireSession: protectedProcedure.input(z.object({ token: z.string() })).mutation(async ({ ctx, input }) => {
+  expireSession: protectedProcedure.input(z.object({ token: shareTokenSchema })).mutation(async ({ ctx, input }) => {
     const session = await ctx.db.guestSplit.findUnique({
       where: { shareToken: input.token },
       select: { id: true, userId: true },
@@ -511,7 +518,7 @@ export const guestRouter = createTRPCRouter({
       return { shareToken: guestSplit.shareToken };
     }),
 
-  getSplit: publicProcedure.input(z.object({ token: z.string() })).query(async ({ ctx, input }) => {
+  getSplit: publicProcedure.input(z.object({ token: shareTokenSchema })).query(async ({ ctx, input }) => {
     const split = await ctx.db.guestSplit.findUnique({
       where: { shareToken: input.token },
     });
@@ -664,8 +671,7 @@ export const guestRouter = createTRPCRouter({
   joinSession: publicProcedure
     .input(
       z.object({
-        // Share tokens are 25-character cuids; the cap bounds the rate-limit keys built from it
-        token: z.string().max(64),
+        token: shareTokenSchema,
         name: z.string().trim().min(1).max(100),
         groupSize: z.number().int().min(1).max(20).optional(),
         // The token this device stored when it joined: whoever holds it is the caller. Only ever
@@ -796,7 +802,7 @@ export const guestRouter = createTRPCRouter({
   // already shows, and the claim page also calls it on finalized splits (personal links work
   // there). Like getSession, it saves ids for people who have none yet (savePersonIds).
   resumeSession: publicProcedure
-    .input(z.object({ token: z.string().max(64), personToken: z.string().uuid() }))
+    .input(z.object({ token: shareTokenSchema, personToken: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       // A claim page load resumes a few times at most (a personal link, accepting it, the stored
       // identity), plus retries on server errors, plus one membership check per session load
@@ -829,7 +835,7 @@ export const guestRouter = createTRPCRouter({
     .input(
       z
         .object({
-          token: z.string(),
+          token: shareTokenSchema,
           personToken: z.string().uuid(),
           targetIndex: z.number().int().min(0).optional(),
           targetId: personIdSchema.optional(),
@@ -877,7 +883,7 @@ export const guestRouter = createTRPCRouter({
     .input(
       z
         .object({
-          token: z.string(),
+          token: shareTokenSchema,
           personToken: z.string().uuid(),
           targetIndex: z.number().int().min(0).optional(),
           targetId: personIdSchema.optional(),
@@ -942,7 +948,7 @@ export const guestRouter = createTRPCRouter({
   splitClaimItem: publicProcedure
     .input(
       z.object({
-        token: z.string(),
+        token: shareTokenSchema,
         personToken: z.string().uuid(),
         itemIndex: z.number().int().min(0),
         splitQuantity: z.number().int().min(1),
@@ -1012,7 +1018,7 @@ export const guestRouter = createTRPCRouter({
     .input(
       z
         .object({
-          token: z.string(),
+          token: shareTokenSchema,
           // Whose claims these are: personId (the claim page), or personIndex (older clients)
           personIndex: z.number().int().min(0).optional(),
           personId: personIdSchema.optional(),
@@ -1103,7 +1109,7 @@ export const guestRouter = createTRPCRouter({
       });
     }),
 
-  getSession: publicProcedure.input(z.object({ token: z.string() })).query(async ({ ctx, input }) => {
+  getSession: publicProcedure.input(z.object({ token: shareTokenSchema })).query(async ({ ctx, input }) => {
     if (!checkSessionReadRateLimit(input.token)) {
       throw new TRPCError({
         code: 'TOO_MANY_REQUESTS',
@@ -1159,7 +1165,7 @@ export const guestRouter = createTRPCRouter({
     .input(
       z
         .object({
-          token: z.string(),
+          token: shareTokenSchema,
           // Who is finalizing: personId (the claim page), or personIndex (older clients); must
           // be the holder of personToken
           personIndex: z.number().int().min(0).optional(),
@@ -1239,7 +1245,7 @@ export const guestRouter = createTRPCRouter({
   setPayerVenmoHandle: protectedProcedure
     .input(
       z.object({
-        token: z.string(),
+        token: shareTokenSchema,
         handle: z.string().max(50).nullable(),
       }),
     )
