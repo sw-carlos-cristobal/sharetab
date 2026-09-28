@@ -22,6 +22,12 @@ export const GUEST_TRANSACTION_ISOLATION = Prisma.TransactionIsolationLevel.Repe
  * such as logging outside it.
  * A conflict that outlasts the retry budget becomes a CONFLICT error with a generic
  * message, so the raw database error never reaches the client.
+ *
+ * Prisma's transaction manager errors (P2028: no pool connection freed up within maxWait,
+ * or the transaction ran past its timeout) become SERVICE_UNAVAILABLE without a retry,
+ * since retrying would add load while the pool is full (#203). They all get the same
+ * handling rather than being told apart by message, which isn't a stable API; the log
+ * keeps Prisma's message.
  */
 export async function guestTransaction<T>(
   db: Pick<PrismaClient, '$transaction'>,
@@ -30,6 +36,14 @@ export async function guestTransaction<T>(
   try {
     return await withTransactionRetry(() => db.$transaction(fn, { isolationLevel: GUEST_TRANSACTION_ISOLATION }));
   } catch (error) {
+    if (isTransactionManagerError(error)) {
+      logger.warn('guest.transaction.unavailable', { code: 'P2028', message: error.message });
+      throw new TRPCError({
+        code: 'SERVICE_UNAVAILABLE',
+        message: 'ShareTab is busy right now. Please try again in a moment.',
+        cause: error,
+      });
+    }
     const code = transactionConflictCode(error);
     if (code === undefined) throw error;
     logger.warn('guest.transaction.retries_exhausted', { attempts: TRANSACTION_RETRY_ATTEMPTS, code });
@@ -39,4 +53,13 @@ export async function guestTransaction<T>(
       cause: error,
     });
   }
+}
+
+/**
+ * Prisma's transaction manager error (P2028). The runtime throws it as an Error subclass
+ * carrying the code, and it may also arrive as a PrismaClientKnownRequestError, so match
+ * on the code.
+ */
+function isTransactionManagerError(error: unknown): error is Error {
+  return error instanceof Error && (error as { code?: unknown }).code === 'P2028';
 }
