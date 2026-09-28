@@ -150,12 +150,12 @@ npx prisma db push   # Push schema without migration (dev only)
 - Locale-aware navigation: import `Link`, `redirect`, `usePathname`, `useRouter` from `@/i18n/navigation`
 - `LanguageSwitcher` component in sidebar and mobile menu
 - User locale preference stored in `User.locale` field (Prisma schema)
-- `npm run lint:i18n` checks for missing or extra translation keys. CI doesn't run it, so run it after changing any `messages/` file
+- `npm run lint:i18n` checks for missing or extra translation keys. CI runs it; run it locally after changing any `messages/` file
 - To add a new language: add locale to `src/i18n/routing.ts`, create `messages/{locale}/` with all namespace files, add display config to `languageConfig`, and add its `Intl` locale to `moneyLocales` in `src/lib/money.ts` (typed `satisfies Record<Locale, string>`, so `tsc` fails until you do)
 
 ## CI and Releases
 
-- `test.yml` — the required `test` check on PRs: `npm audit --omit=dev --audit-level=high`, `format:check`, `lint`, `tsc --noEmit`, unit tests, `prisma db push` + `prisma/after-push/*.sql` + seed, `build`, then the Playwright suite against `npm run start`
+- `test.yml` — the required `test` check on PRs: `npm audit --omit=dev --audit-level=high`, `format:check`, `lint`, `lint:i18n`, `tsc --noEmit`, unit tests, `prisma db push` + `prisma/after-push/*.sql` + seed, `build`, then the Playwright suite against `npm run start`
 - `docker-fresh-install.yml` — on pull requests, builds the production image and runs `scripts/docker-smoke.sh` against it (fresh install on an empty volume, upgrade restarts, the entrypoint's SQL phases, Meridian startup)
 - `audit.yml` — scheduled npm audit; `auto-assign.yml` — assigns new issues to the owner; Dependabot (`.github/dependabot.yml`) groups npm minor/patch updates (majors come individually) and Actions updates, and also updates the Docker base image
 - No semver releases (retired after v0.8.0): don't bump `package.json` `version` or edit `CHANGELOG.md` for new changes. Each push to `main` runs `auto-release.yml` (tag `build/YYYY.MM.DD.N` + GitHub release listing commits since the previous build) and `docker.yml` (builds the image, smoke-tests it with `scripts/docker-smoke.sh`, then pushes `ghcr.io/sw-carlos-cristobal/sharetab:latest` and `:<short-sha>`). The manual `promote-stable.yml` workflow moves the `stable` git tag and image tag to a chosen build
