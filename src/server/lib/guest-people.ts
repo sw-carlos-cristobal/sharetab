@@ -22,6 +22,9 @@ export type GuestSessionPerson = {
   // The join that created (or first claimed) this person: its idempotency key and the normalized
   // name it was made with, replayable until expiresAt (epoch ms). See guest.joinSession.
   join?: { key: string; name: string; expiresAt: number };
+  // The last saves this person's token sent to guest.claimItems with a save key: the key and a
+  // digest of the changes, so a retry of a save whose answer was lost isn't applied twice (#238)
+  saves?: { key: string; hash: string }[];
 };
 
 export type IdentifiedGuestPerson = GuestSessionPerson & { id: string };

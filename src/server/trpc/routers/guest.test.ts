@@ -207,6 +207,7 @@ type TestPerson = {
   personToken?: string;
   groupSize?: number;
   join?: { key: string; name: string; expiresAt: number };
+  saves?: { key: string; hash: string }[];
 };
 
 // People as saved since person ids exist: anyone without an id gets pid(their index)
@@ -789,6 +790,137 @@ describe('guest.claimItems with added and removed items (#226)', () => {
     catSavedMeanwhile();
     await (await caller()).claimItems({ ...forCat({}), claimedItemIndices: [2] });
     expect(savedAssignments()).toEqual([{ itemIndex: 2, personIndices: [1] }]);
+  });
+});
+
+describe('guest.claimItems with a save key (#238)', () => {
+  const SAVE_KEY = '55555555-5555-4555-8555-555555555555';
+
+  const forCat = (edits: {
+    addItemIndices?: number[];
+    removeItemIndices?: number[];
+    claimedItemIndices?: number[];
+  }) => ({
+    token: 'share-1',
+    personToken: ALICE_TOKEN,
+    personId: pid(1),
+    saveKey: SAVE_KEY,
+    ...edits,
+  });
+
+  // Ann's page saves for Cat; `annSaves` is what Ann's person has recorded of her earlier saves
+  function session(
+    assignments: { itemIndex: number; personIndices: number[] }[],
+    annSaves?: { key: string; hash: string }[],
+  ) {
+    claimSession(
+      [
+        { id: pid(0), name: 'Ann', personToken: ALICE_TOKEN, ...(annSaves ? { saves: annSaves } : {}) },
+        { id: pid(1), name: 'Cat', personToken: OTHER_TOKEN },
+      ],
+      { items: items(3), assignments },
+    );
+  }
+
+  // The session as the last save stored it (its people, with the keys recorded), as the next
+  // request reads it; `assignments` stands in for what other devices changed since
+  function storedSinceLastSave(assignments?: { itemIndex: number; personIndices: number[] }[]) {
+    const saved = mockDb.guestSplit.update.mock.calls.at(-1)?.[0] as {
+      data: { people: TestPerson[]; assignments: { itemIndex: number; personIndices: number[] }[] };
+    };
+    claimSession(saved.data.people, { items: items(3), assignments: assignments ?? saved.data.assignments });
+    mockDb.guestSplit.update.mockClear();
+  }
+
+  test("records the key on the caller's person with the save", async () => {
+    session([]);
+    await (await caller()).claimItems(forCat({ addItemIndices: [2] }));
+    expect(savedAssignments()).toEqual([{ itemIndex: 2, personIndices: [1] }]);
+    const people = savedPeople() as { saves?: { key: string }[] }[];
+    expect(people[0]!.saves?.map((s) => s.key)).toEqual([SAVE_KEY]);
+    expect(people[1]!.saves).toBeUndefined();
+  });
+
+  test('a retry of a stored save answers saved without applying it again', async () => {
+    session([]);
+    const api = await caller();
+    await api.claimItems(forCat({ addItemIndices: [2] }));
+    // Ann's page never got the answer; meanwhile Cat's own phone unclaimed the pie
+    storedSinceLastSave([]);
+
+    const answer = await api.claimItems(forCat({ addItemIndices: [2] }));
+    expect(answer).toEqual({ success: true, conflicts: [] });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test('matches a retry whatever order it lists the items in', async () => {
+    session([]);
+    const api = await caller();
+    await api.claimItems(forCat({ addItemIndices: [0, 2], removeItemIndices: [1] }));
+    storedSinceLastSave();
+    await api.claimItems(forCat({ addItemIndices: [2, 0], removeItemIndices: [1] }));
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test("a replay reports the conflicts on the person's claims as stored now", async () => {
+    session([]);
+    const api = await caller();
+    await api.claimItems(forCat({ addItemIndices: [2] }));
+    // Meanwhile Ann claimed the pie for herself too
+    storedSinceLastSave([{ itemIndex: 2, personIndices: [1, 0] }]);
+    const answer = await api.claimItems(forCat({ addItemIndices: [2] }));
+    expect(answer).toEqual({ success: true, conflicts: [{ itemIndex: 2, claimedBy: ['Ann'] }] });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test('refuses the same key with different changes, and saves nothing', async () => {
+    session([]);
+    const api = await caller();
+    await api.claimItems(forCat({ addItemIndices: [2] }));
+    storedSinceLastSave();
+    await expect(api.claimItems(forCat({ addItemIndices: [1] }))).rejects.toMatchObject({ code: 'CONFLICT' });
+    await expect(api.claimItems({ ...forCat({ addItemIndices: [2] }), personId: pid(0) })).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
+    await expect(api.claimItems(forCat({ claimedItemIndices: [2] }))).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test("another person's save key isn't the caller's: it applies as a new save", async () => {
+    session([]);
+    await (await caller()).claimItems(forCat({ addItemIndices: [2] }));
+    storedSinceLastSave();
+    // Cat's phone happens to send the same key
+    await (await caller()).claimItems({ ...forCat({ removeItemIndices: [2] }), personToken: OTHER_TOKEN });
+    expect(savedAssignments()).toEqual([]);
+  });
+
+  test('keeps only the last 10 keys a person saved with', async () => {
+    const older = Array.from({ length: 10 }, (_, i) => ({
+      key: `66666666-6666-4666-8666-${String(i).padStart(12, '0')}`,
+      hash: 'x',
+    }));
+    session([], older);
+    await (await caller()).claimItems(forCat({ addItemIndices: [2] }));
+    const people = savedPeople() as { saves?: { key: string }[] }[];
+    expect(people[0]!.saves?.map((s) => s.key)).toEqual([...older.slice(1).map((s) => s.key), SAVE_KEY]);
+  });
+
+  test('without a save key, records nothing and leaves the people alone', async () => {
+    session([]);
+    await (
+      await caller()
+    ).claimItems({ token: 'share-1', personToken: ALICE_TOKEN, personId: pid(1), addItemIndices: [2] });
+    const call = mockDb.guestSplit.update.mock.calls.at(-1)?.[0] as { data: Record<string, unknown> };
+    expect(call.data).not.toHaveProperty('people');
+  });
+
+  test('refuses a save key that is not a UUID', async () => {
+    session([]);
+    await expect(
+      (await caller()).claimItems({ ...forCat({ addItemIndices: [2] }), saveKey: 'not-a-uuid' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
   });
 });
 

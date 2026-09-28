@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { Prisma, GuestSplitStatus } from '@/generated/prisma/client';
@@ -92,6 +92,48 @@ function addsAndRemovesApart(added: number[] | undefined, removed: number[] | un
   return !(added ?? []).some((idx) => removedSet.has(idx));
 }
 const ADD_OR_REMOVE = { message: 'An item cannot be both added and removed' };
+
+// How many save keys claimItems remembers per person: the claim page has one save out at a time,
+// and only its own person's other devices (a personal link) add keys to the same list
+const SAVE_KEYS_KEPT = 10;
+
+/**
+ * A digest of what a claimItems request changes, kept with its save key: a retry must send the
+ * same changes as the save it retries (like a join key's name). Item order doesn't matter.
+ */
+function claimChangesHash(input: {
+  personId: string;
+  claimedItemIndices?: number[] | undefined;
+  addItemIndices?: number[] | undefined;
+  removeItemIndices?: number[] | undefined;
+}): string {
+  const sorted = (indices: number[] | undefined) => (indices ? [...new Set(indices)].sort((a, b) => a - b) : null);
+  const changes = [
+    input.personId,
+    sorted(input.claimedItemIndices),
+    sorted(input.addItemIndices),
+    sorted(input.removeItemIndices),
+  ];
+  return createHash('sha256').update(JSON.stringify(changes)).digest('base64url');
+}
+
+/** The items in a person's claims that someone else has claimed too, with their names. */
+function claimConflicts(
+  assignments: { itemIndex: number; personIndices: number[] }[],
+  people: GuestSessionPerson[],
+  personIndex: number,
+  claimed: Iterable<number>,
+) {
+  const byItem = new Map(assignments.map((a) => [a.itemIndex, a]));
+  const conflicts: { itemIndex: number; claimedBy: string[] }[] = [];
+  for (const itemIndex of claimed) {
+    const otherNames = (byItem.get(itemIndex)?.personIndices ?? [])
+      .filter((pi) => pi !== personIndex)
+      .map((pi) => people[pi]?.name ?? 'Someone');
+    if (otherNames.length > 0) conflicts.push({ itemIndex, claimedBy: otherNames });
+  }
+  return conflicts;
+}
 
 /**
  * A share token as sent by the client. Real ones are 25-character cuids; the cap bounds the
@@ -1024,6 +1066,11 @@ export const guestRouter = createTRPCRouter({
           // stored when the save arrives, so another device's changes to other items are kept (#226)
           addItemIndices: z.array(z.number().int().min(0)).max(1000).optional(),
           removeItemIndices: z.array(z.number().int().min(0)).max(1000).optional(),
+          // An idempotency key the page made for this save. Remembered (with a digest of the
+          // changes) on the caller's person, so a retry of a save whose answer was lost answers
+          // as stored instead of applying the changes again over what other devices saved since;
+          // the same key with other changes is refused (#238)
+          saveKey: z.string().uuid().optional(),
         })
         .refine(
           (input) => claimsOneWay(input.claimedItemIndices, input.addItemIndices, input.removeItemIndices),
@@ -1052,10 +1099,31 @@ export const guestRouter = createTRPCRouter({
         const items = session.items as { name: string; quantity: number; unitPrice: number; totalPrice: number }[];
 
         // Validate personToken belongs to ANY participant (allows claiming for others)
-        const isParticipant = people.some((p) => p.personToken === input.personToken);
-        if (!isParticipant) {
+        const callerIndex = people.findIndex((p) => p.personToken === input.personToken);
+        if (callerIndex < 0) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Invalid person token' });
         }
+
+        // A retry of a save that was stored: answer as stored, without applying it again. Checked
+        // before the person and item checks, since what those check may have changed since.
+        const caller = people[callerIndex]!;
+        const callerSaves = Array.isArray(caller.saves) ? caller.saves : [];
+        const hash = input.saveKey ? claimChangesHash(input) : null;
+        const earlier = input.saveKey ? callerSaves.find((save) => save.key === input.saveKey) : undefined;
+        if (earlier) {
+          if (earlier.hash !== hash) {
+            throw new TRPCError({ code: 'CONFLICT', message: 'This save was already sent with different changes.' });
+          }
+          // Conflicts as stored now (none if the person has been removed since)
+          const stored = session.assignments as { itemIndex: number; personIndices: number[] }[];
+          const storedIndex = findTargetIndex(people, input.personId);
+          const claimed = stored.filter((a) => a.personIndices.includes(storedIndex)).map((a) => a.itemIndex);
+          return {
+            success: true,
+            conflicts: storedIndex < 0 ? [] : claimConflicts(stored, people, storedIndex, claimed),
+          };
+        }
+
         const personIndex = targetIndexOrThrow(people, input.personId);
 
         for (const idx of [
@@ -1099,27 +1167,24 @@ export const guestRouter = createTRPCRouter({
         // Clean up empty assignments
         const cleanedAssignments = assignments.filter((a) => a.personIndices.length > 0);
 
+        // The save key goes on the caller's person with this save, newest last
+        const save = input.saveKey && hash ? { key: input.saveKey, hash } : null;
+        const withSaveKey = save
+          ? people.map((person, index) =>
+              index === callerIndex ? { ...person, saves: [...callerSaves, save].slice(-SAVE_KEYS_KEPT) } : person,
+            )
+          : null;
+
         await tx.guestSplit.update({
           where: { id: session.id },
-          data: { assignments: cleanedAssignments as unknown as Prisma.InputJsonValue },
+          data: {
+            assignments: cleanedAssignments as unknown as Prisma.InputJsonValue,
+            ...(withSaveKey ? { people: withSaveKey as unknown as Prisma.InputJsonValue } : {}),
+          },
         });
 
         // Check for conflicts: items in this person's claim set that are also claimed by others
-        const assignmentMap = new Map(cleanedAssignments.map((a) => [a.itemIndex, a]));
-        const conflicts: { itemIndex: number; claimedBy: string[] }[] = [];
-        for (const claimedIdx of claimedSet) {
-          const assignment = assignmentMap.get(claimedIdx);
-          if (assignment && assignment.personIndices.length > 1) {
-            const otherNames = assignment.personIndices
-              .filter((pi) => pi !== personIndex)
-              .map((pi) => people[pi]?.name ?? 'Someone');
-            if (otherNames.length > 0) {
-              conflicts.push({ itemIndex: claimedIdx, claimedBy: otherNames });
-            }
-          }
-        }
-
-        return { success: true, conflicts };
+        return { success: true, conflicts: claimConflicts(cleanedAssignments, people, personIndex, claimedSet) };
       });
     }),
 
