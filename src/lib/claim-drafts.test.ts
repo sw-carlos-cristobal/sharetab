@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { draftsByIndex, editsToSave, hasEdits, toggleEdit, withEdits } from './claim-drafts';
+import { draftsByIndex, editsToSave, hasEdits, restoreEdits, toggleEdit, withEdits } from './claim-drafts';
 
 describe('draftsByIndex', () => {
   test("puts each person's unsaved claims at their index in the people list the page has now", () => {
@@ -110,5 +110,36 @@ describe('editsToSave', () => {
 
   test('sends nothing for no changes', () => {
     expect(editsToSave(new Map())).toEqual({ addItemIndices: [], removeItemIndices: [] });
+  });
+});
+
+describe('restoreEdits', () => {
+  test("a failed save's changes come back as unsaved", () => {
+    expect(restoreEdits(new Set(), new Map([[2, true]]), undefined)).toEqual(new Map([[2, true]]));
+  });
+
+  test('changes made while it was in flight win over the ones it sent', () => {
+    const sent = new Map([
+      [1, true],
+      [2, true],
+    ]);
+    const since = new Map([[2, false]]);
+    expect(restoreEdits(new Set(), sent, since)).toEqual(new Map([[1, true]]));
+  });
+
+  test('tapping an item off and back on while its save was in flight keeps it claimed when the save fails', () => {
+    // Claimed item 2 and pressed Save; tapped it off and on again (judged against the save in
+    // flight, the second tap undid the first); then the save failed
+    const sent = new Map([[2, true]]);
+    const inFlight = withEdits(new Set(), sent);
+    const since = toggleEdit(inFlight, toggleEdit(inFlight, undefined, 2), 2);
+    expect(since).toEqual(new Map());
+    const restored = restoreEdits(new Set(), sent, since);
+    expect(withEdits(new Set(), restored)).toEqual(new Set([2]));
+    expect(hasEdits(new Set(), restored)).toBe(true);
+  });
+
+  test('drops changes that match the saved claims', () => {
+    expect(restoreEdits(new Set([2]), new Map([[2, true]]), new Map([[3, false]]))).toEqual(new Map());
   });
 });

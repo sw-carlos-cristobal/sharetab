@@ -22,7 +22,15 @@ import {
   type PendingJoin,
   type StoredClaimIdentity,
 } from '@/lib/guest-session';
-import { draftsByIndex, editsToSave, hasEdits, toggleEdit, withEdits, type ClaimEdits } from '@/lib/claim-drafts';
+import {
+  draftsByIndex,
+  editsToSave,
+  hasEdits,
+  restoreEdits,
+  toggleEdit,
+  withEdits,
+  type ClaimEdits,
+} from '@/lib/claim-drafts';
 import { calculateSplitTotals } from '@/lib/split-calculator';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -113,9 +121,10 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   // first edit here; people without one show their saved claims.
   // Unsaved claim changes by person id (see ClaimEdits)
   const [claimEdits, setClaimEdits] = useState<Map<string, ClaimEdits>>(new Map());
-  // The changes a save in flight is sending, by person id. A tap meanwhile is judged against the
-  // claims as they'll be once it lands, so tapping an item back isn't taken for a no-op
-  const savingEdits = useRef(new Map<string, ClaimEdits>());
+  // The changes a save in flight is sending, by person id. Saving moves a person's changes here,
+  // and taps meanwhile are new changes on top of them (judged against the claims as they'll be
+  // once it lands); if it fails, restoreEdits puts the sent changes back under the new ones
+  const [savingEdits, setSavingEdits] = useState<Map<string, ClaimEdits>>(new Map());
   const [saving, setSaving] = useState(false);
   const [showImage, setShowImage] = useState(false);
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
@@ -534,19 +543,30 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
 
   // Unsaved edits by index in the session as loaded, for comparing with its saved claims
   const localEdits = useMemo(() => draftsByIndex(claimEdits, session.data?.people ?? []), [claimEdits, session.data]);
+  // Saved claims with any save in flight applied: what unsaved edits are shown over and judged by
+  const savingByIndex = useMemo(
+    () => draftsByIndex(savingEdits, session.data?.people ?? []),
+    [savingEdits, session.data],
+  );
+  const baseClaimsMap = useMemo(() => {
+    const map = new Map(serverClaimsMap);
+    for (const [pi, edits] of savingByIndex)
+      map.set(pi, withEdits(serverClaimsMap.get(pi) ?? new Set<number>(), edits));
+    return map;
+  }, [serverClaimsMap, savingByIndex]);
 
   const hasUnsavedChanges = useMemo(() => {
     if (personIndex === null) return false;
-    return hasEdits(serverClaimsMap.get(personIndex) ?? new Set<number>(), localEdits.get(personIndex));
-  }, [localEdits, serverClaimsMap, personIndex]);
+    return hasEdits(baseClaimsMap.get(personIndex) ?? new Set<number>(), localEdits.get(personIndex));
+  }, [localEdits, baseClaimsMap, personIndex]);
 
   // Check if ANY person has unsaved local edits (not just the currently selected one)
   const hasAnyUnsavedChanges = useMemo(() => {
     for (const [pIdx, edits] of localEdits) {
-      if (hasEdits(serverClaimsMap.get(pIdx) ?? new Set<number>(), edits)) return true;
+      if (hasEdits(baseClaimsMap.get(pIdx) ?? new Set<number>(), edits)) return true;
     }
     return false;
-  }, [localEdits, serverClaimsMap]);
+  }, [localEdits, baseClaimsMap]);
 
   // All items have at least one saved claimant
   const allItemsClaimed = useMemo(() => {
@@ -580,15 +600,15 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     const hasWeights = personWeights.some((w) => w > 1);
     const weightsParam = hasWeights ? { personWeights } : {};
 
-    if (localEdits.size > 0) {
+    if (localEdits.size > 0 || savingByIndex.size > 0) {
       // Build assignment map from server state
       const assignmentMap = new Map<number, Set<number>>();
       for (const a of serverAssignments) {
         assignmentMap.set(a.itemIndex, new Set(a.personIndices));
       }
       // Override with local claims for each person that has local state
-      for (const [pi, edits] of localEdits) {
-        const items = withEdits(serverClaimsMap.get(pi) ?? new Set<number>(), edits);
+      for (const pi of new Set([...localEdits.keys(), ...savingByIndex.keys()])) {
+        const items = withEdits(baseClaimsMap.get(pi) ?? new Set<number>(), localEdits.get(pi));
         // Remove this person from all items
         for (const [, persons] of assignmentMap) {
           persons.delete(pi);
@@ -626,7 +646,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
       peopleCount: session.data.people.length,
       ...weightsParam,
     });
-  }, [session.data, serverClaimsMap, localEdits]);
+  }, [session.data, baseClaimsMap, localEdits, savingByIndex]);
 
   // --- Handlers ---
   function handleJoin() {
@@ -640,7 +660,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
 
   function toggleClaim(itemIndex: number) {
     if (personIndex === null || activeId === null) return;
-    const saved = withEdits(serverClaimsMap.get(personIndex) ?? new Set<number>(), savingEdits.current.get(activeId));
+    const saved = baseClaimsMap.get(personIndex) ?? new Set<number>();
     setClaimEdits((prev) => {
       const next = new Map(prev);
       const edits = toggleEdit(saved, prev.get(activeId), itemIndex);
@@ -703,34 +723,57 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     if (personIndex === null || activeId === null || !personToken) return;
     const edits = localEdits.get(personIndex);
     if (!edits) return;
-    savingEdits.current.set(activeId, edits);
-    // Saving until the reload below lands: before it, the session as loaded still shows the
-    // draft as unsaved, and Save would be enabled again
+    // The changes move into the save in flight; taps from now on are new changes on top of it
+    setSavingEdits((prev) => new Map(prev).set(activeId, edits));
+    setClaimEdits((prev) => {
+      const next = new Map(prev);
+      next.delete(activeId);
+      return next;
+    });
+    // Saving until the reload below lands, so Save isn't enabled again in between
     setSaving(true);
     try {
+      let saved = false;
       try {
         // By id: if someone listed earlier was removed since the session last loaded, an index
         // would now point at someone else. Only the items changed here are sent, so claims
         // another device saved for this person on other items are kept (#226)
         await claimItems.mutateAsync({ token, personId: activeId, personToken, ...editsToSave(edits) });
+        saved = true;
       } catch {
-        return; // claimItems' onError has said why
+        // claimItems' onError has said why
       }
-      // Reload with a new fetch (a poll already in flight may predate the save), then drop the
-      // changes unless they were edited meanwhile, so later changes to these items from other
-      // devices show here
-      const reloaded = await session.refetch();
-      if (reloaded.status !== 'success') return;
-      setClaimEdits((prev) => {
-        if (prev.get(activeId) !== edits) return prev;
+      // After a save, reload with a new fetch (a poll already in flight may predate it), so the
+      // claims it stored are on screen before its changes leave the save in flight
+      const reloaded = saved ? await session.refetch() : null;
+      if (reloaded?.status !== 'success') {
+        // Not saved (or saved but not reloaded, until the next poll shows it): the changes come
+        // back as unsaved, under any made since
+        const since = savedClaimsOf(activeId);
+        setClaimEdits((prev) => {
+          const next = new Map(prev);
+          const restored = restoreEdits(since, edits, prev.get(activeId));
+          if (restored.size > 0) next.set(activeId, restored);
+          else next.delete(activeId);
+          return next;
+        });
+      }
+    } finally {
+      setSavingEdits((prev) => {
         const next = new Map(prev);
         next.delete(activeId);
         return next;
       });
-    } finally {
-      savingEdits.current.delete(activeId);
       setSaving(false);
     }
+  }
+
+  // A person's saved claims in the session as last loaded (read from the query cache, since
+  // saveClaims runs across renders)
+  function savedClaimsOf(personId: string): Set<number> {
+    const loaded = utils.guest.getSession.getData({ token });
+    const index = loaded?.people.findIndex((person) => person.id === personId) ?? -1;
+    return new Set(loaded?.assignments.filter((a) => a.personIndices.includes(index)).map((a) => a.itemIndex));
   }
 
   // --- Loading state ---
@@ -1124,7 +1167,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   const activeClaims =
     personIndex === null
       ? new Set<number>()
-      : withEdits(serverClaimsMap.get(personIndex) ?? new Set<number>(), localEdits.get(personIndex));
+      : withEdits(baseClaimsMap.get(personIndex) ?? new Set<number>(), localEdits.get(personIndex));
   return (
     <div className="space-y-6 pb-24">
       {/* Header */}

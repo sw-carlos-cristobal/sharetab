@@ -67,3 +67,21 @@ export function editsToSave(edits: ClaimEdits): { addItemIndices: number[]; remo
   }
   return { addItemIndices, removeItemIndices };
 }
+
+/**
+ * A person's changes after a save didn't go through: the changes it sent come back as unsaved,
+ * under any made while it was in flight (those were judged against the claims as they'd be once
+ * it landed, so they win). Changes that match the saved claims are dropped.
+ */
+export function restoreEdits(
+  saved: ReadonlySet<number>,
+  sent: ClaimEdits,
+  since: ClaimEdits | undefined,
+): Map<number, boolean> {
+  const restored = new Map<number, boolean>();
+  for (const item of new Set([...sent.keys(), ...(since?.keys() ?? [])])) {
+    const claimed = since?.get(item) ?? sent.get(item);
+    if (claimed !== undefined && claimed !== saved.has(item)) restored.set(item, claimed);
+  }
+  return restored;
+}
