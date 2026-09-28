@@ -637,6 +637,28 @@ describe('guest.getSession read limit (#204)', () => {
   });
 });
 
+describe('claim-session transactions when the database is busy (#203)', () => {
+  test('a mutation answers SERVICE_UNAVAILABLE when no pool connection frees up in time', async () => {
+    const busy = Object.assign(new Error('Transaction API error: Unable to start a transaction in the given time.'), {
+      name: 'TransactionManagerError',
+      code: 'P2028',
+    });
+    mockDb.$transaction.mockRejectedValueOnce(busy);
+    await expect(
+      (await caller()).claimItems({
+        token: 'share-1',
+        personToken: ALICE_TOKEN,
+        personId: pid(1),
+        claimedItemIndices: [0],
+      }),
+    ).rejects.toMatchObject({
+      code: 'SERVICE_UNAVAILABLE',
+      message: 'ShareTab is busy right now. Please try again in a moment.',
+    });
+    expect(mockDb.$transaction).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('guest.claimItems', () => {
   test("saves claims for the person the id names, wherever they are now, leaving others' alone", async () => {
     sessionAfterBWasRemoved();
