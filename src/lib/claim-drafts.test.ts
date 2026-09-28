@@ -217,6 +217,13 @@ describe('editsAfterSave', () => {
     expect(hasEdits(new Set([2]), kept)).toBe(true);
   });
 
+  test('refused but not reloaded: every change is kept, since the claims the page has may be stale', () => {
+    // Another device claimed item 2 meanwhile, but the page couldn't reload to see it
+    const kept = editsAfterSave({ outcome: 'refused', reloaded: false, savedNow: new Set(), sent, since });
+    expect(kept).toEqual(new Map([[2, false]]));
+    expect(withEdits(new Set([2]), kept)).toEqual(new Set());
+  });
+
   test('saved but not reloaded: every change is kept', () => {
     const kept = editsAfterSave({ outcome: 'saved', reloaded: false, savedNow: new Set(), sent, since });
     expect(kept).toEqual(new Map([[2, false]]));

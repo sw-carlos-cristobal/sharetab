@@ -107,10 +107,10 @@ export type SaveOutcome = 'saved' | 'refused' | 'unknown';
  * tried to), given the changes made meanwhile (`since`, judged against the claims with the save
  * applied). Only when the answer settles what's stored are changes compared with the claims:
  * - saved and reloaded: the claims shown include it, so only the changes made since remain;
- * - refused: nothing was stored, so the sent changes come back under the newer ones
- *   (restoreEdits, compared with the claims as reloaded);
- * - otherwise (no answer, or saved but not reloaded): the claims the page has may not show what
- *   was stored, now or later, so every change is kept as it is (stackEdits).
+ * - refused and reloaded: nothing was stored, so the sent changes come back under the newer
+ *   ones (restoreEdits, compared with the claims as reloaded);
+ * - otherwise (no answer, or not reloaded): the claims the page has may not show what is stored,
+ *   now or later, so every change is kept as it is (stackEdits).
  */
 export function editsAfterSave(save: {
   outcome: SaveOutcome;
@@ -120,6 +120,6 @@ export function editsAfterSave(save: {
   since: ClaimEdits | undefined;
 }): Map<number, boolean> {
   if (save.outcome === 'saved' && save.reloaded) return new Map(save.since);
-  if (save.outcome === 'refused') return restoreEdits(save.savedNow, save.sent, save.since);
+  if (save.outcome === 'refused' && save.reloaded) return restoreEdits(save.savedNow, save.sent, save.since);
   return stackEdits(save.sent, save.since);
 }
