@@ -1,3 +1,5 @@
+import { CLAIM_POLL_RETRY_MS } from './guest-session';
+
 /**
  * A person's unsaved claim changes: for each item tapped, whether it's claimed (true) or not
  * (false). Only the changes are kept, not a copy of the person's whole claim set, so the page
@@ -98,9 +100,33 @@ export function stackEdits(older: ClaimEdits, newer: ClaimEdits | undefined): Ma
 /**
  * How a save ended: stored ('saved'), refused by the server (an error answer: nothing was
  * stored), or unknown (no answer, e.g. a dropped connection or a proxy's error page: the server
- * may have stored it, even after the page reloaded).
+ * may have stored it, even after the page reloaded). The page sends an unknown save again with
+ * the same save key until it learns which (see failedSaveOutcome).
  */
 export type SaveOutcome = 'saved' | 'refused' | 'unknown';
+
+/**
+ * How a save attempt that failed ended, from the HTTP status of the server's error answer
+ * (undefined when no answer came). `retry`: the attempt sent a save again, with the same save
+ * key, after an earlier attempt got no answer. The server answers a retry of a stored save as
+ * stored (#238), so a retry it refuses means no attempt was stored, or the edits no longer
+ * matter (the session is gone or finalized, the person removed) - except a retry that was rate
+ * limited (429) or found the server busy (503): it never ran, so it's still unknown.
+ */
+export function failedSaveOutcome(httpStatus: number | undefined, retry: boolean): SaveOutcome {
+  if (httpStatus === undefined) return 'unknown';
+  if (retry && (httpStatus === 429 || httpStatus === 503)) return 'unknown';
+  return 'refused';
+}
+
+/**
+ * How long the claim page waits before sending an unanswered save again, or reloading again
+ * after a save when the reload failed: a second, doubling each time, up to the poll's own retry
+ * interval. `attempt` counts from 0.
+ */
+export function saveRetryDelay(attempt: number): number {
+  return Math.min(1000 * 2 ** attempt, CLAIM_POLL_RETRY_MS);
+}
 
 /**
  * A person's unsaved changes once a save of `sent` has ended and the page has reloaded (or

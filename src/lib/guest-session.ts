@@ -27,12 +27,14 @@ export function isGuestSessionToken(value: string): boolean {
 }
 
 /**
- * A new random join key (a version 4 UUID): the idempotency key the claim page sends with a
- * join, so a join whose response was lost can be retried as the same person.
+ * A new random request key (a version 4 UUID): the idempotency key the claim page sends with a
+ * join (its join key), so a join whose response was lost can be retried as the same person, and
+ * with a claim save (its save key), so a save whose answer was lost can be sent again without
+ * being applied twice.
  * Built on crypto.getRandomValues because crypto.randomUUID only exists in a secure context,
  * and self-hosted instances are often reached over plain HTTP.
  */
-export function newJoinKey(): string {
+export function newRequestKey(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(16));
   bytes[6] = (bytes[6]! & 0x0f) | 0x40; // version 4
   bytes[8] = (bytes[8]! & 0x3f) | 0x80; // RFC 4122 variant
@@ -48,7 +50,7 @@ export type PendingJoin = { joinKey: string; name: string };
  * (the server replays that join), otherwise a new one, since the server refuses a join key
  * replayed with a different name.
  */
-export function joinKeyFor(name: string, pending: PendingJoin | null, makeKey = newJoinKey): PendingJoin {
+export function joinKeyFor(name: string, pending: PendingJoin | null, makeKey = newRequestKey): PendingJoin {
   const normalized = normalizeGuestName(name);
   return pending?.name === normalized ? pending : { joinKey: makeKey(), name: normalized };
 }

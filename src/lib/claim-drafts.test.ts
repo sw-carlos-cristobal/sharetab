@@ -3,12 +3,15 @@ import {
   draftsByIndex,
   editsAfterSave,
   editsToSave,
+  failedSaveOutcome,
   hasEdits,
   restoreEdits,
+  saveRetryDelay,
   stackEdits,
   toggleEdit,
   withEdits,
 } from './claim-drafts';
+import { CLAIM_POLL_RETRY_MS } from './guest-session';
 
 describe('draftsByIndex', () => {
   test("puts each person's unsaved claims at their index in the people list the page has now", () => {
@@ -227,5 +230,43 @@ describe('editsAfterSave', () => {
   test('saved but not reloaded: every change is kept', () => {
     const kept = editsAfterSave({ outcome: 'saved', reloaded: false, savedNow: new Set(), sent, since });
     expect(kept).toEqual(new Map([[2, false]]));
+  });
+});
+
+describe('failedSaveOutcome (#238)', () => {
+  test('no answer from the server: the save may have been stored', () => {
+    expect(failedSaveOutcome(undefined, false)).toBe('unknown');
+    expect(failedSaveOutcome(undefined, true)).toBe('unknown');
+  });
+
+  test('an error answer to a first attempt: nothing was stored, whatever the error', () => {
+    for (const status of [400, 403, 404, 409, 429, 500, 503]) {
+      expect(failedSaveOutcome(status, false)).toBe('refused');
+    }
+  });
+
+  test('a retry that was rate limited or found the server busy never ran: still unknown', () => {
+    expect(failedSaveOutcome(429, true)).toBe('unknown');
+    expect(failedSaveOutcome(503, true)).toBe('unknown');
+  });
+
+  test('a retry refused otherwise: the save was not stored, or no longer matters', () => {
+    for (const status of [400, 403, 404, 409, 500]) {
+      expect(failedSaveOutcome(status, true)).toBe('refused');
+    }
+  });
+});
+
+describe('saveRetryDelay (#238)', () => {
+  test('starts at a second and doubles, up to the poll retry interval', () => {
+    expect([0, 1, 2, 3, 4, 5, 20].map(saveRetryDelay)).toEqual([
+      1000,
+      2000,
+      4000,
+      8000,
+      CLAIM_POLL_RETRY_MS,
+      CLAIM_POLL_RETRY_MS,
+      CLAIM_POLL_RETRY_MS,
+    ]);
   });
 });

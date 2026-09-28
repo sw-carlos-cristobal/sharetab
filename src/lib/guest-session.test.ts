@@ -8,7 +8,7 @@ import {
   isSessionLost,
   joinKeyFor,
   needsMembershipCheck,
-  newJoinKey,
+  newRequestKey,
   personalLinkHash,
   readPersonalLinkToken,
   resumeOutcome,
@@ -38,15 +38,15 @@ describe('personal link fragment', () => {
   });
 });
 
-describe('newJoinKey', () => {
+describe('newRequestKey', () => {
   test('makes a lowercase version 4 UUID that the server accepts', () => {
-    const key = newJoinKey();
+    const key = newRequestKey();
     expect(key).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     expect(isGuestSessionToken(key)).toBe(true);
   });
 
   test('makes a different key each time', () => {
-    const keys = new Set(Array.from({ length: 50 }, () => newJoinKey()));
+    const keys = new Set(Array.from({ length: 50 }, () => newRequestKey()));
     expect(keys.size).toBe(50);
   });
 });
