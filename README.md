@@ -233,7 +233,7 @@ Each push to `main` also gets a GitHub release named `Build YYYY.MM.DD.N-<sha>` 
 
 ### AI model defaults and Meridian (builds from 2026.09.26)
 
-- `OPENAI_CODEX_MODEL` now defaults to `gpt-5.5` (build `2026.09.26.2`, #211): the Codex backend rejects `gpt-5.4` for ChatGPT accounts. The old `.env.example` and Unraid template set `gpt-5.4` explicitly, and a saved value is kept on upgrade, so change it to `gpt-5.5` in your `.env` or template. Don't just blank it: outside Docker Compose an empty value is passed through as the model name instead of falling back to the default.
+- `OPENAI_CODEX_MODEL` now defaults to `gpt-5.5` (build `2026.09.26.2`, #211): the Codex backend rejects `gpt-5.4` for ChatGPT accounts. The old `.env.example` and Unraid template set `gpt-5.4` explicitly, and a saved value is kept on upgrade, so change it to `gpt-5.5` in your `.env` or template, or blank it to use the default (#222; builds before that fix sent a blank value as the model name instead of falling back).
 - `ANTHROPIC_MODEL` now defaults to `claude-sonnet-5` for both the `claude` and `meridian` providers (build `2026.09.26.3`, #215). A value saved in your `.env` or template (the old defaults were `claude-sonnet-4-6` and, on Unraid, `claude-opus-4-6`) still wins; change it if you want the new default.
 - Meridian receipt scanning was broken in the Docker image in builds `2026.09.19.4` through `2026.09.26.1` and is fixed in `2026.09.26.2` (#211). If Meridian stopped working in that period, upgrading fixes it.
 
