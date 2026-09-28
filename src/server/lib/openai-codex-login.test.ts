@@ -429,6 +429,18 @@ describe('OpenAICodexLogin', () => {
       expectNoPartOf('ENDPOINTSECRET0123456789', await loggedText());
     });
 
+    test('a refresh answering an empty refresh_token keeps the stored one', async () => {
+      const { writeFileSync } = expiredStoredAuth();
+      const fresh = jwtExpiringIn(3600);
+      vi.mocked(fetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ id_token: fresh, access_token: fresh, refresh_token: '' }), { status: 200 }),
+      );
+      const { refreshIfNeeded } = await import('./openai-codex-login');
+      expect(await refreshIfNeeded()).toBe(true);
+      const saved = JSON.parse(writeFileSync.mock.calls[0]![1] as string) as { tokens: { refresh_token: string } };
+      expect(saved.tokens.refresh_token).toBe(REFRESH_TOKEN);
+    });
+
     test('a failed refresh logs only the status and an RFC 6749 error code', async () => {
       const { writeFileSync } = expiredStoredAuth();
       vi.mocked(fetch).mockResolvedValueOnce(

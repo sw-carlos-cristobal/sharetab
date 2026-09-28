@@ -259,7 +259,8 @@ async function refreshAuth(force = false): Promise<ParsedStoredAuth | null> {
     return null;
   }
 
-  writeStoredAuth({ id_token, access_token, refresh_token: refresh_token ?? stored.refreshToken });
+  // A refresh may not rotate the refresh token; an empty one counts as not sent
+  writeStoredAuth({ id_token, access_token, refresh_token: refresh_token || stored.refreshToken });
 
   return readStoredAuth();
 }
