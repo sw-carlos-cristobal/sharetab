@@ -3,15 +3,12 @@ import {
   draftsByIndex,
   editsAfterSave,
   editsToSave,
-  failedSaveOutcome,
   hasEdits,
   restoreEdits,
-  saveRetryDelay,
   stackEdits,
   toggleEdit,
   withEdits,
 } from './claim-drafts';
-import { CLAIM_POLL_RETRY_MS } from './guest-session';
 
 describe('draftsByIndex', () => {
   test("puts each person's unsaved claims at their index in the people list the page has now", () => {
@@ -179,9 +176,9 @@ describe('stackEdits', () => {
     expect(stackEdits(new Map([[1, true]]), undefined)).toEqual(new Map([[1, true]]));
   });
 
-  test('a tap made during a save that stored but did not reload survives the next poll', () => {
-    // Saved item 2 (stored); tapped it off meanwhile; the reload failed, so the page still has
-    // the claims from before the save
+  test('a tap made during a save whose outcome the page never learned survives the next poll', () => {
+    // Saved item 2 (stored, but the page gave up before learning it); tapped it off meanwhile;
+    // the page still has the claims from before the save
     const sent = new Map([[2, true]]);
     const since = toggleEdit(withEdits(new Set(), sent), undefined, 2);
     const kept = stackEdits(sent, since);
@@ -212,7 +209,7 @@ describe('editsAfterSave', () => {
     expect(kept).toEqual(new Map([[1, true]]));
   });
 
-  test('no answer (it may still be stored): every change is kept, whatever the reload shows (#226 review)', () => {
+  test('gave up with no answer (it may still be stored): every change is kept, whatever the reload shows (#226 review)', () => {
     // The reload came back before the save committed, showing item 2 unclaimed
     const kept = editsAfterSave({ outcome: 'unknown', reloaded: true, savedNow: new Set(), sent, since });
     // Once the commit shows up, the tap-off still wins and is waiting to be saved
@@ -227,46 +224,8 @@ describe('editsAfterSave', () => {
     expect(withEdits(new Set([2]), kept)).toEqual(new Set());
   });
 
-  test('saved but not reloaded: every change is kept', () => {
+  test('saved but not reloaded (the session is gone): every change is kept', () => {
     const kept = editsAfterSave({ outcome: 'saved', reloaded: false, savedNow: new Set(), sent, since });
     expect(kept).toEqual(new Map([[2, false]]));
-  });
-});
-
-describe('failedSaveOutcome (#238)', () => {
-  test('no answer from the server: the save may have been stored', () => {
-    expect(failedSaveOutcome(undefined, false)).toBe('unknown');
-    expect(failedSaveOutcome(undefined, true)).toBe('unknown');
-  });
-
-  test('an error answer to a first attempt: nothing was stored, whatever the error', () => {
-    for (const status of [400, 403, 404, 409, 429, 500, 503]) {
-      expect(failedSaveOutcome(status, false)).toBe('refused');
-    }
-  });
-
-  test('a retry that was rate limited or found the server busy never ran: still unknown', () => {
-    expect(failedSaveOutcome(429, true)).toBe('unknown');
-    expect(failedSaveOutcome(503, true)).toBe('unknown');
-  });
-
-  test('a retry refused otherwise: the save was not stored, or no longer matters', () => {
-    for (const status of [400, 403, 404, 409, 500]) {
-      expect(failedSaveOutcome(status, true)).toBe('refused');
-    }
-  });
-});
-
-describe('saveRetryDelay (#238)', () => {
-  test('starts at a second and doubles, up to the poll retry interval', () => {
-    expect([0, 1, 2, 3, 4, 5, 20].map(saveRetryDelay)).toEqual([
-      1000,
-      2000,
-      4000,
-      8000,
-      CLAIM_POLL_RETRY_MS,
-      CLAIM_POLL_RETRY_MS,
-      CLAIM_POLL_RETRY_MS,
-    ]);
   });
 });

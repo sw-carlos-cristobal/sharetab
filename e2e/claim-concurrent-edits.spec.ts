@@ -7,6 +7,9 @@ const BASE = process.env.BASE_URL || 'http://localhost:3001';
 // A save used to replace the person's whole claim set with the one the page built from the
 // claims it loaded plus its taps, dropping whatever the other device saved meanwhile. The page
 // now sends only the items it changed.
+// Issue #238: a save whose answer was lost left its changes as unsaved edits, which could undo
+// another device's later change. The page now sends it again with the same save key until the
+// answer says whether it was stored; the server stores a save once per key.
 
 const ITEMS = ['Tea', 'Cake', 'Pie'];
 
@@ -169,8 +172,8 @@ test.describe('Claim page — two devices edit the same person (#226)', () => {
     const { ctx, shareToken } = await annClaimingForCat(page, 'Failed Save Diner');
     const saveKeys = recordSaveKeys(page);
 
-    // Hold the save, then drop it before it reaches the server, once the item has been tapped
-    // off and on again
+    // Hold the save, then drop it before it reaches the server, once the pie has been tapped off
+    // and on again and the tea tapped
     let fail = () => {};
     const failed = new Promise<void>((resolve) => (fail = resolve));
     let saveSent = () => {};
@@ -190,16 +193,50 @@ test.describe('Claim page — two devices edit the same person (#226)', () => {
     await sent;
     await page.getByTestId('claim-item-2').click();
     await page.getByTestId('claim-item-2').click();
+    await page.getByTestId('claim-item-0').click();
     fail();
 
-    // The page sends the save again with the same key, and it's stored; the taps cancelled out
+    // The page sends the save again with the same key, and it's stored; the pie taps cancelled
+    // out, and the tea is still waiting to be saved
     await expect.poll(() => claimsOf(ctx, shareToken, 'Cat'), { timeout: 15000 }).toEqual(['Pie']);
-    await expect(page.getByTestId('save-claims-btn')).toHaveText('Claims saved', { timeout: 15000 });
+    await expect(page.getByTestId('save-claims-btn')).toBeEnabled({ timeout: 15000 });
     await expect(page.getByTestId('claim-item-2')).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByText('Unsaved changes')).toHaveCount(0);
+    await expect(page.getByTestId('claim-item-0')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByText('Unsaved changes').first()).toBeVisible();
     expect(saveKeys).toHaveLength(2);
     expect(saveKeys[0]).toMatch(/^[0-9a-f-]{36}$/);
     expect(saveKeys[1]).toBe(saveKeys[0]);
+    await save(page);
+    await expect.poll(() => claimsOf(ctx, shareToken, 'Cat'), { timeout: 15000 }).toEqual(['Pie', 'Tea']);
+
+    await ctx.dispose();
+  });
+
+  test('a save the server refuses is not sent again, and its changes stay to be saved (#238)', async ({ page }) => {
+    const { ctx, shareToken } = await annClaimingForCat(page, 'Refused Save Diner');
+    const saveKeys = recordSaveKeys(page);
+
+    // The first save arrives with a malformed save key, so the server refuses it (400)
+    await page.route(
+      (url) => url.pathname.includes('guest.claimItems'),
+      async (route) => {
+        const postData = (route.request().postData() ?? '').replace(/"saveKey":"[0-9a-f-]{36}"/, '"saveKey":"bad"');
+        await route.continue({ postData }).catch(() => {});
+      },
+      { times: 1 },
+    );
+
+    await page.getByTestId('claim-item-2').click();
+    await page.getByTestId('save-claims-btn').click();
+
+    // Nothing was stored; the pie is still claimed here, waiting to be saved
+    await expect(page.getByTestId('save-claims-btn')).toBeEnabled({ timeout: 15000 });
+    await expect(page.getByTestId('claim-item-2')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByText('Unsaved changes').first()).toBeVisible();
+    expect(await claimsOf(ctx, shareToken, 'Cat')).toEqual([]);
+    expect(saveKeys).toHaveLength(1);
+    await save(page);
+    await expect.poll(() => claimsOf(ctx, shareToken, 'Cat'), { timeout: 15000 }).toEqual(['Pie']);
 
     await ctx.dispose();
   });
@@ -278,8 +315,9 @@ test.describe('Claim page — two devices edit the same person (#226)', () => {
     await watchForUnsavedChanges(page);
     release();
 
-    // Reloads keep failing: the page keeps the pie in the save, and keeps trying
-    await expect.poll(() => failedReloads, { timeout: 20000 }).toBeGreaterThanOrEqual(2);
+    // Reloads keep failing: the page keeps the pie in the save, and keeps trying. One reload is
+    // four requests (the query's own three retries), so a fifth means the page is on its second
+    await expect.poll(() => failedReloads, { timeout: 30000 }).toBeGreaterThanOrEqual(5);
     await expect(page.getByTestId('save-claims-btn')).toBeDisabled();
     await expect(page.getByTestId('claim-item-2')).toHaveAttribute('aria-pressed', 'true');
 
@@ -373,6 +411,61 @@ test.describe('Claim page — two devices edit the same person (#226)', () => {
     await expect(page.getByTestId('claim-item-0')).toHaveAttribute('aria-pressed', 'true', { timeout: 15000 });
     await expect(page.getByTestId('claim-item-2')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByText('Unsaved changes').first()).toBeVisible();
+
+    await ctx.dispose();
+  });
+});
+
+test.describe('guest.claimItems save keys (#238)', () => {
+  test('a save sent again with its key is stored once, even when both copies arrive together', async () => {
+    const ctx = await request.newContext({ baseURL: BASE });
+    const createRes = await trpcMutation(ctx, 'guest.createClaimSession', {
+      receiptData: { merchantName: 'Save Key Diner', subtotal: 3000, tax: 0, tip: 0, total: 3000, currency: 'USD' },
+      items: ITEMS.map((name) => ({ name, quantity: 1, unitPrice: 1000, totalPrice: 1000 })),
+      creatorName: 'Host',
+      paidByName: 'Host',
+    });
+    expect(createRes.ok(), await createRes.text()).toBe(true);
+    const shareToken: string = (await createRes.json()).result.data.json.shareToken;
+    const ann = await joinGuestSession(ctx, { token: shareToken, name: 'Ann' });
+    const cat = await joinGuestSession(ctx, { token: shareToken, name: 'Cat' });
+    const forCat = (saveKey: string, changes: Record<string, number[]>) =>
+      trpcMutation(ctx, 'guest.claimItems', {
+        token: shareToken,
+        personId: cat.personId,
+        personToken: ann.personToken,
+        saveKey,
+        ...changes,
+      });
+    const catSaves = async (claimedItemIndices: number[]) => {
+      const res = await trpcMutation(ctx, 'guest.claimItems', {
+        token: shareToken,
+        personId: cat.personId,
+        personToken: cat.personToken,
+        claimedItemIndices,
+      });
+      expect(res.ok(), await res.text()).toBe(true);
+    };
+
+    // Ann's save of the pie is stored; Cat's phone unclaims it; Ann's page sends the save again
+    const pieKey = '99999999-9999-4999-8999-000000000001';
+    expect((await forCat(pieKey, { addItemIndices: [2] })).ok()).toBe(true);
+    await catSaves([]);
+    const again = await forCat(pieKey, { addItemIndices: [2] });
+    expect(again.ok(), await again.text()).toBe(true);
+    expect(await claimsOf(ctx, shareToken, 'Cat')).toEqual([]);
+    // The same key with other changes is refused
+    expect((await forCat(pieKey, { addItemIndices: [1] })).status()).toBe(409);
+
+    // Two copies of one save at once: one stores it, the other finds its key
+    const teaKey = '99999999-9999-4999-8999-000000000002';
+    const both = await Promise.all([forCat(teaKey, { addItemIndices: [0] }), forCat(teaKey, { addItemIndices: [0] })]);
+    for (const res of both) expect(res.ok(), await res.text()).toBe(true);
+    expect(await claimsOf(ctx, shareToken, 'Cat')).toEqual(['Tea']);
+    // The key was stored: once Cat unclaims the tea, sending it again doesn't bring it back
+    await catSaves([]);
+    expect((await forCat(teaKey, { addItemIndices: [0] })).ok()).toBe(true);
+    expect(await claimsOf(ctx, shareToken, 'Cat')).toEqual([]);
 
     await ctx.dispose();
   });

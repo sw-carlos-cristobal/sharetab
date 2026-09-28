@@ -1,5 +1,3 @@
-import { CLAIM_POLL_RETRY_MS } from './guest-session';
-
 /**
  * A person's unsaved claim changes: for each item tapped, whether it's claimed (true) or not
  * (false). Only the changes are kept, not a copy of the person's whole claim set, so the page
@@ -90,53 +88,36 @@ export function restoreEdits(
 
 /**
  * Newer changes stacked over older ones, keeping every change (none is compared with the saved
- * claims). For a save that stored its changes but whose reload failed: the claims the page has
- * are from before it, so comparing with them would drop changes that undo what it stored.
+ * claims). For a save that ended without the page learning what's stored, or without a reload
+ * showing it: the claims the page has may not include it, so comparing with them could drop
+ * changes that undo what it stored. The claim page gets here only when it gave up on an
+ * unanswered save (see settleSave in claim-save.ts), or the save was refused and the reload
+ * failed.
  */
 export function stackEdits(older: ClaimEdits, newer: ClaimEdits | undefined): Map<number, boolean> {
   return new Map([...older, ...(newer ?? [])]);
 }
 
 /**
- * How a save ended: stored ('saved'), refused by the server (an error answer: nothing was
- * stored), or unknown (no answer, e.g. a dropped connection or a proxy's error page: the server
- * may have stored it, even after the page reloaded). The page sends an unknown save again with
- * the same save key until it learns which (see failedSaveOutcome).
+ * How a save ended: stored ('saved'), refused by the server (an error answer that settles it:
+ * nothing was stored, or for a retry, what an earlier attempt stored no longer matters), or
+ * unknown (no answer, e.g. a dropped connection or a proxy's error page, or a server error: the
+ * server may have stored it). The claim page sends an unknown save again with the same save key
+ * until it learns which (see claim-save.ts), and gives up after SAVE_ATTEMPTS.
  */
 export type SaveOutcome = 'saved' | 'refused' | 'unknown';
-
-/**
- * How a save attempt that failed ended, from the HTTP status of the server's error answer
- * (undefined when no answer came). `retry`: the attempt sent a save again, with the same save
- * key, after an earlier attempt got no answer. The server answers a retry of a stored save as
- * stored (#238), so a retry it refuses means no attempt was stored, or the edits no longer
- * matter (the session is gone or finalized, the person removed) - except a retry that was rate
- * limited (429) or found the server busy (503): it never ran, so it's still unknown.
- */
-export function failedSaveOutcome(httpStatus: number | undefined, retry: boolean): SaveOutcome {
-  if (httpStatus === undefined) return 'unknown';
-  if (retry && (httpStatus === 429 || httpStatus === 503)) return 'unknown';
-  return 'refused';
-}
-
-/**
- * How long the claim page waits before sending an unanswered save again, or reloading again
- * after a save when the reload failed: a second, doubling each time, up to the poll's own retry
- * interval. `attempt` counts from 0.
- */
-export function saveRetryDelay(attempt: number): number {
-  return Math.min(1000 * 2 ** attempt, CLAIM_POLL_RETRY_MS);
-}
 
 /**
  * A person's unsaved changes once a save of `sent` has ended and the page has reloaded (or
  * tried to), given the changes made meanwhile (`since`, judged against the claims with the save
  * applied). Only when the answer settles what's stored are changes compared with the claims:
  * - saved and reloaded: the claims shown include it, so only the changes made since remain;
- * - refused and reloaded: nothing was stored, so the sent changes come back under the newer
- *   ones (restoreEdits, compared with the claims as reloaded);
- * - otherwise (no answer, or not reloaded): the claims the page has may not show what is stored,
- *   now or later, so every change is kept as it is (stackEdits).
+ * - refused and reloaded: nothing was stored (or it no longer matters), so the sent changes come
+ *   back under the newer ones (restoreEdits, compared with the claims as reloaded);
+ * - otherwise (the page gave up on an unanswered save, or a reload didn't land): the claims the
+ *   page has may not show what is stored, now or later, so every change is kept as it is
+ *   (stackEdits). settleSave (claim-save.ts) reloads a stored save until a reload lands, so
+ *   'saved' without a reload only happens when the session is gone.
  */
 export function editsAfterSave(save: {
   outcome: SaveOutcome;
