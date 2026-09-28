@@ -59,7 +59,7 @@ This creates three demo users you can log in with:
 npm test
 ```
 
-Runs ~625 fast Vitest tests (about 2 seconds). Tests sit next to the code they cover (`src/**/*.test.ts`, plus `docker/**/*.test.mjs` for the Docker build scripts): money and split math, balance computation, rate limiting, exchange rates, sign-in and OIDC policy, guest sessions, AI providers, and the admin, auth, and guest routers.
+Runs ~645 fast Vitest tests (about 2 seconds). Tests sit next to the code they cover (`src/**/*.test.ts`, plus `docker/**/*.test.mjs` for the Docker build scripts): money and split math, balance computation, rate limiting, exchange rates, sign-in and OIDC policy, guest sessions, AI providers, and the admin, auth, and guest routers.
 
 ### E2E tests
 

@@ -637,6 +637,113 @@ describe('guest.getSession read limit (#204)', () => {
   });
 });
 
+describe('guest.claimItems with added and removed items (#226)', () => {
+  // Cat's own phone saved items 0 and 1 while Ann's page was editing Cat's claims
+  function catSavedMeanwhile() {
+    claimSession(
+      [
+        { id: pid(0), name: 'Ann', personToken: ALICE_TOKEN },
+        { id: pid(1), name: 'Cat', personToken: OTHER_TOKEN },
+      ],
+      {
+        items: items(3),
+        assignments: [
+          { itemIndex: 0, personIndices: [1] },
+          { itemIndex: 1, personIndices: [1] },
+        ],
+      },
+    );
+  }
+
+  const forCat = (edits: { addItemIndices?: number[]; removeItemIndices?: number[] }) => ({
+    token: 'share-1',
+    personToken: ALICE_TOKEN,
+    personId: pid(1),
+    ...edits,
+  });
+
+  test('adds to the claims stored now, keeping the ones another device saved meanwhile', async () => {
+    catSavedMeanwhile();
+    await (await caller()).claimItems(forCat({ addItemIndices: [2] }));
+    expect(savedAssignments()).toEqual([
+      { itemIndex: 0, personIndices: [1] },
+      { itemIndex: 1, personIndices: [1] },
+      { itemIndex: 2, personIndices: [1] },
+    ]);
+  });
+
+  test('removes only the items named', async () => {
+    catSavedMeanwhile();
+    await (await caller()).claimItems(forCat({ removeItemIndices: [0] }));
+    expect(savedAssignments()).toEqual([{ itemIndex: 1, personIndices: [1] }]);
+  });
+
+  test('adds and removes in one save', async () => {
+    catSavedMeanwhile();
+    await (await caller()).claimItems(forCat({ addItemIndices: [2], removeItemIndices: [0] }));
+    expect(savedAssignments()).toEqual([
+      { itemIndex: 1, personIndices: [1] },
+      { itemIndex: 2, personIndices: [1] },
+    ]);
+  });
+
+  test('adding an item the person has, or removing one they lack, changes nothing', async () => {
+    catSavedMeanwhile();
+    await (await caller()).claimItems(forCat({ addItemIndices: [0], removeItemIndices: [2] }));
+    expect(savedAssignments()).toEqual([
+      { itemIndex: 0, personIndices: [1] },
+      { itemIndex: 1, personIndices: [1] },
+    ]);
+  });
+
+  test("leaves other people's claims on the same items alone", async () => {
+    claimSession(
+      [
+        { id: pid(0), name: 'Ann', personToken: ALICE_TOKEN },
+        { id: pid(1), name: 'Cat', personToken: OTHER_TOKEN },
+      ],
+      { items: items(2), assignments: [{ itemIndex: 0, personIndices: [0, 1] }] },
+    );
+    await (await caller()).claimItems(forCat({ addItemIndices: [1], removeItemIndices: [0] }));
+    expect(savedAssignments()).toEqual([
+      { itemIndex: 0, personIndices: [0] },
+      { itemIndex: 1, personIndices: [1] },
+    ]);
+  });
+
+  test('refuses an item named as both added and removed', async () => {
+    catSavedMeanwhile();
+    await expect(
+      (await caller()).claimItems(forCat({ addItemIndices: [2], removeItemIndices: [2] })),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test('refuses an item index past the end, added or removed', async () => {
+    catSavedMeanwhile();
+    const api = await caller();
+    await expect(api.claimItems(forCat({ addItemIndices: [3] }))).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(api.claimItems(forCat({ removeItemIndices: [3] }))).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test('refuses a request that sends the whole claim set and changes too, or neither', async () => {
+    catSavedMeanwhile();
+    const api = await caller();
+    await expect(
+      api.claimItems({ ...forCat({ addItemIndices: [2] }), claimedItemIndices: [0, 2] }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(api.claimItems(forCat({}))).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test('the whole claim set still replaces what is stored (older clients)', async () => {
+    catSavedMeanwhile();
+    await (await caller()).claimItems({ ...forCat({}), claimedItemIndices: [2] });
+    expect(savedAssignments()).toEqual([{ itemIndex: 2, personIndices: [1] }]);
+  });
+});
+
 describe('guest.claimItems', () => {
   test("saves claims for the person the id names, wherever they are now, leaving others' alone", async () => {
     sessionAfterBWasRemoved();

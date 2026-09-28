@@ -88,6 +88,18 @@ function namesOnePerson(index: number | undefined, id: string | undefined) {
 }
 const NAME_ONE_PERSON = { message: 'Name the person by exactly one of index or id' };
 
+/** A claimItems request sends either the person's whole claim set, or the items added and removed. */
+function claimsOneWay(claimed: number[] | undefined, added: number[] | undefined, removed: number[] | undefined) {
+  return (claimed !== undefined) !== (added !== undefined || removed !== undefined);
+}
+const CLAIMS_ONE_WAY = { message: 'Send either the whole claim set or the items added and removed' };
+
+function addsAndRemovesApart(added: number[] | undefined, removed: number[] | undefined) {
+  const removedSet = new Set(removed);
+  return !(added ?? []).some((idx) => removedSet.has(idx));
+}
+const ADD_OR_REMOVE = { message: 'An item cannot be both added and removed' };
+
 /** The index of the person a request targets (see findTargetIndex), or a TRPCError. */
 function targetIndexOrThrow(
   people: readonly { id?: string | undefined }[],
@@ -1017,9 +1029,19 @@ export const guestRouter = createTRPCRouter({
           personIndex: z.number().int().min(0).optional(),
           personId: personIdSchema.optional(),
           personToken: z.string().uuid(),
-          claimedItemIndices: z.array(z.number().int().min(0)).max(1000),
+          // The person's whole claim set, replacing what is stored (older clients) ...
+          claimedItemIndices: z.array(z.number().int().min(0)).max(1000).optional(),
+          // ... or the items added to and removed from it (the claim page), applied to whatever is
+          // stored when the save arrives, so another device's changes to other items are kept (#226)
+          addItemIndices: z.array(z.number().int().min(0)).max(1000).optional(),
+          removeItemIndices: z.array(z.number().int().min(0)).max(1000).optional(),
         })
-        .refine((input) => namesOnePerson(input.personIndex, input.personId), NAME_ONE_PERSON),
+        .refine((input) => namesOnePerson(input.personIndex, input.personId), NAME_ONE_PERSON)
+        .refine(
+          (input) => claimsOneWay(input.claimedItemIndices, input.addItemIndices, input.removeItemIndices),
+          CLAIMS_ONE_WAY,
+        )
+        .refine((input) => addsAndRemovesApart(input.addItemIndices, input.removeItemIndices), ADD_OR_REMOVE),
     )
     .mutation(async ({ ctx, input }) => {
       if (!checkClaimWriteRateLimit('claim', input.token, input.personToken)) {
@@ -1048,16 +1070,26 @@ export const guestRouter = createTRPCRouter({
         }
         const personIndex = targetIndexOrThrow(people, input.personIndex, input.personId);
 
-        // Deduplicate claimed indices
-        const claimedSet = new Set(input.claimedItemIndices);
-
-        for (const idx of claimedSet) {
+        for (const idx of [
+          ...(input.claimedItemIndices ?? []),
+          ...(input.addItemIndices ?? []),
+          ...(input.removeItemIndices ?? []),
+        ]) {
           if (idx >= items.length) {
             throw new TRPCError({ code: 'BAD_REQUEST', message: `Invalid item index: ${idx}` });
           }
         }
 
         const assignments = cloneAssignments(session.assignments as { itemIndex: number; personIndices: number[] }[]);
+
+        // The person's claims after this save: the set sent, or what is stored now with the
+        // changes applied
+        const claimedSet = new Set(
+          input.claimedItemIndices ??
+            assignments.filter((a) => a.personIndices.includes(personIndex)).map((a) => a.itemIndex),
+        );
+        for (const idx of input.addItemIndices ?? []) claimedSet.add(idx);
+        for (const idx of input.removeItemIndices ?? []) claimedSet.delete(idx);
 
         // Remove this person from all current assignments
         for (const a of assignments) {

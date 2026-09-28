@@ -78,7 +78,7 @@ npx prisma db push   # Push schema without migration (dev only)
 - `src/components/providers.tsx` — Client-side tRPC + React Query + SessionProvider + ThemeProvider wrapper
 - `src/lib/trpc.ts` — Client-side tRPC React hooks
 - `src/lib/utils.ts` — `cn()` utility for Tailwind class merging
-- `src/lib/claim-drafts.ts` — The claim page keeps unsaved claim edits by person id; `draftsByIndex` places them at each person's index in the session as last loaded (dropping removed people), `sameClaims` compares claim sets
+- `src/lib/claim-drafts.ts` — The claim page keeps unsaved claim edits by person id, as the items changed (`ClaimEdits`: item index → claimed or not), not a copy of the whole claim set: `withEdits` shows saved claims with the edits applied (so another device's saves show underneath), `toggleEdit`, `hasEdits`, and `editsToSave`, which becomes `claimItems`' `addItemIndices` / `removeItemIndices`; the server applies those to whatever is stored when the save arrives, so two devices editing one person's claims keep each other's changes to other items (`claimedItemIndices`, replacing the whole set, still works for older clients and the e2e suite). `draftsByIndex` places the edits at each person's index in the session as last loaded (dropping removed people)
 - `src/generated/prisma/` — Auto-generated Prisma client (do not edit, gitignored)
 - `prisma/schema.prisma` — Database schema (money stored as Int cents)
 - `prisma.config.ts` — Prisma v7 config (datasource URL lives here, not in schema.prisma)
@@ -125,7 +125,7 @@ npx prisma db push   # Push schema without migration (dev only)
 
 ### Unit Tests (Vitest)
 
-- `npm test` — run all unit tests (~625 tests, about 2 seconds)
+- `npm test` — run all unit tests (~645 tests, about 2 seconds)
 - Tests live co-located with source: `src/**/*.test.ts`, plus `docker/**/*.test.mjs` for the Docker build scripts
 - Covers most of `src/server/lib/`, `src/lib/` money, split-calculator, sign-in-errors, avatar, guest-session, and claim-drafts, `ai/registry.ts`, `ai/providers/openai-codex.ts`, `ai/providers/meridian.ts`, the admin, auth, and guest routers, `app/api/upload/route.ts`, and `docker/stage-runtime-deps.mjs`. `git ls-files '*.test.ts' '*.test.mjs'` lists them
 

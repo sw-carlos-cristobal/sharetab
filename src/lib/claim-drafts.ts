@@ -1,14 +1,19 @@
 /**
+ * A person's unsaved claim changes: for each item tapped, whether it's claimed (true) or not
+ * (false). Only the changes are kept, not a copy of the person's whole claim set, so the page
+ * shows claims another device saved meanwhile on the other items, and a save sends just the
+ * items added and removed, which the server applies to whatever is stored then (#226).
+ */
+export type ClaimEdits = ReadonlyMap<number, boolean>;
+
+/**
  * The claim page keeps unsaved claim edits by person id, since a person's index changes when
  * someone listed before them is removed. The session it polls lists claims by index, so this
  * puts each draft at its person's index in the people list the page has now, and drops the
  * drafts of people who are no longer in it.
  */
-export function draftsByIndex(
-  drafts: ReadonlyMap<string, Set<number>>,
-  people: readonly { id: string }[],
-): Map<number, Set<number>> {
-  const byIndex = new Map<number, Set<number>>();
+export function draftsByIndex<T>(drafts: ReadonlyMap<string, T>, people: readonly { id: string }[]): Map<number, T> {
+  const byIndex = new Map<number, T>();
   people.forEach((person, index) => {
     const draft = drafts.get(person.id);
     if (draft) byIndex.set(index, draft);
@@ -16,11 +21,49 @@ export function draftsByIndex(
   return byIndex;
 }
 
-/** Whether two sets of claimed item indexes hold the same items */
-export function sameClaims(a: ReadonlySet<number>, b: ReadonlySet<number>): boolean {
-  if (a.size !== b.size) return false;
-  for (const item of a) {
-    if (!b.has(item)) return false;
+/** A person's claims as shown: their saved claims with their unsaved changes applied. */
+export function withEdits(saved: ReadonlySet<number>, edits: ClaimEdits | undefined): Set<number> {
+  const claims = new Set(saved);
+  for (const [item, claimed] of edits ?? []) {
+    if (claimed) claims.add(item);
+    else claims.delete(item);
   }
-  return true;
+  return claims;
+}
+
+/**
+ * A person's changes after tapping an item: it flips from how it's shown. A change that puts
+ * the item back to how it's saved is dropped.
+ */
+export function toggleEdit(
+  saved: ReadonlySet<number>,
+  edits: ClaimEdits | undefined,
+  item: number,
+): Map<number, boolean> {
+  const next = new Map(edits);
+  const claimed = !(edits?.get(item) ?? saved.has(item));
+  if (claimed === saved.has(item)) next.delete(item);
+  else next.set(item, claimed);
+  return next;
+}
+
+/**
+ * Whether a person's changes differ from their saved claims. A change can come to match them,
+ * e.g. when another device saved the same thing.
+ */
+export function hasEdits(saved: ReadonlySet<number>, edits: ClaimEdits | undefined): boolean {
+  for (const [item, claimed] of edits ?? []) {
+    if (saved.has(item) !== claimed) return true;
+  }
+  return false;
+}
+
+/** What saving a person's changes sends to guest.claimItems. */
+export function editsToSave(edits: ClaimEdits): { addItemIndices: number[]; removeItemIndices: number[] } {
+  const addItemIndices: number[] = [];
+  const removeItemIndices: number[] = [];
+  for (const [item, claimed] of edits) {
+    (claimed ? addItemIndices : removeItemIndices).push(item);
+  }
+  return { addItemIndices, removeItemIndices };
 }
