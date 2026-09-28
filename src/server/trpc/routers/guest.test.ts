@@ -858,6 +858,24 @@ describe('guest.claimItems with a save key (#238)', () => {
     expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
   });
 
+  test('a retry of a whole-claim-set save answers saved without applying it again', async () => {
+    session([]);
+    const api = await caller();
+    await api.claimItems(forCat({ claimedItemIndices: [2] }));
+    storedSinceLastSave([]);
+    expect(await api.claimItems(forCat({ claimedItemIndices: [2] }))).toEqual({ success: true, conflicts: [] });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test('matches a retry that lists an item twice', async () => {
+    session([]);
+    const api = await caller();
+    await api.claimItems(forCat({ addItemIndices: [2] }));
+    storedSinceLastSave();
+    await api.claimItems(forCat({ addItemIndices: [2, 2] }));
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
   test('matches a retry whatever order it lists the items in', async () => {
     session([]);
     const api = await caller();

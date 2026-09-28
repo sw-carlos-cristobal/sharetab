@@ -209,6 +209,20 @@ describe('editsAfterSave', () => {
     expect(kept).toEqual(new Map([[1, true]]));
   });
 
+  test('refused and reloaded: sent changes the reload already shows (another device did the same) are dropped', () => {
+    const kept = editsAfterSave({
+      outcome: 'refused',
+      reloaded: true,
+      savedNow: new Set([1]),
+      sent: new Map([
+        [1, true],
+        [3, true],
+      ]),
+      since: undefined,
+    });
+    expect(kept).toEqual(new Map([[3, true]]));
+  });
+
   test('gave up with no answer: the changes made since are kept, whatever the reload shows (#226 review)', () => {
     // The reload came back before the save committed, showing item 2 unclaimed
     const kept = editsAfterSave({ outcome: 'unknown', reloaded: true, savedNow: new Set(), sent, since });

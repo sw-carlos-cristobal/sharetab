@@ -88,9 +88,8 @@ export function restoreEdits(
 
 /**
  * Newer changes stacked over older ones, keeping every change (none is compared with the saved
- * claims). For a save whose outcome the page doesn't know, or that was refused, when no reload
- * landed afterwards: the claims the page has may not show what's stored, so comparing with them
- * could drop changes that undo what it stored.
+ * claims). editsAfterSave uses it wherever the claims the page has may not show what's stored,
+ * since comparing with them could drop changes that undo what a save stored.
  */
 export function stackEdits(older: ClaimEdits, newer: ClaimEdits | undefined): Map<number, boolean> {
   return new Map([...older, ...(newer ?? [])]);
@@ -108,15 +107,18 @@ export type SaveOutcome = 'saved' | 'refused' | 'unknown';
 /**
  * A person's unsaved changes once a save of `sent` has ended and the page has reloaded (or
  * tried to), given the changes made meanwhile (`since`, judged against the claims with the save
- * applied, so they are always kept as they are):
+ * applied, so they are kept as they are except after a refusal, see below):
  * - saved: the sent changes are stored, so only the changes made since remain. If no reload
  *   landed, the claims shown catch up at the next poll;
  * - refused and reloaded: nothing was stored (or it no longer matters), so the sent changes come
- *   back under the newer ones (restoreEdits, compared with the claims as reloaded);
+ *   back under the newer ones, and any of either that the reload already shows are dropped
+ *   (restoreEdits);
  * - unknown (the page gave up) and reloaded: the sent changes the reload already shows are
  *   dropped (stored, or matched by another device), so they can't come back later to undo
- *   another device's change (#238); the rest stay, under the changes made since. Only an attempt
- *   still in flight on the server when the reload read the claims can leave a stale one;
+ *   another device's change (#238); the rest stay, under the changes made since (stackEdits).
+ *   The reload can't tell a change never stored from one stored and then changed back by another
+ *   device before the reload (or one stored by an attempt that commits after it), so those can
+ *   still leave a stale edit;
  * - refused or unknown without a reload: every change is kept as it is (stackEdits).
  */
 export function editsAfterSave(save: {
