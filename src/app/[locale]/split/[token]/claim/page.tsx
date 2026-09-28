@@ -755,21 +755,23 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
       } catch {
         // claimItems' onError has said why
       }
-      // After a save, reload with a new fetch (a poll already in flight may predate it), so the
-      // claims it stored are on screen before its changes leave the save in flight
-      const reloaded = saved ? await session.refetch() : null;
-      // Put the changes back unless they were discarded meanwhile, or saved and on screen
-      if (reloaded?.status !== 'success' && editsReset.current === resetsBefore) {
-        // Not saved: they come back as unsaved, under any made since (compared with the saved
-        // claims as loaded, which are still current). Saved but not reloaded: the claims as
-        // loaded predate the save, so every change is kept as it is until a poll loads what the
-        // save stored (see stackEdits)
-        const savedBefore = savedClaimsOf(activeId);
+      // Reload with a new fetch (a poll already in flight may predate the save), whether or not the
+      // save went through: the claims it stored are on screen before its changes leave the save in
+      // flight, and after an error the reload shows whether it was stored anyway (the answer can
+      // be lost after the server stored it)
+      const reloaded = await session.refetch();
+      // Put the changes back unless they're saved and on screen, or were discarded meanwhile
+      if (!(saved && reloaded.status === 'success') && editsReset.current === resetsBefore) {
+        const savedNow = savedClaimsOf(activeId);
         setClaimEdits((prev) => {
           const next = new Map(prev);
-          const kept = saved
-            ? stackEdits(edits, prev.get(activeId))
-            : restoreEdits(savedBefore, edits, prev.get(activeId));
+          // Reloaded: compared with the claims as they are now, the sent changes that weren't
+          // stored come back under the ones made since. Not reloaded: the claims the page has may
+          // predate what was stored, so every change is kept as it is (see stackEdits)
+          const kept =
+            reloaded.status === 'success'
+              ? restoreEdits(savedNow, edits, prev.get(activeId))
+              : stackEdits(edits, prev.get(activeId));
           if (kept.size > 0) next.set(activeId, kept);
           else next.delete(activeId);
           return next;

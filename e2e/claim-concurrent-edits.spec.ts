@@ -170,6 +170,42 @@ test.describe('Claim page — two devices edit the same person (#226)', () => {
     await ctx.dispose();
   });
 
+  test('a save whose answer is lost after the server stored it keeps a tap made meanwhile', async ({ page }) => {
+    const { ctx, shareToken } = await annClaimingForCat(page, 'Lost Answer Diner');
+
+    // The save reaches the server and is stored, but its answer never arrives
+    let drop = () => {};
+    const dropped = new Promise<void>((resolve) => (drop = resolve));
+    let stored = () => {};
+    const serverStored = new Promise<void>((resolve) => (stored = resolve));
+    await page.route(
+      (url) => url.pathname.includes('guest.claimItems'),
+      async (route) => {
+        await route.fetch();
+        stored();
+        await dropped;
+        await route.abort('connectionreset').catch(() => {});
+      },
+      { times: 1 },
+    );
+
+    // Ann claims the pie for Cat and saves; while the save is out, she taps the pie off again
+    await page.getByTestId('claim-item-2').click();
+    await page.getByTestId('save-claims-btn').click();
+    await serverStored;
+    await page.getByTestId('claim-item-2').click();
+    drop();
+
+    // The pie was stored; the tap-off is still here, waiting to be saved
+    await expect(page.getByText('Unsaved changes').first()).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId('claim-item-2')).toHaveAttribute('aria-pressed', 'false');
+    expect(await claimsOf(ctx, shareToken, 'Cat')).toEqual(['Pie']);
+    await save(page);
+    expect(await claimsOf(ctx, shareToken, 'Cat')).toEqual([]);
+
+    await ctx.dispose();
+  });
+
   test('Finalize stays hidden while a save is in flight', async ({ page }) => {
     const { ctx, catSaves } = await annClaimingForCat(page, 'Finalize Wait Diner');
     // Cat has claimed everything, so the split could be finalized
