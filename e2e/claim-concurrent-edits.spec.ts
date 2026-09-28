@@ -58,6 +58,8 @@ async function annClaimingForCat(page: Page, merchantName: string) {
   return { ctx, shareToken, catSaves };
 }
 
+// Checks after a save poll the stored claims (claimsOf) rather than wait for the "Claims saved!"
+// toast, since an earlier save's toast can still be on screen
 async function save(page: Page) {
   await page.getByTestId('save-claims-btn').click();
   await expect(page.getByText('Claims saved!').first()).toBeVisible({ timeout: 15000 });
@@ -72,7 +74,7 @@ test.describe('Claim page — two devices edit the same person (#226)', () => {
     await catSaves([0, 1]);
     await save(page);
 
-    expect(await claimsOf(ctx, shareToken, 'Cat')).toEqual(['Cake', 'Pie', 'Tea']);
+    await expect.poll(() => claimsOf(ctx, shareToken, 'Cat'), { timeout: 15000 }).toEqual(['Cake', 'Pie', 'Tea']);
     // Ann's page shows all three as Cat's, with nothing left to save
     for (const item of [0, 1, 2]) {
       await expect(page.getByTestId(`claim-item-${item}`)).toHaveAttribute('aria-pressed', 'true', {
@@ -94,7 +96,7 @@ test.describe('Claim page — two devices edit the same person (#226)', () => {
     await catSaves([0, 1]);
     await save(page);
 
-    expect(await claimsOf(ctx, shareToken, 'Cat')).toEqual(['Cake']);
+    await expect.poll(() => claimsOf(ctx, shareToken, 'Cat'), { timeout: 15000 }).toEqual(['Cake']);
 
     await ctx.dispose();
   });
@@ -126,11 +128,11 @@ test.describe('Claim page — two devices edit the same person (#226)', () => {
     await expect(page.getByText('Claims saved!').first()).toBeVisible({ timeout: 15000 });
 
     // The save stored the pie; the second tap is still here, waiting to be saved
-    expect(await claimsOf(ctx, shareToken, 'Cat')).toEqual(['Pie']);
+    await expect.poll(() => claimsOf(ctx, shareToken, 'Cat'), { timeout: 15000 }).toEqual(['Pie']);
     await expect(page.getByTestId('claim-item-2')).toHaveAttribute('aria-pressed', 'false');
     await expect(page.getByText('Unsaved changes').first()).toBeVisible();
     await save(page);
-    expect(await claimsOf(ctx, shareToken, 'Cat')).toEqual([]);
+    await expect.poll(() => claimsOf(ctx, shareToken, 'Cat'), { timeout: 15000 }).toEqual([]);
 
     await ctx.dispose();
   });
@@ -163,9 +165,9 @@ test.describe('Claim page — two devices edit the same person (#226)', () => {
     // Nothing was stored; the pie is still claimed here, waiting to be saved
     await expect(page.getByTestId('claim-item-2')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByText('Unsaved changes').first()).toBeVisible({ timeout: 15000 });
-    expect(await claimsOf(ctx, shareToken, 'Cat')).toEqual([]);
+    await expect.poll(() => claimsOf(ctx, shareToken, 'Cat'), { timeout: 15000 }).toEqual([]);
     await save(page);
-    expect(await claimsOf(ctx, shareToken, 'Cat')).toEqual(['Pie']);
+    await expect.poll(() => claimsOf(ctx, shareToken, 'Cat'), { timeout: 15000 }).toEqual(['Pie']);
 
     await ctx.dispose();
   });
@@ -199,9 +201,9 @@ test.describe('Claim page — two devices edit the same person (#226)', () => {
     // The pie was stored; the tap-off is still here, waiting to be saved
     await expect(page.getByText('Unsaved changes').first()).toBeVisible({ timeout: 15000 });
     await expect(page.getByTestId('claim-item-2')).toHaveAttribute('aria-pressed', 'false');
-    expect(await claimsOf(ctx, shareToken, 'Cat')).toEqual(['Pie']);
+    await expect.poll(() => claimsOf(ctx, shareToken, 'Cat'), { timeout: 15000 }).toEqual(['Pie']);
     await save(page);
-    expect(await claimsOf(ctx, shareToken, 'Cat')).toEqual([]);
+    await expect.poll(() => claimsOf(ctx, shareToken, 'Cat'), { timeout: 15000 }).toEqual([]);
 
     await ctx.dispose();
   });
