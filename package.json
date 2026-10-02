@@ -101,7 +101,7 @@
     "shadcn": "^4.21.0",
     "tailwindcss": "^4",
     "tsx": "^4.23.13",
-    "typescript": "^5",
+    "typescript": "^7",
     "vitest": "^4.1.2"
   }
 }
