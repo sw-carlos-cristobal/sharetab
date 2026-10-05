@@ -128,7 +128,7 @@ npx prisma db push   # Push schema without migration (dev only)
 
 - `npm test` — run all unit tests (~745 tests, about 2 seconds)
 - Tests live co-located with source: `src/**/*.test.ts`, plus `docker/**/*.test.mjs` for the Docker build scripts
-- Covers most of `src/server/lib/`, `src/lib/` money, split-calculator, sign-in-errors, avatar, guest-session, claim-drafts, and claim-save, `ai/registry.ts`, `ai/providers/openai-codex.ts`, `ai/providers/meridian.ts`, the admin, auth, and guest routers, `app/api/upload/route.ts`, and `docker/stage-runtime-deps.mjs`. `git ls-files '*.test.ts' '*.test.mjs'` lists them
+- Covers most of `src/server/lib/`, `src/lib/` money, split-calculator, sign-in-errors, avatar, guest-session, claim-drafts, and claim-save, `ai/registry.ts`, `ai/schema.ts`, `ai/providers/openai-codex.ts`, `ai/providers/meridian.ts`, the admin, auth, and guest routers, `app/api/upload/route.ts`, and `docker/stage-runtime-deps.mjs`. `git ls-files '*.test.ts' '*.test.mjs'` lists them
 
 ### E2E Tests (Playwright)
 
