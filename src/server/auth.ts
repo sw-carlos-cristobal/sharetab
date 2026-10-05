@@ -5,6 +5,7 @@ import { PrismaAdapter } from '@auth/prisma-adapter';
 import Credentials from 'next-auth/providers/credentials';
 import Google from 'next-auth/providers/google';
 import Nodemailer from 'next-auth/providers/nodemailer';
+import type { SMTPTransportOptions } from 'nodemailer';
 import { db } from './db';
 import { logger } from './lib/logger';
 import { parseAuthConfig } from './lib/auth-config';
@@ -58,26 +59,21 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
 }
 
 if (authConfig.magicLink) {
+  // Checked against nodemailer's own type: Auth.js types `server` as `any`
+  // under nodemailer 10, whose transport modules are namespaces that
+  // @auth/core's declarations use as types.
+  const server = {
+    host: process.env.EMAIL_SERVER_HOST,
+    port: parseInt(process.env.EMAIL_SERVER_PORT ?? '587'),
+    secure: parseInt(process.env.EMAIL_SERVER_PORT ?? '587') === 465,
+    auth: {
+      ...(process.env.EMAIL_SERVER_USER !== undefined ? { user: process.env.EMAIL_SERVER_USER } : {}),
+      ...(process.env.EMAIL_SERVER_PASSWORD !== undefined ? { pass: process.env.EMAIL_SERVER_PASSWORD } : {}),
+    },
+  } satisfies SMTPTransportOptions;
   providers.push(
-    // @ts-expect-error -- upstream next-auth type bug (not fixable from the call
-    // site): NodemailerConfig["server"] is declared `server?: AllTransportOptions`,
-    // but the base EmailConfig re-derives it via an indexed-access type
-    // (`server?: NodemailerConfig["server"]`), which flattens the optional-property
-    // bit into an explicit `AllTransportOptions | undefined` value type. Under
-    // exactOptionalPropertyTypes that reads as "may be present-as-undefined", which
-    // NodemailerConfig's own (correctly) optional `server?:` field does not accept.
-    // See also the (related but not identical) upstream discussion in
-    // nextauthjs/next-auth#9883 / #9890.
     Nodemailer({
-      server: {
-        host: process.env.EMAIL_SERVER_HOST,
-        port: parseInt(process.env.EMAIL_SERVER_PORT ?? '587'),
-        secure: parseInt(process.env.EMAIL_SERVER_PORT ?? '587') === 465,
-        auth: {
-          ...(process.env.EMAIL_SERVER_USER !== undefined ? { user: process.env.EMAIL_SERVER_USER } : {}),
-          ...(process.env.EMAIL_SERVER_PASSWORD !== undefined ? { pass: process.env.EMAIL_SERVER_PASSWORD } : {}),
-        },
-      },
+      server,
       from: process.env.EMAIL_FROM ?? 'ShareTab <noreply@sharetab.local>',
     }),
   );
