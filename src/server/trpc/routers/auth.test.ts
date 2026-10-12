@@ -184,6 +184,20 @@ describe('auth.getProfile', () => {
     expect(profile).not.toHaveProperty('passwordHash');
   });
 
+  test("returns the caller's id, so the client can tell who tRPC acts as while impersonating", async () => {
+    mockDb.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      name: 'Alice',
+      email: 'alice@example.com',
+      passwordHash: null,
+    });
+    const api = await caller({ user: { id: 'user-1' } });
+    await api.getProfile();
+    expect(mockDb.user.findUnique).toHaveBeenLastCalledWith(
+      expect.objectContaining({ where: { id: 'user-1' }, select: expect.objectContaining({ id: true }) }),
+    );
+  });
+
   test('hasPassword is false for OIDC-only users', async () => {
     mockDb.user.findUnique.mockResolvedValue({
       name: 'Alice',

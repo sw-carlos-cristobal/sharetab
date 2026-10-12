@@ -187,7 +187,15 @@ export const authRouter = createTRPCRouter({
   getProfile: protectedProcedure.query(async ({ ctx }) => {
     const user = await ctx.db.user.findUnique({
       where: { id: ctx.user.id },
-      select: { name: true, email: true, venmoUsername: true, locale: true, defaultCurrency: true, passwordHash: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        venmoUsername: true,
+        locale: true,
+        defaultCurrency: true,
+        passwordHash: true,
+      },
     });
     if (!user) {
       throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found' });

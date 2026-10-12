@@ -1,7 +1,6 @@
 'use client';
 
 import { use, useMemo, useState } from 'react';
-import { useSession } from 'next-auth/react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Link, useRouter } from '@/i18n/navigation';
 import { trpc } from '@/lib/trpc';
@@ -38,7 +37,9 @@ export default function NewExpensePage({ params }: { params: Promise<{ groupId: 
   const locale = useLocale();
   const t = useTranslations('expenses');
   const group = trpc.groups.get.useQuery({ groupId });
-  const { data: session } = useSession();
+  // Who tRPC acts as: the impersonated user while an admin impersonates, where
+  // useSession() would still report the admin.
+  const profile = trpc.auth.getProfile.useQuery();
 
   const [title, setTitle] = useState('');
   const [amountStr, setAmountStr] = useState('');
@@ -84,10 +85,10 @@ export default function NewExpensePage({ params }: { params: Promise<{ groupId: 
     [group.data?.members],
   );
 
-  // Until someone picks a payer, default to the signed-in user (when they're in the group),
+  // Until someone picks a payer, default to the current user (when they're in the group),
   // the same way currency defaults to the group's.
-  const sessionUserId = session?.user.id;
-  const defaultPaidById = sessionUserId && members.some((m) => m.id === sessionUserId) ? sessionUserId : '';
+  const currentUserId = profile.data?.id;
+  const defaultPaidById = currentUserId && members.some((m) => m.id === currentUserId) ? currentUserId : '';
   const effectivePaidById = paidById || defaultPaidById;
 
   const amountCents = parseToCents(amountStr);
