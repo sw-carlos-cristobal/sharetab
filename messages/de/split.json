@@ -21,6 +21,7 @@
     "subtitle": "Fügen Sie die Namen aller Personen hinzu, die diese Rechnung teilen.",
     "personPlaceholder": "Person {index}",
     "addPerson": "Person hinzufügen",
+    "removePerson": "Person entfernen",
     "whoPaid": "Wer hat die Rechnung bezahlt?",
     "nextAssign": "Weiter: Artikel zuordnen",
     "rescanCorrections": "Erneut scannen mit Korrekturen",

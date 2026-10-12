@@ -21,6 +21,7 @@
     "subtitle": "Adicione os nomes de todos que estão dividindo esta conta.",
     "personPlaceholder": "Pessoa {index}",
     "addPerson": "Adicionar pessoa",
+    "removePerson": "Remover pessoa",
     "whoPaid": "Quem pagou a conta?",
     "nextAssign": "Próximo: Atribuir itens",
     "rescanCorrections": "Re-escanear com correções",

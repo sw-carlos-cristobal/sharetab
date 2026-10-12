@@ -21,6 +21,7 @@
     "subtitle": "添加所有分摊此账单的人的姓名。",
     "personPlaceholder": "成员 {index}",
     "addPerson": "添加成员",
+    "removePerson": "移除成员",
     "whoPaid": "谁付了账单？",
     "nextAssign": "下一步：分配项目",
     "rescanCorrections": "带修正重新扫描",
