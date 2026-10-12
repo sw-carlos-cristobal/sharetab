@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { trpc } from '@/lib/trpc';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -43,6 +43,7 @@ function SortIcon({
 
 export function UserManagementSection({ currentUserEmail }: { currentUserEmail?: string | null }) {
   const t = useTranslations('admin');
+  const locale = useLocale();
   const utils = trpc.useUtils();
 
   // Filter / search / sort state
@@ -263,7 +264,7 @@ export function UserManagementSection({ currentUserEmail }: { currentUserEmail?:
                         </td>
                         <td className="px-4 py-3 text-right">{user.groupCount}</td>
                         <td className="px-4 py-3 text-muted-foreground">
-                          {new Date(user.createdAt).toLocaleDateString()}
+                          {new Date(user.createdAt).toLocaleDateString(locale)}
                         </td>
                         <td className="px-4 py-3">
                           {user.email !== currentUserEmail && (

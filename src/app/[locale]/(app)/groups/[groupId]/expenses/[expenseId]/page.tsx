@@ -88,7 +88,7 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ groupI
             </div>
             <div>
               <p className="text-muted-foreground">{t('detail.date')}</p>
-              <p className="font-medium">{new Date(e.expenseDate).toLocaleDateString()}</p>
+              <p className="font-medium">{new Date(e.expenseDate).toLocaleDateString(locale)}</p>
             </div>
             {e.category && (
               <div>

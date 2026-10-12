@@ -282,7 +282,7 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
                   <Link href={`/groups/${groupId}/scan?receiptId=${r.id}`} className="flex-1 min-w-0">
                     <p className="font-medium">{r.extractedData?.merchantName ?? t('detail.receipt')}</p>
                     <p className="text-sm text-muted-foreground">
-                      {r.extractedData?.date ?? new Date(r.createdAt).toLocaleDateString()}
+                      {r.extractedData?.date ?? new Date(r.createdAt).toLocaleDateString(locale)}
                       {' · '}
                       {t('detail.savedForLater')}
                     </p>
@@ -373,7 +373,7 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
                           name: expense.paidBy.name ?? expense.paidBy.email ?? t('detail.unknown'),
                         })}
                         {' · '}
-                        {new Date(expense.expenseDate).toLocaleDateString()}
+                        {new Date(expense.expenseDate).toLocaleDateString(locale)}
                         {expense.category && (
                           <span className="ml-1 text-muted-foreground/70">
                             {' · '}

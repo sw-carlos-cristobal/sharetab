@@ -215,7 +215,7 @@ export function GroupOverviewSection() {
                         <td className="px-4 py-3 text-right">{group.expenseCount}</td>
                         <td className="px-4 py-3 text-right">{formatCents(group.totalAmount, 'USD', locale)}</td>
                         <td className="px-4 py-3 text-muted-foreground">
-                          {new Date(group.lastActivity).toLocaleDateString()}
+                          {new Date(group.lastActivity).toLocaleDateString(locale)}
                         </td>
                         <td className="px-4 py-3">
                           {group.isArchived ? (

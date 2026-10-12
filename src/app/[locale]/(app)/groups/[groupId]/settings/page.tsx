@@ -1,7 +1,7 @@
 'use client';
 
 import { use, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Link, useRouter } from '@/i18n/navigation';
 import { trpc } from '@/lib/trpc';
 import { COMMON_CURRENCIES } from '@/lib/currencies';
@@ -98,6 +98,7 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
   const { groupId } = use(params);
   const router = useRouter();
   const t = useTranslations('groups');
+  const locale = useLocale();
   const group = trpc.groups.get.useQuery({ groupId });
   const utils = trpc.useUtils();
 
@@ -182,7 +183,7 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
           <div className="flex-1">
             <p className="font-medium">{t('settings.archived')}</p>
             <p className="text-amber-700 dark:text-amber-300">
-              {t('settings.archivedOn', { date: new Date(group.data.archivedAt).toLocaleDateString() })}
+              {t('settings.archivedOn', { date: new Date(group.data.archivedAt).toLocaleDateString(locale) })}
             </p>
           </div>
           <Button

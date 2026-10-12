@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { trpc } from '@/lib/trpc';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,6 +11,7 @@ import { Loader2, ShieldCheck, Plus, Copy, Ban, Check } from 'lucide-react';
 
 export function RegistrationControlSection() {
   const t = useTranslations('admin');
+  const locale = useLocale();
   const utils = trpc.useUtils();
   const regMode = trpc.admin.getRegistrationMode.useQuery();
   const setMode = trpc.admin.setRegistrationMode.useMutation({
@@ -179,7 +180,7 @@ export function RegistrationControlSection() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
-                        {new Date(inv.createdAt).toLocaleDateString()}
+                        {new Date(inv.createdAt).toLocaleDateString(locale)}
                       </td>
                       <td className="px-4 py-3 text-right">
                         {inv.isActive && (

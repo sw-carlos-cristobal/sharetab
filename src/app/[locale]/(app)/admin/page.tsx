@@ -1,7 +1,7 @@
 'use client';
 
 import { useSession } from 'next-auth/react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { trpc } from '@/lib/trpc';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -73,6 +73,7 @@ export default function AdminPage() {
 
 function SystemHealthSection() {
   const t = useTranslations('admin');
+  const locale = useLocale();
   const health = trpc.admin.getSystemHealth.useQuery(undefined, {
     refetchInterval: 30000,
   });
@@ -128,7 +129,7 @@ function SystemHealthSection() {
             <span className="text-sm font-medium">{data ? formatUptime(data.uptime) : '---'}</span>
             {data?.serverStartTime && (
               <p className="mt-1 text-xs text-muted-foreground">
-                {t('systemHealth.started', { time: new Date(data.serverStartTime).toLocaleString() })}
+                {t('systemHealth.started', { time: new Date(data.serverStartTime).toLocaleString(locale) })}
               </p>
             )}
           </CardContent>

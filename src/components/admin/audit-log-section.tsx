@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { trpc } from '@/lib/trpc';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -10,6 +10,7 @@ import { Loader2, ScrollText } from 'lucide-react';
 
 export function AuditLogSection() {
   const t = useTranslations('admin');
+  const locale = useLocale();
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const auditLog = trpc.admin.getAuditLog.useQuery({ limit: 20, cursor });
 
@@ -146,7 +147,7 @@ export function AuditLogSection() {
                           <td className="px-4 py-3 text-muted-foreground">{entry.adminName}</td>
                           <td className="px-4 py-3 text-muted-foreground">{formatMetadata(entry.metadata)}</td>
                           <td className="px-4 py-3 text-muted-foreground">
-                            {new Date(entry.createdAt).toLocaleString()}
+                            {new Date(entry.createdAt).toLocaleString(locale)}
                           </td>
                         </tr>
                       );

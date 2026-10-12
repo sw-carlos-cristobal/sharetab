@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { trpc } from '@/lib/trpc';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -10,6 +10,7 @@ import { Loader2, Activity } from 'lucide-react';
 
 export function ActivityFeedSection() {
   const t = useTranslations('admin');
+  const locale = useLocale();
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const activity = trpc.admin.getGlobalActivity.useQuery({
     limit: 20,
@@ -65,7 +66,9 @@ export function ActivityFeedSection() {
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">{item.userName}</td>
                         <td className="px-4 py-3 text-muted-foreground">{item.groupName}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{new Date(item.createdAt).toLocaleString()}</td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {new Date(item.createdAt).toLocaleString(locale)}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
