@@ -7,9 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { COMMON_CURRENCIES } from '@/lib/currencies';
 import { trpc } from '@/lib/trpc';
 
-const CURRENCY_OPTIONS = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'INR', 'BRL'];
 const EMOJI_OPTIONS = ['💰', '🏠', '✈️', '🍽️', '🎉', '🛒', '🚗', '💼'];
 
 export default function NewGroupPage() {
@@ -94,9 +94,9 @@ export default function NewGroupPage() {
                 onChange={(e) => setCurrency(e.target.value)}
                 className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
-                {CURRENCY_OPTIONS.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
+                {COMMON_CURRENCIES.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.code} - {c.name}
                   </option>
                 ))}
               </select>
