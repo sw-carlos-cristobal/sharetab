@@ -79,7 +79,7 @@ export const groupsRouter = createTRPCRouter({
   create: protectedProcedure
     .input(
       z.object({
-        name: z.string().min(1).max(100),
+        name: z.string().trim().min(1).max(100),
         description: z.string().max(500).optional(),
         currency: z
           .string()
@@ -109,7 +109,7 @@ export const groupsRouter = createTRPCRouter({
     .input(
       z.object({
         groupId: z.string(),
-        name: z.string().min(1).max(100).optional(),
+        name: z.string().trim().min(1).max(100).optional(),
         description: z.string().max(500).optional(),
         currency: z
           .string()
@@ -414,7 +414,7 @@ export const groupsRouter = createTRPCRouter({
     .input(
       z.object({
         groupId: z.string(),
-        name: z.string().min(1).max(100),
+        name: z.string().trim().min(1).max(100),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -452,7 +452,7 @@ export const groupsRouter = createTRPCRouter({
     }),
 
   renamePlaceholder: groupMemberProcedure
-    .input(z.object({ groupId: z.string(), placeholderUserId: z.string(), name: z.string().min(1).max(100) }))
+    .input(z.object({ groupId: z.string(), placeholderUserId: z.string(), name: z.string().trim().min(1).max(100) }))
     .mutation(async ({ ctx, input }) => {
       if (ctx.membership.role !== 'OWNER' && ctx.membership.role !== 'ADMIN') {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Only admins and owners can rename placeholder members' });

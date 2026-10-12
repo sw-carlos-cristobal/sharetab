@@ -187,7 +187,7 @@ export const receiptsRouter = createTRPCRouter({
     .input(
       z.object({
         itemId: z.string(),
-        name: z.string().min(1).max(200).optional(),
+        name: z.string().trim().min(1).max(200).optional(),
         quantity: z.number().int().min(1).optional(),
         unitPrice: z.number().int().min(0).optional(),
         totalPrice: z.number().int().min(0).optional(),
@@ -211,7 +211,7 @@ export const receiptsRouter = createTRPCRouter({
     .input(
       z.object({
         receiptId: z.string(),
-        name: z.string().min(1).max(200),
+        name: z.string().trim().min(1).max(200),
         quantity: z.number().int().min(1).default(1),
         unitPrice: z.number().int().min(0),
         totalPrice: z.number().int().min(0),

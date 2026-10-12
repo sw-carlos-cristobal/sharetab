@@ -88,6 +88,7 @@
     "title": "Registrera en betalning",
     "from": "Från",
     "to": "Till",
+    "samePerson": "Från och Till måste vara olika personer.",
     "amount": "Belopp",
     "submit": "Registrera betalning",
     "submitting": "Bokför...",

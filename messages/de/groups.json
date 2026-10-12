@@ -88,6 +88,7 @@
     "title": "Zahlung erfassen",
     "from": "Von",
     "to": "An",
+    "samePerson": "Von und An müssen verschiedene Personen sein.",
     "amount": "Betrag",
     "submit": "Zahlung erfassen",
     "submitting": "Erfassen...",

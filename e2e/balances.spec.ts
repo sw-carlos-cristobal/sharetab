@@ -76,6 +76,18 @@ test.describe('Balances & Settlements', () => {
       await expect(page.getByLabel('Amount')).toBeVisible();
     });
 
+    test('settle dialog refuses the same person as From and To', async ({ page }) => {
+      await login(page, users.alice.email, users.alice.password);
+      await navigateToGroup(page, 'Apartment');
+
+      await page.getByRole('button', { name: 'Settle up' }).click();
+      await page.getByLabel('From').selectOption({ label: users.alice.name });
+      await page.getByLabel('To', { exact: true }).selectOption({ label: users.alice.name });
+
+      await expect(page.getByTestId('settle-same-person')).toBeVisible();
+      await expect(page.getByTestId('record-payment-btn')).toBeDisabled();
+    });
+
     test('settle dialog pre-fills from debt click', async ({ page }) => {
       await login(page, users.alice.email, users.alice.password);
       await navigateToGroup(page, 'Apartment');

@@ -89,6 +89,7 @@
     "description": "Registra un pago entre dos miembros del grupo.",
     "from": "De",
     "to": "A",
+    "samePerson": "De y A deben ser personas distintas.",
     "amount": "Monto",
     "selectMember": "Seleccionar miembro",
     "useSuggested": "Usar sugerido: {amount}",

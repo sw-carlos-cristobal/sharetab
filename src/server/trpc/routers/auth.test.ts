@@ -12,7 +12,7 @@ vi.mock('bcryptjs', () => ({
 const mockDb = {
   systemSetting: { findUnique: vi.fn() },
   systemInvite: { findUnique: vi.fn() },
-  user: { findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn() },
+  user: { findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn() },
   $transaction: vi.fn(),
   $queryRaw: vi.fn(),
 };
@@ -160,6 +160,47 @@ describe('auth.register duplicate check', () => {
   });
 });
 
+describe('names are trimmed', () => {
+  test('register refuses a name that is only whitespace', async () => {
+    mockDb.systemSetting.findUnique.mockResolvedValue(null);
+    mockDb.$queryRaw.mockResolvedValue([]);
+    const api = await caller();
+    await expect(api.register({ name: '   ', email: 'ws@example.com', password: 'password123' })).rejects.toMatchObject(
+      {
+        code: 'BAD_REQUEST',
+      },
+    );
+    expect(mockDb.$transaction).not.toHaveBeenCalled();
+  });
+
+  test('register stores the name without surrounding whitespace', async () => {
+    mockDb.systemSetting.findUnique.mockResolvedValue(null);
+    mockDb.$queryRaw.mockResolvedValue([]);
+    const tx = { user: { create: vi.fn().mockResolvedValue({ id: 'new', name: 'Ada', email: 'ada@example.com' }) } };
+    mockDb.$transaction.mockImplementation(async (fn: (client: typeof tx) => unknown) => fn(tx));
+    const api = await caller();
+    await api.register({ name: '  Ada  ', email: 'ada@example.com', password: 'password123' });
+    expect(tx.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ name: 'Ada' }) }),
+    );
+  });
+
+  test('updateProfile refuses a name that is only whitespace', async () => {
+    mockDb.user.findUnique.mockResolvedValue({ suspendedAt: null });
+    const api = await caller({ user: { id: 'u1' } });
+    await expect(api.updateProfile({ name: '   ' })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockDb.user.update).not.toHaveBeenCalled();
+  });
+
+  test('updateProfile stores the name without surrounding whitespace', async () => {
+    mockDb.user.findUnique.mockResolvedValue({ suspendedAt: null });
+    mockDb.user.update.mockResolvedValue({ id: 'u1', name: 'Ada', email: 'ada@example.com' });
+    const api = await caller({ user: { id: 'u1' } });
+    await api.updateProfile({ name: '  Ada  ' });
+    expect(mockDb.user.update).toHaveBeenCalledWith(expect.objectContaining({ data: { name: 'Ada' } }));
+  });
+});
+
 describe('password login enabled', () => {
   test('getRegistrationMode returns the admin setting', async () => {
     mockDb.systemSetting.findUnique.mockResolvedValue({ key: 'registrationMode', value: 'invite-only' });
@@ -182,6 +223,20 @@ describe('auth.getProfile', () => {
     const profile = await api.getProfile();
     expect(profile.hasPassword).toBe(true);
     expect(profile).not.toHaveProperty('passwordHash');
+  });
+
+  test("returns the caller's id, so the client can tell who tRPC acts as while impersonating", async () => {
+    mockDb.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      name: 'Alice',
+      email: 'alice@example.com',
+      passwordHash: null,
+    });
+    const api = await caller({ user: { id: 'user-1' } });
+    await api.getProfile();
+    expect(mockDb.user.findUnique).toHaveBeenLastCalledWith(
+      expect.objectContaining({ where: { id: 'user-1' }, select: expect.objectContaining({ id: true }) }),
+    );
   });
 
   test('hasPassword is false for OIDC-only users', async () => {

@@ -93,10 +93,13 @@ function SettleForm({
     },
   });
 
+  // The server refuses a payment from someone to themselves; say so before sending it.
+  const samePerson = fromId !== '' && fromId === toId;
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const amount = parseToCents(amountStr);
-    if (!toId || amount <= 0) return;
+    if (!toId || amount <= 0 || samePerson) return;
     settle.mutate({ groupId, fromId: fromId || undefined, toId, amount, currency, note: note || undefined });
   }
 
@@ -136,6 +139,11 @@ function SettleForm({
             </option>
           ))}
         </select>
+        {samePerson && (
+          <p className="text-sm text-destructive" data-testid="settle-same-person">
+            {t('settle.samePerson')}
+          </p>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -175,7 +183,12 @@ function SettleForm({
         <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{settle.error.message}</div>
       )}
 
-      <Button type="submit" className="w-full" disabled={settle.isPending}>
+      <Button
+        type="submit"
+        className="w-full"
+        disabled={settle.isPending || samePerson}
+        data-testid="record-payment-btn"
+      >
         {settle.isPending ? t('settle.submitting') : t('settle.submit')}
       </Button>
     </form>
