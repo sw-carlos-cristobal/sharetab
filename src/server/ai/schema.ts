@@ -7,6 +7,12 @@ const MAX_RECEIPT_CENTS = 1_000_000_000;
 
 const moneyCents = z.number().int().min(0).max(MAX_RECEIPT_CENTS);
 
+// The extraction prompt asks for null when a receipt shows no store name or
+// date. Read null as undefined, so those fields keep their optional string
+// type and callers never see null.
+const nullAsUndefined = <T extends z.ZodType>(schema: T) =>
+  z.preprocess((value) => (value === null ? undefined : value), schema.optional());
+
 export const receiptItemSchema = z.object({
   name: z.string().max(500),
   quantity: z.number().int().min(1).max(10_000).default(1),
@@ -15,8 +21,8 @@ export const receiptItemSchema = z.object({
 });
 
 export const receiptExtractionSchema = z.object({
-  merchantName: z.string().max(500).optional(),
-  date: z.string().max(100).optional(),
+  merchantName: nullAsUndefined(z.string().max(500)),
+  date: nullAsUndefined(z.string().max(100)),
   items: z.array(receiptItemSchema).min(1).max(500),
   subtotal: moneyCents,
   tax: moneyCents.default(0),
