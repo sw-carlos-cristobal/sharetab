@@ -126,9 +126,9 @@ npx prisma db push   # Push schema without migration (dev only)
 
 ### Unit Tests (Vitest)
 
-- `npm test` — run all unit tests (~745 tests, about 2 seconds)
+- `npm test` — run all unit tests (~760 tests, about 2 seconds)
 - Tests live co-located with source: `src/**/*.test.ts`, plus `docker/**/*.test.mjs` for the Docker build scripts
-- Covers most of `src/server/lib/`, `src/lib/` money, split-calculator, sign-in-errors, avatar, guest-session, claim-drafts, and claim-save, `ai/registry.ts`, `ai/schema.ts`, `ai/providers/openai-codex.ts`, `ai/providers/meridian.ts`, the admin, auth, and guest routers, `app/api/upload/route.ts`, and `docker/stage-runtime-deps.mjs`. `git ls-files '*.test.ts' '*.test.mjs'` lists them
+- Covers most of `src/server/lib/`, `src/lib/` money, split-calculator, sign-in-errors, avatar, guest-session, claim-drafts, and claim-save, `ai/registry.ts`, `ai/schema.ts`, `ai/providers/openai-codex.ts`, `ai/providers/meridian.ts`, the admin, auth, guest, groups, and receipts routers, `app/api/upload/route.ts`, and `docker/stage-runtime-deps.mjs`. `git ls-files '*.test.ts' '*.test.mjs'` lists them
 
 ### E2E Tests (Playwright)
 
@@ -146,12 +146,13 @@ npx prisma db push   # Push schema without migration (dev only)
 - Uses `next-intl` with `createNextIntlPlugin` in `next.config.ts`
 - 9 locales defined in `src/i18n/routing.ts`: en, es, sv, fr, de, pt-BR, ja, zh-CN, ko (default: en)
 - All routes under `src/app/[locale]/` — the `[locale]` segment is required
-- Translation files: `messages/{locale}/{namespace}.json` (namespaces: admin, auth, common, dashboard, expenses, groups, settings, split, splits). A new namespace also needs an import in `src/i18n/request.ts`
+- Translation files: `messages/{locale}/{namespace}.json` (namespaces: admin, auth, common, dashboard, expenses, groups, settings, split, splits). A new namespace also needs an import in `src/i18n/request.ts` and an entry in `src/types/next-intl.d.ts`
 - Use `useTranslations(namespace)` in client components, `getTranslations(namespace)` in server components
 - Locale-aware navigation: import `Link`, `redirect`, `usePathname`, `useRouter` from `@/i18n/navigation`
 - `LanguageSwitcher` component in sidebar and mobile menu
 - User locale preference stored in `User.locale` field (Prisma schema)
 - `npm run lint:i18n` checks for missing or extra translation keys. CI runs it; run it locally after changing any `messages/` file
+- `src/types/next-intl.d.ts` types `t()` keys against the English messages, so `npx tsc --noEmit` fails on a key that isn't in `messages/en/` (lint:i18n alone only compares the other locales with en)
 - To add a new language: add locale to `src/i18n/routing.ts`, create `messages/{locale}/` with all namespace files, add display config to `languageConfig`, and add its `Intl` locale to `moneyLocales` in `src/lib/money.ts` (typed `satisfies Record<Locale, string>`, so `tsc` fails until you do)
 
 ## CI and Releases

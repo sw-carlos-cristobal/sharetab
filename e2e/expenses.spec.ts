@@ -47,6 +47,13 @@ test.describe('Expenses', () => {
   // ── Add Expense ───────────────────────────────────────────
 
   test.describe('Add Expense', () => {
+    test('Paid by defaults to the signed-in user', async ({ page }) => {
+      await navigateToGroup(page, 'Apartment');
+      await page.goto(page.url() + '/expenses/new');
+
+      await expect(page.getByTestId('paid-by-select').locator('option:checked')).toHaveText(users.alice.name);
+    });
+
     test('7.4.1 — equal split UI with all members', async ({ page }) => {
       await navigateToGroup(page, 'Apartment');
       const groupUrl = page.url();

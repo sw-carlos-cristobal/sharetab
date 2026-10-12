@@ -21,6 +21,7 @@
     "subtitle": "Ajoutez les noms de toutes les personnes qui partagent cette addition.",
     "personPlaceholder": "Personne {index}",
     "addPerson": "Ajouter une personne",
+    "removePerson": "Retirer la personne",
     "whoPaid": "Qui a payé l'addition ?",
     "nextAssign": "Suivant : Attribuer les articles",
     "rescanCorrections": "Re-scanner avec corrections",

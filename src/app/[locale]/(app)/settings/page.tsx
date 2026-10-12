@@ -37,8 +37,9 @@ function ProfileForm({
 
   function handleSave(e: React.FormEvent) {
     e.preventDefault();
+    if (!name.trim()) return;
     updateProfile.mutate({
-      name,
+      name: name.trim(),
       venmoUsername: venmoUsername.trim() || null,
     });
   }

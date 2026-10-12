@@ -21,6 +21,7 @@
     "subtitle": "Add the names of everyone sharing this bill.",
     "personPlaceholder": "Person {index}",
     "addPerson": "Add person",
+    "removePerson": "Remove person",
     "whoPaid": "Who paid the bill?",
     "nextAssign": "Next: Assign Items",
     "rescanCorrections": "Rescan with corrections",
