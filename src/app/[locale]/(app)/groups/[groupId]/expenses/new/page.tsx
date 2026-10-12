@@ -1,6 +1,7 @@
 'use client';
 
 import { use, useMemo, useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Link, useRouter } from '@/i18n/navigation';
 import { trpc } from '@/lib/trpc';
@@ -37,6 +38,7 @@ export default function NewExpensePage({ params }: { params: Promise<{ groupId: 
   const locale = useLocale();
   const t = useTranslations('expenses');
   const group = trpc.groups.get.useQuery({ groupId });
+  const { data: session } = useSession();
 
   const [title, setTitle] = useState('');
   const [amountStr, setAmountStr] = useState('');
@@ -82,13 +84,19 @@ export default function NewExpensePage({ params }: { params: Promise<{ groupId: 
     [group.data?.members],
   );
 
+  // Until someone picks a payer, default to the signed-in user (when they're in the group),
+  // the same way currency defaults to the group's.
+  const sessionUserId = session?.user.id;
+  const defaultPaidById = sessionUserId && members.some((m) => m.id === sessionUserId) ? sessionUserId : '';
+  const effectivePaidById = paidById || defaultPaidById;
+
   const amountCents = parseToCents(amountStr);
   const parsedManualRate = parseFloat(manualRate);
   const manualRateValid = useManualRate && !isNaN(parsedManualRate) && parsedManualRate > 0;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!paidById || amountCents <= 0 || shares.length === 0) return;
+    if (!effectivePaidById || amountCents <= 0 || shares.length === 0) return;
 
     createExpense.mutate({
       groupId,
@@ -97,7 +105,7 @@ export default function NewExpensePage({ params }: { params: Promise<{ groupId: 
       currency: effectiveCurrency,
       ...(isDifferentCurrency && manualRateValid ? { exchangeRate: parsedManualRate } : {}),
       category: category || undefined,
-      paidById,
+      paidById: effectivePaidById,
       splitMode,
       shares,
     });
@@ -229,7 +237,8 @@ export default function NewExpensePage({ params }: { params: Promise<{ groupId: 
               <Label htmlFor="paidBy">{t('new.paidBy')}</Label>
               <select
                 id="paidBy"
-                value={paidById}
+                data-testid="paid-by-select"
+                value={effectivePaidById}
                 onChange={(e) => setPaidById(e.target.value)}
                 required
                 className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
