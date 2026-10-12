@@ -21,6 +21,7 @@
     "subtitle": "이 계산서를 나누는 모든 사람의 이름을 추가하세요.",
     "personPlaceholder": "참가자 {index}",
     "addPerson": "참가자 추가",
+    "removePerson": "참가자 제거",
     "whoPaid": "누가 계산했나요?",
     "nextAssign": "다음: 항목 배정",
     "rescanCorrections": "수정 후 다시 스캔",
