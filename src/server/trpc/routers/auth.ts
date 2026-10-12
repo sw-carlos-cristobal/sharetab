@@ -44,7 +44,7 @@ export const authRouter = createTRPCRouter({
   register: publicProcedure
     .input(
       z.object({
-        name: z.string().min(1).max(100),
+        name: z.string().trim().min(1).max(100),
         email: z.string().email(),
         password: z.string().min(8).max(100),
         inviteCode: z.string().optional(),
@@ -199,7 +199,7 @@ export const authRouter = createTRPCRouter({
   updateProfile: protectedProcedure
     .input(
       z.object({
-        name: z.string().min(1).max(100).optional(),
+        name: z.string().trim().min(1).max(100).optional(),
         defaultCurrency: z.string().length(3).optional(),
         locale: z.enum(locales).optional(),
         venmoUsername: z.string().max(50).nullable().optional(),

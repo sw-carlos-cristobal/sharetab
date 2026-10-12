@@ -28,8 +28,9 @@ export default function NewGroupPage() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!name.trim()) return;
     createGroup.mutate({
-      name,
+      name: name.trim(),
       description: description || undefined,
       currency,
       emoji,
