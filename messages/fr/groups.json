@@ -88,6 +88,7 @@
     "title": "Enregistrer un paiement",
     "from": "De",
     "to": "À",
+    "samePerson": "De et À doivent être deux personnes différentes.",
     "amount": "Montant",
     "submit": "Enregistrer le paiement",
     "submitting": "Enregistrement...",

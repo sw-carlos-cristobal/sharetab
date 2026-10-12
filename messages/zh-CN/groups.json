@@ -88,6 +88,7 @@
     "title": "记录付款",
     "from": "付款人",
     "to": "收款人",
+    "samePerson": "付款人和收款人必须是不同的人。",
     "amount": "金额",
     "submit": "记录付款",
     "submitting": "记录中...",

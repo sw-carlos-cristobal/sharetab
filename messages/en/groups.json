@@ -89,6 +89,7 @@
     "description": "Record a payment between two group members.",
     "from": "From",
     "to": "To",
+    "samePerson": "From and To must be different people.",
     "amount": "Amount",
     "selectMember": "Select member",
     "useSuggested": "Use suggested: {amount}",

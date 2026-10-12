@@ -88,6 +88,7 @@
     "title": "Registrar um pagamento",
     "from": "De",
     "to": "Para",
+    "samePerson": "De e Para precisam ser pessoas diferentes.",
     "amount": "Valor",
     "submit": "Registrar pagamento",
     "submitting": "Registrando...",
