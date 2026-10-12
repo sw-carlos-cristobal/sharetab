@@ -31,6 +31,23 @@ updates:
         update-types:
           - minor
           - patch
+    # Majors that can't land yet. Remove an entry once its condition clears.
+    ignore:
+      # ESLint 10 removed context.getFilename(), which eslint-plugin-react
+      # (pulled in by eslint-config-next) still calls, so `npm run lint`
+      # crashes. Lift when eslint-plugin-react supports ESLint 10 (#176).
+      - dependency-name: eslint
+        versions: ['>=10']
+      # typescript-eslint supports TypeScript <6.1.0 and crashes on load under
+      # TypeScript 7. 6.0.x can still be proposed. Lift when typescript-eslint
+      # supports TypeScript 7 (#175).
+      - dependency-name: typescript
+        versions: ['>=7']
+      # Types track the Node major that Docker and CI run (node:22-alpine,
+      # node-version: 22). Raise this together with the Node upgrade (#171,
+      # #177).
+      - dependency-name: '@types/node'
+        versions: ['>=23']
 
   - package-ecosystem: github-actions
     directory: /
