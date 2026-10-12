@@ -21,6 +21,7 @@
     "subtitle": "この会計を共有する全員の名前を追加してください。",
     "personPlaceholder": "メンバー {index}",
     "addPerson": "メンバーを追加",
+    "removePerson": "メンバーを削除",
     "whoPaid": "誰が支払いましたか？",
     "nextAssign": "次へ: 品目を割り当て",
     "rescanCorrections": "修正して再スキャン",

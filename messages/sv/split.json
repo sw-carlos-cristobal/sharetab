@@ -21,6 +21,7 @@
     "subtitle": "Lägg till namnen på alla som delar denna nota.",
     "personPlaceholder": "Person {index}",
     "addPerson": "Lägg till person",
+    "removePerson": "Ta bort person",
     "whoPaid": "Vem betalade notan?",
     "nextAssign": "Nästa: Tilldela artiklar",
     "rescanCorrections": "Skanna om med korrigeringar",
