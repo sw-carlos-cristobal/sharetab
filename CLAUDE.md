@@ -126,7 +126,7 @@ npx prisma db push   # Push schema without migration (dev only)
 
 ### Unit Tests (Vitest)
 
-- `npm test` — run all unit tests (~760 tests, about 2 seconds)
+- `npm test` — run all unit tests (~780 tests, about 2 seconds)
 - Tests live co-located with source: `src/**/*.test.ts`, plus `docker/**/*.test.mjs` for the Docker build scripts
 - Covers most of `src/server/lib/`, `src/lib/` money, split-calculator, split-editor-seed, sign-in-errors, avatar, guest-session, claim-drafts, and claim-save, `ai/registry.ts`, `ai/schema.ts`, `ai/providers/openai-codex.ts`, `ai/providers/meridian.ts`, the admin, auth, guest, groups, and receipts routers, `app/api/upload/route.ts`, and `docker/stage-runtime-deps.mjs`. `git ls-files '*.test.ts' '*.test.mjs'` lists them
 
@@ -136,7 +136,7 @@ npx prisma db push   # Push schema without migration (dev only)
 - `BASE_URL=http://localhost:3000 npx playwright test --headed` — visual testing
 - `RUN_AI_TESTS=1` — enable AI-dependent tests (requires configured AI provider)
 - Run `npm run dev:full` to start embedded PostgreSQL + dev server for testing
-- Set `AUTH_RATE_LIMIT_MAX=9999`, `AUTH_IP_RATE_LIMIT_MAX=9999`, `REGISTER_RATE_LIMIT_MAX=9999`, and `GUEST_RATE_LIMIT_MAX=9999` in `.env` to lift the per-email and per-IP limits during test runs; the global guest caps and the fixed guest limits in `guest.ts` / `guest-join-limit.ts` / `guest-session-limits.ts` still apply (every local request shares one IP bucket — Next.js synthesizes `x-forwarded-for` for local requests)
+- Set `AUTH_RATE_LIMIT_MAX=9999`, `AUTH_IP_RATE_LIMIT_MAX=9999`, `REGISTER_RATE_LIMIT_MAX=9999`, and `GUEST_RATE_LIMIT_MAX=9999` in `.env` to lift the per-email and per-IP limits during test runs; the global guest caps and the fixed guest limits in `guest.ts` / `guest-join-limit.ts` / `guest-session-limits.ts` still apply (every local request shares one IP bucket — Next.js synthesizes `x-forwarded-for` for local requests), as does `groups.getInvite`'s 30 lookups a minute per account (`groups.ts`)
 - E2e tests use `navigateToGroup(page, name)` helper for pagination-safe group navigation
 - `createTestGroup()` auto-deletes the group on `dispose()` to avoid test pollution
 - Do NOT rely on Chrome DevTools MCP viewport emulation for visual accuracy — it doesn't account for browser chrome

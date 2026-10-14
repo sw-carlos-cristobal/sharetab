@@ -10,7 +10,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { UserPlus } from 'lucide-react';
 
-const bold = (chunks: ReactNode) => <span className="font-medium text-foreground">{chunks}</span>;
+// The group and inviter names come from other users; <bdi> keeps right-to-left or direction-override
+// characters in them from reordering the rest of the sentence.
+const isolate = (chunks: ReactNode) => <bdi>{chunks}</bdi>;
+const bold = (chunks: ReactNode) => <bdi className="font-medium text-foreground">{chunks}</bdi>;
 
 export default function InvitePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params);
@@ -19,12 +22,17 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
   const t = useTranslations('auth.invite');
   const { data: session, status } = useSession();
 
-  // Loaded once: without retries a failed lookup falls back straight away, and without refetches
-  // the page doesn't turn to "invalid" because this person's own join just used the invite.
-  const invite = trpc.groups.getInvite.useQuery({ token }, { enabled: !!session, retry: false, staleTime: Infinity });
-  // null means joinByInvite would refuse the token. A failed lookup keeps the old text and the
-  // Accept button, and leaves joinByInvite to report any problem.
-  const invalid = invite.data === null;
+  // No retries, so a failed lookup falls back straight away. Details that loaded aren't refetched
+  // on focus, so the page doesn't turn to "invalid" because this person's own join used the
+  // invite; they're dropped when the page closes, so coming back loads them fresh.
+  const invite = trpc.groups.getInvite.useQuery(
+    { token },
+    { enabled: !!session, retry: false, staleTime: Infinity, gcTime: 0 },
+  );
+  // null means joinByInvite would refuse the token, and BAD_REQUEST means it isn't even shaped like
+  // one. Any other failed lookup falls back to the generic description and the Accept button, and
+  // leaves joinByInvite to report any problem.
+  const invalid = invite.data === null || invite.error?.data?.code === 'BAD_REQUEST';
 
   const joinGroup = trpc.groups.joinByInvite.useMutation({
     onSuccess: (data) => {
@@ -54,7 +62,7 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
   if (invite.data) {
     const details = { group: invite.data.groupName, count: invite.data.memberCount, b: bold };
     summary = invite.data.inviterName
-      ? t.rich('invitedBy', { ...details, inviter: invite.data.inviterName })
+      ? t.rich('invitedBy', { ...details, inviter: invite.data.inviterName, name: isolate })
       : t.rich('invited', details);
   } else {
     summary = invite.isPending ? t('loading') : t('description');

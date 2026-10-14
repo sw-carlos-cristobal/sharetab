@@ -136,7 +136,8 @@ describe('invites', () => {
   test('getInvite has no inviter once the inviter is a placeholder (a deleted account)', async () => {
     mockDb.groupInvite.findUnique.mockResolvedValue({
       ...validInvite(),
-      createdBy: { name: 'Deleted user', isPlaceholder: true, suspendedAt: new Date() },
+      // admin.deleteUser also suspends the account; leave that out to pin the placeholder check on its own
+      createdBy: { name: 'Deleted user', isPlaceholder: true, suspendedAt: null },
     });
     const api = await caller();
     await expect(api.getInvite({ token: 't1' })).resolves.toMatchObject({ inviterName: null });

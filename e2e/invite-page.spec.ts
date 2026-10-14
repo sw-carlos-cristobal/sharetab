@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { users, login, trpcMutation, createTestGroup } from './helpers';
+import { users, login, authedContext, trpcMutation, createTestGroup } from './helpers';
 
 test.describe('Invite page (2.4)', () => {
   test('2.4.9 — shows the group, inviter and member count, then joins', async ({ page }) => {
@@ -23,9 +23,36 @@ test.describe('Invite page (2.4)', () => {
 
   test('2.4.10 — an invalid invite shows a message instead of the Accept button', async ({ page }) => {
     await login(page, users.charlie.email, users.charlie.password);
-    await page.goto('/en/invite/not-a-real-token');
-    await expect(page.getByText('This invite link is invalid, expired, or already used.')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Accept Invite' })).toHaveCount(0);
-    await expect(page.getByText('Go to Dashboard')).toBeVisible();
+    // An unknown token, and one too long to be a token at all
+    for (const token of ['not-a-real-token', 'x'.repeat(65)]) {
+      await page.goto(`/en/invite/${token}`);
+      await expect(page.getByText('This invite link is invalid, expired, or already used.')).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Accept Invite' })).toHaveCount(0);
+      await expect(page.getByText('Go to Dashboard')).toBeVisible();
+    }
+  });
+
+  test('2.4.11 — an invite used by someone else after the page loaded shows the invalid message', async ({ page }) => {
+    const groupName = `Invite Used ${Date.now()}`;
+    const { owner, groupId, dispose } = await createTestGroup(users.alice.email, users.alice.password, [], groupName);
+    const invRes = await trpcMutation(owner, 'groups.createInvite', { groupId });
+    const token = (await invRes.json()).result?.data?.json?.token;
+    const bob = await authedContext(users.bob.email, users.bob.password);
+
+    try {
+      await login(page, users.charlie.email, users.charlie.password);
+      await page.goto(`/en/invite/${token}`);
+      await expect(page.locator('p', { hasText: 'invited you to join' })).toBeVisible();
+
+      await trpcMutation(bob, 'groups.joinByInvite', { token });
+      await page.getByRole('button', { name: 'Accept Invite' }).click();
+
+      await expect(page.getByText('This invite link is invalid, expired, or already used.')).toBeVisible();
+      await expect(page.getByText('Invalid or expired invite', { exact: true })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Accept Invite' })).toHaveCount(0);
+    } finally {
+      await bob.dispose();
+      await dispose();
+    }
   });
 });

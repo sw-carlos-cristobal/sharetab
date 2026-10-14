@@ -5,10 +5,11 @@ import { createTRPCRouter, protectedProcedure, groupMemberProcedure } from '../i
 import { stripUndefined } from '../../lib/strip-undefined';
 import { checkRateLimit } from '../../lib/rate-limit';
 
-// Invite tokens are cuids (25 characters); the cap keeps oversized input away from the lookup.
+// Invite tokens are cuids (25 characters); a defensive bound so oversized input never reaches the lookup.
 const inviteTokenSchema = z.string().max(64);
 // getInvite answers whether a token is live without using it up, so cap how fast one account can ask.
-const INVITE_LOOKUPS_PER_MINUTE = 30;
+const INVITE_LOOKUP_LIMIT = 30;
+const INVITE_LOOKUP_WINDOW_MS = 60 * 1000;
 
 export const groupsRouter = createTRPCRouter({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -255,7 +256,7 @@ export const groupsRouter = createTRPCRouter({
   // holds the token sees it, which is less than the token already gives them
   // (joining the group). null when joinByInvite would refuse the token.
   getInvite: protectedProcedure.input(z.object({ token: inviteTokenSchema })).query(async ({ ctx, input }) => {
-    if (!checkRateLimit(`invite-lookup:${ctx.user.id}`, INVITE_LOOKUPS_PER_MINUTE, 60 * 1000).allowed) {
+    if (!checkRateLimit(`invite-lookup:${ctx.user.id}`, INVITE_LOOKUP_LIMIT, INVITE_LOOKUP_WINDOW_MS).allowed) {
       throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'Too many invite lookups. Try again in a minute.' });
     }
     const invite = await ctx.db.groupInvite.findUnique({
