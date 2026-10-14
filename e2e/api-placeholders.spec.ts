@@ -210,12 +210,12 @@ test.describe('Placeholder Members', () => {
   // #260: removing a placeholder used to move their shares and payments onto
   // other people and delete their settlements, writing off what they owed or
   // were owed without saying so.
-  test('removing a placeholder who still owes money is refused', async () => {
+  test('removing a placeholder who is in an expense is refused', async () => {
     const { owner, groupId, memberIds, dispose } = await createTestGroup(
       users.alice.email,
       users.alice.password,
       [],
-      'Remove Unsettled Placeholder',
+      'Remove Used Placeholder',
     );
     const aliceId = memberIds[users.alice.email];
     const phRes = await trpcMutation(owner, 'groups.addPlaceholder', { groupId, name: 'Gina' });
@@ -234,7 +234,9 @@ test.describe('Placeholder Members', () => {
 
     const err = await trpcError(await trpcMutation(owner, 'groups.removeMember', { groupId, userId: ginaId }));
     expect(err?.data?.code).toBe('PRECONDITION_FAILED');
-    expect(err?.message).toBe('Gina owes $10.00 in this group. Settle up before removing them.');
+    expect(err?.message).toBe(
+      "Gina is in expenses or payments in this group, so they can't be removed. Take them out of those first.",
+    );
 
     const group = await trpcResult(await trpcQuery(owner, 'groups.get', { groupId }));
     expect(group.members.some((m: { user: { id: string } }) => m.user.id === ginaId)).toBe(true);
@@ -244,7 +246,7 @@ test.describe('Placeholder Members', () => {
     await dispose();
   });
 
-  test('removing a settled-up placeholder leaves everyone else owing the same', async () => {
+  test('removing a settled-up placeholder is refused and changes no balance', async () => {
     const { owner, groupId, memberIds, dispose } = await createTestGroup(
       users.alice.email,
       users.alice.password,
@@ -267,7 +269,7 @@ test.describe('Placeholder Members', () => {
         { userId: halId, amount: 500 },
       ],
     });
-    const halPaidRes = await trpcMutation(owner, 'expenses.create', {
+    await trpcMutation(owner, 'expenses.create', {
       groupId,
       title: 'Hal paid for Alice',
       amount: 1000,
@@ -278,21 +280,36 @@ test.describe('Placeholder Members', () => {
         { userId: aliceId, amount: 500 },
       ],
     });
-    const halPaid = (await halPaidRes.json()).result?.data?.json;
 
-    const res = await trpcMutation(owner, 'groups.removeMember', { groupId, userId: halId });
-    expect((await res.json()).result?.data?.json?.success).toBe(true);
+    const err = await trpcError(await trpcMutation(owner, 'groups.removeMember', { groupId, userId: halId }));
+    expect(err?.data?.code).toBe('PRECONDITION_FAILED');
 
-    const group = await trpcResult(await trpcQuery(owner, 'groups.get', { groupId }));
-    expect(group.members.some((m: { user: { id: string } }) => m.user.id === halId)).toBe(false);
     // Moving Hal's shares onto the payers used to zero both of these.
     const { balances } = await trpcResult(await trpcQuery(owner, 'balances.getGroupBalances', { groupId }));
     const net = (userId: string) => balances.find((b: { userId: string }) => b.userId === userId)?.net;
     expect(net(bobId)).toBe(500);
     expect(net(aliceId)).toBe(-500);
-    // The expense still shows who actually paid it.
-    const expense = await trpcResult(await trpcQuery(owner, 'expenses.get', { groupId, expenseId: halPaid.id }));
-    expect(expense.paidById).toBe(halId);
+    const group = await trpcResult(await trpcQuery(owner, 'groups.get', { groupId }));
+    expect(group.members.some((m: { user: { id: string } }) => m.user.id === halId)).toBe(true);
+
+    await dispose();
+  });
+
+  test('removing a placeholder who was never in an expense removes them', async () => {
+    const { owner, groupId, dispose } = await createTestGroup(
+      users.alice.email,
+      users.alice.password,
+      [],
+      'Remove Unused Placeholder',
+    );
+    const phRes = await trpcMutation(owner, 'groups.addPlaceholder', { groupId, name: 'Ivy' });
+    const ivyId = (await phRes.json()).result?.data?.json?.id;
+
+    const res = await trpcMutation(owner, 'groups.removeMember', { groupId, userId: ivyId });
+    expect((await res.json()).result?.data?.json?.success).toBe(true);
+
+    const group = await trpcResult(await trpcQuery(owner, 'groups.get', { groupId }));
+    expect(group.members.some((m: { user: { id: string } }) => m.user.id === ivyId)).toBe(false);
 
     await dispose();
   });

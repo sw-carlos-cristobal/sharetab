@@ -3,8 +3,6 @@ import { TRPCError } from '@trpc/server';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { createTRPCRouter, protectedProcedure, groupMemberProcedure } from '../init';
 import { stripUndefined } from '../../lib/strip-undefined';
-import { computeBalances } from '../../lib/balance-calculator';
-import { formatCents } from '@/lib/money';
 
 export const groupsRouter = createTRPCRouter({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -332,60 +330,26 @@ export const groupsRouter = createTRPCRouter({
       });
 
       if (targetUser?.isPlaceholder) {
-        // A placeholder can't settle up on their own, so refuse while they owe
-        // or are owed anything: removing them must not change anyone's balance.
-        const [group, expenses, settlements] = await Promise.all([
-          ctx.db.group.findUnique({ where: { id: input.groupId }, select: { currency: true } }),
-          ctx.db.expense.findMany({
-            where: { groupId: input.groupId },
-            select: {
-              paidById: true,
-              addedById: true,
-              amount: true,
-              baseCurrencyAmount: true,
-              shares: { select: { userId: true, amount: true } },
-            },
-          }),
-          ctx.db.settlement.findMany({
-            where: { groupId: input.groupId },
-            select: { fromId: true, toId: true, amount: true, baseCurrencyAmount: true },
-          }),
+        // A placeholder can't log in to settle up, rejoin or be merged once
+        // gone, so one who is in any expense or payment stays. Moving their part
+        // onto other people writes off what they owe or are owed, and dropping
+        // only the membership leaves a balance that comes back (say an old
+        // expense is deleted) with nobody able to settle it.
+        const [shares, expenses, settlements] = await Promise.all([
+          ctx.db.expenseShare.count({ where: { userId: input.userId } }),
+          ctx.db.expense.count({ where: { OR: [{ paidById: input.userId }, { addedById: input.userId }] } }),
+          ctx.db.settlement.count({ where: { OR: [{ fromId: input.userId }, { toId: input.userId }] } }),
         ]);
-        const net = computeBalances(expenses, settlements).find((b) => b.userId === input.userId)?.net ?? 0;
-        if (net !== 0) {
+        if (shares + expenses + settlements > 0) {
           const name = targetUser.placeholderName ?? targetUser.name ?? 'This member';
-          const amount = formatCents(Math.abs(net), group?.currency ?? 'USD');
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',
-            message: `${name} ${net > 0 ? 'is owed' : 'owes'} ${amount} in this group. Settle up before removing them.`,
+            message: `${name} is in expenses or payments in this group, so they can't be removed. Take them out of those first.`,
           });
         }
 
-        // Even at a zero balance, moving their shares or payments onto someone
-        // else would shift who owes whom, so a placeholder with history keeps
-        // it and only loses the membership, like a real user who leaves.
-        const hasHistory =
-          expenses.some(
-            (e) =>
-              e.paidById === input.userId ||
-              e.addedById === input.userId ||
-              e.shares.some((s) => s.userId === input.userId),
-          ) || settlements.some((s) => s.fromId === input.userId || s.toId === input.userId);
-
         await ctx.db.$transaction(async (tx) => {
-          if (hasHistory) {
-            // Drop them from receipts that haven't become an expense yet
-            await tx.receiptItemAssignment.deleteMany({
-              where: {
-                userId: input.userId,
-                receiptItem: { receipt: { groupId: input.groupId, expense: { is: null } } },
-              },
-            });
-            await tx.groupMember.delete({ where: { id: targetMember.id } });
-          } else {
-            await tx.receiptItemAssignment.deleteMany({ where: { userId: input.userId } });
-          }
-
+          await tx.receiptItemAssignment.deleteMany({ where: { userId: input.userId } });
           await tx.activityLog.create({
             data: {
               groupId: input.groupId,
@@ -394,12 +358,9 @@ export const groupsRouter = createTRPCRouter({
               metadata: { removedUserId: input.userId, wasPlaceholder: true },
             },
           });
-
-          if (!hasHistory) {
-            // Nothing refers to them: delete the user (GroupMember cascades; their
-            // activity-log entries keep their text with the user link cleared)
-            await tx.user.delete({ where: { id: input.userId } });
-          }
+          // Nothing refers to them: delete the user (GroupMember cascades; their
+          // activity-log entries stay, with the user link cleared)
+          await tx.user.delete({ where: { id: input.userId } });
         });
       } else {
         // Real user — preserve financial history, just remove the membership
