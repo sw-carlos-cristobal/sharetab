@@ -29,8 +29,8 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
     { token },
     { enabled: !!session, retry: false, staleTime: Infinity, gcTime: 0 },
   );
-  // null means joinByInvite would refuse the token, and BAD_REQUEST means it isn't even shaped like
-  // one. Any other failed lookup falls back to the generic description and the Accept button, and
+  // null means joinByInvite would refuse the token, and BAD_REQUEST means it's too long to be one.
+  // Any other failed lookup falls back to the generic description and the Accept button, and
   // leaves joinByInvite to report any problem.
   const invalid = invite.data === null || invite.error?.data?.code === 'BAD_REQUEST';
 
@@ -82,7 +82,7 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
             <p className="text-sm break-words text-muted-foreground">{summary}</p>
           )}
 
-          {joinGroup.error && !invalid && (
+          {joinGroup.error && !invalid && !invite.isFetching && (
             <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{joinGroup.error.message}</div>
           )}
 
@@ -90,7 +90,7 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
             <Button
               className="w-full"
               onClick={() => joinGroup.mutate({ token })}
-              disabled={invite.isPending || joinGroup.isPending}
+              disabled={invite.isFetching || joinGroup.isPending}
             >
               {joinGroup.isPending ? t('joining') : t('accept')}
             </Button>

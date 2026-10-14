@@ -44,7 +44,8 @@ test.describe('Invite page (2.4)', () => {
       await page.goto(`/en/invite/${token}`);
       await expect(page.locator('p', { hasText: 'invited you to join' })).toBeVisible();
 
-      await trpcMutation(bob, 'groups.joinByInvite', { token });
+      const bobJoin = await trpcMutation(bob, 'groups.joinByInvite', { token });
+      expect((await bobJoin.json()).result?.data?.json?.alreadyMember).toBe(false);
       await page.getByRole('button', { name: 'Accept Invite' }).click();
 
       await expect(page.getByText('This invite link is invalid, expired, or already used.')).toBeVisible();
