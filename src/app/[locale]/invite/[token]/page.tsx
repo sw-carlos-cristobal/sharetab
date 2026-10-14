@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useEffect } from 'react';
+import { use, useEffect, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { Link, useRouter } from '@/i18n/navigation';
 import { useLocale } from 'next-intl';
@@ -10,12 +10,19 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { UserPlus } from 'lucide-react';
 
+const bold = (chunks: ReactNode) => <span className="font-medium text-foreground">{chunks}</span>;
+
 export default function InvitePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params);
   const router = useRouter();
   const locale = useLocale();
   const t = useTranslations('auth.invite');
   const { data: session, status } = useSession();
+
+  const invite = trpc.groups.getInvite.useQuery({ token }, { enabled: !!session });
+  // null means joinByInvite would refuse the token; a failed lookup leaves the Accept button
+  // (and joinByInvite's own error) as the fallback.
+  const invalid = invite.data === null;
 
   const joinGroup = trpc.groups.joinByInvite.useMutation({
     onSuccess: (data) => {
@@ -47,15 +54,42 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
           <CardTitle>{t('title')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-center">
-          <p className="text-sm text-muted-foreground">{t('description')}</p>
+          {invalid ? (
+            <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{t('invalid')}</div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {invite.data
+                ? invite.data.inviterName
+                  ? t.rich('invitedBy', {
+                      inviter: invite.data.inviterName,
+                      group: invite.data.groupName,
+                      count: invite.data.memberCount,
+                      b: bold,
+                    })
+                  : t.rich('invited', {
+                      group: invite.data.groupName,
+                      count: invite.data.memberCount,
+                      b: bold,
+                    })
+                : invite.isPending
+                  ? t('loading')
+                  : t('description')}
+            </p>
+          )}
 
           {joinGroup.error && (
             <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{joinGroup.error.message}</div>
           )}
 
-          <Button className="w-full" onClick={() => joinGroup.mutate({ token })} disabled={joinGroup.isPending}>
-            {joinGroup.isPending ? t('joining') : t('accept')}
-          </Button>
+          {!invalid && (
+            <Button
+              className="w-full"
+              onClick={() => joinGroup.mutate({ token })}
+              disabled={invite.isPending || joinGroup.isPending}
+            >
+              {joinGroup.isPending ? t('joining') : t('accept')}
+            </Button>
+          )}
 
           <Button variant="ghost" className="w-full" nativeButton={false} render={<Link href="/dashboard" />}>
             {t('dashboard')}

@@ -141,4 +141,33 @@ test.describe('Invites API (2.4)', () => {
     expect(body.result?.data?.json?.alreadyMember).toBe(true);
     await dispose();
   });
+
+  test('2.4.7 — invite details show the group, inviter and member count until the invite is used', async () => {
+    const { owner, groupId, dispose } = await createTestGroup(
+      users.alice.email,
+      users.alice.password,
+      [{ email: users.bob.email, password: users.bob.password }],
+      'Invite Details Test',
+    );
+    const invRes = await trpcMutation(owner, 'groups.createInvite', { groupId });
+    const token = (await invRes.json()).result?.data?.json?.token;
+
+    // Charlie isn't in the group yet and can still read what the invite is for
+    const charlie = await authedContext(users.charlie.email, users.charlie.password);
+    const details = await trpcResult(await trpcQuery(charlie, 'groups.getInvite', { token }));
+    expect(details).toEqual({ groupName: 'Invite Details Test', inviterName: users.alice.name, memberCount: 2 });
+
+    await trpcMutation(charlie, 'groups.joinByInvite', { token });
+    expect(await trpcResult(await trpcQuery(charlie, 'groups.getInvite', { token }))).toBeNull();
+
+    await charlie.dispose();
+    await dispose();
+  });
+
+  test('2.4.8 — invite details for an unknown token are null', async () => {
+    const bob = await authedContext(users.bob.email, users.bob.password);
+    const res = await trpcQuery(bob, 'groups.getInvite', { token: 'not-a-real-token' });
+    expect(await trpcResult(res)).toBeNull();
+    await bob.dispose();
+  });
 });

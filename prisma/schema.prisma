@@ -77,6 +77,7 @@ model User {
   systemInvitesUsed SystemInvite[] @relation("SystemInviteUsedBy")
   uploadedReceipts Receipt[] @relation("UploadedReceipts")
   guestSplits      GuestSplit[] @relation("GuestSplits")
+  groupInvitesCreated GroupInvite[] @relation("GroupInvitesCreated")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -127,12 +128,15 @@ model GroupInvite {
   usedById  String?
 
   placeholderUserId String?  // if set, auto-merge this placeholder when invite is used
+  createdById       String?  // who made the invite (null for invites made before this was recorded)
 
-  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  group     Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdBy User? @relation("GroupInvitesCreated", fields: [createdById], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
 
   @@index([groupId])
+  @@index([createdById])
 }
 
 enum GroupRole {

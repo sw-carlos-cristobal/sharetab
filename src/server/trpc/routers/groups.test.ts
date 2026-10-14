@@ -9,6 +9,7 @@ const mockDb = {
   user: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
   group: { create: vi.fn(), update: vi.fn(), findUnique: vi.fn() },
   groupMember: { findUnique: vi.fn(), create: vi.fn() },
+  groupInvite: { findUnique: vi.fn(), create: vi.fn() },
   activityLog: { create: vi.fn() },
 };
 vi.mock('@/server/db', () => ({ db: mockDb }));
@@ -76,5 +77,69 @@ describe('group and placeholder names are trimmed', () => {
       code: 'BAD_REQUEST',
     });
     expect(mockDb.user.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('invites', () => {
+  const inAWeek = () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const validInvite = () => ({
+    usedAt: null,
+    expiresAt: inAWeek(),
+    group: { name: 'Ski Trip', _count: { members: 4 } },
+    createdBy: { name: 'Alice', isPlaceholder: false },
+  });
+
+  test('createInvite records who made the invite', async () => {
+    mockDb.groupInvite.create.mockResolvedValue({ token: 't1' });
+    const api = await caller();
+    await api.createInvite({ groupId: 'g1' });
+    expect(mockDb.groupInvite.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ createdById: 'owner' }) }),
+    );
+  });
+
+  test('getInvite returns the group name, inviter and member count to someone not in the group', async () => {
+    mockDb.groupMember.findUnique.mockResolvedValue(null);
+    mockDb.groupInvite.findUnique.mockResolvedValue(validInvite());
+    const api = await caller();
+    await expect(api.getInvite({ token: 't1' })).resolves.toEqual({
+      groupName: 'Ski Trip',
+      inviterName: 'Alice',
+      memberCount: 4,
+    });
+    expect(mockDb.groupInvite.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { token: 't1' } }));
+  });
+
+  test('getInvite returns null for a token that matches no invite', async () => {
+    mockDb.groupInvite.findUnique.mockResolvedValue(null);
+    const api = await caller();
+    await expect(api.getInvite({ token: 'nope' })).resolves.toBeNull();
+  });
+
+  test('getInvite returns null for an invite that was already used', async () => {
+    mockDb.groupInvite.findUnique.mockResolvedValue({ ...validInvite(), usedAt: new Date() });
+    const api = await caller();
+    await expect(api.getInvite({ token: 't1' })).resolves.toBeNull();
+  });
+
+  test('getInvite returns null for an expired invite', async () => {
+    mockDb.groupInvite.findUnique.mockResolvedValue({ ...validInvite(), expiresAt: new Date(Date.now() - 1000) });
+    const api = await caller();
+    await expect(api.getInvite({ token: 't1' })).resolves.toBeNull();
+  });
+
+  test('getInvite has no inviter for an invite made before inviters were recorded', async () => {
+    mockDb.groupInvite.findUnique.mockResolvedValue({ ...validInvite(), createdBy: null });
+    const api = await caller();
+    await expect(api.getInvite({ token: 't1' })).resolves.toMatchObject({ groupName: 'Ski Trip', inviterName: null });
+  });
+
+  test('getInvite has no inviter once the inviter is a placeholder (a deleted account)', async () => {
+    mockDb.groupInvite.findUnique.mockResolvedValue({
+      ...validInvite(),
+      createdBy: { name: 'Deleted user', isPlaceholder: true },
+    });
+    const api = await caller();
+    await expect(api.getInvite({ token: 't1' })).resolves.toMatchObject({ inviterName: null });
   });
 });

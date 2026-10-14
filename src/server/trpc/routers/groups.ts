@@ -236,6 +236,7 @@ export const groupsRouter = createTRPCRouter({
       const invite = await ctx.db.groupInvite.create({
         data: {
           groupId: input.groupId,
+          createdById: ctx.user.id,
           ...(input.email !== undefined ? { email: input.email } : {}),
           ...(input.placeholderUserId !== undefined ? { placeholderUserId: input.placeholderUserId } : {}),
           expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
@@ -244,11 +245,34 @@ export const groupsRouter = createTRPCRouter({
       return { token: invite.token };
     }),
 
+  // What the invite page shows before the person accepts. Anyone signed in who
+  // holds the token sees it, which is less than the token already gives them
+  // (joining the group). null when joinByInvite would refuse the token.
+  getInvite: protectedProcedure.input(z.object({ token: z.string() })).query(async ({ ctx, input }) => {
+    const invite = await ctx.db.groupInvite.findUnique({
+      where: { token: input.token },
+      select: {
+        usedAt: true,
+        expiresAt: true,
+        group: { select: { name: true, _count: { select: { members: true } } } },
+        createdBy: { select: { name: true, isPlaceholder: true } },
+      },
+    });
+    if (!invite || !isRedeemable(invite)) return null;
+    // A deleted account becomes a placeholder named "Deleted user"; leave it out.
+    const inviter = invite.createdBy && !invite.createdBy.isPlaceholder ? invite.createdBy.name : null;
+    return {
+      groupName: invite.group.name,
+      inviterName: inviter,
+      memberCount: invite.group._count.members,
+    };
+  }),
+
   joinByInvite: protectedProcedure.input(z.object({ token: z.string() })).mutation(async ({ ctx, input }) => {
     const invite = await ctx.db.groupInvite.findUnique({
       where: { token: input.token },
     });
-    if (!invite || invite.usedAt || invite.expiresAt < new Date()) {
+    if (!invite || !isRedeemable(invite)) {
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Invalid or expired invite' });
     }
 
@@ -518,6 +542,11 @@ export const groupsRouter = createTRPCRouter({
       return { success: true };
     }),
 });
+
+/** Whether an invite can still be used to join: not used yet and not expired. */
+function isRedeemable(invite: { usedAt: Date | null; expiresAt: Date }) {
+  return !invite.usedAt && invite.expiresAt >= new Date();
+}
 
 /**
  * Merge all references from a placeholder user into a real user, then delete the placeholder.
