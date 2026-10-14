@@ -18,12 +18,11 @@ import { EqualSplit } from '@/components/expenses/equal-split';
 import { ExactSplit } from '@/components/expenses/exact-split';
 import { PercentageSplit } from '@/components/expenses/percentage-split';
 import { SharesSplit } from '@/components/expenses/shares-split';
+import { splitEditorSeed, type EditableSplitMode as SplitMode } from '@/lib/split-editor-seed';
 
 type RouterOutputs = inferRouterOutputs<AppRouter>;
 type ExpenseData = RouterOutputs['expenses']['get'];
 type GroupData = NonNullable<RouterOutputs['groups']['get']>;
-
-type SplitMode = 'EQUAL' | 'EXACT' | 'PERCENTAGE' | 'SHARES';
 
 type MemberInfo = {
   id: string;
@@ -105,7 +104,6 @@ function EditExpenseForm({
   const [paidById, setPaidById] = useState(() =>
     group.members.some((m) => m.user.id === expense.paidById) ? expense.paidById : '',
   );
-  const [splitMode, setSplitMode] = useState<SplitMode>(isItemSplit ? 'EQUAL' : (expense.splitMode as SplitMode));
   const [shares, setShares] = useState<ShareEntry[]>([]);
   const [currency, setCurrency] = useState<string>(expense.currency);
   const [manualRate, setManualRate] = useState<string>(
@@ -113,9 +111,8 @@ function EditExpenseForm({
   );
   const [useManualRate, setUseManualRate] = useState(initiallyDifferentCurrency && !!expense.exchangeRate);
 
-  // Seed the split editors with the saved shares so editing doesn't silently
-  // rewrite the split. Only the saved mode is seeded; other modes keep their
-  // new-expense defaults. (percentage is stored in basis points: 5000 = 50%)
+  // Seed the split editors with the saved shares (splitEditorSeed) so editing
+  // doesn't silently rewrite the split.
   // Saved shares can reference users who have since left the group (member
   // removal preserves financial history). The editors only render current
   // members, so a hidden ex-member id would be unremovable and make every
@@ -181,33 +178,14 @@ function EditExpenseForm({
       hasFormerMemberShares: true,
     };
   }, [expense, group]);
-  const initialSelected = useMemo(
-    () => (expense.splitMode === 'EQUAL' && savedShares.length > 0 ? savedShares.map((s) => s.userId) : undefined),
-    [expense, savedShares],
-  );
-  const initialAmounts = useMemo(
-    () =>
-      expense.splitMode === 'EXACT' && savedShares.length > 0
-        ? Object.fromEntries(savedShares.map((s) => [s.userId, centsToDecimal(s.amount)]))
-        : undefined,
-    [expense, savedShares],
-  );
-  const initialPercentages = useMemo(
-    () =>
-      expense.splitMode === 'PERCENTAGE' && savedShares.length > 0
-        ? Object.fromEntries(
-            savedShares.map((s) => [s.userId, s.percentage != null ? String(s.percentage / 100) : '0']),
-          )
-        : undefined,
-    [expense, savedShares],
-  );
-  const initialShareUnits = useMemo(
-    () =>
-      expense.splitMode === 'SHARES' && savedShares.length > 0
-        ? Object.fromEntries(savedShares.map((s) => [s.userId, String(s.shares ?? 1)]))
-        : undefined,
-    [expense, savedShares],
-  );
+  const {
+    mode: initialSplitMode,
+    initialSelected,
+    initialAmounts,
+    initialPercentages,
+    initialShareUnits,
+  } = useMemo(() => splitEditorSeed(expense.splitMode, savedShares), [expense.splitMode, savedShares]);
+  const [splitMode, setSplitMode] = useState<SplitMode>(initialSplitMode);
 
   const updateExpense = trpc.expenses.update.useMutation({
     onSuccess: () => {
