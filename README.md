@@ -122,7 +122,7 @@ ShareTab is a free, self-hosted alternative to Splitwise for tracking shared exp
 - **9 languages** -- English, Spanish, Swedish, French, German, Brazilian Portuguese, Japanese, Simplified Chinese, and Korean, with locale-aware money formatting; each user's choice is saved to their account
 - **Guest bill splitting** -- no account needed, shareable summary links; admins can turn off guest receipt uploads (admin toggle or `DISABLE_GUEST_UPLOADS`) so anonymous visitors can't upload receipt images or run AI scans (signed-in users with an active account keep access, so also limit who can create an account: Registration Control only covers password sign-up, while magic link, Google and OIDC auto-registration still create accounts; see [Security notes](#oidc-security-notes))
 - **Pluggable AI providers** -- OpenAI (GPT-4o), OpenAI-Codex (ChatGPT OAuth), Claude (API key), Meridian (Claude Max subscription), local Ollama
-- **Group archiving** -- archive inactive groups to declutter your dashboard; toggle archived view on groups page
+- **Group archiving** -- archive settled-up groups to declutter your dashboard; toggle archived view on groups page. A group with an open balance can't be archived, and an archived group where you still owe or are owed money (for example, one archived before this rule) stays on the dashboard
 - **Cross-group dashboard** -- see all your balances at a glance, with per-person debt breakdown
 - **Debt simplification** -- minimize the number of payments needed
 - **Settle up** -- record payments between any two group members with explicit From/To fields

@@ -1,48 +1,16 @@
 import { createTRPCRouter, groupMemberProcedure, protectedProcedure } from '../init';
 import { z } from 'zod';
 import { simplifyDebts, computeBalances } from '../../lib/balance-calculator';
+import { loadGroupBalances } from '../../lib/group-balances';
 
 export const balancesRouter = createTRPCRouter({
   getGroupBalances: groupMemberProcedure.input(z.object({ groupId: z.string() })).query(async ({ ctx, input }) => {
-    const [expenses, settlements] = await Promise.all([
-      ctx.db.expense.findMany({
-        where: { groupId: input.groupId },
-        select: {
-          paidById: true,
-          amount: true,
-          baseCurrencyAmount: true,
-          shares: { select: { userId: true, amount: true } },
-        },
-      }),
-      ctx.db.settlement.findMany({
-        where: { groupId: input.groupId },
-        select: { fromId: true, toId: true, amount: true, baseCurrencyAmount: true },
-      }),
-    ]);
-
-    const balances = computeBalances(expenses, settlements);
+    const balances = await loadGroupBalances(ctx.db, input.groupId);
     return { balances };
   }),
 
   getSimplifiedDebts: groupMemberProcedure.input(z.object({ groupId: z.string() })).query(async ({ ctx, input }) => {
-    const [expenses, settlements] = await Promise.all([
-      ctx.db.expense.findMany({
-        where: { groupId: input.groupId },
-        select: {
-          paidById: true,
-          amount: true,
-          baseCurrencyAmount: true,
-          shares: { select: { userId: true, amount: true } },
-        },
-      }),
-      ctx.db.settlement.findMany({
-        where: { groupId: input.groupId },
-        select: { fromId: true, toId: true, amount: true, baseCurrencyAmount: true },
-      }),
-    ]);
-
-    const balances = computeBalances(expenses, settlements);
-    const debts = simplifyDebts(balances);
+    const debts = simplifyDebts(await loadGroupBalances(ctx.db, input.groupId));
     return { debts };
   }),
 
@@ -144,7 +112,9 @@ export const balancesRouter = createTRPCRouter({
       select: {
         id: true,
         name: true,
+        emoji: true,
         currency: true,
+        archivedAt: true,
         expenses: {
           select: {
             paidById: true,
@@ -165,8 +135,10 @@ export const balancesRouter = createTRPCRouter({
     const perGroup: {
       groupId: string;
       groupName: string;
+      emoji: string | null;
       currency: string;
       balance: number;
+      archived: boolean;
     }[] = [];
 
     for (const group of groups) {
@@ -179,8 +151,10 @@ export const balancesRouter = createTRPCRouter({
       perGroup.push({
         groupId: group.id,
         groupName: group.name,
+        emoji: group.emoji,
         currency: group.currency,
         balance: net,
+        archived: group.archivedAt !== null,
       });
     }
 

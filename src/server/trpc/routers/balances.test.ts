@@ -20,53 +20,73 @@ async function caller() {
   return balancesRouter.createCaller(ctx as unknown as Parameters<typeof balancesRouter.createCaller>[0]);
 }
 
-// An archived group where Bob still owes me $5.00 (groups archived before
-// archiving required a zero balance can still be in this state).
-const archivedGroup = {
-  id: 'g1',
-  name: 'Old trip',
+// Bob owes me $5.00 in an archived group (an archived group can still hold a
+// balance: archived earlier, or a write racing the archive), and Carol owes me
+// $3.00 in an active one.
+const group = (
+  id: string,
+  name: string,
+  archivedAt: Date | null,
+  debtor: { id: string; name: string },
+  amount: number,
+) => ({
+  id,
+  name,
+  emoji: '💰',
   currency: 'USD',
-  archivedAt: new Date('2026-10-01'),
+  archivedAt,
   expenses: [
     {
       paidById: 'me',
-      amount: 1000,
+      amount: amount * 2,
       baseCurrencyAmount: null,
       shares: [
-        { userId: 'me', amount: 500 },
-        { userId: 'bob', amount: 500 },
+        { userId: 'me', amount },
+        { userId: debtor.id, amount },
       ],
     },
   ],
   settlements: [],
   members: [
     { user: { id: 'me', name: 'Me', venmoUsername: null } },
-    { user: { id: 'bob', name: 'Bob', venmoUsername: null } },
+    { user: { id: debtor.id, name: debtor.name, venmoUsername: null } },
   ],
-};
+});
+const archivedGroup = group('g1', 'Old trip', new Date('2026-10-01'), { id: 'bob', name: 'Bob' }, 500);
+const activeGroup = group('g2', 'Flat', null, { id: 'carol', name: 'Carol' }, 300);
 
 beforeEach(() => {
   vi.resetAllMocks();
   mockDb.user.findUnique.mockResolvedValue({ suspendedAt: null });
-  // Stand-in for the database: return only the groups the query's filter lets through.
-  mockDb.group.findMany.mockImplementation(async (args: { where: { archivedAt?: unknown } }) =>
-    args.where.archivedAt === null ? [] : [archivedGroup],
-  );
+  // Stand-in for the database: return only the groups the query's archivedAt filter lets through.
+  mockDb.group.findMany.mockImplementation(async (args: { where: { archivedAt?: unknown } }) => {
+    const filter = args.where.archivedAt;
+    return [activeGroup, archivedGroup].filter((g) =>
+      filter === undefined ? true : filter === null ? g.archivedAt === null : g.archivedAt !== null,
+    );
+  });
 });
 
 // #275: the dashboard skipped archived groups, so it said "All settled up!"
 // while a debt sat in an archived group.
 describe('dashboard balances include archived groups', () => {
-  test('getOverallDebts lists a debt from an archived group', async () => {
+  test('getOverallDebts lists debts from active and archived groups', async () => {
     const api = await caller();
     const { owedToYou } = await api.getOverallDebts();
-    expect(owedToYou).toEqual([{ userId: 'bob', userName: 'Bob', venmoUsername: null, amount: 500 }]);
+    expect(owedToYou).toEqual([
+      { userId: 'bob', userName: 'Bob', venmoUsername: null, amount: 500 },
+      { userId: 'carol', userName: 'Carol', venmoUsername: null, amount: 300 },
+    ]);
   });
 
-  test('getDashboard counts an archived group in the totals', async () => {
+  test('getDashboard counts active and archived groups in the totals', async () => {
     const api = await caller();
     const { totalOwed, perGroup } = await api.getDashboard();
-    expect(totalOwed).toBe(500);
-    expect(perGroup).toEqual([{ groupId: 'g1', groupName: 'Old trip', currency: 'USD', balance: 500 }]);
+    expect(totalOwed).toBe(800);
+    // Flagged so the dashboard can show the archived one, which its group list leaves out
+    expect(perGroup).toEqual([
+      { groupId: 'g2', groupName: 'Flat', emoji: '💰', currency: 'USD', balance: 300, archived: false },
+      { groupId: 'g1', groupName: 'Old trip', emoji: '💰', currency: 'USD', balance: 500, archived: true },
+    ]);
   });
 });

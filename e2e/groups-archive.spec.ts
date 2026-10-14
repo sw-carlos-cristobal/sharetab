@@ -194,6 +194,40 @@ test.describe('Group Archiving', () => {
       await dispose();
     });
 
+    // Settlements need both people to be members, so "settle up" alone can't
+    // clear a balance with someone who has left.
+    test('archive refusal says so when someone who left still has a balance', async () => {
+      const { owner, groupId, memberIds, memberContexts, dispose } = await createTestGroup(
+        users.alice.email,
+        users.alice.password,
+        [{ email: users.bob.email, password: users.bob.password }],
+        'Archive Departed Member',
+      );
+      const aliceId = memberIds[users.alice.email];
+      const bobId = memberIds[users.bob.email];
+      await trpcMutation(owner, 'expenses.create', {
+        groupId,
+        title: 'Bob owes half',
+        amount: 1000,
+        paidById: aliceId,
+        splitMode: 'EQUAL',
+        shares: [
+          { userId: aliceId, amount: 500 },
+          { userId: bobId, amount: 500 },
+        ],
+      });
+      // Bob leaves while still owing Alice.
+      await trpcMutation(memberContexts[0]!, 'groups.removeMember', { groupId, userId: bobId });
+
+      const error = await trpcError(await trpcMutation(owner, 'groups.archive', { groupId }));
+      expect(error?.data?.code).toBe('PRECONDITION_FAILED');
+      expect(error?.message).toBe(
+        "Someone who is no longer in this group still owes or is owed money, so it can't be archived. Invite them back to settle up, or edit the expenses they're in.",
+      );
+
+      await dispose();
+    });
+
     test('cannot update expense on archived group', async () => {
       const { owner, groupId, memberIds, dispose } = await createTestGroup(
         users.alice.email,

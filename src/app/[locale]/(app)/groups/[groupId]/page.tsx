@@ -174,10 +174,13 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
               <CardTitle className="text-base" data-testid="balances-title">
                 {t('detail.balances')}
               </CardTitle>
-              <Button variant="outline" size="sm" onClick={() => setSettleState({ open: true })}>
-                <Handshake className="mr-2 h-4 w-4" />
-                {t('detail.settle')}
-              </Button>
+              {/* An archived group refuses payments (see the banner above) */}
+              {!g.archivedAt && (
+                <Button variant="outline" size="sm" onClick={() => setSettleState({ open: true })}>
+                  <Handshake className="mr-2 h-4 w-4" />
+                  {t('detail.settle')}
+                </Button>
+              )}
             </div>
           </CardHeader>
           <CardContent className="space-y-1">
@@ -187,6 +190,7 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
               const toName = to?.name ?? to?.email ?? t('detail.unknown');
               const isMyDebt = debt.from === authSession?.user?.id;
               const showVenmo =
+                !g.archivedAt &&
                 venmoSetting.data?.enabled &&
                 g.currency === 'USD' &&
                 isMyDebt &&
@@ -199,7 +203,8 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
                 <div key={i} className="flex items-center gap-2">
                   <button
                     type="button"
-                    className="flex flex-1 items-center gap-2 rounded-lg p-2.5 text-sm transition-all hover:bg-muted/70 hover:shadow-sm"
+                    disabled={!!g.archivedAt}
+                    className="flex flex-1 items-center gap-2 rounded-lg p-2.5 text-sm transition-all enabled:hover:bg-muted/70 enabled:hover:shadow-sm"
                     onClick={() =>
                       setSettleState({
                         open: true,

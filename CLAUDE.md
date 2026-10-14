@@ -73,6 +73,7 @@ npx prisma db push   # Push schema without migration (dev only)
 - `src/server/trpc/router.ts` — Root app router (exports `AppRouter` type)
 - `src/server/trpc/routers/` — Individual routers: auth, groups, expenses, balances, settlements, activity, receipts, guest, admin
 - `src/server/lib/balance-calculator.ts` — Pure functions for debt simplification and balance computation (extracted for testability)
+- `src/server/lib/group-balances.ts` — `loadGroupBalances(db, groupId)`: loads one group's expenses and settlements and runs `computeBalances`; shared by `balances.getGroupBalances`/`getSimplifiedDebts` and `groups.archive`, so the group page and the archive check agree
 - `src/app/[locale]/` — Next.js App Router pages under i18n locale segment. `(auth)/` for login/register, `(app)/` for authenticated pages
 - `src/components/` — React components organized by domain
 - `src/components/providers.tsx` — Client-side tRPC + React Query + SessionProvider + ThemeProvider wrapper
@@ -93,6 +94,7 @@ npx prisma db push   # Push schema without migration (dev only)
 ## Key Conventions
 
 - All monetary amounts are stored as integers in cents (e.g., $12.99 = 1299)
+- Archived groups refuse new expenses, expense edits and deletes, and settlements. `groups.archive` refuses while any net balance in the group is nonzero, and the dashboard balance queries (`balances.getOverallDebts`, `getDashboard`) deliberately include archived groups, so an open balance in one stays visible on the dashboard: `getDashboard.perGroup` flags `archived`, and the dashboard gives an archived group where the viewer's balance is nonzero its own card. The group page hides the payment actions (Settle, Pay via Venmo) for an archived group (#275)
 - tRPC routers live in `src/server/trpc/routers/`
 - `protectedProcedure` requires auth; `groupMemberProcedure` requires group membership
 - AI providers implement the `AIProvider` interface in `src/server/ai/provider.ts`

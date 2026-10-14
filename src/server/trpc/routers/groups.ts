@@ -3,7 +3,7 @@ import { TRPCError } from '@trpc/server';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { createTRPCRouter, protectedProcedure, groupMemberProcedure } from '../init';
 import { stripUndefined } from '../../lib/strip-undefined';
-import { computeBalances } from '../../lib/balance-calculator';
+import { loadGroupBalances } from '../../lib/group-balances';
 import { checkRateLimit } from '../../lib/rate-limit';
 
 // Invite tokens are cuids (25 characters); a defensive bound so oversized input never reaches the lookup.
@@ -176,25 +176,21 @@ export const groupsRouter = createTRPCRouter({
     }
     // An archived group refuses settlements (and expenses), so an open balance
     // archived with it could only be settled by unarchiving the group first.
-    const [expenses, settlements] = await Promise.all([
-      ctx.db.expense.findMany({
+    const unsettled = (await loadGroupBalances(ctx.db, input.groupId)).filter((b) => b.net !== 0);
+    if (unsettled.length > 0) {
+      // Settlements need both people to be members, so a balance with someone
+      // who left can't be settled until they rejoin. An account an admin
+      // deleted can't rejoin, so the expenses it's in have to change instead.
+      const members = await ctx.db.groupMember.findMany({
         where: { groupId: input.groupId },
-        select: {
-          paidById: true,
-          amount: true,
-          baseCurrencyAmount: true,
-          shares: { select: { userId: true, amount: true } },
-        },
-      }),
-      ctx.db.settlement.findMany({
-        where: { groupId: input.groupId },
-        select: { fromId: true, toId: true, amount: true, baseCurrencyAmount: true },
-      }),
-    ]);
-    if (computeBalances(expenses, settlements).some((b) => b.net !== 0)) {
+        select: { userId: true },
+      });
+      const memberIds = new Set(members.map((m) => m.userId));
       throw new TRPCError({
         code: 'PRECONDITION_FAILED',
-        message: 'This group still has unsettled balances. Settle up before archiving it.',
+        message: unsettled.some((b) => !memberIds.has(b.userId))
+          ? "Someone who is no longer in this group still owes or is owed money, so it can't be archived. Invite them back to settle up, or edit the expenses they're in."
+          : 'This group still has unsettled balances. Settle up before archiving it.',
       });
     }
     const group = await ctx.db.group.update({
