@@ -3,6 +3,8 @@ import { TRPCError } from '@trpc/server';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { createTRPCRouter, protectedProcedure, groupMemberProcedure } from '../init';
 import { stripUndefined } from '../../lib/strip-undefined';
+import { computeBalances } from '../../lib/balance-calculator';
+import { formatCents } from '@/lib/money';
 
 export const groupsRouter = createTRPCRouter({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -326,60 +328,64 @@ export const groupsRouter = createTRPCRouter({
 
       const targetUser = await ctx.db.user.findUnique({
         where: { id: input.userId },
-        select: { isPlaceholder: true },
+        select: { isPlaceholder: true, name: true, placeholderName: true },
       });
 
       if (targetUser?.isPlaceholder) {
-        // Placeholder cleanup: redistribute shares, reassign expenses, then hard-delete the user
-        await ctx.db.$transaction(async (tx) => {
-          // 1. Redistribute expense shares to each expense's payer
-          const shares = await tx.expenseShare.findMany({
-            where: { userId: input.userId, expense: { groupId: input.groupId } },
-            include: { expense: { select: { paidById: true } } },
+        // A placeholder can't settle up on their own, so refuse while they owe
+        // or are owed anything: removing them must not change anyone's balance.
+        const [group, expenses, settlements] = await Promise.all([
+          ctx.db.group.findUnique({ where: { id: input.groupId }, select: { currency: true } }),
+          ctx.db.expense.findMany({
+            where: { groupId: input.groupId },
+            select: {
+              paidById: true,
+              addedById: true,
+              amount: true,
+              baseCurrencyAmount: true,
+              shares: { select: { userId: true, amount: true } },
+            },
+          }),
+          ctx.db.settlement.findMany({
+            where: { groupId: input.groupId },
+            select: { fromId: true, toId: true, amount: true, baseCurrencyAmount: true },
+          }),
+        ]);
+        const net = computeBalances(expenses, settlements).find((b) => b.userId === input.userId)?.net ?? 0;
+        if (net !== 0) {
+          const name = targetUser.placeholderName ?? targetUser.name ?? 'This member';
+          const amount = formatCents(Math.abs(net), group?.currency ?? 'USD');
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: `${name} ${net > 0 ? 'is owed' : 'owes'} ${amount} in this group. Settle up before removing them.`,
           });
+        }
 
-          for (const share of shares) {
-            // If the placeholder was the payer, redistribute to the acting admin
-            const payerId = share.expense.paidById === input.userId ? ctx.user.id : share.expense.paidById;
+        // Even at a zero balance, moving their shares or payments onto someone
+        // else would shift who owes whom, so a placeholder with history keeps
+        // it and only loses the membership, like a real user who leaves.
+        const hasHistory =
+          expenses.some(
+            (e) =>
+              e.paidById === input.userId ||
+              e.addedById === input.userId ||
+              e.shares.some((s) => s.userId === input.userId),
+          ) || settlements.some((s) => s.fromId === input.userId || s.toId === input.userId);
 
-            const existing = await tx.expenseShare.findUnique({
-              where: { expenseId_userId: { expenseId: share.expenseId, userId: payerId } },
+        await ctx.db.$transaction(async (tx) => {
+          if (hasHistory) {
+            // Drop them from receipts that haven't become an expense yet
+            await tx.receiptItemAssignment.deleteMany({
+              where: {
+                userId: input.userId,
+                receiptItem: { receipt: { groupId: input.groupId, expense: { is: null } } },
+              },
             });
-            if (existing) {
-              await tx.expenseShare.update({
-                where: { id: existing.id },
-                data: { amount: existing.amount + share.amount },
-              });
-            } else {
-              await tx.expenseShare.create({
-                data: { expenseId: share.expenseId, userId: payerId, amount: share.amount },
-              });
-            }
-            await tx.expenseShare.delete({ where: { id: share.id } });
+            await tx.groupMember.delete({ where: { id: targetMember.id } });
+          } else {
+            await tx.receiptItemAssignment.deleteMany({ where: { userId: input.userId } });
           }
 
-          // 2. Reassign expenses where the placeholder was payer or creator
-          await tx.expense.updateMany({
-            where: { paidById: input.userId, groupId: input.groupId },
-            data: { paidById: ctx.user.id },
-          });
-          await tx.expense.updateMany({
-            where: { addedById: input.userId, groupId: input.groupId },
-            data: { addedById: ctx.user.id },
-          });
-
-          // 3. Delete settlements involving the placeholder in this group
-          await tx.settlement.deleteMany({
-            where: { groupId: input.groupId, OR: [{ fromId: input.userId }, { toId: input.userId }] },
-          });
-
-          // 4. Delete receipt item assignments for the placeholder
-          await tx.receiptItemAssignment.deleteMany({ where: { userId: input.userId } });
-
-          // 5. Delete any activity log entries for the placeholder
-          await tx.activityLog.deleteMany({ where: { userId: input.userId } });
-
-          // 6. Log the removal before deleting the user
           await tx.activityLog.create({
             data: {
               groupId: input.groupId,
@@ -389,8 +395,11 @@ export const groupsRouter = createTRPCRouter({
             },
           });
 
-          // 7. Delete the placeholder user record (GroupMember cascades automatically)
-          await tx.user.delete({ where: { id: input.userId } });
+          if (!hasHistory) {
+            // Nothing refers to them: delete the user (GroupMember cascades; their
+            // activity-log entries keep their text with the user link cleared)
+            await tx.user.delete({ where: { id: input.userId } });
+          }
         });
       } else {
         // Real user — preserve financial history, just remove the membership

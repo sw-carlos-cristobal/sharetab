@@ -206,4 +206,94 @@ test.describe('Placeholder Members', () => {
     await charlie.dispose();
     await dispose();
   });
+
+  // #260: removing a placeholder used to move their shares and payments onto
+  // other people and delete their settlements, writing off what they owed or
+  // were owed without saying so.
+  test('removing a placeholder who still owes money is refused', async () => {
+    const { owner, groupId, memberIds, dispose } = await createTestGroup(
+      users.alice.email,
+      users.alice.password,
+      [],
+      'Remove Unsettled Placeholder',
+    );
+    const aliceId = memberIds[users.alice.email];
+    const phRes = await trpcMutation(owner, 'groups.addPlaceholder', { groupId, name: 'Gina' });
+    const ginaId = (await phRes.json()).result?.data?.json?.id;
+    await trpcMutation(owner, 'expenses.create', {
+      groupId,
+      title: 'Gina owes half',
+      amount: 2000,
+      paidById: aliceId,
+      splitMode: 'EQUAL',
+      shares: [
+        { userId: aliceId, amount: 1000 },
+        { userId: ginaId, amount: 1000 },
+      ],
+    });
+
+    const err = await trpcError(await trpcMutation(owner, 'groups.removeMember', { groupId, userId: ginaId }));
+    expect(err?.data?.code).toBe('PRECONDITION_FAILED');
+    expect(err?.message).toBe('Gina owes $10.00 in this group. Settle up before removing them.');
+
+    const group = await trpcResult(await trpcQuery(owner, 'groups.get', { groupId }));
+    expect(group.members.some((m: { user: { id: string } }) => m.user.id === ginaId)).toBe(true);
+    const { balances } = await trpcResult(await trpcQuery(owner, 'balances.getGroupBalances', { groupId }));
+    expect(balances.find((b: { userId: string }) => b.userId === aliceId).net).toBe(1000);
+
+    await dispose();
+  });
+
+  test('removing a settled-up placeholder leaves everyone else owing the same', async () => {
+    const { owner, groupId, memberIds, dispose } = await createTestGroup(
+      users.alice.email,
+      users.alice.password,
+      [{ email: users.bob.email, password: users.bob.password }],
+      'Remove Settled Placeholder',
+    );
+    const aliceId = memberIds[users.alice.email]!;
+    const bobId = memberIds[users.bob.email]!;
+    const phRes = await trpcMutation(owner, 'groups.addPlaceholder', { groupId, name: 'Hal' });
+    const halId = (await phRes.json()).result?.data?.json?.id;
+    // Hal owes Bob $5.00 and Alice owes Hal $5.00, so Hal's balance is zero.
+    await trpcMutation(owner, 'expenses.create', {
+      groupId,
+      title: 'Bob paid for Hal',
+      amount: 1000,
+      paidById: bobId,
+      splitMode: 'EQUAL',
+      shares: [
+        { userId: bobId, amount: 500 },
+        { userId: halId, amount: 500 },
+      ],
+    });
+    const halPaidRes = await trpcMutation(owner, 'expenses.create', {
+      groupId,
+      title: 'Hal paid for Alice',
+      amount: 1000,
+      paidById: halId,
+      splitMode: 'EQUAL',
+      shares: [
+        { userId: halId, amount: 500 },
+        { userId: aliceId, amount: 500 },
+      ],
+    });
+    const halPaid = (await halPaidRes.json()).result?.data?.json;
+
+    const res = await trpcMutation(owner, 'groups.removeMember', { groupId, userId: halId });
+    expect((await res.json()).result?.data?.json?.success).toBe(true);
+
+    const group = await trpcResult(await trpcQuery(owner, 'groups.get', { groupId }));
+    expect(group.members.some((m: { user: { id: string } }) => m.user.id === halId)).toBe(false);
+    // Moving Hal's shares onto the payers used to zero both of these.
+    const { balances } = await trpcResult(await trpcQuery(owner, 'balances.getGroupBalances', { groupId }));
+    const net = (userId: string) => balances.find((b: { userId: string }) => b.userId === userId)?.net;
+    expect(net(bobId)).toBe(500);
+    expect(net(aliceId)).toBe(-500);
+    // The expense still shows who actually paid it.
+    const expense = await trpcResult(await trpcQuery(owner, 'expenses.get', { groupId, expenseId: halPaid.id }));
+    expect(expense.paidById).toBe(halId);
+
+    await dispose();
+  });
 });
