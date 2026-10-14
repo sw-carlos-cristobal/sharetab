@@ -12,9 +12,7 @@
     "signIn": "Entrar"
   },
   "processing": {
-    "title": "Processando recibo...",
-    "activeProvider": "Provedor ativo:",
-    "fallbackChain": "Cadeia de fallback:"
+    "title": "Processando recibo..."
   },
   "people": {
     "title": "Quem está dividindo?",

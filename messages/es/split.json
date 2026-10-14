@@ -12,9 +12,7 @@
     "signIn": "Iniciar sesión"
   },
   "processing": {
-    "title": "Procesando recibo...",
-    "activeProvider": "Proveedor activo:",
-    "fallbackChain": "Cadena de respaldo:"
+    "title": "Procesando recibo..."
   },
   "people": {
     "title": "¿Quiénes comparten?",

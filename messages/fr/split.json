@@ -12,9 +12,7 @@
     "signIn": "Se connecter"
   },
   "processing": {
-    "title": "Traitement du reçu...",
-    "activeProvider": "Fournisseur actif :",
-    "fallbackChain": "Chaîne de secours :"
+    "title": "Traitement du reçu..."
   },
   "people": {
     "title": "Qui partage ?",

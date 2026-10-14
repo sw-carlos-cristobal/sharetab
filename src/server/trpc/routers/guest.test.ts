@@ -33,7 +33,6 @@ vi.mock('@/server/lib/rate-limit', () => ({
   checkTokenRateLimit: checkRateLimit,
   peekTokenRateLimit: peekRateLimit,
 }));
-vi.mock('@/server/ai/registry', () => ({ getConfiguredProviderPriority: vi.fn().mockReturnValue([]) }));
 
 type Session = { user: { id: string } } | null;
 
@@ -56,6 +55,14 @@ beforeEach(async () => {
   checkRateLimit.mockReturnValue({ allowed: true, retryAfterMs: 0 });
   peekRateLimit.mockReturnValue({ allowed: true, retryAfterMs: 0 });
   mockDb.user.findUnique.mockResolvedValue({ suspendedAt: null });
+});
+
+describe('AI provider setup (#280)', () => {
+  test('no guest procedure exposes the AI provider setup', async () => {
+    const { guestRouter } = await import('./guest');
+    const names = Object.keys(guestRouter._def.procedures).filter((name) => /provider/i.test(name));
+    expect(names, 'the AI provider setup is admin-only, in admin.getSystemHealth').toEqual([]);
+  });
 });
 
 describe('guest.getUploadStatus', () => {

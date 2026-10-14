@@ -12,9 +12,7 @@
     "signIn": "로그인"
   },
   "processing": {
-    "title": "영수증 처리 중...",
-    "activeProvider": "활성 제공자:",
-    "fallbackChain": "폴백 체인:"
+    "title": "영수증 처리 중..."
   },
   "people": {
     "title": "누가 나누나요?",

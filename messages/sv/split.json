@@ -12,9 +12,7 @@
     "signIn": "Logga in"
   },
   "processing": {
-    "title": "Bearbetar kvitto...",
-    "activeProvider": "Aktiv leverantör:",
-    "fallbackChain": "Reservkedja:"
+    "title": "Bearbetar kvitto..."
   },
   "people": {
     "title": "Vilka delar?",

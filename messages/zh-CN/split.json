@@ -12,9 +12,7 @@
     "signIn": "登录"
   },
   "processing": {
-    "title": "正在处理小票...",
-    "activeProvider": "当前提供商：",
-    "fallbackChain": "备用链："
+    "title": "正在处理小票..."
   },
   "people": {
     "title": "谁来分摊？",
