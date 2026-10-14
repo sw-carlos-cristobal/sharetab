@@ -12,9 +12,7 @@
     "signIn": "Anmelden"
   },
   "processing": {
-    "title": "Beleg wird verarbeitet...",
-    "activeProvider": "Aktiver Anbieter:",
-    "fallbackChain": "Fallback-Kette:"
+    "title": "Beleg wird verarbeitet..."
   },
   "people": {
     "title": "Wer teilt?",

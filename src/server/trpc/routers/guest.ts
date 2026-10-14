@@ -18,7 +18,6 @@ import {
 } from '../../lib/json-schemas';
 import { calculateSplitTotals } from '@/lib/split-calculator';
 import { normalizeGuestName } from '@/lib/guest-session';
-import { getConfiguredProviderPriority } from '@/server/ai/registry';
 import { canUseGuestUploads } from '../../lib/guest-uploads';
 import { checkJoinRateLimit } from '../../lib/guest-join-limit';
 import {
@@ -279,21 +278,6 @@ export const guestRouter = createTRPCRouter({
         nextCursor,
       };
     }),
-
-  getScanProviderInfo: protectedProcedure.query(async () => {
-    try {
-      return {
-        configuredProviders: getConfiguredProviderPriority(),
-        activeProvider: null,
-      };
-    } catch {
-      // Keep response shape stable even if provider parsing fails.
-      return {
-        configuredProviders: [],
-        activeProvider: null,
-      };
-    }
-  }),
 
   getUploadStatus: publicProcedure.query(async ({ ctx }) => {
     return { allowed: await canUseGuestUploads(ctx.db, () => ctx.session?.user?.id) };

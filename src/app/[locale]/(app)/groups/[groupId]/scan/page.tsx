@@ -34,7 +34,6 @@ function ScanReceiptContent({ params }: { params: Promise<{ groupId: string }> }
   const { data: authSession } = useSession();
   const resumeReceiptId = searchParams.get('receiptId');
   const group = trpc.groups.get.useQuery({ groupId });
-  const providerInfo = trpc.receipts.getScanProviderInfo.useQuery();
 
   const [step, setStep] = useState<Step>(resumeReceiptId ? 'assign' : 'upload');
   const [receiptId, setReceiptId] = useState<string | null>(resumeReceiptId);
@@ -157,9 +156,6 @@ function ScanReceiptContent({ params }: { params: Promise<{ groupId: string }> }
       name: m.user.placeholderName ?? m.user.name ?? m.user.email,
     })) ?? [];
 
-  const configuredProviderChain = providerInfo.data?.configuredProviders?.join(' -> ') ?? 'loading...';
-  const activeProvider = providerInfo.data?.activeProvider ?? 'checking...';
-
   // Loading state for group data (Finding #22)
   if (group.isLoading) {
     return (
@@ -214,11 +210,6 @@ function ScanReceiptContent({ params }: { params: Promise<{ groupId: string }> }
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">{t('uploadDescription')}</p>
-            <p className="text-xs text-muted-foreground">
-              {t('activeProvider')} <span className="font-medium text-foreground">{activeProvider}</span>
-              {' · '}
-              {t('fallbackChain')} <span className="font-medium text-foreground">{configuredProviderChain}</span>
-            </p>
 
             <div className="space-y-2">
               <Label htmlFor="receipt">{t('receiptImage')}</Label>
@@ -249,11 +240,6 @@ function ScanReceiptContent({ params }: { params: Promise<{ groupId: string }> }
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <div className="text-center space-y-2">
               <p className="font-medium">{t('processing')}</p>
-              <p className="text-xs text-muted-foreground">
-                {t('using')} <span className="font-medium text-foreground">{activeProvider}</span>
-                {' · '}
-                {t('chain')} <span className="font-medium text-foreground">{configuredProviderChain}</span>
-              </p>
               <p className="text-sm text-muted-foreground">
                 {tc(loadingMessageKeys[loadingMsgIdx] ?? loadingMessageKeys[0])}
               </p>

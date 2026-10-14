@@ -12,9 +12,7 @@
     "signIn": "ログイン"
   },
   "processing": {
-    "title": "レシートを処理中...",
-    "activeProvider": "使用中のプロバイダ:",
-    "fallbackChain": "フォールバックチェーン:"
+    "title": "レシートを処理中..."
   },
   "people": {
     "title": "誰と割り勘しますか？",

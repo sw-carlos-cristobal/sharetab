@@ -5,10 +5,6 @@ vi.mock('next/headers', () => ({
 }));
 vi.mock('@/server/auth', () => ({ auth: vi.fn() }));
 vi.mock('@/server/lib/receipt-processor', () => ({ processReceiptImage: vi.fn() }));
-vi.mock('@/server/ai/registry', () => ({
-  getAIProvidersWithFallback: vi.fn(),
-  getConfiguredProviderPriority: vi.fn(),
-}));
 
 const mockDb = {
   user: { findUnique: vi.fn() },
@@ -28,6 +24,14 @@ async function caller() {
 beforeEach(() => {
   vi.clearAllMocks();
   mockDb.user.findUnique.mockResolvedValue({ suspendedAt: null });
+});
+
+describe('AI provider setup (#280)', () => {
+  test('no receipts procedure exposes the AI provider setup', async () => {
+    const { receiptsRouter } = await import('./receipts');
+    const names = Object.keys(receiptsRouter._def.procedures).filter((name) => /provider/i.test(name));
+    expect(names, 'the AI provider setup is admin-only, in admin.getSystemHealth').toEqual([]);
+  });
 });
 
 describe('receipt item names are trimmed', () => {

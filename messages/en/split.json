@@ -12,9 +12,7 @@
     "signIn": "Sign in"
   },
   "processing": {
-    "title": "Processing receipt...",
-    "activeProvider": "Active provider:",
-    "fallbackChain": "Fallback chain:"
+    "title": "Processing receipt..."
   },
   "people": {
     "title": "Who's splitting?",

@@ -65,7 +65,6 @@ export const expensesRouter = createTRPCRouter({
           shares: {
             include: { user: { select: { id: true, name: true, email: true, image: true } } },
           },
-          receipt: true,
         },
       });
       if (!expense || expense.groupId !== input.groupId) {

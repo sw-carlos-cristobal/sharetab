@@ -6,7 +6,6 @@ import { createTRPCRouter, protectedProcedure, groupMemberProcedure } from '../i
 import { processReceiptImage } from '../../lib/receipt-processor';
 import { logger } from '../../lib/logger';
 import { parseExtractedData } from '../../lib/json-schemas';
-import { getAIProvidersWithFallback, getConfiguredProviderPriority } from '@/server/ai/registry';
 import { getExchangeRate, convertCents } from '../../lib/exchange-rates';
 import { stripUndefined } from '../../lib/strip-undefined';
 
@@ -40,23 +39,6 @@ async function verifyReceiptAccess(
 }
 
 export const receiptsRouter = createTRPCRouter({
-  getScanProviderInfo: protectedProcedure.query(async () => {
-    try {
-      const configured = getConfiguredProviderPriority();
-      const [active] = await getAIProvidersWithFallback();
-      return {
-        configuredProviders: configured,
-        activeProvider: active?.name ?? null,
-      };
-    } catch {
-      // Keep response shape stable even if provider checks fail.
-      return {
-        configuredProviders: [],
-        activeProvider: null,
-      };
-    }
-  }),
-
   processReceipt: protectedProcedure
     .input(
       z.object({
