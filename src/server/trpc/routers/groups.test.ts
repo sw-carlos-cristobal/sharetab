@@ -17,9 +17,9 @@ vi.mock('@/server/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-async function caller() {
+async function caller(userId = 'owner') {
   const { groupsRouter } = await import('./groups');
-  const ctx = { session: { user: { id: 'owner' } }, db: mockDb, headers: new Headers(), impersonating: null };
+  const ctx = { session: { user: { id: userId } }, db: mockDb, headers: new Headers(), impersonating: null };
   return groupsRouter.createCaller(ctx as unknown as Parameters<typeof groupsRouter.createCaller>[0]);
 }
 
@@ -86,7 +86,7 @@ describe('invites', () => {
     usedAt: null,
     expiresAt: inAWeek(),
     group: { name: 'Ski Trip', _count: { members: 4 } },
-    createdBy: { name: 'Alice', isPlaceholder: false },
+    createdBy: { name: 'Alice', isPlaceholder: false, suspendedAt: null },
   });
 
   test('createInvite records who made the invite', async () => {
@@ -98,8 +98,7 @@ describe('invites', () => {
     );
   });
 
-  test('getInvite returns the group name, inviter and member count to someone not in the group', async () => {
-    mockDb.groupMember.findUnique.mockResolvedValue(null);
+  test('getInvite returns the group name, inviter and member count', async () => {
     mockDb.groupInvite.findUnique.mockResolvedValue(validInvite());
     const api = await caller();
     await expect(api.getInvite({ token: 't1' })).resolves.toEqual({
@@ -137,9 +136,36 @@ describe('invites', () => {
   test('getInvite has no inviter once the inviter is a placeholder (a deleted account)', async () => {
     mockDb.groupInvite.findUnique.mockResolvedValue({
       ...validInvite(),
-      createdBy: { name: 'Deleted user', isPlaceholder: true },
+      createdBy: { name: 'Deleted user', isPlaceholder: true, suspendedAt: new Date() },
     });
     const api = await caller();
     await expect(api.getInvite({ token: 't1' })).resolves.toMatchObject({ inviterName: null });
+  });
+
+  test('getInvite has no inviter while the inviter is suspended', async () => {
+    mockDb.groupInvite.findUnique.mockResolvedValue({
+      ...validInvite(),
+      createdBy: { name: 'Mallory', isPlaceholder: false, suspendedAt: new Date() },
+    });
+    const api = await caller();
+    await expect(api.getInvite({ token: 't1' })).resolves.toMatchObject({ inviterName: null });
+  });
+
+  test('getInvite and joinByInvite refuse a token longer than 64 characters without a lookup', async () => {
+    const api = await caller();
+    const token = 'x'.repeat(65);
+    await expect(api.getInvite({ token })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(api.joinByInvite({ token })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockDb.groupInvite.findUnique).not.toHaveBeenCalled();
+  });
+
+  test('getInvite allows 30 lookups a minute per user, then refuses without a lookup', async () => {
+    mockDb.groupInvite.findUnique.mockResolvedValue(null);
+    const api = await caller('prober');
+    for (let i = 0; i < 30; i++) await api.getInvite({ token: `guess-${i}` });
+    await expect(api.getInvite({ token: 'guess-30' })).rejects.toMatchObject({ code: 'TOO_MANY_REQUESTS' });
+    expect(mockDb.groupInvite.findUnique).toHaveBeenCalledTimes(30);
+    // Another user's budget is separate
+    await expect((await caller('someone-else')).getInvite({ token: 'guess-0' })).resolves.toBeNull();
   });
 });

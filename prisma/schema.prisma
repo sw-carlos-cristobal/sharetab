@@ -128,7 +128,7 @@ model GroupInvite {
   usedById  String?
 
   placeholderUserId String?  // if set, auto-merge this placeholder when invite is used
-  createdById       String?  // who made the invite (null for invites made before this was recorded)
+  createdById       String?  // who made the invite (null for invites made before this was recorded, or once that user row is deleted)
 
   group     Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
   createdBy User? @relation("GroupInvitesCreated", fields: [createdById], references: [id], onDelete: SetNull)

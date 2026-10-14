@@ -19,15 +19,19 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
   const t = useTranslations('auth.invite');
   const { data: session, status } = useSession();
 
-  const invite = trpc.groups.getInvite.useQuery({ token }, { enabled: !!session });
-  // null means joinByInvite would refuse the token; a failed lookup leaves the Accept button
-  // (and joinByInvite's own error) as the fallback.
+  // Loaded once: without retries a failed lookup falls back straight away, and without refetches
+  // the page doesn't turn to "invalid" because this person's own join just used the invite.
+  const invite = trpc.groups.getInvite.useQuery({ token }, { enabled: !!session, retry: false, staleTime: Infinity });
+  // null means joinByInvite would refuse the token. A failed lookup keeps the old text and the
+  // Accept button, and leaves joinByInvite to report any problem.
   const invalid = invite.data === null;
 
   const joinGroup = trpc.groups.joinByInvite.useMutation({
     onSuccess: (data) => {
       router.push(`/groups/${data.groupId}`);
     },
+    // Someone may have used the invite, or it may have expired, since the page loaded.
+    onError: () => void invite.refetch(),
   });
 
   useEffect(() => {
@@ -46,6 +50,16 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
 
   if (!session) return null;
 
+  let summary: ReactNode;
+  if (invite.data) {
+    const details = { group: invite.data.groupName, count: invite.data.memberCount, b: bold };
+    summary = invite.data.inviterName
+      ? t.rich('invitedBy', { ...details, inviter: invite.data.inviterName })
+      : t.rich('invited', details);
+  } else {
+    summary = invite.isPending ? t('loading') : t('description');
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-md">
@@ -57,27 +71,10 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
           {invalid ? (
             <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{t('invalid')}</div>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              {invite.data
-                ? invite.data.inviterName
-                  ? t.rich('invitedBy', {
-                      inviter: invite.data.inviterName,
-                      group: invite.data.groupName,
-                      count: invite.data.memberCount,
-                      b: bold,
-                    })
-                  : t.rich('invited', {
-                      group: invite.data.groupName,
-                      count: invite.data.memberCount,
-                      b: bold,
-                    })
-                : invite.isPending
-                  ? t('loading')
-                  : t('description')}
-            </p>
+            <p className="text-sm break-words text-muted-foreground">{summary}</p>
           )}
 
-          {joinGroup.error && (
+          {joinGroup.error && !invalid && (
             <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{joinGroup.error.message}</div>
           )}
 

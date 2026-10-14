@@ -3,6 +3,12 @@ import { TRPCError } from '@trpc/server';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { createTRPCRouter, protectedProcedure, groupMemberProcedure } from '../init';
 import { stripUndefined } from '../../lib/strip-undefined';
+import { checkRateLimit } from '../../lib/rate-limit';
+
+// Invite tokens are cuids (25 characters); the cap keeps oversized input away from the lookup.
+const inviteTokenSchema = z.string().max(64);
+// getInvite answers whether a token is live without using it up, so cap how fast one account can ask.
+const INVITE_LOOKUPS_PER_MINUTE = 30;
 
 export const groupsRouter = createTRPCRouter({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -248,27 +254,32 @@ export const groupsRouter = createTRPCRouter({
   // What the invite page shows before the person accepts. Anyone signed in who
   // holds the token sees it, which is less than the token already gives them
   // (joining the group). null when joinByInvite would refuse the token.
-  getInvite: protectedProcedure.input(z.object({ token: z.string() })).query(async ({ ctx, input }) => {
+  getInvite: protectedProcedure.input(z.object({ token: inviteTokenSchema })).query(async ({ ctx, input }) => {
+    if (!checkRateLimit(`invite-lookup:${ctx.user.id}`, INVITE_LOOKUPS_PER_MINUTE, 60 * 1000).allowed) {
+      throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'Too many invite lookups. Try again in a minute.' });
+    }
     const invite = await ctx.db.groupInvite.findUnique({
       where: { token: input.token },
       select: {
         usedAt: true,
         expiresAt: true,
         group: { select: { name: true, _count: { select: { members: true } } } },
-        createdBy: { select: { name: true, isPlaceholder: true } },
+        createdBy: { select: { name: true, isPlaceholder: true, suspendedAt: true } },
       },
     });
     if (!invite || !isRedeemable(invite)) return null;
-    // A deleted account becomes a placeholder named "Deleted user"; leave it out.
-    const inviter = invite.createdBy && !invite.createdBy.isPlaceholder ? invite.createdBy.name : null;
+    // Name only an active account: a deleted one becomes a placeholder named "Deleted user",
+    // and a suspended one shouldn't be vouching for anything.
+    const inviter = invite.createdBy;
+    const inviterName = inviter && !inviter.isPlaceholder && !inviter.suspendedAt ? inviter.name : null;
     return {
       groupName: invite.group.name,
-      inviterName: inviter,
+      inviterName,
       memberCount: invite.group._count.members,
     };
   }),
 
-  joinByInvite: protectedProcedure.input(z.object({ token: z.string() })).mutation(async ({ ctx, input }) => {
+  joinByInvite: protectedProcedure.input(z.object({ token: inviteTokenSchema })).mutation(async ({ ctx, input }) => {
     const invite = await ctx.db.groupInvite.findUnique({
       where: { token: input.token },
     });
@@ -282,9 +293,9 @@ export const groupsRouter = createTRPCRouter({
       },
     });
     if (existing) {
-      // Intentional: invite links are reusable for navigation purposes.
-      // usedAt/usedById only track the first redemption that creates a membership.
-      // An already-member user can still use the link to navigate to the group.
+      // A member opening an unused link is sent to the group without using it up:
+      // usedAt/usedById only track the redemption that creates a membership. Once
+      // someone has redeemed it, the isRedeemable check above refuses it for everyone.
       return { groupId: invite.groupId, alreadyMember: true };
     }
 

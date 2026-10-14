@@ -1,14 +1,12 @@
 import { test, expect } from '@playwright/test';
-import { users, login, authedContext, trpcMutation, deleteTestGroup } from './helpers';
+import { users, login, trpcMutation, createTestGroup } from './helpers';
 
 test.describe('Invite page (2.4)', () => {
   test('2.4.9 — shows the group, inviter and member count, then joins', async ({ page }) => {
     const groupName = `Invite Page ${Date.now()}`;
-    const alice = await authedContext(users.alice.email, users.alice.password);
-    const groupId = (await (await trpcMutation(alice, 'groups.create', { name: groupName })).json()).result?.data?.json
-      ?.id;
-    const token = (await (await trpcMutation(alice, 'groups.createInvite', { groupId })).json()).result?.data?.json
-      ?.token;
+    const { owner, groupId, dispose } = await createTestGroup(users.alice.email, users.alice.password, [], groupName);
+    const invRes = await trpcMutation(owner, 'groups.createInvite', { groupId });
+    const token = (await invRes.json()).result?.data?.json?.token;
 
     try {
       await login(page, users.charlie.email, users.charlie.password);
@@ -19,8 +17,7 @@ test.describe('Invite page (2.4)', () => {
       await page.getByRole('button', { name: 'Accept Invite' }).click();
       await page.waitForURL(new RegExp(`/groups/${groupId}$`), { timeout: 15000 });
     } finally {
-      await deleteTestGroup(alice, groupId);
-      await alice.dispose();
+      await dispose();
     }
   });
 
