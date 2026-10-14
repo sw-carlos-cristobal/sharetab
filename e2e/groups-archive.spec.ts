@@ -159,6 +159,41 @@ test.describe('Group Archiving', () => {
       await dispose();
     });
 
+    // #275: an archived group refuses settlements and was left off the
+    // dashboard, so archiving it with an open balance hid the debt.
+    test('cannot archive a group until everyone is settled up', async () => {
+      const { owner, groupId, memberIds, dispose } = await createTestGroup(
+        users.alice.email,
+        users.alice.password,
+        [{ email: users.bob.email, password: users.bob.password }],
+        'Archive Unsettled Block',
+      );
+      const aliceId = memberIds[users.alice.email];
+      const bobId = memberIds[users.bob.email];
+      await trpcMutation(owner, 'expenses.create', {
+        groupId,
+        title: 'Bob owes half',
+        amount: 1000,
+        paidById: aliceId,
+        splitMode: 'EQUAL',
+        shares: [
+          { userId: aliceId, amount: 500 },
+          { userId: bobId, amount: 500 },
+        ],
+      });
+
+      const error = await trpcError(await trpcMutation(owner, 'groups.archive', { groupId }));
+      expect(error?.data?.code).toBe('PRECONDITION_FAILED');
+      expect(error?.message).toBe('This group still has unsettled balances. Settle up before archiving it.');
+
+      // Once Bob pays Alice back, the group can be archived.
+      await trpcMutation(owner, 'settlements.create', { groupId, fromId: bobId, toId: aliceId, amount: 500 });
+      const res = await trpcMutation(owner, 'groups.archive', { groupId });
+      expect((await res.json()).result?.data?.json?.archivedAt).toBeTruthy();
+
+      await dispose();
+    });
+
     test('cannot update expense on archived group', async () => {
       const { owner, groupId, memberIds, dispose } = await createTestGroup(
         users.alice.email,

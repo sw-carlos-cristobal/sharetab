@@ -48,7 +48,8 @@ export const balancesRouter = createTRPCRouter({
 
   getOverallDebts: protectedProcedure.query(async ({ ctx }) => {
     const groups = await ctx.db.group.findMany({
-      where: { members: { some: { userId: ctx.user.id } }, archivedAt: null },
+      // Archived groups count too: an open balance stays visible until it's settled
+      where: { members: { some: { userId: ctx.user.id } } },
       select: {
         expenses: {
           select: {
@@ -138,7 +139,8 @@ export const balancesRouter = createTRPCRouter({
 
   getDashboard: protectedProcedure.query(async ({ ctx }) => {
     const groups = await ctx.db.group.findMany({
-      where: { members: { some: { userId: ctx.user.id } }, archivedAt: null },
+      // Archived groups count too: an open balance stays visible until it's settled
+      where: { members: { some: { userId: ctx.user.id } } },
       select: {
         id: true,
         name: true,

@@ -3,6 +3,7 @@ import { TRPCError } from '@trpc/server';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { createTRPCRouter, protectedProcedure, groupMemberProcedure } from '../init';
 import { stripUndefined } from '../../lib/strip-undefined';
+import { computeBalances } from '../../lib/balance-calculator';
 import { checkRateLimit } from '../../lib/rate-limit';
 
 // Invite tokens are cuids (25 characters); a defensive bound so oversized input never reaches the lookup.
@@ -172,6 +173,29 @@ export const groupsRouter = createTRPCRouter({
   archive: groupMemberProcedure.input(z.object({ groupId: z.string() })).mutation(async ({ ctx, input }) => {
     if (ctx.membership.role === 'MEMBER') {
       throw new TRPCError({ code: 'FORBIDDEN', message: 'Only admins and owners can archive groups' });
+    }
+    // An archived group refuses settlements (and expenses), so an open balance
+    // archived with it could only be settled by unarchiving the group first.
+    const [expenses, settlements] = await Promise.all([
+      ctx.db.expense.findMany({
+        where: { groupId: input.groupId },
+        select: {
+          paidById: true,
+          amount: true,
+          baseCurrencyAmount: true,
+          shares: { select: { userId: true, amount: true } },
+        },
+      }),
+      ctx.db.settlement.findMany({
+        where: { groupId: input.groupId },
+        select: { fromId: true, toId: true, amount: true, baseCurrencyAmount: true },
+      }),
+    ]);
+    if (computeBalances(expenses, settlements).some((b) => b.net !== 0)) {
+      throw new TRPCError({
+        code: 'PRECONDITION_FAILED',
+        message: 'This group still has unsettled balances. Settle up before archiving it.',
+      });
     }
     const group = await ctx.db.group.update({
       where: { id: input.groupId },

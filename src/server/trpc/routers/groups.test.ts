@@ -11,7 +11,7 @@ const mockDb = {
   groupMember: { findUnique: vi.fn(), create: vi.fn(), delete: vi.fn() },
   groupInvite: { findUnique: vi.fn(), create: vi.fn() },
   activityLog: { create: vi.fn(), deleteMany: vi.fn() },
-  expense: { count: vi.fn(), updateMany: vi.fn() },
+  expense: { count: vi.fn(), findMany: vi.fn(), updateMany: vi.fn() },
   expenseShare: {
     count: vi.fn(),
     findMany: vi.fn(),
@@ -20,7 +20,7 @@ const mockDb = {
     create: vi.fn(),
     delete: vi.fn(),
   },
-  settlement: { count: vi.fn(), deleteMany: vi.fn() },
+  settlement: { count: vi.fn(), findMany: vi.fn(), deleteMany: vi.fn() },
   receiptItemAssignment: { deleteMany: vi.fn() },
   $transaction: vi.fn(),
 };
@@ -246,5 +246,52 @@ describe('removing a placeholder', () => {
       expect.objectContaining({ data: expect.objectContaining({ type: 'MEMBER_LEFT' }) }),
     );
     expect(mockDb.user.delete).toHaveBeenCalledWith({ where: { id: 'p1' } });
+  });
+});
+
+// #275: archiving hid a group's open balances from the dashboard, and an
+// archived group refuses settlements, so the debt was frozen out of sight.
+describe('archiving a group', () => {
+  const expense = (paidById: string, shares: { userId: string; amount: number }[]) => ({
+    paidById,
+    amount: shares.reduce((sum, s) => sum + s.amount, 0),
+    baseCurrencyAmount: null,
+    shares,
+  });
+
+  test('is refused while anyone in the group owes money', async () => {
+    mockDb.expense.findMany.mockResolvedValue([
+      expense('owner', [
+        { userId: 'owner', amount: 500 },
+        { userId: 'bob', amount: 500 },
+      ]),
+    ]);
+    mockDb.settlement.findMany.mockResolvedValue([]);
+    mockDb.group.update.mockResolvedValue({ id: 'g1', name: 'Trip', archivedAt: new Date() });
+    const api = await caller();
+    await expect(api.archive({ groupId: 'g1' })).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: 'This group still has unsettled balances. Settle up before archiving it.',
+    });
+    expect(mockDb.group.update).not.toHaveBeenCalled();
+  });
+
+  test('goes ahead once everyone is settled up', async () => {
+    mockDb.expense.findMany.mockResolvedValue([
+      expense('owner', [
+        { userId: 'owner', amount: 500 },
+        { userId: 'bob', amount: 500 },
+      ]),
+    ]);
+    // Bob paid the owner back.
+    mockDb.settlement.findMany.mockResolvedValue([
+      { fromId: 'bob', toId: 'owner', amount: 500, baseCurrencyAmount: null },
+    ]);
+    mockDb.group.update.mockResolvedValue({ id: 'g1', name: 'Trip', archivedAt: new Date() });
+    const api = await caller();
+    await api.archive({ groupId: 'g1' });
+    expect(mockDb.group.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'g1' }, data: { archivedAt: expect.any(Date) } }),
+    );
   });
 });
