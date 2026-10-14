@@ -6,10 +6,22 @@ vi.mock('next/headers', () => ({
 vi.mock('@/server/auth', () => ({ auth: vi.fn() }));
 
 const mockDb = {
-  user: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
+  user: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
   group: { create: vi.fn(), update: vi.fn(), findUnique: vi.fn() },
-  groupMember: { findUnique: vi.fn(), create: vi.fn() },
-  activityLog: { create: vi.fn() },
+  groupMember: { findUnique: vi.fn(), create: vi.fn(), delete: vi.fn() },
+  activityLog: { create: vi.fn(), deleteMany: vi.fn() },
+  expense: { count: vi.fn(), updateMany: vi.fn() },
+  expenseShare: {
+    count: vi.fn(),
+    findMany: vi.fn(),
+    findUnique: vi.fn(),
+    update: vi.fn(),
+    create: vi.fn(),
+    delete: vi.fn(),
+  },
+  settlement: { count: vi.fn(), deleteMany: vi.fn() },
+  receiptItemAssignment: { deleteMany: vi.fn() },
+  $transaction: vi.fn(),
 };
 vi.mock('@/server/db', () => ({ db: mockDb }));
 vi.mock('@/server/lib/logger', () => ({
@@ -23,10 +35,13 @@ async function caller() {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   // protectedProcedure looks the caller up; groupMemberProcedure checks membership.
   mockDb.user.findUnique.mockResolvedValue({ suspendedAt: null });
   mockDb.groupMember.findUnique.mockResolvedValue({ role: 'OWNER', userId: 'owner', groupId: 'g1' });
+  mockDb.$transaction.mockImplementation(async (arg: unknown) =>
+    typeof arg === 'function' ? arg(mockDb) : Promise.all(arg as Promise<unknown>[]),
+  );
 });
 
 describe('group and placeholder names are trimmed', () => {
@@ -76,5 +91,68 @@ describe('group and placeholder names are trimmed', () => {
       code: 'BAD_REQUEST',
     });
     expect(mockDb.user.update).not.toHaveBeenCalled();
+  });
+});
+
+// #260: removing a placeholder moved their shares onto each expense's payer,
+// their expenses onto the acting admin, and deleted their settlements, so
+// whatever they owed or were owed vanished from everyone else's balance.
+describe('removing a placeholder', () => {
+  function setUp({ shares = 0, expenses = 0, settlements = 0 } = {}) {
+    // The caller lookup and membership check, then the target's membership and user rows.
+    mockDb.groupMember.findUnique
+      .mockResolvedValueOnce({ role: 'OWNER', userId: 'owner', groupId: 'g1' })
+      .mockResolvedValueOnce({ id: 'gm-p1', role: 'MEMBER', userId: 'p1', groupId: 'g1' });
+    mockDb.user.findUnique
+      .mockResolvedValueOnce({ suspendedAt: null })
+      .mockResolvedValueOnce({ isPlaceholder: true, name: 'Alice', placeholderName: 'Alice' });
+    mockDb.expenseShare.count.mockResolvedValue(shares);
+    mockDb.expense.count.mockResolvedValue(expenses);
+    mockDb.settlement.count.mockResolvedValue(settlements);
+    // Read by the old cleanup, which looked up the shares to move
+    mockDb.expenseShare.findMany.mockResolvedValue([]);
+  }
+
+  function expectNothingChanged() {
+    expect(mockDb.expenseShare.update).not.toHaveBeenCalled();
+    expect(mockDb.expenseShare.create).not.toHaveBeenCalled();
+    expect(mockDb.expenseShare.delete).not.toHaveBeenCalled();
+    expect(mockDb.expense.updateMany).not.toHaveBeenCalled();
+    expect(mockDb.settlement.deleteMany).not.toHaveBeenCalled();
+    expect(mockDb.groupMember.delete).not.toHaveBeenCalled();
+    expect(mockDb.user.delete).not.toHaveBeenCalled();
+  }
+
+  // Even at a zero balance: moving their part onto others shifts who owes
+  // whom, and a removed member's balance can come back with nobody able to
+  // settle it.
+  test.each([
+    ['has a share in an expense', { shares: 1 }],
+    ['paid an expense', { expenses: 1 }],
+    ['is in a settlement', { settlements: 1 }],
+  ])('is refused when the placeholder %s', async (_, history) => {
+    setUp(history);
+    const api = await caller();
+    await expect(api.removeMember({ groupId: 'g1', userId: 'p1' })).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message:
+        "Alice is in expenses or payments in this group, so they can't be removed. Take them out of those first.",
+    });
+    expectNothingChanged();
+  });
+
+  test('deletes a placeholder who was never in an expense or payment', async () => {
+    setUp();
+    const api = await caller();
+    await expect(api.removeMember({ groupId: 'g1', userId: 'p1' })).resolves.toEqual({ success: true });
+    expect(mockDb.expense.updateMany).not.toHaveBeenCalled();
+    expect(mockDb.settlement.deleteMany).not.toHaveBeenCalled();
+    // Their activity-log entries stay (the user link is cleared by the database)
+    expect(mockDb.activityLog.deleteMany).not.toHaveBeenCalled();
+    expect(mockDb.receiptItemAssignment.deleteMany).toHaveBeenCalledWith({ where: { userId: 'p1' } });
+    expect(mockDb.activityLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ type: 'MEMBER_LEFT' }) }),
+    );
+    expect(mockDb.user.delete).toHaveBeenCalledWith({ where: { id: 'p1' } });
   });
 });
