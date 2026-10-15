@@ -221,11 +221,31 @@ describe('invites', () => {
     await expect(api.getInvite({ token: 't1' })).resolves.toMatchObject({ placeholderName: 'Bob' });
   });
 
-  test('getInvite names no placeholder once the one a claim link was made for is gone', async () => {
+  // A claim link is for that placeholder only; once they're merged or removed it's dead
+  test('getInvite treats a claim link whose placeholder is gone as invalid', async () => {
     mockDb.groupInvite.findUnique.mockResolvedValue({ ...validInvite(), groupId: 'g1', placeholderUserId: 'p1' });
     mockDb.user.findUnique.mockResolvedValueOnce({ suspendedAt: null }).mockResolvedValueOnce(null);
     const api = await caller('bob');
-    await expect(api.getInvite({ token: 't1' })).resolves.toMatchObject({ placeholderName: null });
+    await expect(api.getInvite({ token: 't1' })).resolves.toBeNull();
+  });
+
+  test('joinByInvite refuses a claim link whose placeholder is gone, without joining', async () => {
+    mockDb.groupInvite.findUnique.mockResolvedValue({
+      id: 'i1',
+      groupId: 'g1',
+      usedAt: null,
+      expiresAt: inAWeek(),
+      placeholderUserId: 'p1',
+    });
+    // Merged into someone else through another link: the user row is gone
+    mockDb.user.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
+      where.id === 'p1' ? null : { suspendedAt: null, isPlaceholder: false },
+    );
+    mockDb.groupMember.findUnique.mockResolvedValue(null);
+    mockDb.groupInvite.updateMany.mockResolvedValue({ count: 1 });
+    const api = await caller('mallory');
+    await expect(api.joinByInvite({ token: 't1' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(mockDb.groupMember.create).not.toHaveBeenCalled();
   });
 
   test('joinByInvite refuses an invite someone else redeemed first, without joining', async () => {

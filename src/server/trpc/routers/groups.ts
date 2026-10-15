@@ -315,6 +315,9 @@ export const groupsRouter = createTRPCRouter({
     const placeholder = invite.placeholderUserId
       ? await findPlaceholderMember(ctx.db, invite.placeholderUserId, invite.groupId)
       : null;
+    // A link made for a placeholder is for them only: once they're merged or
+    // removed, joinByInvite refuses it.
+    if (invite.placeholderUserId && !placeholder) return null;
     const placeholderName = placeholder ? (placeholder.placeholderName ?? placeholder.name) : null;
     return {
       groupName: invite.group.name,
@@ -373,6 +376,12 @@ export const groupsRouter = createTRPCRouter({
       // redeeming one link at once can't both join (and only one takes over a
       // placeholder).
       if (!(await claimInvite(tx, invite.id, ctx.user.id))) return false;
+      // An invite made for a placeholder hands them over to whoever accepts it,
+      // and is for that only: once the placeholder is merged or removed, it
+      // doesn't let anyone into the group.
+      if (invite.placeholderUserId && !(await findPlaceholderMember(tx, invite.placeholderUserId, invite.groupId))) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Invalid or expired invite' });
+      }
       await tx.groupMember.create({
         data: { userId: ctx.user.id, groupId: invite.groupId },
       });
@@ -384,12 +393,8 @@ export const groupsRouter = createTRPCRouter({
         },
       });
 
-      // An invite made for a placeholder hands them over to whoever accepts it.
-      // Skip it if they're no longer a placeholder member of this group (merged
-      // or removed since).
-      if (invite.placeholderUserId && (await findPlaceholderMember(tx, invite.placeholderUserId, invite.groupId))) {
-        // Lost to a merge that got there first: don't join them as if they'd
-        // taken the placeholder over. Accepting again joins without it.
+      if (invite.placeholderUserId) {
+        // Lost to a merge that got there first since the check above
         if (!(await mergePlaceholderIntoUser(tx, invite.placeholderUserId, ctx.user.id, invite.groupId))) {
           throw new TRPCError({ code: 'CONFLICT', message: 'This placeholder was already merged or removed' });
         }

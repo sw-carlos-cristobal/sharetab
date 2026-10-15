@@ -303,6 +303,32 @@ test.describe('Placeholder Members', () => {
     await dispose();
   });
 
+  // #276: a claim link is for its placeholder only, not a general way into the group
+  test('a claim link stops working once its placeholder is merged', async () => {
+    const { owner, groupId, memberIds, dispose } = await createTestGroup(
+      users.alice.email,
+      users.alice.password,
+      [{ email: users.bob.email, password: users.bob.password }],
+      'Stale Claim Link Test',
+    );
+    const bobId = memberIds[users.bob.email]!;
+    const phRes = await trpcMutation(owner, 'groups.addPlaceholder', { groupId, name: 'Jo' });
+    const joId = (await phRes.json()).result?.data?.json?.id;
+    const invRes = await trpcMutation(owner, 'groups.createInvite', { groupId, placeholderUserId: joId });
+    const token = (await invRes.json()).result?.data?.json?.token;
+    await trpcMutation(owner, 'groups.mergePlaceholder', { groupId, placeholderUserId: joId, realUserId: bobId });
+
+    const charlie = await authedContext(users.charlie.email, users.charlie.password);
+    expect(await trpcResult(await trpcQuery(charlie, 'groups.getInvite', { token }))).toBeNull();
+    const err = await trpcError(await trpcMutation(charlie, 'groups.joinByInvite', { token }));
+    expect(err?.data?.code).toBe('NOT_FOUND');
+    const group = await trpcResult(await trpcQuery(owner, 'groups.get', { groupId }));
+    expect(group.members.map((m: { user: { email: string } }) => m.user.email)).not.toContain(users.charlie.email);
+
+    await charlie.dispose();
+    await dispose();
+  });
+
   // #260: removing a placeholder used to move their shares and payments onto
   // other people and delete their settlements, writing off what they owed or
   // were owed without saying so.
