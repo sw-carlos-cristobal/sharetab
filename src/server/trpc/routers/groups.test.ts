@@ -346,6 +346,17 @@ describe('invites', () => {
     expect(mockDb.expense.updateMany).not.toHaveBeenCalled();
   });
 
+  test('joinByInvite tells a member that a claim link is gone once its placeholder was merged elsewhere', async () => {
+    memberOpensClaimLink({ claimed: true, usedById: 'charlie' });
+    // The placeholder's user row is gone (merged through another link)
+    mockDb.user.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
+      where.id === 'p1' ? null : { suspendedAt: null, isPlaceholder: false },
+    );
+    const api = await caller('bob');
+    await expect(api.joinByInvite({ token: 't1' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(mockDb.groupInvite.updateMany).not.toHaveBeenCalled();
+  });
+
   test("joinByInvite answers a member's second submit of their own claim as done", async () => {
     memberOpensClaimLink({ claimed: false, usedById: 'bob' });
     const api = await caller('bob');

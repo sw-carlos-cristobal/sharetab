@@ -354,7 +354,12 @@ export const groupsRouter = createTRPCRouter({
       const placeholderUserId = invite.placeholderUserId;
       if (placeholderUserId) {
         await ctx.db.$transaction(async (tx) => {
-          if (!(await findPlaceholderMember(tx, placeholderUserId, invite.groupId))) return;
+          if (!(await findPlaceholderMember(tx, placeholderUserId, invite.groupId))) {
+            // Done if this person's own earlier submit took them over; otherwise
+            // they went to someone else, and the link is for nothing now.
+            if (await isUsedBy(tx, invite.id, ctx.user.id)) return;
+            throw new TRPCError({ code: 'NOT_FOUND', message: 'Invalid or expired invite' });
+          }
           if (!(await claimInvite(tx, invite.id, ctx.user.id))) {
             // Fine if it was this person's own earlier submit; otherwise
             // someone else got there first and took the placeholder.
