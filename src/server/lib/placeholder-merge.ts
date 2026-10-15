@@ -48,10 +48,9 @@ export async function mergePlaceholderIntoUser(
   }
   // Hard guard: this reassigns financial history and may delete the user row,
   // so it must never run against a real (non-placeholder) account.
-  const [placeholder, target, targetMembership, group] = await Promise.all([
+  const [placeholder, target, group] = await Promise.all([
     tx.user.findUnique({ where: { id: placeholderUserId }, select: { isPlaceholder: true, suspendedAt: true } }),
     tx.user.findUnique({ where: { id: realUserId }, select: { isPlaceholder: true } }),
-    tx.groupMember.findUnique({ where: { userId_groupId: { userId: realUserId, groupId } } }),
     tx.group.findUnique({ where: { id: groupId }, select: { archivedAt: true } }),
   ]);
   if (!placeholder?.isPlaceholder) {
@@ -68,9 +67,12 @@ export async function mergePlaceholderIntoUser(
       message: 'A placeholder can only be merged into a member with an account',
     });
   }
-  // Checked here, in the transaction, since the caller may have looked them up
-  // before it: history handed to someone outside the group couldn't be settled.
-  if (!targetMembership) {
+  // History handed to someone outside the group couldn't be settled. Lock their
+  // membership row (Prisma has no row-lock API): a removal waits for this
+  // transaction, and one that got in first leaves no row to lock.
+  const targetMembership = await tx.$queryRaw<{ id: string }[]>`
+    SELECT "id" FROM "GroupMember" WHERE "userId" = ${realUserId} AND "groupId" = ${groupId} FOR SHARE`;
+  if (targetMembership.length === 0) {
     throw new TRPCError({ code: 'BAD_REQUEST', message: 'Target user is not a member of this group' });
   }
   // An archived group refuses changes to its expenses and payments, and a

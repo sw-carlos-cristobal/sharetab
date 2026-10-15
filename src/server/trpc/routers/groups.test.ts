@@ -39,6 +39,7 @@ const mockDb = {
     deleteMany: vi.fn(),
   },
   $transaction: vi.fn(),
+  $queryRaw: vi.fn(),
 };
 vi.mock('@/server/db', () => ({ db: mockDb }));
 vi.mock('@/server/lib/logger', () => ({
@@ -59,6 +60,8 @@ beforeEach(() => {
   mockDb.$transaction.mockImplementation(async (arg: unknown) =>
     typeof arg === 'function' ? arg(mockDb) : Promise.all(arg as Promise<unknown>[]),
   );
+  // The merge locks the target's membership row; it's there unless a test says otherwise
+  mockDb.$queryRaw.mockResolvedValue([{ id: 'gm-target' }]);
 });
 
 describe('group and placeholder names are trimmed', () => {
@@ -296,18 +299,15 @@ describe('invites', () => {
 
   test('joinByInvite does not hand a placeholder to a member who left before the claim went through', async () => {
     memberOpensClaimLink({ claimed: true });
-    // In the group when the request starts, gone by the time the merge runs
-    let bobLookups = 0;
-    mockDb.groupMember.findUnique.mockImplementation(
-      async ({ where }: { where: { userId_groupId: { userId: string } } }) => {
-        const userId = where.userId_groupId.userId;
-        if (userId === 'bob' && ++bobLookups > 1) return null;
-        return { id: `gm-${userId}`, userId, groupId: 'g1' };
-      },
-    );
+    // In the group when the request starts; the merge's lock finds no membership row
+    mockDb.$queryRaw.mockResolvedValue([]);
     const api = await caller('bob');
     await expect(api.joinByInvite({ token: 't1' })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
     expect(mockDb.expense.updateMany).not.toHaveBeenCalled();
+    // A share lock, so a removal waits for the merge instead of slipping in after the check
+    const [sql, ...values] = mockDb.$queryRaw.mock.calls[0]! as [TemplateStringsArray, ...unknown[]];
+    expect(sql.join('?')).toMatch(/FROM "GroupMember" WHERE "userId" = \? AND "groupId" = \? FOR SHARE/);
+    expect(values).toEqual(['bob', 'g1']);
   });
 
   // The person joined through a plain link first, then the admin sent them the claim link.
