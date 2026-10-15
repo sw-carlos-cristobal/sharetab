@@ -166,7 +166,9 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
   if (group.isLoading) return <LoadingSpinner />;
   if (!group.data) return <p className="text-destructive">{t('settings.notFound')}</p>;
 
-  const placeholders = group.data.members.filter((m) => m.user.isPlaceholder);
+  const placeholders = group.data.members
+    .filter((m) => m.user.isPlaceholder)
+    .map((m) => ({ ...m, displayName: m.user.placeholderName ?? m.user.name ?? '' }));
   // Who a placeholder can be merged into: the members who joined with an account
   const accountMembers = group.data.members
     .filter((m) => !m.user.isPlaceholder)
@@ -288,32 +290,29 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
                         </Badge>
                       </div>
                       <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          aria-label={t('settings.inviteToClaim', {
-                            name: m.user.placeholderName ?? m.user.name ?? '',
-                          })}
-                          title={t('settings.inviteToClaim', { name: m.user.placeholderName ?? m.user.name ?? '' })}
-                          onClick={() =>
-                            setClaimFor({ id: m.user.id, name: m.user.placeholderName ?? m.user.name ?? '' })
-                          }
-                          className="text-muted-foreground hover:text-foreground"
-                        >
-                          <Link2 className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          aria-label={t('settings.mergeIntoMember', {
-                            name: m.user.placeholderName ?? m.user.name ?? '',
-                          })}
-                          title={t('settings.mergeIntoMember', { name: m.user.placeholderName ?? m.user.name ?? '' })}
-                          onClick={() =>
-                            setMergeFor({ id: m.user.id, name: m.user.placeholderName ?? m.user.name ?? '' })
-                          }
-                          className="text-muted-foreground hover:text-foreground"
-                        >
-                          <Merge className="h-3.5 w-3.5" />
-                        </button>
+                        {/* An archived group refuses merges */}
+                        {!group.data.archivedAt && (
+                          <>
+                            <button
+                              type="button"
+                              aria-label={t('settings.inviteToClaim', { name: m.displayName })}
+                              title={t('settings.inviteToClaim', { name: m.displayName })}
+                              onClick={() => setClaimFor({ id: m.user.id, name: m.displayName })}
+                              className="text-muted-foreground hover:text-foreground"
+                            >
+                              <Link2 className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              aria-label={t('settings.mergeIntoMember', { name: m.displayName })}
+                              title={t('settings.mergeIntoMember', { name: m.displayName })}
+                              onClick={() => setMergeFor({ id: m.user.id, name: m.displayName })}
+                              className="text-muted-foreground hover:text-foreground"
+                            >
+                              <Merge className="h-3.5 w-3.5" />
+                            </button>
+                          </>
+                        )}
                         <button
                           type="button"
                           onClick={() => {

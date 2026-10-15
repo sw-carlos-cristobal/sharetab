@@ -155,7 +155,12 @@ test.describe('Invites API (2.4)', () => {
     // Charlie isn't in the group yet and can still read what the invite is for
     const charlie = await authedContext(users.charlie.email, users.charlie.password);
     const details = await trpcResult(await trpcQuery(charlie, 'groups.getInvite', { token }));
-    expect(details).toEqual({ groupName: 'Invite Details Test', inviterName: users.alice.name, memberCount: 2 });
+    expect(details).toEqual({
+      groupName: 'Invite Details Test',
+      inviterName: users.alice.name,
+      memberCount: 2,
+      placeholderName: null,
+    });
 
     await trpcMutation(charlie, 'groups.joinByInvite', { token });
     expect(await trpcResult(await trpcQuery(charlie, 'groups.getInvite', { token }))).toBeNull();

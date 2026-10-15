@@ -249,10 +249,24 @@ export const groupsRouter = createTRPCRouter({
         }
         const placeholder = await ctx.db.user.findUnique({
           where: { id: input.placeholderUserId },
-          select: { isPlaceholder: true },
+          select: { isPlaceholder: true, suspendedAt: true },
         });
         if (!placeholder?.isPlaceholder) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'Not a placeholder user' });
+        }
+        // Accepting the link merges the placeholder, which refuses these two
+        if (placeholder.suspendedAt) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: "A deleted account can't be merged" });
+        }
+        const group = await ctx.db.group.findUnique({
+          where: { id: input.groupId },
+          select: { archivedAt: true },
+        });
+        if (group?.archivedAt) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'This group is archived. Unarchive it to merge a placeholder.',
+          });
         }
         const membership = await ctx.db.groupMember.findUnique({
           where: { userId_groupId: { userId: input.placeholderUserId, groupId: input.groupId } },
@@ -324,22 +338,28 @@ export const groupsRouter = createTRPCRouter({
       },
     });
     if (existing) {
-      // A member opening an unused link is sent to the group without using it up:
-      // usedAt/usedById only track the redemption that creates a membership. Once
-      // someone has redeemed it, the isRedeemable check above refuses it for everyone.
+      // A link made for a placeholder hands them over to whoever accepts it,
+      // including someone who joined through another link first.
+      const placeholderUserId = invite.placeholderUserId;
+      if (placeholderUserId) {
+        await ctx.db.$transaction(async (tx) => {
+          if (!(await findPlaceholderMember(tx, placeholderUserId, invite.groupId))) return;
+          if (!(await claimInvite(tx, invite.id, ctx.user.id))) return;
+          if (!(await mergePlaceholderIntoUser(tx, placeholderUserId, ctx.user.id, invite.groupId))) {
+            throw new TRPCError({ code: 'CONFLICT', message: 'This placeholder was already merged or removed' });
+          }
+        });
+      }
+      // Any other link opened by a member sends them to the group without using
+      // it up: usedAt/usedById only track a redemption that joins or merges.
       return { groupId: invite.groupId, alreadyMember: true };
     }
 
-    await ctx.db.$transaction(async (tx) => {
-      // Claim the invite only while it's unused, so two people redeeming one
-      // link at once can't both join (and only one takes over a placeholder).
-      const claimed = await tx.groupInvite.updateMany({
-        where: { id: invite.id, usedAt: null },
-        data: { usedAt: new Date(), usedById: ctx.user.id },
-      });
-      if (claimed.count === 0) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Invalid or expired invite' });
-      }
+    const joined = await ctx.db.$transaction(async (tx) => {
+      // Claim the invite only while it's unused and unexpired, so two people
+      // redeeming one link at once can't both join (and only one takes over a
+      // placeholder).
+      if (!(await claimInvite(tx, invite.id, ctx.user.id))) return false;
       await tx.groupMember.create({
         data: { userId: ctx.user.id, groupId: invite.groupId },
       });
@@ -357,7 +377,17 @@ export const groupsRouter = createTRPCRouter({
       if (invite.placeholderUserId && (await findPlaceholderMember(tx, invite.placeholderUserId, invite.groupId))) {
         await mergePlaceholderIntoUser(tx, invite.placeholderUserId, ctx.user.id, invite.groupId);
       }
+      return true;
     });
+    if (!joined) {
+      // Used or expired since the lookup. A second submit of this person's own
+      // join ends up here too, once the first has joined them.
+      const member = await ctx.db.groupMember.findUnique({
+        where: { userId_groupId: { userId: ctx.user.id, groupId: invite.groupId } },
+      });
+      if (member) return { groupId: invite.groupId, alreadyMember: true };
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Invalid or expired invite' });
+    }
 
     return { groupId: invite.groupId, alreadyMember: false };
   }),
@@ -541,9 +571,12 @@ export const groupsRouter = createTRPCRouter({
         });
       }
 
-      await ctx.db.$transaction((tx) =>
+      const merged = await ctx.db.$transaction((tx) =>
         mergePlaceholderIntoUser(tx, input.placeholderUserId, input.realUserId, input.groupId),
       );
+      if (!merged) {
+        throw new TRPCError({ code: 'CONFLICT', message: 'This placeholder was already merged or removed' });
+      }
 
       return { success: true };
     }),
@@ -552,6 +585,15 @@ export const groupsRouter = createTRPCRouter({
 /** Whether an invite can still be used to join: not used yet and not expired. */
 function isRedeemable(invite: { usedAt: Date | null; expiresAt: Date }) {
   return !invite.usedAt && invite.expiresAt >= new Date();
+}
+
+/** Mark an invite used by this user, if it's still unused and unexpired. */
+async function claimInvite(tx: Prisma.TransactionClient, inviteId: string, userId: string) {
+  const claimed = await tx.groupInvite.updateMany({
+    where: { id: inviteId, usedAt: null, expiresAt: { gte: new Date() } },
+    data: { usedAt: new Date(), usedById: userId },
+  });
+  return claimed.count === 1;
 }
 
 /** The user if they're still a placeholder and a member of the group, else null. */

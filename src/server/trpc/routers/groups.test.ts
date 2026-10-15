@@ -29,6 +29,7 @@ const mockDb = {
     delete: vi.fn(),
   },
   settlement: { count: vi.fn(), findMany: vi.fn(), updateMany: vi.fn(), deleteMany: vi.fn() },
+  receipt: { updateMany: vi.fn() },
   receiptItem: { findMany: vi.fn() },
   receiptItemAssignment: {
     findMany: vi.fn(),
@@ -191,6 +192,20 @@ describe('invites', () => {
     expect(mockDb.groupInvite.findUnique).not.toHaveBeenCalled();
   });
 
+  // #276: the link would only fail once someone accepted it
+  test.each([
+    ['a deleted account', { suspendedAt: new Date(), isPlaceholder: true }, null],
+    ['a placeholder in an archived group', { suspendedAt: null, isPlaceholder: true }, new Date()],
+  ])('createInvite refuses a claim link for %s', async (_, placeholder, archivedAt) => {
+    mockDb.user.findUnique.mockResolvedValueOnce({ suspendedAt: null }).mockResolvedValueOnce(placeholder);
+    mockDb.group.findUnique.mockResolvedValue({ archivedAt });
+    const api = await caller();
+    await expect(api.createInvite({ groupId: 'g1', placeholderUserId: 'p1' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    expect(mockDb.groupInvite.create).not.toHaveBeenCalled();
+  });
+
   // #276: accepting a link made for a placeholder takes over their expenses and
   // payments, so the invite page says whose.
   test('getInvite names the placeholder a claim link hands over', async () => {
@@ -218,9 +233,53 @@ describe('invites', () => {
     const api = await caller('bob');
     await expect(api.joinByInvite({ token: 't1' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
     expect(mockDb.groupInvite.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'i1', usedAt: null } }),
+      expect.objectContaining({ where: { id: 'i1', usedAt: null, expiresAt: { gte: expect.any(Date) } } }),
     );
     expect(mockDb.groupMember.create).not.toHaveBeenCalled();
+  });
+
+  test('joinByInvite answers a second submit of the same join as already a member', async () => {
+    mockDb.groupInvite.findUnique.mockResolvedValue({ id: 'i1', groupId: 'g1', usedAt: null, expiresAt: inAWeek() });
+    // Not a member when the invite is looked up; the first submit has joined them by the time the claim fails
+    mockDb.groupMember.findUnique.mockResolvedValueOnce(null).mockResolvedValue({ id: 'gm-bob', userId: 'bob' });
+    mockDb.groupInvite.updateMany.mockResolvedValue({ count: 0 });
+    const api = await caller('bob');
+    await expect(api.joinByInvite({ token: 't1' })).resolves.toEqual({ groupId: 'g1', alreadyMember: true });
+    expect(mockDb.groupMember.create).not.toHaveBeenCalled();
+  });
+
+  // The person joined through a plain link first, then the admin sent them the claim link.
+  test('joinByInvite with a claim link hands the placeholder to someone already in the group', async () => {
+    mockDb.groupInvite.findUnique.mockResolvedValue({
+      id: 'i1',
+      groupId: 'g1',
+      usedAt: null,
+      expiresAt: inAWeek(),
+      placeholderUserId: 'p1',
+    });
+    mockDb.user.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
+      where.id === 'p1' ? { suspendedAt: null, isPlaceholder: true } : { suspendedAt: null, isPlaceholder: false },
+    );
+    mockDb.groupMember.findUnique.mockImplementation(
+      async ({ where }: { where: { userId_groupId: { userId: string } } }) => ({
+        id: `gm-${where.userId_groupId.userId}`,
+        userId: where.userId_groupId.userId,
+        groupId: 'g1',
+      }),
+    );
+    mockDb.groupInvite.updateMany.mockResolvedValue({ count: 1 });
+    mockDb.groupMember.deleteMany.mockResolvedValue({ count: 1 });
+    mockDb.expenseShare.findMany.mockResolvedValue([]);
+    mockDb.receiptItem.findMany.mockResolvedValue([]);
+    mockDb.groupMember.count.mockResolvedValue(0);
+    const api = await caller('bob');
+    await expect(api.joinByInvite({ token: 't1' })).resolves.toEqual({ groupId: 'g1', alreadyMember: true });
+    expect(mockDb.groupInvite.updateMany).toHaveBeenCalled();
+    expect(mockDb.groupMember.create).not.toHaveBeenCalled();
+    expect(mockDb.expense.updateMany).toHaveBeenCalledWith({
+      where: { paidById: 'p1', groupId: 'g1' },
+      data: { paidById: 'bob' },
+    });
   });
 
   test('joinByInvite with a claim link joins and takes over the placeholder in one transaction', async () => {
@@ -239,6 +298,7 @@ describe('invites', () => {
         where.userId_groupId.userId === 'p1' ? { id: 'gm-p1', userId: 'p1', groupId: 'g1' } : null,
     );
     mockDb.groupInvite.updateMany.mockResolvedValue({ count: 1 });
+    mockDb.groupMember.deleteMany.mockResolvedValue({ count: 1 });
     mockDb.expenseShare.findMany.mockResolvedValue([]);
     mockDb.receiptItem.findMany.mockResolvedValue([]);
     mockDb.groupMember.count.mockResolvedValue(0);
@@ -336,6 +396,8 @@ describe('merging a placeholder into a member', () => {
     p1: { suspendedAt: null, isPlaceholder: true },
     p2: { suspendedAt: null, isPlaceholder: true },
   };
+  // admin.deleteUser turns an account into a suspended placeholder that keeps its history in other groups
+  const deletedAccount = { suspendedAt: new Date(), isPlaceholder: true };
 
   beforeEach(() => {
     mockDb.user.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) => users[where.id] ?? null);
@@ -345,6 +407,7 @@ describe('merging a placeholder into a member', () => {
         return { id: `gm-${userId}`, role: userId === 'owner' ? 'OWNER' : 'MEMBER', userId, groupId: 'g1' };
       },
     );
+    mockDb.groupMember.deleteMany.mockResolvedValue({ count: 1 });
     mockDb.expenseShare.findMany.mockResolvedValue([]);
     mockDb.receiptItem.findMany.mockResolvedValue([]);
     mockDb.groupMember.count.mockResolvedValue(0);
@@ -374,6 +437,47 @@ describe('merging a placeholder into a member', () => {
     expectNothingMoved();
   });
 
+  test('refuses to merge a deleted account', async () => {
+    mockDb.user.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
+      where.id === 'p1' ? deletedAccount : (users[where.id] ?? null),
+    );
+    const api = await caller();
+    await expect(
+      api.mergePlaceholder({ groupId: 'g1', placeholderUserId: 'p1', realUserId: 'bob' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expectNothingMoved();
+  });
+
+  // An archived group refuses changes to its expenses and payments, and a merge rewrites both.
+  test('refuses to merge in an archived group', async () => {
+    mockDb.group.findUnique.mockResolvedValue({ archivedAt: new Date() });
+    const api = await caller();
+    await expect(
+      api.mergePlaceholder({ groupId: 'g1', placeholderUserId: 'p1', realUserId: 'bob' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST', message: expect.stringContaining('archived') });
+    expectNothingMoved();
+  });
+
+  // Two merges of one placeholder (an admin's merge and a claim link, say): the
+  // second waits on the first's lock on the membership, then finds it gone.
+  test('a merge that finds the placeholder already merged moves nothing', async () => {
+    mockDb.groupMember.deleteMany.mockResolvedValue({ count: 0 });
+    const api = await caller();
+    await expect(
+      api.mergePlaceholder({ groupId: 'g1', placeholderUserId: 'p1', realUserId: 'bob' }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expectNothingMoved();
+  });
+
+  test('moves the payer of a receipt saved for later to the member', async () => {
+    const api = await caller();
+    await api.mergePlaceholder({ groupId: 'g1', placeholderUserId: 'p1', realUserId: 'bob' });
+    expect(mockDb.receipt.updateMany).toHaveBeenCalledWith({
+      where: { paidById: 'p1', OR: [{ groupId: 'g1' }, { expense: { groupId: 'g1' } }] },
+      data: { paidById: 'bob' },
+    });
+  });
+
   test('moves a share only the placeholder had to the member', async () => {
     mockDb.expenseShare.findMany.mockResolvedValue([
       {
@@ -393,7 +497,7 @@ describe('merging a placeholder into a member', () => {
     expect(mockDb.expense.update).not.toHaveBeenCalled();
   });
 
-  test('an equal split both were in becomes a split by shares, so editing it keeps the amounts', async () => {
+  test('an equal split both were in becomes a split by shares where the member holds both parts', async () => {
     mockDb.expenseShare.findMany.mockResolvedValue([
       {
         id: 's-p1',

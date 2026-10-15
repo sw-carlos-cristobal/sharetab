@@ -127,7 +127,7 @@ test.describe('Merging a placeholder from group settings', () => {
       await expect(dialog.getByText('Send this only to Frank')).toBeVisible();
       const token = (await dialog.getByRole('textbox').inputValue()).split('/invite/')[1]!;
 
-      const join = await trpcResult(await trpcMutation(charlie, 'groups.joinByInvite', { token }));
+      const join = (await (await trpcMutation(charlie, 'groups.joinByInvite', { token })).json()).result?.data?.json;
       expect(join.alreadyMember).toBe(false);
       const detail = await trpcResult(await trpcQuery(owner, 'groups.get', { groupId }));
       const charlieId: string = detail.members.find(

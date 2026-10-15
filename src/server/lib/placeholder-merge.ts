@@ -31,33 +31,56 @@ export function combineShares(
 }
 
 /**
- * Hand a placeholder's expenses, shares, payments and receipt assignments in
- * one group to the member with an account they stand for, then delete the
- * placeholder once no group has them. Run inside the caller's transaction.
+ * Hand a placeholder's expenses, shares, payments and receipts in one group to
+ * the member with an account they stand for, then delete the placeholder once
+ * no group has them. Run inside the caller's transaction. Returns false, moving
+ * nothing, when the placeholder is no longer in the group (merged or removed
+ * by a transaction that got there first).
  */
 export async function mergePlaceholderIntoUser(
   tx: Prisma.TransactionClient,
   placeholderUserId: string,
   realUserId: string,
   groupId: string,
-) {
+): Promise<boolean> {
   if (placeholderUserId === realUserId) {
     throw new TRPCError({ code: 'BAD_REQUEST', message: "A placeholder can't be merged into itself" });
   }
   // Hard guard: this reassigns financial history and may delete the user row,
   // so it must never run against a real (non-placeholder) account.
-  const [placeholder, target] = await Promise.all([
-    tx.user.findUnique({ where: { id: placeholderUserId }, select: { isPlaceholder: true } }),
+  const [placeholder, target, group] = await Promise.all([
+    tx.user.findUnique({ where: { id: placeholderUserId }, select: { isPlaceholder: true, suspendedAt: true } }),
     tx.user.findUnique({ where: { id: realUserId }, select: { isPlaceholder: true } }),
+    tx.group.findUnique({ where: { id: groupId }, select: { archivedAt: true } }),
   ]);
   if (!placeholder?.isPlaceholder) {
     throw new TRPCError({ code: 'BAD_REQUEST', message: 'Not a placeholder user' });
+  }
+  // A deleted account is kept as a placeholder for its history, which can
+  // span groups it left, so it stays as it is.
+  if (placeholder.suspendedAt) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: "A deleted account can't be merged" });
   }
   if (!target || target.isPlaceholder) {
     throw new TRPCError({
       code: 'BAD_REQUEST',
       message: 'A placeholder can only be merged into a member with an account',
     });
+  }
+  // An archived group refuses changes to its expenses and payments, and a
+  // merge rewrites both.
+  if (group?.archivedAt) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'This group is archived. Unarchive it to merge a placeholder.',
+    });
+  }
+
+  // Removing the membership first locks it: a second merge of the same
+  // placeholder waits here, then finds nothing to remove and stops.
+  const removed = await tx.groupMember.deleteMany({ where: { userId: placeholderUserId, groupId } });
+  if (removed.count === 0) {
+    return false;
   }
 
   // A payment between the two would become a payment to themselves, which
@@ -126,6 +149,12 @@ export async function mergePlaceholderIntoUser(
     }
   }
 
+  // A receipt saved for later keeps its payer until it becomes an expense
+  await tx.receipt.updateMany({
+    where: { paidById: placeholderUserId, OR: [{ groupId }, { expense: { groupId } }] },
+    data: { paidById: realUserId },
+  });
+
   await tx.expense.updateMany({
     where: { paidById: placeholderUserId, groupId },
     data: { paidById: realUserId },
@@ -149,10 +178,6 @@ export async function mergePlaceholderIntoUser(
     data: { userId: realUserId },
   });
 
-  await tx.groupMember.deleteMany({
-    where: { userId: placeholderUserId, groupId },
-  });
-
   await tx.activityLog.create({
     data: {
       groupId,
@@ -168,4 +193,5 @@ export async function mergePlaceholderIntoUser(
   if (remainingMemberships === 0) {
     await tx.user.delete({ where: { id: placeholderUserId } });
   }
+  return true;
 }

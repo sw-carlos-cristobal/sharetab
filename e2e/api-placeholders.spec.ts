@@ -224,20 +224,19 @@ test.describe('Placeholder Members', () => {
     const phRes = await trpcMutation(owner, 'groups.addPlaceholder', { groupId, name: 'Hank' });
     const hankId = (await phRes.json()).result?.data?.json?.id;
 
-    const expense = await trpcResult(
-      await trpcMutation(owner, 'expenses.create', {
-        groupId,
-        title: 'Cabin',
-        amount: 3000,
-        paidById: aliceId,
-        splitMode: 'EQUAL',
-        shares: [
-          { userId: aliceId, amount: 1000 },
-          { userId: bobId, amount: 1000 },
-          { userId: hankId, amount: 1000 },
-        ],
-      }),
-    );
+    const created = await trpcMutation(owner, 'expenses.create', {
+      groupId,
+      title: 'Cabin',
+      amount: 3000,
+      paidById: aliceId,
+      splitMode: 'EQUAL',
+      shares: [
+        { userId: aliceId, amount: 1000 },
+        { userId: bobId, amount: 1000 },
+        { userId: hankId, amount: 1000 },
+      ],
+    });
+    const expense = (await created.json()).result?.data?.json;
     await trpcMutation(owner, 'settlements.create', { groupId, fromId: hankId, toId: bobId, amount: 500 });
 
     const mergeRes = await trpcMutation(owner, 'groups.mergePlaceholder', {
@@ -247,7 +246,7 @@ test.describe('Placeholder Members', () => {
     });
     expect((await mergeRes.json()).result?.data?.json?.success).toBe(true);
 
-    // Bob holds both equal parts as two shares, so editing the expense keeps the amounts
+    // Bob holds both equal parts as two shares, so the edit form opens on the same split
     const after = await trpcResult(await trpcQuery(owner, 'expenses.get', { groupId, expenseId: expense.id }));
     expect(after.splitMode).toBe('SHARES');
     const shares = Object.fromEntries(
@@ -261,6 +260,45 @@ test.describe('Placeholder Members', () => {
     const balances = (await trpcResult(await trpcQuery(owner, 'balances.getGroupBalances', { groupId }))).balances;
     expect(balances.find((b: { userId: string }) => b.userId === bobId).net).toBe(-2000);
     expect(balances.find((b: { userId: string }) => b.userId === aliceId).net).toBe(2000);
+
+    await dispose();
+  });
+
+  // #276: someone who joined through a plain link first, then got the claim link
+  test('a member who opens a claim link takes over the placeholder', async () => {
+    const { owner, memberContexts, groupId, memberIds, dispose } = await createTestGroup(
+      users.alice.email,
+      users.alice.password,
+      [{ email: users.charlie.email, password: users.charlie.password }],
+      'Member Claim Test',
+    );
+    const charlie = memberContexts[0]!;
+    const aliceId = memberIds[users.alice.email]!;
+    const charlieId = memberIds[users.charlie.email]!;
+    const phRes = await trpcMutation(owner, 'groups.addPlaceholder', { groupId, name: 'Ivy' });
+    const ivyId = (await phRes.json()).result?.data?.json?.id;
+    await trpcMutation(owner, 'expenses.create', {
+      groupId,
+      title: 'Ivy owes half',
+      amount: 2000,
+      paidById: aliceId,
+      splitMode: 'EQUAL',
+      shares: [
+        { userId: aliceId, amount: 1000 },
+        { userId: ivyId, amount: 1000 },
+      ],
+    });
+    const invRes = await trpcMutation(owner, 'groups.createInvite', { groupId, placeholderUserId: ivyId });
+    const token = (await invRes.json()).result?.data?.json?.token;
+
+    const joinRes = await trpcMutation(charlie, 'groups.joinByInvite', { token });
+    expect((await joinRes.json()).result?.data?.json).toEqual({ groupId, alreadyMember: true });
+
+    const balances = (await trpcResult(await trpcQuery(owner, 'balances.getGroupBalances', { groupId }))).balances;
+    expect(balances.find((b: { userId: string }) => b.userId === charlieId).net).toBe(-1000);
+    expect(balances.find((b: { userId: string }) => b.userId === ivyId)).toBeUndefined();
+    // The link is used up
+    expect(await trpcResult(await trpcQuery(charlie, 'groups.getInvite', { token }))).toBeNull();
 
     await dispose();
   });
