@@ -16,7 +16,6 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { InviteDialog } from '@/components/groups/invite-dialog';
 import { MergePlaceholderDialog } from '@/components/groups/merge-placeholder-dialog';
 import { toast } from 'sonner';
-import { useSession } from 'next-auth/react';
 
 // Details form is a separate component so its state is initialized exactly
 // once from the loaded group data. The page invalidates `groups.get` whenever
@@ -105,7 +104,9 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
   const locale = useLocale();
   const group = trpc.groups.get.useQuery({ groupId });
   const utils = trpc.useUtils();
-  const { data: session } = useSession();
+  // Who tRPC acts as: the impersonated user while an admin impersonates, where
+  // useSession() would still report the admin.
+  const profile = trpc.auth.getProfile.useQuery();
 
   const [placeholderName, setPlaceholderName] = useState('');
   const [editingPlaceholder, setEditingPlaceholder] = useState<string | null>(null);
@@ -172,7 +173,7 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
     .filter((m) => m.user.isPlaceholder)
     .map((m) => ({ ...m, displayName: m.user.placeholderName ?? m.user.name ?? '' }));
   // Claim links and merges are for owners and admins, and an archived group refuses merges
-  const myRole = group.data.members.find((m) => m.user.id === session?.user?.id)?.role;
+  const myRole = group.data.members.find((m) => m.user.id === profile.data?.id)?.role;
   const canMerge = (myRole === 'OWNER' || myRole === 'ADMIN') && !group.data.archivedAt;
   // Who a placeholder can be merged into: the members who joined with an account
   const accountMembers = group.data.members
