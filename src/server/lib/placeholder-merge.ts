@@ -48,9 +48,10 @@ export async function mergePlaceholderIntoUser(
   }
   // Hard guard: this reassigns financial history and may delete the user row,
   // so it must never run against a real (non-placeholder) account.
-  const [placeholder, target, group] = await Promise.all([
+  const [placeholder, target, targetMembership, group] = await Promise.all([
     tx.user.findUnique({ where: { id: placeholderUserId }, select: { isPlaceholder: true, suspendedAt: true } }),
     tx.user.findUnique({ where: { id: realUserId }, select: { isPlaceholder: true } }),
+    tx.groupMember.findUnique({ where: { userId_groupId: { userId: realUserId, groupId } } }),
     tx.group.findUnique({ where: { id: groupId }, select: { archivedAt: true } }),
   ]);
   if (!placeholder?.isPlaceholder) {
@@ -66,6 +67,11 @@ export async function mergePlaceholderIntoUser(
       code: 'BAD_REQUEST',
       message: 'A placeholder can only be merged into a member with an account',
     });
+  }
+  // Checked here, in the transaction, since the caller may have looked them up
+  // before it: history handed to someone outside the group couldn't be settled.
+  if (!targetMembership) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'Target user is not a member of this group' });
   }
   // An archived group refuses changes to its expenses and payments, and a
   // merge rewrites both.

@@ -328,7 +328,7 @@ export const groupsRouter = createTRPCRouter({
     const invite = await ctx.db.groupInvite.findUnique({
       where: { token: input.token },
     });
-    if (!invite || !isRedeemable(invite)) {
+    if (!invite) {
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Invalid or expired invite' });
     }
 
@@ -337,6 +337,14 @@ export const groupsRouter = createTRPCRouter({
         userId_groupId: { userId: ctx.user.id, groupId: invite.groupId },
       },
     });
+    // A retry of this person's own redemption, whose answer was lost, finds
+    // the invite already used by them.
+    if (existing && invite.usedById === ctx.user.id) {
+      return { groupId: invite.groupId, alreadyMember: true };
+    }
+    if (!isRedeemable(invite)) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Invalid or expired invite' });
+    }
     if (existing) {
       // A link made for a placeholder hands them over to whoever accepts it,
       // including someone who joined through another link first.
@@ -344,7 +352,13 @@ export const groupsRouter = createTRPCRouter({
       if (placeholderUserId) {
         await ctx.db.$transaction(async (tx) => {
           if (!(await findPlaceholderMember(tx, placeholderUserId, invite.groupId))) return;
-          if (!(await claimInvite(tx, invite.id, ctx.user.id))) return;
+          if (!(await claimInvite(tx, invite.id, ctx.user.id))) {
+            // Fine if it was this person's own earlier submit; otherwise
+            // someone else got there first and took the placeholder.
+            const used = await tx.groupInvite.findUnique({ where: { id: invite.id }, select: { usedById: true } });
+            if (used?.usedById === ctx.user.id) return;
+            throw new TRPCError({ code: 'NOT_FOUND', message: 'Invalid or expired invite' });
+          }
           if (!(await mergePlaceholderIntoUser(tx, placeholderUserId, ctx.user.id, invite.groupId))) {
             throw new TRPCError({ code: 'CONFLICT', message: 'This placeholder was already merged or removed' });
           }
@@ -556,19 +570,6 @@ export const groupsRouter = createTRPCRouter({
       });
       if (!placeholderMember) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Placeholder is not a member of this group' });
-      }
-
-      // Verify realUserId is a member of the same group
-      const realUserMember = await ctx.db.groupMember.findUnique({
-        where: {
-          userId_groupId: { userId: input.realUserId, groupId: input.groupId },
-        },
-      });
-      if (!realUserMember) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'Target user is not a member of this group',
-        });
       }
 
       const merged = await ctx.db.$transaction((tx) =>

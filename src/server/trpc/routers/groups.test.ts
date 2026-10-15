@@ -248,6 +248,68 @@ describe('invites', () => {
     expect(mockDb.groupMember.create).not.toHaveBeenCalled();
   });
 
+  test('joinByInvite answers a retry of a join that already went through as already a member', async () => {
+    // The first request joined them and used the invite; its answer never arrived
+    mockDb.groupInvite.findUnique.mockResolvedValue({
+      id: 'i1',
+      groupId: 'g1',
+      usedAt: new Date(),
+      usedById: 'bob',
+      expiresAt: inAWeek(),
+    });
+    mockDb.groupMember.findUnique.mockResolvedValue({ id: 'gm-bob', userId: 'bob' });
+    const api = await caller('bob');
+    await expect(api.joinByInvite({ token: 't1' })).resolves.toEqual({ groupId: 'g1', alreadyMember: true });
+    expect(mockDb.groupInvite.updateMany).not.toHaveBeenCalled();
+  });
+
+  function memberOpensClaimLink({ claimed, usedById }: { claimed: boolean; usedById?: string }) {
+    mockDb.groupInvite.findUnique
+      .mockResolvedValueOnce({ id: 'i1', groupId: 'g1', usedAt: null, expiresAt: inAWeek(), placeholderUserId: 'p1' })
+      .mockResolvedValue({ usedById: usedById ?? null });
+    mockDb.user.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
+      where.id === 'p1' ? { suspendedAt: null, isPlaceholder: true } : { suspendedAt: null, isPlaceholder: false },
+    );
+    mockDb.groupMember.findUnique.mockImplementation(
+      async ({ where }: { where: { userId_groupId: { userId: string } } }) => ({
+        id: `gm-${where.userId_groupId.userId}`,
+        userId: where.userId_groupId.userId,
+        groupId: 'g1',
+      }),
+    );
+    mockDb.groupInvite.updateMany.mockResolvedValue({ count: claimed ? 1 : 0 });
+  }
+
+  test('joinByInvite tells a member who lost a claim link to someone else that the link is gone', async () => {
+    memberOpensClaimLink({ claimed: false, usedById: 'charlie' });
+    const api = await caller('bob');
+    await expect(api.joinByInvite({ token: 't1' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(mockDb.expense.updateMany).not.toHaveBeenCalled();
+  });
+
+  test("joinByInvite answers a member's second submit of their own claim as done", async () => {
+    memberOpensClaimLink({ claimed: false, usedById: 'bob' });
+    const api = await caller('bob');
+    await expect(api.joinByInvite({ token: 't1' })).resolves.toEqual({ groupId: 'g1', alreadyMember: true });
+    expect(mockDb.expense.updateMany).not.toHaveBeenCalled();
+  });
+
+  test('joinByInvite does not hand a placeholder to a member who left before the claim went through', async () => {
+    memberOpensClaimLink({ claimed: true });
+    // In the group when the request starts, gone by the time the merge runs
+    let bobLookups = 0;
+    mockDb.groupMember.findUnique.mockImplementation(
+      async ({ where }: { where: { userId_groupId: { userId: string } } }) => {
+        const userId = where.userId_groupId.userId;
+        if (userId === 'bob' && ++bobLookups > 1) return null;
+        return { id: `gm-${userId}`, userId, groupId: 'g1' };
+      },
+    );
+    const api = await caller('bob');
+    await expect(api.joinByInvite({ token: 't1' })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockDb.expense.updateMany).not.toHaveBeenCalled();
+  });
+
   // The person joined through a plain link first, then the admin sent them the claim link.
   test('joinByInvite with a claim link hands the placeholder to someone already in the group', async () => {
     mockDb.groupInvite.findUnique.mockResolvedValue({
@@ -293,9 +355,14 @@ describe('invites', () => {
     mockDb.user.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
       where.id === 'p1' ? { suspendedAt: null, isPlaceholder: true } : { suspendedAt: null, isPlaceholder: false },
     );
+    // Bob isn't a member until the transaction adds him
+    let bobJoined = false;
+    mockDb.groupMember.create.mockImplementation(async () => (bobJoined = true));
     mockDb.groupMember.findUnique.mockImplementation(
-      async ({ where }: { where: { userId_groupId: { userId: string } } }) =>
-        where.userId_groupId.userId === 'p1' ? { id: 'gm-p1', userId: 'p1', groupId: 'g1' } : null,
+      async ({ where }: { where: { userId_groupId: { userId: string } } }) => {
+        const userId = where.userId_groupId.userId;
+        return userId === 'p1' || bobJoined ? { id: `gm-${userId}`, userId, groupId: 'g1' } : null;
+      },
     );
     mockDb.groupInvite.updateMany.mockResolvedValue({ count: 1 });
     mockDb.groupMember.deleteMany.mockResolvedValue({ count: 1 });
