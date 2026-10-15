@@ -76,6 +76,8 @@
     "placeholderMembers": "Placeholder members ({count})",
     "pending": "Pending",
     "removeConfirm": "Remove \"{name}\"?",
+    "inviteToClaim": "Invite {name} to claim their place",
+    "mergeIntoMember": "Merge {name} into a member",
     "dangerZone": "Danger Zone",
     "archiveDescription": "Archive this group to hide it from your dashboard. Everyone must be settled up first. You can unarchive it at any time.",
     "archiveConfirm": "Archive this group? It will be hidden from your dashboard.",
@@ -105,7 +107,20 @@
     "generating": "Generating...",
     "generateLink": "Generate invite link",
     "copyLink": "Copy invite link",
-    "linkInfo": "Anyone with this link can join the group."
+    "linkInfo": "Anyone with this link can join the group.",
+    "claimTitle": "Invite {name} to claim their place",
+    "claimDescription": "When {name} accepts this link, the expenses and payments recorded for them become theirs. Links expire after 7 days.",
+    "claimLinkInfo": "Send this only to {name}: whoever accepts it first takes over their expenses and payments."
+  },
+  "merge": {
+    "title": "Merge {name} into a member",
+    "description": "If {name} already joined this group with an account, move everything recorded for {name} to that account.",
+    "target": "Member",
+    "choose": "Choose a member",
+    "confirm": "{name}'s expenses, shares and payments will move to {member}, and {name} will be removed from the group. This can't be undone.",
+    "submit": "Merge",
+    "merging": "Merging...",
+    "done": "Merged {name} into {member}"
   },
   "empty": "No groups yet",
   "emptyDescription": "Create your first group to start splitting expenses with friends.",

@@ -8,20 +8,35 @@ vi.mock('@/server/auth', () => ({ auth: vi.fn() }));
 const mockDb = {
   user: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
   group: { create: vi.fn(), update: vi.fn(), findUnique: vi.fn() },
-  groupMember: { findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn(), delete: vi.fn() },
-  groupInvite: { findUnique: vi.fn(), create: vi.fn() },
-  activityLog: { create: vi.fn(), deleteMany: vi.fn() },
-  expense: { count: vi.fn(), findMany: vi.fn(), updateMany: vi.fn() },
+  groupMember: {
+    findUnique: vi.fn(),
+    findMany: vi.fn(),
+    create: vi.fn(),
+    delete: vi.fn(),
+    deleteMany: vi.fn(),
+    count: vi.fn(),
+  },
+  groupInvite: { findUnique: vi.fn(), create: vi.fn(), updateMany: vi.fn() },
+  activityLog: { create: vi.fn(), deleteMany: vi.fn(), updateMany: vi.fn() },
+  expense: { count: vi.fn(), findMany: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
   expenseShare: {
     count: vi.fn(),
     findMany: vi.fn(),
     findUnique: vi.fn(),
     update: vi.fn(),
+    updateMany: vi.fn(),
     create: vi.fn(),
     delete: vi.fn(),
   },
-  settlement: { count: vi.fn(), findMany: vi.fn(), deleteMany: vi.fn() },
-  receiptItemAssignment: { deleteMany: vi.fn() },
+  settlement: { count: vi.fn(), findMany: vi.fn(), updateMany: vi.fn(), deleteMany: vi.fn() },
+  receiptItem: { findMany: vi.fn() },
+  receiptItemAssignment: {
+    findMany: vi.fn(),
+    findFirst: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+    deleteMany: vi.fn(),
+  },
   $transaction: vi.fn(),
 };
 vi.mock('@/server/db', () => ({ db: mockDb }));
@@ -120,6 +135,7 @@ describe('invites', () => {
       groupName: 'Ski Trip',
       inviterName: 'Alice',
       memberCount: 4,
+      placeholderName: null,
     });
     expect(mockDb.groupInvite.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { token: 't1' } }));
   });
@@ -173,6 +189,68 @@ describe('invites', () => {
     await expect(api.getInvite({ token })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
     await expect(api.joinByInvite({ token })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
     expect(mockDb.groupInvite.findUnique).not.toHaveBeenCalled();
+  });
+
+  // #276: accepting a link made for a placeholder takes over their expenses and
+  // payments, so the invite page says whose.
+  test('getInvite names the placeholder a claim link hands over', async () => {
+    mockDb.groupInvite.findUnique.mockResolvedValue({ ...validInvite(), groupId: 'g1', placeholderUserId: 'p1' });
+    mockDb.user.findUnique
+      .mockResolvedValueOnce({ suspendedAt: null })
+      .mockResolvedValueOnce({ isPlaceholder: true, placeholderName: 'Bob', name: 'Bob' });
+    mockDb.groupMember.findUnique.mockResolvedValue({ id: 'gm-p1', userId: 'p1', groupId: 'g1' });
+    const api = await caller('bob');
+    await expect(api.getInvite({ token: 't1' })).resolves.toMatchObject({ placeholderName: 'Bob' });
+  });
+
+  test('getInvite names no placeholder once the one a claim link was made for is gone', async () => {
+    mockDb.groupInvite.findUnique.mockResolvedValue({ ...validInvite(), groupId: 'g1', placeholderUserId: 'p1' });
+    mockDb.user.findUnique.mockResolvedValueOnce({ suspendedAt: null }).mockResolvedValueOnce(null);
+    const api = await caller('bob');
+    await expect(api.getInvite({ token: 't1' })).resolves.toMatchObject({ placeholderName: null });
+  });
+
+  test('joinByInvite refuses an invite someone else redeemed first, without joining', async () => {
+    mockDb.groupInvite.findUnique.mockResolvedValue({ id: 'i1', groupId: 'g1', usedAt: null, expiresAt: inAWeek() });
+    mockDb.groupMember.findUnique.mockResolvedValue(null);
+    // Redeemed between the lookup and the claim
+    mockDb.groupInvite.updateMany.mockResolvedValue({ count: 0 });
+    const api = await caller('bob');
+    await expect(api.joinByInvite({ token: 't1' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(mockDb.groupInvite.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'i1', usedAt: null } }),
+    );
+    expect(mockDb.groupMember.create).not.toHaveBeenCalled();
+  });
+
+  test('joinByInvite with a claim link joins and takes over the placeholder in one transaction', async () => {
+    mockDb.groupInvite.findUnique.mockResolvedValue({
+      id: 'i1',
+      groupId: 'g1',
+      usedAt: null,
+      expiresAt: inAWeek(),
+      placeholderUserId: 'p1',
+    });
+    mockDb.user.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
+      where.id === 'p1' ? { suspendedAt: null, isPlaceholder: true } : { suspendedAt: null, isPlaceholder: false },
+    );
+    mockDb.groupMember.findUnique.mockImplementation(
+      async ({ where }: { where: { userId_groupId: { userId: string } } }) =>
+        where.userId_groupId.userId === 'p1' ? { id: 'gm-p1', userId: 'p1', groupId: 'g1' } : null,
+    );
+    mockDb.groupInvite.updateMany.mockResolvedValue({ count: 1 });
+    mockDb.expenseShare.findMany.mockResolvedValue([]);
+    mockDb.receiptItem.findMany.mockResolvedValue([]);
+    mockDb.groupMember.count.mockResolvedValue(0);
+    const api = await caller('bob');
+    await expect(api.joinByInvite({ token: 't1' })).resolves.toEqual({ groupId: 'g1', alreadyMember: false });
+    expect(mockDb.groupMember.create).toHaveBeenCalledWith({ data: { userId: 'bob', groupId: 'g1' } });
+    expect(mockDb.expense.updateMany).toHaveBeenCalledWith({
+      where: { paidById: 'p1', groupId: 'g1' },
+      data: { paidById: 'bob' },
+    });
+    expect(mockDb.user.delete).toHaveBeenCalledWith({ where: { id: 'p1' } });
+    expect(mockDb.$transaction).toHaveBeenCalledTimes(1);
   });
 
   test('getInvite allows 30 lookups a minute per user, then refuses without a lookup', async () => {
@@ -246,6 +324,130 @@ describe('removing a placeholder', () => {
       expect.objectContaining({ data: expect.objectContaining({ type: 'MEMBER_LEFT' }) }),
     );
     expect(mockDb.user.delete).toHaveBeenCalledWith({ where: { id: 'p1' } });
+  });
+});
+
+// #276: merging a placeholder into the member it stands for moves their
+// expenses, shares and payments over, so the balance follows them.
+describe('merging a placeholder into a member', () => {
+  const users: Record<string, { suspendedAt: null; isPlaceholder: boolean }> = {
+    owner: { suspendedAt: null, isPlaceholder: false },
+    bob: { suspendedAt: null, isPlaceholder: false },
+    p1: { suspendedAt: null, isPlaceholder: true },
+    p2: { suspendedAt: null, isPlaceholder: true },
+  };
+
+  beforeEach(() => {
+    mockDb.user.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) => users[where.id] ?? null);
+    mockDb.groupMember.findUnique.mockImplementation(
+      async ({ where }: { where: { userId_groupId: { userId: string } } }) => {
+        const userId = where.userId_groupId.userId;
+        return { id: `gm-${userId}`, role: userId === 'owner' ? 'OWNER' : 'MEMBER', userId, groupId: 'g1' };
+      },
+    );
+    mockDb.expenseShare.findMany.mockResolvedValue([]);
+    mockDb.receiptItem.findMany.mockResolvedValue([]);
+    mockDb.groupMember.count.mockResolvedValue(0);
+  });
+
+  function expectNothingMoved() {
+    expect(mockDb.expenseShare.update).not.toHaveBeenCalled();
+    expect(mockDb.expense.updateMany).not.toHaveBeenCalled();
+    expect(mockDb.settlement.updateMany).not.toHaveBeenCalled();
+    expect(mockDb.settlement.deleteMany).not.toHaveBeenCalled();
+    expect(mockDb.user.delete).not.toHaveBeenCalled();
+  }
+
+  test('refuses to merge a placeholder into itself', async () => {
+    const api = await caller();
+    await expect(
+      api.mergePlaceholder({ groupId: 'g1', placeholderUserId: 'p1', realUserId: 'p1' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expectNothingMoved();
+  });
+
+  test('refuses to merge a placeholder into another placeholder', async () => {
+    const api = await caller();
+    await expect(
+      api.mergePlaceholder({ groupId: 'g1', placeholderUserId: 'p1', realUserId: 'p2' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expectNothingMoved();
+  });
+
+  test('moves a share only the placeholder had to the member', async () => {
+    mockDb.expenseShare.findMany.mockResolvedValue([
+      {
+        id: 's-p1',
+        expenseId: 'e1',
+        userId: 'p1',
+        amount: 500,
+        shares: 1,
+        percentage: null,
+        expense: { splitMode: 'EQUAL' },
+      },
+    ]);
+    mockDb.expenseShare.findUnique.mockResolvedValue(null);
+    const api = await caller();
+    await api.mergePlaceholder({ groupId: 'g1', placeholderUserId: 'p1', realUserId: 'bob' });
+    expect(mockDb.expenseShare.update).toHaveBeenCalledWith({ where: { id: 's-p1' }, data: { userId: 'bob' } });
+    expect(mockDb.expense.update).not.toHaveBeenCalled();
+  });
+
+  test('an equal split both were in becomes a split by shares, so editing it keeps the amounts', async () => {
+    mockDb.expenseShare.findMany.mockResolvedValue([
+      {
+        id: 's-p1',
+        expenseId: 'e1',
+        userId: 'p1',
+        amount: 333,
+        shares: 1,
+        percentage: null,
+        expense: { splitMode: 'EQUAL' },
+      },
+    ]);
+    mockDb.expenseShare.findUnique.mockResolvedValue({
+      id: 's-bob',
+      expenseId: 'e1',
+      userId: 'bob',
+      amount: 334,
+      shares: 1,
+      percentage: null,
+    });
+    const api = await caller();
+    await api.mergePlaceholder({ groupId: 'g1', placeholderUserId: 'p1', realUserId: 'bob' });
+    expect(mockDb.expenseShare.delete).toHaveBeenCalledWith({ where: { id: 's-p1' } });
+    expect(mockDb.expenseShare.update).toHaveBeenCalledWith({
+      where: { id: 's-bob' },
+      data: { amount: 667, shares: 2, percentage: null },
+    });
+    // Everyone else keeps the one share the equal split gave them
+    expect(mockDb.expenseShare.updateMany).toHaveBeenCalledWith({
+      where: { expenseId: 'e1', userId: { not: 'bob' } },
+      data: { shares: 1 },
+    });
+    expect(mockDb.expense.update).toHaveBeenCalledWith({ where: { id: 'e1' }, data: { splitMode: 'SHARES' } });
+  });
+
+  test('drops payments between the placeholder and the member, which would become payments to themselves', async () => {
+    const api = await caller();
+    await api.mergePlaceholder({ groupId: 'g1', placeholderUserId: 'p1', realUserId: 'bob' });
+    expect(mockDb.settlement.deleteMany).toHaveBeenCalledWith({
+      where: {
+        groupId: 'g1',
+        OR: [
+          { fromId: 'p1', toId: 'bob' },
+          { fromId: 'bob', toId: 'p1' },
+        ],
+      },
+    });
+    // Before the placeholder's other payments move over
+    expect(mockDb.settlement.deleteMany.mock.invocationCallOrder[0]).toBeLessThan(
+      mockDb.settlement.updateMany.mock.invocationCallOrder[0]!,
+    );
+    expect(mockDb.settlement.updateMany).toHaveBeenCalledWith({
+      where: { fromId: 'p1', groupId: 'g1' },
+      data: { fromId: 'bob' },
+    });
   });
 });
 

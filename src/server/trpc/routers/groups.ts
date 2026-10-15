@@ -1,9 +1,10 @@
 import { z } from 'zod';
+import type { Prisma } from '@/generated/prisma/client';
 import { TRPCError } from '@trpc/server';
-import type { PrismaClient } from '@/generated/prisma/client';
 import { createTRPCRouter, protectedProcedure, groupMemberProcedure } from '../init';
 import { stripUndefined } from '../../lib/strip-undefined';
 import { loadGroupBalances } from '../../lib/group-balances';
+import { mergePlaceholderIntoUser } from '../../lib/placeholder-merge';
 import { checkRateLimit } from '../../lib/rate-limit';
 
 // Invite tokens are cuids (25 characters); a defensive bound so oversized input never reaches the lookup.
@@ -284,6 +285,8 @@ export const groupsRouter = createTRPCRouter({
       select: {
         usedAt: true,
         expiresAt: true,
+        groupId: true,
+        placeholderUserId: true,
         group: { select: { name: true, _count: { select: { members: true } } } },
         createdBy: { select: { name: true, isPlaceholder: true, suspendedAt: true } },
       },
@@ -293,10 +296,17 @@ export const groupsRouter = createTRPCRouter({
     // and a suspended one shouldn't be vouching for anything.
     const inviter = invite.createdBy;
     const inviterName = inviter && !inviter.isPlaceholder && !inviter.suspendedAt ? inviter.name : null;
+    // A link made for a placeholder hands over their expenses and payments, so
+    // the page says whose (only while joinByInvite would still merge them).
+    const placeholder = invite.placeholderUserId
+      ? await findPlaceholderMember(ctx.db, invite.placeholderUserId, invite.groupId)
+      : null;
+    const placeholderName = placeholder ? (placeholder.placeholderName ?? placeholder.name) : null;
     return {
       groupName: invite.group.name,
       inviterName,
       memberCount: invite.group._count.members,
+      placeholderName,
     };
   }),
 
@@ -320,42 +330,34 @@ export const groupsRouter = createTRPCRouter({
       return { groupId: invite.groupId, alreadyMember: true };
     }
 
-    await ctx.db.$transaction([
-      ctx.db.groupMember.create({
-        data: { userId: ctx.user.id, groupId: invite.groupId },
-      }),
-      ctx.db.groupInvite.update({
-        where: { id: invite.id },
+    await ctx.db.$transaction(async (tx) => {
+      // Claim the invite only while it's unused, so two people redeeming one
+      // link at once can't both join (and only one takes over a placeholder).
+      const claimed = await tx.groupInvite.updateMany({
+        where: { id: invite.id, usedAt: null },
         data: { usedAt: new Date(), usedById: ctx.user.id },
-      }),
-      ctx.db.activityLog.create({
+      });
+      if (claimed.count === 0) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Invalid or expired invite' });
+      }
+      await tx.groupMember.create({
+        data: { userId: ctx.user.id, groupId: invite.groupId },
+      });
+      await tx.activityLog.create({
         data: {
           groupId: invite.groupId,
           userId: ctx.user.id,
           type: 'MEMBER_JOINED',
         },
-      }),
-    ]);
-
-    // Auto-merge placeholder if invite was linked to one. Re-validate at
-    // redemption: the linked user must still be a placeholder member of this
-    // group (it may have been merged, removed, or never have been valid).
-    if (invite.placeholderUserId) {
-      const placeholder = await ctx.db.user.findUnique({
-        where: { id: invite.placeholderUserId },
-        select: { isPlaceholder: true },
       });
-      const placeholderMembership = placeholder?.isPlaceholder
-        ? await ctx.db.groupMember.findUnique({
-            where: {
-              userId_groupId: { userId: invite.placeholderUserId, groupId: invite.groupId },
-            },
-          })
-        : null;
-      if (placeholder?.isPlaceholder && placeholderMembership) {
-        await mergePlaceholderIntoUser(ctx.db, invite.placeholderUserId, ctx.user.id, invite.groupId);
+
+      // An invite made for a placeholder hands them over to whoever accepts it.
+      // Skip it if they're no longer a placeholder member of this group (merged
+      // or removed since).
+      if (invite.placeholderUserId && (await findPlaceholderMember(tx, invite.placeholderUserId, invite.groupId))) {
+        await mergePlaceholderIntoUser(tx, invite.placeholderUserId, ctx.user.id, invite.groupId);
       }
-    }
+    });
 
     return { groupId: invite.groupId, alreadyMember: false };
   }),
@@ -539,7 +541,9 @@ export const groupsRouter = createTRPCRouter({
         });
       }
 
-      await mergePlaceholderIntoUser(ctx.db, input.placeholderUserId, input.realUserId, input.groupId);
+      await ctx.db.$transaction((tx) =>
+        mergePlaceholderIntoUser(tx, input.placeholderUserId, input.realUserId, input.groupId),
+      );
 
       return { success: true };
     }),
@@ -550,124 +554,15 @@ function isRedeemable(invite: { usedAt: Date | null; expiresAt: Date }) {
   return !invite.usedAt && invite.expiresAt >= new Date();
 }
 
-/**
- * Merge all references from a placeholder user into a real user, then delete the placeholder.
- */
-async function mergePlaceholderIntoUser(
-  db: PrismaClient,
-  placeholderUserId: string,
-  realUserId: string,
-  groupId: string,
-) {
-  await db.$transaction(async (tx) => {
-    // Hard guard: this helper reassigns financial history and may delete the
-    // user row, so it must never run against a real (non-placeholder) account.
-    const placeholder = await tx.user.findUnique({
-      where: { id: placeholderUserId },
-      select: { isPlaceholder: true },
-    });
-    if (!placeholder?.isPlaceholder) {
-      throw new TRPCError({ code: 'BAD_REQUEST', message: 'Not a placeholder user' });
-    }
-
-    const groupExpenseIds = (
-      await tx.expense.findMany({
-        where: { groupId },
-        select: { id: true },
-      })
-    ).map((e) => e.id);
-
-    const shares = await tx.expenseShare.findMany({
-      where: { userId: placeholderUserId, expenseId: { in: groupExpenseIds } },
-    });
-    for (const share of shares) {
-      const existing = await tx.expenseShare.findUnique({
-        where: { expenseId_userId: { expenseId: share.expenseId, userId: realUserId } },
-      });
-      if (existing) {
-        await tx.expenseShare.update({
-          where: { id: existing.id },
-          data: { amount: existing.amount + share.amount },
-        });
-        await tx.expenseShare.delete({ where: { id: share.id } });
-      } else {
-        await tx.expenseShare.update({
-          where: { id: share.id },
-          data: { userId: realUserId },
-        });
-      }
-    }
-
-    const groupReceiptItemIds = (
-      await tx.receiptItem.findMany({
-        where: {
-          receipt: {
-            OR: [{ expense: { groupId } }, { groupId }],
-          },
-        },
-        select: { id: true },
-      })
-    ).map((ri) => ri.id);
-    if (groupReceiptItemIds.length > 0) {
-      const placeholderAssignments = await tx.receiptItemAssignment.findMany({
-        where: { userId: placeholderUserId, receiptItemId: { in: groupReceiptItemIds } },
-      });
-      for (const assignment of placeholderAssignments) {
-        const existing = await tx.receiptItemAssignment.findFirst({
-          where: { receiptItemId: assignment.receiptItemId, userId: realUserId },
-        });
-        if (existing) {
-          await tx.receiptItemAssignment.delete({ where: { id: assignment.id } });
-        } else {
-          await tx.receiptItemAssignment.update({
-            where: { id: assignment.id },
-            data: { userId: realUserId },
-          });
-        }
-      }
-    }
-
-    await tx.expense.updateMany({
-      where: { paidById: placeholderUserId, groupId },
-      data: { paidById: realUserId },
-    });
-    await tx.expense.updateMany({
-      where: { addedById: placeholderUserId, groupId },
-      data: { addedById: realUserId },
-    });
-
-    await tx.settlement.updateMany({
-      where: { fromId: placeholderUserId, groupId },
-      data: { fromId: realUserId },
-    });
-    await tx.settlement.updateMany({
-      where: { toId: placeholderUserId, groupId },
-      data: { toId: realUserId },
-    });
-
-    await tx.activityLog.updateMany({
-      where: { userId: placeholderUserId, groupId },
-      data: { userId: realUserId },
-    });
-
-    await tx.groupMember.deleteMany({
-      where: { userId: placeholderUserId, groupId },
-    });
-
-    await tx.activityLog.create({
-      data: {
-        groupId,
-        userId: realUserId,
-        type: 'PLACEHOLDER_MERGED',
-        metadata: { mergedPlaceholderId: placeholderUserId },
-      },
-    });
-
-    const remainingMemberships = await tx.groupMember.count({
-      where: { userId: placeholderUserId },
-    });
-    if (remainingMemberships === 0) {
-      await tx.user.delete({ where: { id: placeholderUserId } });
-    }
+/** The user if they're still a placeholder and a member of the group, else null. */
+async function findPlaceholderMember(db: Prisma.TransactionClient, userId: string, groupId: string) {
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: { isPlaceholder: true, placeholderName: true, name: true },
   });
+  if (!user?.isPlaceholder) return null;
+  const membership = await db.groupMember.findUnique({
+    where: { userId_groupId: { userId, groupId } },
+  });
+  return membership ? user : null;
 }

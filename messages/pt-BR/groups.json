@@ -76,6 +76,8 @@
     "placeholderMembers": "Membros provisórios ({count})",
     "pending": "Pendente",
     "removeConfirm": "Remover \"{name}\"?",
+    "inviteToClaim": "Convidar {name} para assumir seu lugar",
+    "mergeIntoMember": "Mesclar {name} com um membro",
     "dangerZone": "Zona de perigo",
     "archiveDescription": "Arquive este grupo para ocultá-lo do painel. Antes de arquivá-lo, todas as contas precisam estar acertadas. Você pode desarquivá-lo a qualquer momento.",
     "archiveConfirm": "Arquivar este grupo? Ele será ocultado do painel.",
@@ -105,7 +107,20 @@
     "generating": "Gerando...",
     "generateLink": "Gerar link de convite",
     "copyLink": "Copiar link de convite",
-    "linkInfo": "Qualquer pessoa com este link pode entrar no grupo."
+    "linkInfo": "Qualquer pessoa com este link pode entrar no grupo.",
+    "claimTitle": "Convidar {name} para assumir seu lugar",
+    "claimDescription": "Quando {name} aceitar este link, as despesas e pagamentos registrados para essa pessoa passam a ser dela. Os links expiram após 7 dias.",
+    "claimLinkInfo": "Envie apenas para {name}: quem aceitar primeiro assume as despesas e pagamentos."
+  },
+  "merge": {
+    "title": "Mesclar {name} com um membro",
+    "description": "Se {name} já entrou neste grupo com uma conta, mova tudo o que foi registrado para {name} para essa conta.",
+    "target": "Membro",
+    "choose": "Escolha um membro",
+    "confirm": "As despesas, partes e pagamentos de {name} vão para {member}, e {name} será removido do grupo. Isso não pode ser desfeito.",
+    "submit": "Mesclar",
+    "merging": "Mesclando...",
+    "done": "{name} foi mesclado com {member}"
   },
   "empty": "Nenhum grupo ainda",
   "emptyDescription": "Crie seu primeiro grupo para começar a dividir despesas com amigos.",

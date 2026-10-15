@@ -76,6 +76,8 @@
     "placeholderMembers": "Platshållarmedlemmar ({count})",
     "pending": "Väntande",
     "removeConfirm": "Ta bort \"{name}\"?",
+    "inviteToClaim": "Bjud in {name} att ta över sin plats",
+    "mergeIntoMember": "Slå samman {name} med en medlem",
     "dangerZone": "Farozon",
     "archiveDescription": "Arkivera denna grupp för att dölja den från instrumentpanelen. Alla måste ha gjort upp först. Du kan avarkivera den när som helst.",
     "archiveConfirm": "Arkivera denna grupp? Den döljs från instrumentpanelen.",
@@ -105,7 +107,20 @@
     "generating": "Genererar...",
     "generateLink": "Generera inbjudningslänk",
     "copyLink": "Kopiera inbjudningslänk",
-    "linkInfo": "Alla med denna länk kan gå med i gruppen."
+    "linkInfo": "Alla med denna länk kan gå med i gruppen.",
+    "claimTitle": "Bjud in {name} att ta över sin plats",
+    "claimDescription": "När {name} accepterar länken blir utgifterna och betalningarna som registrerats för dem deras egna. Länkar upphör att gälla efter 7 dagar.",
+    "claimLinkInfo": "Skicka den bara till {name}: den som accepterar den först tar över deras utgifter och betalningar."
+  },
+  "merge": {
+    "title": "Slå samman {name} med en medlem",
+    "description": "Om {name} redan har gått med i gruppen med ett konto, flytta allt som registrerats för {name} till det kontot.",
+    "target": "Medlem",
+    "choose": "Välj en medlem",
+    "confirm": "Utgifterna, andelarna och betalningarna för {name} flyttas till {member}, och {name} tas bort från gruppen. Det går inte att ångra.",
+    "submit": "Slå samman",
+    "merging": "Slår samman...",
+    "done": "{name} slogs samman med {member}"
   },
   "empty": "Inga grupper än",
   "emptyDescription": "Skapa din första grupp för att börja dela utgifter med vänner.",

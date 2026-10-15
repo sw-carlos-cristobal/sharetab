@@ -76,6 +76,8 @@
     "placeholderMembers": "仮メンバー（{count}人）",
     "pending": "保留中",
     "removeConfirm": "「{name}」を削除しますか？",
+    "inviteToClaim": "{name}さんを招待して引き継いでもらう",
+    "mergeIntoMember": "{name}さんをメンバーに統合",
     "dangerZone": "危険ゾーン",
     "archiveDescription": "このグループをアーカイブしてダッシュボードから非表示にします。先に全員の精算を済ませてください。いつでもアーカイブ解除できます。",
     "archiveConfirm": "このグループをアーカイブしますか？ダッシュボードから非表示になります。",
@@ -105,7 +107,20 @@
     "generating": "生成中...",
     "generateLink": "招待リンクを生成",
     "copyLink": "招待リンクをコピー",
-    "linkInfo": "このリンクを持つ人は誰でもグループに参加できます。"
+    "linkInfo": "このリンクを持つ人は誰でもグループに参加できます。",
+    "claimTitle": "{name}さんを招待して引き継いでもらう",
+    "claimDescription": "{name}さんがこのリンクを承認すると、{name}さんとして記録された経費と支払いがその人のものになります。リンクは7日後に期限切れになります。",
+    "claimLinkInfo": "{name}さん本人にだけ送ってください。最初に承認した人が経費と支払いを引き継ぎます。"
+  },
+  "merge": {
+    "title": "{name}さんをメンバーに統合",
+    "description": "{name}さんがすでにアカウントでこのグループに参加している場合、{name}さんとして記録されたものをすべてそのアカウントに移します。",
+    "target": "メンバー",
+    "choose": "メンバーを選択",
+    "confirm": "{name}さんの経費、負担分、支払いは{member}さんに移り、{name}さんはグループから削除されます。この操作は元に戻せません。",
+    "submit": "統合",
+    "merging": "統合中...",
+    "done": "{name}さんを{member}さんに統合しました"
   },
   "empty": "グループがありません",
   "emptyDescription": "最初のグループを作成して、友達との割り勘を始めましょう。",

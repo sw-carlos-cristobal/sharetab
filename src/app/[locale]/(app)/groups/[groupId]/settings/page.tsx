@@ -11,8 +11,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { Archive, ArchiveRestore, ArrowLeft, Pencil, Trash2, UserPlus, Check, X } from 'lucide-react';
+import { Archive, ArchiveRestore, ArrowLeft, Pencil, Trash2, UserPlus, Check, X, Link2, Merge } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { InviteDialog } from '@/components/groups/invite-dialog';
+import { MergePlaceholderDialog } from '@/components/groups/merge-placeholder-dialog';
 import { toast } from 'sonner';
 
 // Details form is a separate component so its state is initialized exactly
@@ -106,6 +108,9 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
   const [placeholderName, setPlaceholderName] = useState('');
   const [editingPlaceholder, setEditingPlaceholder] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
+  // The placeholder whose claim link or merge dialog is open
+  const [claimFor, setClaimFor] = useState<{ id: string; name: string } | null>(null);
+  const [mergeFor, setMergeFor] = useState<{ id: string; name: string } | null>(null);
 
   const deleteGroup = trpc.groups.delete.useMutation({
     onSuccess: () => {
@@ -162,6 +167,10 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
   if (!group.data) return <p className="text-destructive">{t('settings.notFound')}</p>;
 
   const placeholders = group.data.members.filter((m) => m.user.isPlaceholder);
+  // Who a placeholder can be merged into: the members who joined with an account
+  const accountMembers = group.data.members
+    .filter((m) => !m.user.isPlaceholder)
+    .map((m) => ({ id: m.user.id, name: m.user.name ?? m.user.email ?? '' }));
 
   return (
     <div className="mx-auto max-w-lg space-y-6">
@@ -281,6 +290,32 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
                       <div className="flex items-center gap-1">
                         <button
                           type="button"
+                          aria-label={t('settings.inviteToClaim', {
+                            name: m.user.placeholderName ?? m.user.name ?? '',
+                          })}
+                          title={t('settings.inviteToClaim', { name: m.user.placeholderName ?? m.user.name ?? '' })}
+                          onClick={() =>
+                            setClaimFor({ id: m.user.id, name: m.user.placeholderName ?? m.user.name ?? '' })
+                          }
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <Link2 className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={t('settings.mergeIntoMember', {
+                            name: m.user.placeholderName ?? m.user.name ?? '',
+                          })}
+                          title={t('settings.mergeIntoMember', { name: m.user.placeholderName ?? m.user.name ?? '' })}
+                          onClick={() =>
+                            setMergeFor({ id: m.user.id, name: m.user.placeholderName ?? m.user.name ?? '' })
+                          }
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <Merge className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => {
                             setEditingPlaceholder(m.user.id);
                             setEditingName(m.user.placeholderName ?? m.user.name ?? '');
@@ -313,6 +348,26 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
           )}
         </CardContent>
       </Card>
+
+      {claimFor && (
+        <InviteDialog
+          key={claimFor.id}
+          groupId={groupId}
+          placeholder={claimFor}
+          open
+          onOpenChange={(open) => !open && setClaimFor(null)}
+        />
+      )}
+      {mergeFor && (
+        <MergePlaceholderDialog
+          key={mergeFor.id}
+          groupId={groupId}
+          placeholder={mergeFor}
+          members={accountMembers}
+          open
+          onOpenChange={(open) => !open && setMergeFor(null)}
+        />
+      )}
 
       <Separator />
 

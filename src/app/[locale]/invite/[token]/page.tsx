@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { UserPlus } from 'lucide-react';
 
-// The group and inviter names come from other users; <bdi> keeps right-to-left or direction-override
+// The group, inviter and placeholder names come from other users; <bdi> keeps right-to-left or direction-override
 // characters in them from reordering the rest of the sentence.
 const isolate = (chunks: ReactNode) => <bdi>{chunks}</bdi>;
 const bold = (chunks: ReactNode) => <bdi className="font-medium text-foreground">{chunks}</bdi>;
@@ -80,6 +80,12 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
             <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{t('invalid')}</div>
           ) : (
             <p className="text-sm break-words text-muted-foreground">{summary}</p>
+          )}
+
+          {!invalid && invite.data?.placeholderName && (
+            <p className="rounded-md bg-muted p-3 text-sm break-words">
+              {t.rich('claims', { name: invite.data.placeholderName, b: bold })}
+            </p>
           )}
 
           {joinGroup.error && !invalid && !invite.isFetching && (

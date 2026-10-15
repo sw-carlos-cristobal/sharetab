@@ -76,6 +76,8 @@
     "placeholderMembers": "占位成员（{count}人）",
     "pending": "待处理",
     "removeConfirm": "移除「{name}」？",
+    "inviteToClaim": "邀请{name}认领其位置",
+    "mergeIntoMember": "将{name}合并到成员",
     "dangerZone": "危险区域",
     "archiveDescription": "归档此群组以从仪表板隐藏。归档前所有人都需要先结清。您可以随时取消归档。",
     "archiveConfirm": "归档此群组？将从仪表板中隐藏。",
@@ -105,7 +107,20 @@
     "generating": "生成中...",
     "generateLink": "生成邀请链接",
     "copyLink": "复制邀请链接",
-    "linkInfo": "拥有此链接的任何人都可以加入群组。"
+    "linkInfo": "拥有此链接的任何人都可以加入群组。",
+    "claimTitle": "邀请{name}认领其位置",
+    "claimDescription": "{name}接受此链接后，记录在其名下的支出和付款将归其所有。链接7天后过期。",
+    "claimLinkInfo": "只发送给{name}：第一个接受链接的人将接管其支出和付款。"
+  },
+  "merge": {
+    "title": "将{name}合并到成员",
+    "description": "如果{name}已经用账户加入了此群组，将记录在{name}名下的所有内容移到该账户。",
+    "target": "成员",
+    "choose": "选择成员",
+    "confirm": "{name}的支出、分摊和付款将移到{member}名下，{name}将从群组中移除。此操作无法撤销。",
+    "submit": "合并",
+    "merging": "合并中...",
+    "done": "已将{name}合并到{member}"
   },
   "empty": "暂无群组",
   "emptyDescription": "创建您的第一个群组，开始与朋友分摊费用。",

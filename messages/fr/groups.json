@@ -76,6 +76,8 @@
     "placeholderMembers": "Membres provisoires ({count})",
     "pending": "En attente",
     "removeConfirm": "Supprimer « {name} » ?",
+    "inviteToClaim": "Inviter {name} à reprendre sa place",
+    "mergeIntoMember": "Fusionner {name} avec un membre",
     "dangerZone": "Zone de danger",
     "archiveDescription": "Archivez ce groupe pour le masquer du tableau de bord. Tous les comptes doivent d'abord être réglés. Vous pouvez le désarchiver à tout moment.",
     "archiveConfirm": "Archiver ce groupe ? Il sera masqué du tableau de bord.",
@@ -105,7 +107,20 @@
     "generating": "Génération...",
     "generateLink": "Générer un lien d'invitation",
     "copyLink": "Copier le lien d'invitation",
-    "linkInfo": "Toute personne disposant de ce lien peut rejoindre le groupe."
+    "linkInfo": "Toute personne disposant de ce lien peut rejoindre le groupe.",
+    "claimTitle": "Inviter {name} à reprendre sa place",
+    "claimDescription": "Quand {name} acceptera ce lien, les dépenses et paiements enregistrés à son nom deviendront les siens. Les liens expirent après 7 jours.",
+    "claimLinkInfo": "Envoyez-le uniquement à {name} : la première personne qui l'accepte reprend ses dépenses et paiements."
+  },
+  "merge": {
+    "title": "Fusionner {name} avec un membre",
+    "description": "Si {name} a déjà rejoint ce groupe avec un compte, transférez tout ce qui est enregistré au nom de {name} vers ce compte.",
+    "target": "Membre",
+    "choose": "Choisissez un membre",
+    "confirm": "Les dépenses, parts et paiements de {name} seront transférés à {member}, et {name} sera retiré du groupe. Cette action est irréversible.",
+    "submit": "Fusionner",
+    "merging": "Fusion...",
+    "done": "{name} a été fusionné avec {member}"
   },
   "empty": "Aucun groupe",
   "emptyDescription": "Créez votre premier groupe pour commencer à partager les dépenses entre amis.",

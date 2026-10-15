@@ -76,6 +76,8 @@
     "placeholderMembers": "임시 멤버 ({count}명)",
     "pending": "대기 중",
     "removeConfirm": "\"{name}\"을(를) 삭제하시겠습니까?",
+    "inviteToClaim": "{name}님이 자리를 이어받도록 초대",
+    "mergeIntoMember": "{name}님을 멤버와 병합",
     "dangerZone": "위험 구역",
     "archiveDescription": "이 그룹을 보관하여 대시보드에서 숨깁니다. 먼저 모두 정산을 완료해야 합니다. 언제든지 보관 해제할 수 있습니다.",
     "archiveConfirm": "이 그룹을 보관하시겠습니까? 대시보드에서 숨겨집니다.",
@@ -105,7 +107,20 @@
     "generating": "생성 중...",
     "generateLink": "초대 링크 생성",
     "copyLink": "초대 링크 복사",
-    "linkInfo": "이 링크를 가진 사람은 누구나 그룹에 참여할 수 있습니다."
+    "linkInfo": "이 링크를 가진 사람은 누구나 그룹에 참여할 수 있습니다.",
+    "claimTitle": "{name}님이 자리를 이어받도록 초대",
+    "claimDescription": "{name}님이 이 링크를 수락하면 {name}님 앞으로 기록된 비용과 결제가 그 사람의 것이 됩니다. 링크는 7일 후 만료됩니다.",
+    "claimLinkInfo": "{name}님에게만 보내세요. 먼저 수락한 사람이 비용과 결제를 이어받습니다."
+  },
+  "merge": {
+    "title": "{name}님을 멤버와 병합",
+    "description": "{name}님이 이미 계정으로 이 그룹에 참여했다면, {name}님 앞으로 기록된 모든 것을 그 계정으로 옮깁니다.",
+    "target": "멤버",
+    "choose": "멤버 선택",
+    "confirm": "{name}님의 비용, 분담액, 결제가 {member}님에게 옮겨지고 {name}님은 그룹에서 삭제됩니다. 이 작업은 되돌릴 수 없습니다.",
+    "submit": "병합",
+    "merging": "병합 중...",
+    "done": "{name}님을 {member}님과 병합했습니다"
   },
   "empty": "그룹이 없습니다",
   "emptyDescription": "친구들과 비용 분할을 시작하려면 첫 번째 그룹을 만드세요.",
