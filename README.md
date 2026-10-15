@@ -126,7 +126,7 @@ ShareTab is a free, self-hosted alternative to Splitwise for tracking shared exp
 - **Cross-group dashboard** -- see all your balances at a glance, with per-person debt breakdown
 - **Debt simplification** -- minimize the number of payments needed
 - **Settle up** -- record payments between any two group members with explicit From/To fields
-- **Placeholder members** -- add people without accounts; rename or remove them from group settings
+- **Placeholder members** -- add people without accounts and rename them from group settings; when someone joins, send them a link that hands over their placeholder, or merge the placeholder into the account they joined with, and its expenses and payments move to them
 - **Dark mode** -- system-aware with manual toggle
 - **Invite links** -- share a link to add friends to your groups
 - **Magic link auth** -- passwordless email sign-in

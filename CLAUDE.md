@@ -74,6 +74,7 @@ npx prisma db push   # Push schema without migration (dev only)
 - `src/server/trpc/routers/` — Individual routers: auth, groups, expenses, balances, settlements, activity, receipts, guest, admin
 - `src/server/lib/balance-calculator.ts` — Pure functions for debt simplification and balance computation (extracted for testability)
 - `src/server/lib/group-balances.ts` — `loadGroupBalances(db, groupId)`: loads one group's expenses and settlements and runs `computeBalances`; shared by `balances.getGroupBalances`/`getSimplifiedDebts` and `groups.archive`, so the group page and the archive check agree
+- `src/server/lib/placeholder-merge.ts` — `mergePlaceholderIntoUser(tx, …)`: hands a placeholder's expenses, shares, payments and receipt assignments in one group to a member with an account, inside the caller's transaction (`groups.mergePlaceholder`, and `groups.joinByInvite` for an invite made for a placeholder, which group settings offers as "Invite to claim"). Where both were in one expense, `combineShares` also adds their share units or percentages and turns an equal split into a split by shares, so the edit form opens on the same split; a payment between the two is deleted, since it would be a payment to themselves
 - `src/app/[locale]/` — Next.js App Router pages under i18n locale segment. `(auth)/` for login/register, `(app)/` for authenticated pages
 - `src/components/` — React components organized by domain
 - `src/components/providers.tsx` — Client-side tRPC + React Query + SessionProvider + ThemeProvider wrapper
@@ -128,7 +129,7 @@ npx prisma db push   # Push schema without migration (dev only)
 
 ### Unit Tests (Vitest)
 
-- `npm test` — run all unit tests (~780 tests, about 2 seconds)
+- `npm test` — run all unit tests (~800 tests, about 2 seconds)
 - Tests live co-located with source: `src/**/*.test.ts`, plus `docker/**/*.test.mjs` for the Docker build scripts
 - Covers most of `src/server/lib/`, `src/lib/` money, split-calculator, split-editor-seed, sign-in-errors, avatar, guest-session, claim-drafts, and claim-save, `ai/registry.ts`, `ai/schema.ts`, `ai/providers/openai-codex.ts`, `ai/providers/meridian.ts`, the admin, auth, balances, expenses, guest, groups, and receipts routers, `app/api/upload/route.ts`, and `docker/stage-runtime-deps.mjs`. `git ls-files '*.test.ts' '*.test.mjs'` lists them
 
