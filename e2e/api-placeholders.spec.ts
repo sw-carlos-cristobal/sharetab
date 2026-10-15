@@ -212,7 +212,7 @@ test.describe('Placeholder Members', () => {
   // #276: merging only added the amounts of a placeholder and a member who were
   // both in an expense, so the edit form opened on a different split, and a
   // payment between them became a payment to themselves.
-  test('merging keeps an equal split both were in as the same split, and drops payments between them', async () => {
+  test('merging keeps the amounts of an expense both were in, and drops payments between them', async () => {
     const { owner, groupId, memberIds, dispose } = await createTestGroup(
       users.alice.email,
       users.alice.password,
@@ -246,13 +246,13 @@ test.describe('Placeholder Members', () => {
     });
     expect((await mergeRes.json()).result?.data?.json?.success).toBe(true);
 
-    // Bob holds both equal parts as two shares, so the edit form opens on the same split
+    // Bob holds both parts, kept as exact amounts so saving the expense unchanged moves nothing
     const after = await trpcResult(await trpcQuery(owner, 'expenses.get', { groupId, expenseId: expense.id }));
-    expect(after.splitMode).toBe('SHARES');
+    expect(after.splitMode).toBe('EXACT');
     const shares = Object.fromEntries(
-      after.shares.map((s: { userId: string; amount: number; shares: number }) => [s.userId, [s.amount, s.shares]]),
+      after.shares.map((s: { userId: string; amount: number }) => [s.userId, s.amount]),
     );
-    expect(shares).toEqual({ [aliceId]: [1000, 1], [bobId]: [2000, 2] });
+    expect(shares).toEqual({ [aliceId]: 1000, [bobId]: 2000 });
 
     // The payment from Hank to Bob would now be Bob paying himself
     const payments = await trpcResult(await trpcQuery(owner, 'settlements.list', { groupId }));

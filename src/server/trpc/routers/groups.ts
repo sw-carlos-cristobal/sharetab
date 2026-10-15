@@ -388,7 +388,11 @@ export const groupsRouter = createTRPCRouter({
       // Skip it if they're no longer a placeholder member of this group (merged
       // or removed since).
       if (invite.placeholderUserId && (await findPlaceholderMember(tx, invite.placeholderUserId, invite.groupId))) {
-        await mergePlaceholderIntoUser(tx, invite.placeholderUserId, ctx.user.id, invite.groupId);
+        // Lost to a merge that got there first: don't join them as if they'd
+        // taken the placeholder over. Accepting again joins without it.
+        if (!(await mergePlaceholderIntoUser(tx, invite.placeholderUserId, ctx.user.id, invite.groupId))) {
+          throw new TRPCError({ code: 'CONFLICT', message: 'This placeholder was already merged or removed' });
+        }
       }
       return true;
     });

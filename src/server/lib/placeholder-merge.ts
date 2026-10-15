@@ -5,29 +5,21 @@ type ShareFields = { amount: number; shares: number; percentage: number | null }
 
 /**
  * One person's share of an expense that the placeholder merged into them was
- * also in: the two shares added up in the numbers the split mode keeps, so the
- * edit form opens on the same split. An equal split can't give one person two
- * parts, so it becomes a split by shares where they hold both.
+ * also in: the two amounts added up. Share units or percentages recomputed for
+ * the merged person can land a cent away from what's stored (the edit form's
+ * rounding depends on member order), so the expense becomes an exact split of
+ * its stored amounts, and saving it unchanged moves nothing. A receipt split
+ * keeps its mode; the edit form already opens it as exact amounts.
  */
 export function combineShares(
   mode: SplitMode,
   target: ShareFields,
   placeholder: ShareFields,
 ): { mode: SplitMode; share: ShareFields } {
-  const amount = target.amount + placeholder.amount;
-  switch (mode) {
-    case 'EQUAL':
-    case 'SHARES':
-      return { mode: 'SHARES', share: { amount, shares: target.shares + placeholder.shares, percentage: null } };
-    case 'PERCENTAGE':
-      return {
-        mode,
-        share: { amount, shares: target.shares, percentage: (target.percentage ?? 0) + (placeholder.percentage ?? 0) },
-      };
-    case 'EXACT':
-    case 'ITEM':
-      return { mode, share: { amount, shares: target.shares, percentage: target.percentage } };
-  }
+  return {
+    mode: mode === 'ITEM' ? 'ITEM' : 'EXACT',
+    share: { amount: target.amount + placeholder.amount, shares: 1, percentage: null },
+  };
 }
 
 /**
@@ -119,11 +111,6 @@ export async function mergePlaceholderIntoUser(
     await tx.expenseShare.delete({ where: { id: share.id } });
     await tx.expenseShare.update({ where: { id: existing.id }, data: combined.share });
     if (combined.mode !== share.expense.splitMode) {
-      // Everyone else keeps the one share the equal split gave them
-      await tx.expenseShare.updateMany({
-        where: { expenseId: share.expenseId, userId: { not: realUserId } },
-        data: { shares: 1 },
-      });
       await tx.expense.update({ where: { id: share.expenseId }, data: { splitMode: combined.mode } });
     }
   }

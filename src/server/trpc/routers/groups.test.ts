@@ -264,6 +264,29 @@ describe('invites', () => {
     await expect(api.joinByInvite({ token: 't1' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 
+  // An admin merged the placeholder between this request's check and its merge
+  test('joinByInvite does not join a first-time claimant whose placeholder went to someone else', async () => {
+    mockDb.groupInvite.findUnique.mockResolvedValue({
+      id: 'i1',
+      groupId: 'g1',
+      usedAt: null,
+      expiresAt: inAWeek(),
+      placeholderUserId: 'p1',
+    });
+    mockDb.user.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
+      where.id === 'p1' ? { suspendedAt: null, isPlaceholder: true } : { suspendedAt: null, isPlaceholder: false },
+    );
+    mockDb.groupMember.findUnique.mockImplementation(
+      async ({ where }: { where: { userId_groupId: { userId: string } } }) =>
+        where.userId_groupId.userId === 'p1' ? { id: 'gm-p1', userId: 'p1', groupId: 'g1' } : null,
+    );
+    mockDb.groupInvite.updateMany.mockResolvedValue({ count: 1 });
+    // The merge finds the placeholder's membership already gone
+    mockDb.groupMember.deleteMany.mockResolvedValue({ count: 0 });
+    const api = await caller('bob');
+    await expect(api.joinByInvite({ token: 't1' })).rejects.toMatchObject({ code: 'CONFLICT' });
+  });
+
   test('joinByInvite answers a retry of a join that already went through as already a member', async () => {
     // The first request joined them and used the invite; its answer never arrived
     mockDb.groupInvite.findUnique.mockResolvedValue({
@@ -577,7 +600,9 @@ describe('merging a placeholder into a member', () => {
     expect(mockDb.expense.update).not.toHaveBeenCalled();
   });
 
-  test('an equal split both were in becomes a split by shares where the member holds both parts', async () => {
+  // Recomputing units or percentages for the merged person can land a cent away
+  // from what's stored, so the expense keeps the stored amounts as exact ones.
+  test('an expense both were in becomes an exact split of the stored amounts', async () => {
     mockDb.expenseShare.findMany.mockResolvedValue([
       {
         id: 's-p1',
@@ -593,7 +618,7 @@ describe('merging a placeholder into a member', () => {
       id: 's-bob',
       expenseId: 'e1',
       userId: 'bob',
-      amount: 334,
+      amount: 333,
       shares: 1,
       percentage: null,
     });
@@ -602,14 +627,9 @@ describe('merging a placeholder into a member', () => {
     expect(mockDb.expenseShare.delete).toHaveBeenCalledWith({ where: { id: 's-p1' } });
     expect(mockDb.expenseShare.update).toHaveBeenCalledWith({
       where: { id: 's-bob' },
-      data: { amount: 667, shares: 2, percentage: null },
+      data: { amount: 666, shares: 1, percentage: null },
     });
-    // Everyone else keeps the one share the equal split gave them
-    expect(mockDb.expenseShare.updateMany).toHaveBeenCalledWith({
-      where: { expenseId: 'e1', userId: { not: 'bob' } },
-      data: { shares: 1 },
-    });
-    expect(mockDb.expense.update).toHaveBeenCalledWith({ where: { id: 'e1' }, data: { splitMode: 'SHARES' } });
+    expect(mockDb.expense.update).toHaveBeenCalledWith({ where: { id: 'e1' }, data: { splitMode: 'EXACT' } });
   });
 
   test('drops payments between the placeholder and the member, which would become payments to themselves', async () => {
