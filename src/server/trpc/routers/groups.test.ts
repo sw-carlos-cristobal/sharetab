@@ -241,14 +241,27 @@ describe('invites', () => {
     expect(mockDb.groupMember.create).not.toHaveBeenCalled();
   });
 
-  test('joinByInvite answers a second submit of the same join as already a member', async () => {
-    mockDb.groupInvite.findUnique.mockResolvedValue({ id: 'i1', groupId: 'g1', usedAt: null, expiresAt: inAWeek() });
-    // Not a member when the invite is looked up; the first submit has joined them by the time the claim fails
+  // Not a member when the invite is looked up; a member by the time the claim fails
+  function claimFailsAfterJoining(usedById: string) {
+    mockDb.groupInvite.findUnique
+      .mockResolvedValueOnce({ id: 'i1', groupId: 'g1', usedAt: null, expiresAt: inAWeek(), placeholderUserId: 'p1' })
+      .mockResolvedValue({ usedById });
     mockDb.groupMember.findUnique.mockResolvedValueOnce(null).mockResolvedValue({ id: 'gm-bob', userId: 'bob' });
     mockDb.groupInvite.updateMany.mockResolvedValue({ count: 0 });
+  }
+
+  test('joinByInvite answers a second submit of the same join as already a member', async () => {
+    claimFailsAfterJoining('bob');
     const api = await caller('bob');
     await expect(api.joinByInvite({ token: 't1' })).resolves.toEqual({ groupId: 'g1', alreadyMember: true });
     expect(mockDb.groupMember.create).not.toHaveBeenCalled();
+  });
+
+  // They joined through another link meanwhile, and someone else took this one (and its placeholder)
+  test('joinByInvite tells someone who lost the invite to another person that it is gone, even if they joined meanwhile', async () => {
+    claimFailsAfterJoining('charlie');
+    const api = await caller('bob');
+    await expect(api.joinByInvite({ token: 't1' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 
   test('joinByInvite answers a retry of a join that already went through as already a member', async () => {

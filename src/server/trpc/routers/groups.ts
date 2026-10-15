@@ -355,8 +355,7 @@ export const groupsRouter = createTRPCRouter({
           if (!(await claimInvite(tx, invite.id, ctx.user.id))) {
             // Fine if it was this person's own earlier submit; otherwise
             // someone else got there first and took the placeholder.
-            const used = await tx.groupInvite.findUnique({ where: { id: invite.id }, select: { usedById: true } });
-            if (used?.usedById === ctx.user.id) return;
+            if (await isUsedBy(tx, invite.id, ctx.user.id)) return;
             throw new TRPCError({ code: 'NOT_FOUND', message: 'Invalid or expired invite' });
           }
           if (!(await mergePlaceholderIntoUser(tx, placeholderUserId, ctx.user.id, invite.groupId))) {
@@ -395,11 +394,10 @@ export const groupsRouter = createTRPCRouter({
     });
     if (!joined) {
       // Used or expired since the lookup. A second submit of this person's own
-      // join ends up here too, once the first has joined them.
-      const member = await ctx.db.groupMember.findUnique({
-        where: { userId_groupId: { userId: ctx.user.id, groupId: invite.groupId } },
-      });
-      if (member) return { groupId: invite.groupId, alreadyMember: true };
+      // join ends up here too, once the first has used the invite for them.
+      if (await isUsedBy(ctx.db, invite.id, ctx.user.id)) {
+        return { groupId: invite.groupId, alreadyMember: true };
+      }
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Invalid or expired invite' });
     }
 
@@ -595,6 +593,12 @@ async function claimInvite(tx: Prisma.TransactionClient, inviteId: string, userI
     data: { usedAt: new Date(), usedById: userId },
   });
   return claimed.count === 1;
+}
+
+/** Whether this user is the one who used the invite. */
+async function isUsedBy(db: Prisma.TransactionClient, inviteId: string, userId: string) {
+  const invite = await db.groupInvite.findUnique({ where: { id: inviteId }, select: { usedById: true } });
+  return invite?.usedById === userId;
 }
 
 /** The user if they're still a placeholder and a member of the group, else null. */
