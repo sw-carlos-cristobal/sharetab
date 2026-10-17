@@ -163,7 +163,8 @@
     "typeGroupArchived": "Group Archived",
     "typeGroupUnarchived": "Group Unarchived",
     "typePlaceholderCreated": "Placeholder Added",
-    "typeSettlementCreated": "Settlement"
+    "typeSettlementCreated": "Settlement",
+    "typeSettlementDeleted": "Settlement Deleted"
   },
   "tools": {
     "title": "Admin Tools",

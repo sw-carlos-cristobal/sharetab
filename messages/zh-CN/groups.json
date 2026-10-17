@@ -139,5 +139,14 @@
     "expenseCount": "{count}笔费用",
     "unarchive": "取消归档",
     "showAll": "显示全部{count}个群组"
+  },
+  "payments": {
+    "title": "付款",
+    "deleteLabel": "删除 {from} 付给 {to} 的 {amount} 付款",
+    "deleteTitle": "删除此付款？",
+    "deleteDescription": "{from} 于 {date} 向 {to} 支付了 {amount}。删除后，余额将恢复为从未记录过此付款时的状态。",
+    "deleting": "正在删除...",
+    "deleted": "付款已删除",
+    "showMore": "显示更多"
   }
 }

@@ -139,5 +139,14 @@
     "expenseCount": "{count, plural, one {# expense} other {# expenses}}",
     "unarchive": "Unarchive",
     "showAll": "Show all {count} groups"
+  },
+  "payments": {
+    "title": "Payments",
+    "deleteLabel": "Delete the payment of {amount} from {from} to {to}",
+    "deleteTitle": "Delete this payment?",
+    "deleteDescription": "{from} paid {to} {amount} on {date}. Deleting it puts the balances back as if it had never been recorded.",
+    "deleting": "Deleting...",
+    "deleted": "Payment deleted",
+    "showMore": "Show more"
   }
 }

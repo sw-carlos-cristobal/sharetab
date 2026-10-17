@@ -17,6 +17,7 @@ import { Link } from '@/i18n/navigation';
 import { toast } from 'sonner';
 import { InviteDialog } from '@/components/groups/invite-dialog';
 import { SettleDialog } from '@/components/groups/settle-dialog';
+import { PaymentsList } from '@/components/groups/payments-list';
 import { getInitials, avatarColor } from '@/lib/avatar';
 
 export default function GroupDetailPage({ params }: { params: Promise<{ groupId: string }> }) {
@@ -81,6 +82,7 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
 
   const g = group.data;
   const memberMap = new Map(g.members.map((m) => [m.user.id, m.user]));
+  const myRole = g.members.find((m) => m.user.id === authSession?.user?.id)?.role;
 
   return (
     <div className="space-y-6">
@@ -401,6 +403,14 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
           </Card>
         )}
       </div>
+
+      <PaymentsList
+        groupId={groupId}
+        groupCurrency={g.currency}
+        currentUserId={authSession?.user?.id}
+        isOwnerOrAdmin={myRole === 'OWNER' || myRole === 'ADMIN'}
+        archived={!!g.archivedAt}
+      />
 
       <InviteDialog groupId={groupId} open={showInvite} onOpenChange={setShowInvite} />
 

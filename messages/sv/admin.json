@@ -163,7 +163,8 @@
     "typeGroupArchived": "Grupp arkiverad",
     "typeGroupUnarchived": "Grupp avarkiverad",
     "typePlaceholderCreated": "Platshållare tillagd",
-    "typeSettlementCreated": "Avräkning"
+    "typeSettlementCreated": "Avräkning",
+    "typeSettlementDeleted": "Avräkning borttagen"
   },
   "tools": {
     "title": "Adminverktyg",

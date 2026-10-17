@@ -139,5 +139,14 @@
     "expenseCount": "{count, plural, one {# utgift} other {# utgifter}}",
     "unarchive": "Avarkivera",
     "showAll": "Visa alla {count} grupper"
+  },
+  "payments": {
+    "title": "Betalningar",
+    "deleteLabel": "Ta bort betalningen på {amount} från {from} till {to}",
+    "deleteTitle": "Ta bort den här betalningen?",
+    "deleteDescription": "{from} betalade {amount} till {to} den {date}. Om du tar bort den blir saldona som om den aldrig hade registrerats.",
+    "deleting": "Tar bort...",
+    "deleted": "Betalningen togs bort",
+    "showMore": "Visa fler"
   }
 }

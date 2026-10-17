@@ -139,5 +139,14 @@
     "expenseCount": "{count, plural, one {# dépense} other {# dépenses}}",
     "unarchive": "Désarchiver",
     "showAll": "Afficher les {count} groupes"
+  },
+  "payments": {
+    "title": "Paiements",
+    "deleteLabel": "Supprimer le paiement de {amount} de {from} à {to}",
+    "deleteTitle": "Supprimer ce paiement ?",
+    "deleteDescription": "{from} a payé {amount} à {to} le {date}. Le supprimer rétablit les soldes comme s'il n'avait jamais été enregistré.",
+    "deleting": "Suppression...",
+    "deleted": "Paiement supprimé",
+    "showMore": "Afficher plus"
   }
 }

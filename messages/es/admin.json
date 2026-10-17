@@ -163,7 +163,8 @@
     "typeGroupArchived": "Grupo archivado",
     "typeGroupUnarchived": "Grupo desarchivado",
     "typePlaceholderCreated": "Marcador añadido",
-    "typeSettlementCreated": "Liquidación"
+    "typeSettlementCreated": "Liquidación",
+    "typeSettlementDeleted": "Liquidación eliminada"
   },
   "tools": {
     "title": "Herramientas de administración",

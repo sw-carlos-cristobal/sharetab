@@ -139,5 +139,14 @@
     "expenseCount": "{count, plural, one {# gasto} other {# gastos}}",
     "unarchive": "Desarchivar",
     "showAll": "Mostrar los {count} grupos"
+  },
+  "payments": {
+    "title": "Pagos",
+    "deleteLabel": "Eliminar el pago de {amount} de {from} a {to}",
+    "deleteTitle": "¿Eliminar este pago?",
+    "deleteDescription": "{from} pagó {amount} a {to} el {date}. Al eliminarlo, los saldos vuelven a quedar como si nunca se hubiera registrado.",
+    "deleting": "Eliminando...",
+    "deleted": "Pago eliminado",
+    "showMore": "Mostrar más"
   }
 }

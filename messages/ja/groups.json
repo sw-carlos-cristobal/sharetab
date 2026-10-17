@@ -139,5 +139,14 @@
     "expenseCount": "支出{count}件",
     "unarchive": "アーカイブ解除",
     "showAll": "{count}件のグループをすべて表示"
+  },
+  "payments": {
+    "title": "支払い",
+    "deleteLabel": "{from}から{to}への{amount}の支払いを削除",
+    "deleteTitle": "この支払いを削除しますか？",
+    "deleteDescription": "{from}は{date}に{to}へ{amount}を支払いました。削除すると、残高は記録されなかった状態に戻ります。",
+    "deleting": "削除中...",
+    "deleted": "支払いを削除しました",
+    "showMore": "さらに表示"
   }
 }

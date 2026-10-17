@@ -139,5 +139,14 @@
     "expenseCount": "{count, plural, one {# Ausgabe} other {# Ausgaben}}",
     "unarchive": "Dearchivieren",
     "showAll": "Alle {count} Gruppen anzeigen"
+  },
+  "payments": {
+    "title": "Zahlungen",
+    "deleteLabel": "Zahlung über {amount} von {from} an {to} löschen",
+    "deleteTitle": "Diese Zahlung löschen?",
+    "deleteDescription": "{from} hat {to} am {date} {amount} gezahlt. Wenn Sie sie löschen, werden die Salden so zurückgesetzt, als wäre sie nie erfasst worden.",
+    "deleting": "Wird gelöscht...",
+    "deleted": "Zahlung gelöscht",
+    "showMore": "Mehr anzeigen"
   }
 }

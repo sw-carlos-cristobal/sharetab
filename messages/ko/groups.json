@@ -139,5 +139,14 @@
     "expenseCount": "비용 {count}건",
     "unarchive": "보관 해제",
     "showAll": "{count}개 그룹 모두 보기"
+  },
+  "payments": {
+    "title": "결제",
+    "deleteLabel": "{from}님이 {to}님에게 보낸 {amount} 결제 삭제",
+    "deleteTitle": "이 결제를 삭제하시겠습니까?",
+    "deleteDescription": "{from}님이 {date}에 {to}님에게 {amount}을(를) 결제했습니다. 삭제하면 잔액이 기록되지 않았던 상태로 돌아갑니다.",
+    "deleting": "삭제 중...",
+    "deleted": "결제가 삭제되었습니다",
+    "showMore": "더 보기"
   }
 }

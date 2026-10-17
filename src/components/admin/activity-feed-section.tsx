@@ -22,6 +22,7 @@ export function ActivityFeedSection() {
     EXPENSE_UPDATED: t('activity.typeExpenseUpdated'),
     EXPENSE_DELETED: t('activity.typeExpenseDeleted'),
     SETTLEMENT_CREATED: t('activity.typeSettlementCreated'),
+    SETTLEMENT_DELETED: t('activity.typeSettlementDeleted'),
     MEMBER_JOINED: t('activity.typeMemberJoined'),
     MEMBER_LEFT: t('activity.typeMemberLeft'),
     GROUP_UPDATED: t('activity.typeGroupUpdated'),
