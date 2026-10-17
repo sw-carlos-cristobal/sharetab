@@ -147,4 +147,64 @@ export const settlementsRouter = createTRPCRouter({
 
       return settlement;
     }),
+
+  delete: groupMemberProcedure
+    .input(z.object({ groupId: z.string(), settlementId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const group = await ctx.db.group.findUnique({
+        where: { id: input.groupId },
+        select: { archivedAt: true },
+      });
+      if (group?.archivedAt) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Cannot delete payments from an archived group',
+        });
+      }
+
+      const settlement = await ctx.db.settlement.findUnique({
+        where: { id: input.settlementId },
+      });
+      if (!settlement || settlement.groupId !== input.groupId) {
+        throw new TRPCError({ code: 'NOT_FOUND' });
+      }
+
+      // A member can only record a payment from themselves, so the payer is
+      // whoever recorded it unless an owner/admin recorded it for them. The
+      // recipient can't delete it: that would let them deny being paid.
+      const isOwnerOrAdmin = ctx.membership.role === 'OWNER' || ctx.membership.role === 'ADMIN';
+      if (!isOwnerOrAdmin && settlement.fromId !== ctx.user.id) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only the payer or a group owner/admin can delete this payment',
+        });
+      }
+
+      await ctx.db.$transaction(async (tx) => {
+        // deleteMany so a payment someone else deleted in the meantime is NOT_FOUND, not a Prisma error
+        const { count } = await tx.settlement.deleteMany({
+          where: { id: input.settlementId, groupId: input.groupId },
+        });
+        if (count === 0) {
+          throw new TRPCError({ code: 'NOT_FOUND' });
+        }
+
+        await tx.activityLog.create({
+          data: {
+            groupId: input.groupId,
+            userId: ctx.user.id,
+            type: 'SETTLEMENT_DELETED',
+            entityId: input.settlementId,
+            metadata: {
+              fromId: settlement.fromId,
+              toId: settlement.toId,
+              amount: settlement.amount,
+              currency: settlement.currency,
+            },
+          },
+        });
+      });
+
+      return { success: true };
+    }),
 });
