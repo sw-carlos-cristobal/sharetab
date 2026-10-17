@@ -68,8 +68,8 @@ export function PaymentsList({
       <h2 className="mb-4 text-lg font-semibold">{t('payments.title')}</h2>
       <Card className="divide-y divide-border overflow-hidden">
         {items.map((p, index) => {
-          const from = p.from.name ?? t('detail.unknown');
-          const to = p.to.name ?? t('detail.unknown');
+          const from = p.from.name ?? p.from.email ?? t('detail.unknown');
+          const to = p.to.name ?? p.to.email ?? t('detail.unknown');
           // Same rule as the expense list: a payment in the group's currency has no base amount
           const amount = formatCents(p.amount, p.baseCurrencyAmount != null ? p.currency : groupCurrency, locale);
           const date = new Date(p.settledAt).toLocaleDateString(locale);

@@ -9,7 +9,7 @@ const mockDb = {
   user: { findUnique: vi.fn() },
   group: { findUnique: vi.fn() },
   groupMember: { findUnique: vi.fn() },
-  settlement: { findUnique: vi.fn(), deleteMany: vi.fn() },
+  settlement: { findUnique: vi.fn(), findMany: vi.fn(), deleteMany: vi.fn() },
   activityLog: { create: vi.fn() },
   $transaction: vi.fn(),
 };
@@ -40,6 +40,20 @@ beforeEach(() => {
   mockDb.$transaction.mockImplementation(async (arg: unknown) =>
     typeof arg === 'function' ? arg(mockDb) : Promise.all(arg as Promise<unknown>[]),
   );
+});
+
+describe('settlements.list', () => {
+  test("includes each person's email, so a member who never set a name isn't shown as Unknown", async () => {
+    asRole('MEMBER', 'bob');
+    mockDb.settlement.findMany.mockResolvedValue([]);
+    const api = await caller('bob');
+
+    await api.list({ groupId: 'g1' });
+
+    const { include } = mockDb.settlement.findMany.mock.calls[0]![0];
+    expect(include.from.select).toMatchObject({ name: true, email: true });
+    expect(include.to.select).toMatchObject({ name: true, email: true });
+  });
 });
 
 // #261: a mistaken payment could not be removed, so it skewed balances for good

@@ -19,8 +19,8 @@ export const settlementsRouter = createTRPCRouter({
         take: input.limit + 1,
         ...(input.cursor ? { cursor: { id: input.cursor } } : {}),
         include: {
-          from: { select: { id: true, name: true, image: true } },
-          to: { select: { id: true, name: true, image: true } },
+          from: { select: { id: true, name: true, email: true, image: true } },
+          to: { select: { id: true, name: true, email: true, image: true } },
         },
         orderBy: [{ settledAt: 'desc' }, { id: 'desc' }],
       });
