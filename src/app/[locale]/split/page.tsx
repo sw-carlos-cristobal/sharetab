@@ -7,6 +7,7 @@ import { Link, useRouter } from '@/i18n/navigation';
 import { trpc } from '@/lib/trpc';
 import { formatCents, centsToDecimal, parseToCents } from '@/lib/money';
 import { calculateSplitTotals } from '@/lib/split-calculator';
+import { setStoredClaimIdentity } from '@/lib/guest-session';
 import { loadingMessageKeys } from '@/lib/loading-messages';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -457,9 +458,18 @@ export default function GuestSplitPage() {
         receiptId: receiptId ?? undefined,
         receiptData: { ...extracted, tip },
         items,
+        people: validPeople,
+        // Whoever scans the receipt is taken to be the payer, and joins the session as them
         creatorName: people[paidByIndex]?.trim() || fallbackName,
         paidByName: people[paidByIndex]?.trim() || fallbackName,
+        joinCreator: true,
       });
+      if (result.creator) {
+        setStoredClaimIdentity(result.shareToken, {
+          name: result.creator.name,
+          personToken: result.creator.personToken,
+        });
+      }
       router.push(`/split/${result.shareToken}/claim`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('assign.createSessionFailed'));

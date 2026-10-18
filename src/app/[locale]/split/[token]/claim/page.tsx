@@ -10,19 +10,19 @@ import { copyToClipboard } from '@/lib/clipboard';
 import {
   canAdoptAnswer,
   claimPollInterval,
-  claimStorageKey,
+  getStoredClaimIdentity,
   isSessionLost,
   joinKeyFor,
   needsMembershipCheck,
   newRequestKey,
   personalLinkHash,
   readPersonalLinkToken,
+  removeStoredClaimIdentity,
   resumeOutcome,
+  setStoredClaimIdentity,
   shouldRetryResume,
-  storedClaimIdentitySchema,
   type ClaimIdentity,
   type PendingJoin,
-  type StoredClaimIdentity,
 } from '@/lib/guest-session';
 import {
   draftsByIndex,
@@ -70,38 +70,6 @@ import { getInitials, guestAvatarColor } from '@/lib/avatar';
 // How one claim save attempt ended: the answer's conflicts when stored, the server's message
 // when refused
 type SaveAttempt = { outcome: SaveOutcome; conflicts: { claimedBy: string[] }[]; message?: string };
-
-function getStoredClaimIdentity(token: string): StoredClaimIdentity | null {
-  if (typeof window === 'undefined') return null;
-
-  try {
-    const raw = window.localStorage.getItem(claimStorageKey(token));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as unknown;
-    const identity = storedClaimIdentitySchema.safeParse(parsed);
-    return identity.success ? identity.data : null;
-  } catch {
-    return null;
-  }
-}
-
-function removeStoredClaimIdentity(token: string) {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.removeItem(claimStorageKey(token));
-  } catch {
-    // Non-fatal, like setStoredClaimIdentity.
-  }
-}
-
-function setStoredClaimIdentity(token: string, identity: StoredClaimIdentity) {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(claimStorageKey(token), JSON.stringify(identity));
-  } catch {
-    // Non-fatal: failing to persist rejoin state should not block the claim flow.
-  }
-}
 
 // Take a personal link's token out of the address bar and this tab's history entry (the
 // browser's global history keeps the URL that was opened). Only called after the page has

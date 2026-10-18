@@ -14,6 +14,7 @@ import { useSession } from 'next-auth/react';
 import { toast } from 'sonner';
 import { ItemAssignment } from '@/components/receipts/item-assignment';
 import { loadingMessageKeys } from '@/lib/loading-messages';
+import { setStoredClaimIdentity } from '@/lib/guest-session';
 
 type Step = 'upload' | 'processing' | 'assign' | 'error';
 
@@ -100,7 +101,14 @@ function ScanReceiptContent({ params }: { params: Promise<{ groupId: string }> }
         })),
         creatorName: myName,
         paidByName: myName,
+        joinCreator: true,
       });
+      if (result.creator) {
+        setStoredClaimIdentity(result.shareToken, {
+          name: result.creator.name,
+          personToken: result.creator.personToken,
+        });
+      }
       router.push(`/split/${result.shareToken}/claim`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('createSessionFailed'));
