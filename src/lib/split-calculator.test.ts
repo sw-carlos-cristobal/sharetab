@@ -327,6 +327,33 @@ describe('calculateClaimTotals', () => {
     expect(result.unclaimed).toEqual({ itemTotal: 1500, tax: 120, tip: 300, total: 1920 });
   });
 
+  test('on a bill whose items are all free, tax and tip stay unclaimed until every item is claimed', () => {
+    const params = { items: [{ totalPrice: 0 }, { totalPrice: 0 }], tax: 50, tip: 100, peopleCount: 2 };
+
+    expect(calculateClaimTotals({ ...params, assignments: [] })).toEqual({
+      people: [],
+      unclaimed: { itemTotal: 0, tax: 50, tip: 100, total: 150 },
+    });
+    expect(calculateClaimTotals({ ...params, assignments: [{ itemIndex: 0, personIndices: [0] }] })).toEqual({
+      people: [{ personIndex: 0, itemTotal: 0, tax: 0, tip: 0, total: 0 }],
+      unclaimed: { itemTotal: 0, tax: 50, tip: 100, total: 150 },
+    });
+    const allClaimed = {
+      ...params,
+      assignments: [
+        { itemIndex: 0, personIndices: [0] },
+        { itemIndex: 1, personIndices: [1] },
+      ],
+    };
+    expect(calculateClaimTotals(allClaimed)).toEqual({ people: calculateSplitTotals(allClaimed), unclaimed: null });
+  });
+
+  test('a free bill with no tax or tip has nothing unclaimed', () => {
+    expect(
+      calculateClaimTotals({ items: [{ totalPrice: 0 }], assignments: [], tax: 0, tip: 0, peopleCount: 1 }),
+    ).toEqual({ people: [], unclaimed: null });
+  });
+
   test('rounding never makes a share negative, and the shares add up to the bill', () => {
     // Each claimant's exact tax share is 0.57 cents and the unclaimed share is 0.29:
     // rounding each claimant's share alone would hand out 3 cents of a 2-cent tax

@@ -83,8 +83,9 @@ export function calculateSplitTotals(params: {
 /**
  * Per-person totals for a split some items may still be missing from (the claim page, #264).
  * Tax and tip are prorated over every item, claimed or not, and the part that belongs to the
- * unclaimed items comes back as `unclaimed`. Once nothing with a price is left unclaimed, the
- * people are `calculateSplitTotals`' unchanged, so the page shows what finalizing will store.
+ * unclaimed items comes back as `unclaimed`. Once nothing with a price is left unclaimed (on a bill
+ * whose items are all free, once every item is claimed), the people are `calculateSplitTotals`'
+ * unchanged, so the page shows what finalizing will store.
  */
 export function calculateClaimTotals(params: Parameters<typeof calculateSplitTotals>[0]): {
   people: ReturnType<typeof calculateSplitTotals>;
@@ -93,11 +94,20 @@ export function calculateClaimTotals(params: Parameters<typeof calculateSplitTot
   const people = calculateSplitTotals(params);
   const billSubtotal = params.items.reduce((sum, item) => sum + item.totalPrice, 0);
   const claimedSubtotal = people.reduce((sum, p) => sum + p.itemTotal, 0);
-  if (claimedSubtotal >= billSubtotal) return { people, unclaimed: null };
+  // When every item is free, tax and tip can't follow prices: they stay unclaimed until every item is claimed
+  const freeBill = billSubtotal <= 0;
+  if (freeBill) {
+    const claimed = new Set(params.assignments.filter((a) => a.personIndices.length > 0).map((a) => a.itemIndex));
+    const allClaimed = params.items.every((_, i) => claimed.has(i));
+    if (allClaimed || (params.tax === 0 && params.tip === 0)) return { people, unclaimed: null };
+  } else if (claimedSubtotal >= billSubtotal) {
+    return { people, unclaimed: null };
+  }
 
   const subtotals = [...people.map((p) => p.itemTotal), billSubtotal - claimedSubtotal];
-  const taxes = allocateProportionally(params.tax, subtotals);
-  const tips = allocateProportionally(params.tip, subtotals);
+  const weights = freeBill ? [...people.map(() => 0), 1] : subtotals;
+  const taxes = allocateProportionally(params.tax, weights);
+  const tips = allocateProportionally(params.tip, weights);
   const withShares = (itemTotal: number, i: number) => ({
     itemTotal,
     tax: taxes[i]!,
