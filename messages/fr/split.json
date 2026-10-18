@@ -95,6 +95,7 @@
     "items": "Articles : {amount}",
     "taxAmount": "Taxes : {amount}",
     "tipAmount": "Pourboire : {amount}",
+    "unclaimed": "Non réclamé",
     "personFallback": "Personne {index}",
     "createAccount": "Créer un compte",
     "or": "ou",

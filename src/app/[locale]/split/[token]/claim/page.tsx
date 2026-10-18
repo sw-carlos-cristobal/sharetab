@@ -43,7 +43,7 @@ import {
   sleep,
   type SaveReload,
 } from '@/lib/claim-save';
-import { calculateSplitTotals } from '@/lib/split-calculator';
+import { calculateClaimTotals } from '@/lib/split-calculator';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -581,9 +581,10 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     return [...unclaimed, ...claimed];
   }, [session.data, claimedByAnyone]);
 
-  // Calculate per-person totals using the full local claims Map merged with server assignments
+  // Calculate per-person totals using the full local claims Map merged with server assignments.
+  // Tax and tip are prorated over every item, so unclaimed items keep their share (#264).
   const splitTotals = useMemo(() => {
-    if (!session.data) return [];
+    if (!session.data) return { people: [], unclaimed: null };
 
     const serverAssignments = session.data.assignments;
 
@@ -620,7 +621,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
           personIndices: Array.from(persons),
         }));
 
-      return calculateSplitTotals({
+      return calculateClaimTotals({
         items: session.data.items,
         assignments: mergedAssignments,
         tax: session.data.receiptData.tax,
@@ -630,7 +631,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
       });
     }
 
-    return calculateSplitTotals({
+    return calculateClaimTotals({
       items: session.data.items,
       assignments: serverAssignments,
       tax: session.data.receiptData.tax,
@@ -1628,17 +1629,21 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
       </div>
 
       {/* Per-person totals */}
-      {splitTotals.length > 0 && (
+      {splitTotals.people.length > 0 && (
         <div className="space-y-3">
           <h3 className="font-semibold text-base">{t('perPersonTotals')}</h3>
-          {splitTotals.map((person) => {
+          {splitTotals.people.map((person) => {
             const personName =
               data.people[person.personIndex]?.name ?? t('personFallback', { index: person.personIndex + 1 });
             const isMe = person.personIndex === myPersonIndex;
             const isActive = person.personIndex === personIndex;
 
             return (
-              <Card key={person.personIndex} className={isActive ? 'ring-2 ring-primary' : ''}>
+              <Card
+                key={person.personIndex}
+                className={isActive ? 'ring-2 ring-primary' : ''}
+                data-testid={`person-total-${person.personIndex}`}
+              >
                 <CardContent className="py-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -1671,6 +1676,42 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
               </Card>
             );
           })}
+          {/* Items nobody has claimed yet, with their share of tax and tip, so the totals above don't look final */}
+          {splitTotals.unclaimed && (
+            <Card data-testid="unclaimed-total">
+              <CardContent className="py-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="h-8 w-8 rounded-full border-2 border-dashed border-muted-foreground/40"
+                      aria-hidden="true"
+                    />
+                    <span className="font-medium text-muted-foreground">{t('unclaimed')}</span>
+                  </div>
+                  <span className="text-lg font-bold text-muted-foreground">
+                    {formatCents(splitTotals.unclaimed.total, currency, locale)}
+                  </span>
+                </div>
+                {(splitTotals.unclaimed.tax > 0 || splitTotals.unclaimed.tip > 0) && (
+                  <div className="ml-11 mt-1 flex gap-3 text-xs text-muted-foreground">
+                    <span>
+                      {t('items', { amount: formatCents(splitTotals.unclaimed.itemTotal, currency, locale) })}
+                    </span>
+                    {splitTotals.unclaimed.tax > 0 && (
+                      <span>
+                        {t('taxAmount', { amount: formatCents(splitTotals.unclaimed.tax, currency, locale) })}
+                      </span>
+                    )}
+                    {splitTotals.unclaimed.tip > 0 && (
+                      <span>
+                        {t('tipAmount', { amount: formatCents(splitTotals.unclaimed.tip, currency, locale) })}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
 

@@ -95,6 +95,7 @@
     "items": "Artiklar: {amount}",
     "taxAmount": "Moms: {amount}",
     "tipAmount": "Dricks: {amount}",
+    "unclaimed": "Ej valt",
     "personFallback": "Person {index}",
     "createAccount": "Skapa ett konto",
     "or": "eller",

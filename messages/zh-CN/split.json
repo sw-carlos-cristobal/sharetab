@@ -95,6 +95,7 @@
     "items": "项目：{amount}",
     "taxAmount": "税费：{amount}",
     "tipAmount": "小费：{amount}",
+    "unclaimed": "未选择",
     "personFallback": "成员 {index}",
     "createAccount": "创建账号",
     "or": "或",

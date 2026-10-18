@@ -95,6 +95,7 @@
     "items": "Artikel: {amount}",
     "taxAmount": "Steuer: {amount}",
     "tipAmount": "Trinkgeld: {amount}",
+    "unclaimed": "Nicht ausgewählt",
     "personFallback": "Person {index}",
     "createAccount": "Konto erstellen",
     "or": "oder",

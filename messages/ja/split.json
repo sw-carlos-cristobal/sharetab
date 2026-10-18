@@ -95,6 +95,7 @@
     "items": "品目: {amount}",
     "taxAmount": "税金: {amount}",
     "tipAmount": "チップ: {amount}",
+    "unclaimed": "未選択",
     "personFallback": "メンバー {index}",
     "createAccount": "アカウントを作成",
     "or": "または",

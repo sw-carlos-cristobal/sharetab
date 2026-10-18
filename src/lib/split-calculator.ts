@@ -79,3 +79,56 @@ export function calculateSplitTotals(params: {
 
   return results;
 }
+
+/**
+ * Per-person totals for a split some items may still be missing from (the claim page, #264).
+ * Tax and tip are prorated over every item, claimed or not, and the part that belongs to the
+ * unclaimed items comes back as `unclaimed`. Once nothing with a price is left unclaimed, the
+ * people are `calculateSplitTotals`' unchanged, so the page shows what finalizing will store.
+ */
+export function calculateClaimTotals(params: Parameters<typeof calculateSplitTotals>[0]): {
+  people: ReturnType<typeof calculateSplitTotals>;
+  unclaimed: { itemTotal: number; tax: number; tip: number; total: number } | null;
+} {
+  const people = calculateSplitTotals(params);
+  const billSubtotal = params.items.reduce((sum, item) => sum + item.totalPrice, 0);
+  const claimedSubtotal = people.reduce((sum, p) => sum + p.itemTotal, 0);
+  if (claimedSubtotal >= billSubtotal) return { people, unclaimed: null };
+
+  const subtotals = [...people.map((p) => p.itemTotal), billSubtotal - claimedSubtotal];
+  const taxes = allocateProportionally(params.tax, subtotals);
+  const tips = allocateProportionally(params.tip, subtotals);
+  const withShares = (itemTotal: number, i: number) => ({
+    itemTotal,
+    tax: taxes[i]!,
+    tip: tips[i]!,
+    total: itemTotal + taxes[i]! + tips[i]!,
+  });
+
+  return {
+    people: people.map((p, i) => ({ personIndex: p.personIndex, ...withShares(p.itemTotal, i) })),
+    unclaimed: withShares(subtotals[people.length]!, people.length),
+  };
+}
+
+/**
+ * Splits `amount` cents in proportion to `weights` (nonnegative, with a positive sum) so the
+ * shares add up to `amount` exactly: each share is rounded down, and the cents left over go to
+ * the largest remainders, earliest first on a tie. Rounding each share on its own could hand out
+ * more than `amount` and leave the last share negative.
+ */
+function allocateProportionally(amount: number, weights: number[]): number[] {
+  const sign = amount < 0 ? -1 : 1;
+  const cents = Math.abs(amount);
+  const weightTotal = weights.reduce((a, b) => a + b, 0);
+  const shares = weights.map((w) => Math.floor((cents * w) / weightTotal));
+  const remainders = weights.map((w, i) => ({ i, remainder: cents * w - shares[i]! * weightTotal }));
+  remainders.sort((a, b) => b.remainder - a.remainder || a.i - b.i);
+  let left = cents - shares.reduce((a, b) => a + b, 0);
+  for (const { i } of remainders) {
+    if (left <= 0) break;
+    shares[i]! += 1;
+    left -= 1;
+  }
+  return shares.map((share) => share * sign);
+}

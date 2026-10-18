@@ -95,6 +95,7 @@
     "items": "Items: {amount}",
     "taxAmount": "Tax: {amount}",
     "tipAmount": "Tip: {amount}",
+    "unclaimed": "Unclaimed",
     "personFallback": "Person {index}",
     "createAccount": "Create an account",
     "or": "or",

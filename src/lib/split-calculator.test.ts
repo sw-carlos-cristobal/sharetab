@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { calculateSplitTotals } from './split-calculator';
+import { calculateClaimTotals, calculateSplitTotals } from './split-calculator';
 
 describe('calculateSplitTotals', () => {
   test('splits single item between two people equally', () => {
@@ -263,5 +263,119 @@ describe('calculateSplitTotals', () => {
 
     // Equal weights should produce same result as no weights
     expect(withoutWeights).toEqual(withEqualWeights);
+  });
+});
+
+// #264: while items are unclaimed, tax and tip were all put on the people who had claimed something
+describe('calculateClaimTotals', () => {
+  const sumAll = (result: ReturnType<typeof calculateClaimTotals>) =>
+    result.people.reduce((sum, p) => sum + p.total, 0) + (result.unclaimed?.total ?? 0);
+
+  test('prorates tax and tip over every item and shows the rest as unclaimed', () => {
+    // The issue's receipt: $25.24 claimed, $7.24 of items unclaimed, $2.60 tax, $5.00 tip
+    const result = calculateClaimTotals({
+      items: [{ totalPrice: 2524 }, { totalPrice: 500 }, { totalPrice: 224 }],
+      assignments: [{ itemIndex: 0, personIndices: [0] }],
+      tax: 260,
+      tip: 500,
+      peopleCount: 2,
+    });
+
+    expect(result.people).toEqual([{ personIndex: 0, itemTotal: 2524, tax: 202, tip: 389, total: 3115 }]);
+    expect(result.unclaimed).toEqual({ itemTotal: 724, tax: 58, tip: 111, total: 893 });
+    expect(sumAll(result)).toBe(4008);
+  });
+
+  test('matches calculateSplitTotals and has no unclaimed row once every item is claimed', () => {
+    const params = {
+      items: [{ totalPrice: 1500 }, { totalPrice: 2000 }, { totalPrice: 500 }],
+      assignments: [
+        { itemIndex: 0, personIndices: [0, 1] },
+        { itemIndex: 1, personIndices: [1, 2] },
+        { itemIndex: 2, personIndices: [0, 2] },
+      ],
+      tax: 350,
+      tip: 500,
+      peopleCount: 3,
+    };
+
+    expect(calculateClaimTotals(params)).toEqual({ people: calculateSplitTotals(params), unclaimed: null });
+  });
+
+  test('an unclaimed item that costs nothing leaves the totals as finalizing would store them', () => {
+    const params = {
+      items: [{ totalPrice: 1000 }, { totalPrice: 0 }],
+      assignments: [{ itemIndex: 0, personIndices: [0, 1, 2] }],
+      tax: 100,
+      tip: 0,
+      peopleCount: 3,
+    };
+
+    expect(calculateClaimTotals(params)).toEqual({ people: calculateSplitTotals(params), unclaimed: null });
+  });
+
+  test('with nothing claimed, the whole bill is unclaimed', () => {
+    const result = calculateClaimTotals({
+      items: [{ totalPrice: 1000 }, { totalPrice: 500 }],
+      assignments: [],
+      tax: 120,
+      tip: 300,
+      peopleCount: 2,
+    });
+
+    expect(result.people).toEqual([]);
+    expect(result.unclaimed).toEqual({ itemTotal: 1500, tax: 120, tip: 300, total: 1920 });
+  });
+
+  test('rounding never makes a share negative, and the shares add up to the bill', () => {
+    // Each claimant's exact tax share is 0.57 cents and the unclaimed share is 0.29:
+    // rounding each claimant's share alone would hand out 3 cents of a 2-cent tax
+    const result = calculateClaimTotals({
+      items: [{ totalPrice: 2 }, { totalPrice: 2 }, { totalPrice: 2 }, { totalPrice: 1 }],
+      assignments: [
+        { itemIndex: 0, personIndices: [0] },
+        { itemIndex: 1, personIndices: [1] },
+        { itemIndex: 2, personIndices: [2] },
+      ],
+      tax: 2,
+      tip: 0,
+      peopleCount: 3,
+    });
+
+    const taxes = [...result.people.map((p) => p.tax), result.unclaimed!.tax];
+    expect(taxes.every((tax) => tax >= 0)).toBe(true);
+    expect(taxes.reduce((a, b) => a + b, 0)).toBe(2);
+    expect(sumAll(result)).toBe(7 + 2);
+  });
+
+  test('a negative tax or tip is shared the same way, with every share on the same side of zero', () => {
+    const result = calculateClaimTotals({
+      items: [{ totalPrice: 600 }, { totalPrice: 400 }],
+      assignments: [{ itemIndex: 0, personIndices: [0] }],
+      tax: -101,
+      tip: 0,
+      peopleCount: 1,
+    });
+
+    expect(result.people[0]!.tax + result.unclaimed!.tax).toBe(-101);
+    expect(result.people[0]!.tax).toBeLessThanOrEqual(0);
+    expect(result.unclaimed!.tax).toBeLessThanOrEqual(0);
+  });
+
+  test('group sizes still weight a shared item', () => {
+    const result = calculateClaimTotals({
+      items: [{ totalPrice: 3000 }, { totalPrice: 1000 }],
+      assignments: [{ itemIndex: 0, personIndices: [0, 1] }],
+      tax: 400,
+      tip: 0,
+      peopleCount: 2,
+      personWeights: [2, 1],
+    });
+
+    expect(result.people).toEqual([
+      { personIndex: 0, itemTotal: 2000, tax: 200, tip: 0, total: 2200 },
+      { personIndex: 1, itemTotal: 1000, tax: 100, tip: 0, total: 1100 },
+    ]);
+    expect(result.unclaimed).toEqual({ itemTotal: 1000, tax: 100, tip: 0, total: 1100 });
   });
 });

@@ -95,6 +95,7 @@
     "items": "Artículos: {amount}",
     "taxAmount": "Impuestos: {amount}",
     "tipAmount": "Propina: {amount}",
+    "unclaimed": "Sin reclamar",
     "personFallback": "Persona {index}",
     "createAccount": "Crear una cuenta",
     "or": "o",

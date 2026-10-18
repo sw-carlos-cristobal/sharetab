@@ -95,6 +95,7 @@
     "items": "항목: {amount}",
     "taxAmount": "세금: {amount}",
     "tipAmount": "팁: {amount}",
+    "unclaimed": "선택 안 됨",
     "personFallback": "참가자 {index}",
     "createAccount": "계정 만들기",
     "or": "또는",

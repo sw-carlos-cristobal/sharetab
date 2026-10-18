@@ -95,6 +95,7 @@
     "items": "Itens: {amount}",
     "taxAmount": "Impostos: {amount}",
     "tipAmount": "Gorjeta: {amount}",
+    "unclaimed": "Não selecionado",
     "personFallback": "Pessoa {index}",
     "createAccount": "Criar uma conta",
     "or": "ou",
