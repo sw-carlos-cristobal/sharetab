@@ -29,10 +29,14 @@ test('in-progress totals prorate tax and tip over every item and show what is un
     await page.goto(`/en/split/${shareToken}/claim`);
     await expect(page.getByTestId('claim-item-0')).toBeVisible({ timeout: 15000 });
 
-    // Alice claims the $25.24 steak: her share of tax and tip is prorated over the whole $32.48
-    await page.getByTestId('claim-item-0').click();
+    // Before anyone claims anything, the whole bill is unclaimed
     const alice = page.getByTestId('person-total-0');
     const unclaimed = page.getByTestId('unclaimed-total');
+    await expect(unclaimed).toContainText('$40.08');
+    await expect(alice).toHaveCount(0);
+
+    // Alice claims the $25.24 steak: her share of tax and tip is prorated over the whole $32.48
+    await page.getByTestId('claim-item-0').click();
     await expect(alice).toContainText('$31.15');
     await expect(alice).toContainText('Tax: $2.02');
     await expect(alice).toContainText('Tip: $3.89');

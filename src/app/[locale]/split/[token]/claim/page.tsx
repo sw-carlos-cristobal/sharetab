@@ -1629,7 +1629,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
       </div>
 
       {/* Per-person totals */}
-      {splitTotals.people.length > 0 && (
+      {(splitTotals.people.length > 0 || splitTotals.unclaimed) && (
         <div className="space-y-3">
           <h3 className="font-semibold text-base">{t('perPersonTotals')}</h3>
           {splitTotals.people.map((person) => {
