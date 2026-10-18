@@ -1,8 +1,9 @@
-import { describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
   CLAIM_POLL_MS,
   CLAIM_POLL_RETRY_MS,
   canAdoptAnswer,
+  canStoreClaimIdentity,
   claimPollInterval,
   isGuestSessionToken,
   isSessionLost,
@@ -250,5 +251,55 @@ describe('canAdoptAnswer', () => {
   test('refuses when another tab stored someone else while the request was out (#213)', () => {
     expect(answer(undefined, OTHER)).toBe(false);
     expect(answer(THIRD, OTHER)).toBe(false);
+  });
+});
+
+// #263: the pages that create a claim session ask the server to join the creator only when they
+// can store the creator's identity; otherwise the creator couldn't resume it or join by name
+describe('canStoreClaimIdentity', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function storage(overrides: Partial<Storage> = {}) {
+    const items = new Map<string, string>();
+    return {
+      items,
+      localStorage: {
+        setItem: (key: string, value: string) => void items.set(key, value),
+        removeItem: (key: string) => void items.delete(key),
+        ...overrides,
+      },
+    };
+  }
+
+  test('is true when storage works, and leaves nothing behind', () => {
+    const { items, localStorage } = storage();
+    vi.stubGlobal('window', { localStorage });
+    expect(canStoreClaimIdentity()).toBe(true);
+    expect(items.size).toBe(0);
+  });
+
+  test('is false when writing throws (storage disabled or full)', () => {
+    const { localStorage } = storage({
+      setItem: () => {
+        throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+      },
+    });
+    vi.stubGlobal('window', { localStorage });
+    expect(canStoreClaimIdentity()).toBe(false);
+  });
+
+  test('is false when the browser refuses access to storage', () => {
+    vi.stubGlobal('window', {
+      get localStorage(): Storage {
+        throw new DOMException('Access is denied for this document.', 'SecurityError');
+      },
+    });
+    expect(canStoreClaimIdentity()).toBe(false);
+  });
+
+  test('is false on the server', () => {
+    expect(canStoreClaimIdentity()).toBe(false);
   });
 });

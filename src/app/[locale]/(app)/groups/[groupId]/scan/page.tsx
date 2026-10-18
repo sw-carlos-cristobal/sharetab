@@ -14,7 +14,7 @@ import { useSession } from 'next-auth/react';
 import { toast } from 'sonner';
 import { ItemAssignment } from '@/components/receipts/item-assignment';
 import { loadingMessageKeys } from '@/lib/loading-messages';
-import { setStoredClaimIdentity } from '@/lib/guest-session';
+import { canStoreClaimIdentity, setStoredClaimIdentity } from '@/lib/guest-session';
 
 type Step = 'upload' | 'processing' | 'assign' | 'error';
 
@@ -101,7 +101,8 @@ function ScanReceiptContent({ params }: { params: Promise<{ groupId: string }> }
         })),
         creatorName: myName,
         paidByName: myName,
-        joinCreator: true,
+        // Without storage the creator joins by name on the claim page, as before
+        joinCreator: canStoreClaimIdentity(),
       });
       if (result.creator) {
         setStoredClaimIdentity(result.shareToken, {

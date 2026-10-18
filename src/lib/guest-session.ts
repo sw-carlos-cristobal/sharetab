@@ -42,6 +42,24 @@ export function removeStoredClaimIdentity(shareToken: string) {
 }
 
 /**
+ * Whether this browser lets the page store a claim identity: storage can be disabled, refused
+ * or full. The pages that create a session only have the server join the creator when it can,
+ * since a creator whose token isn't stored can neither resume it nor join under their own name
+ * (#263).
+ */
+export function canStoreClaimIdentity(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const key = claimStorageKey('probe');
+    window.localStorage.setItem(key, '1');
+    window.localStorage.removeItem(key);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Store who this device is in a claim session. The claim page does this when it joins or adopts
  * someone; the pages that create a session do it for the creator before opening the claim page,
  * which then resumes them (#263).
