@@ -48,6 +48,9 @@ async function getCreatorPayerVenmoHandle(
 // How long a join can be replayed with its join key (Stripe prunes idempotency keys once they are at least 24 hours old)
 const JOIN_REPLAY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
+// The most people a claim session holds
+const MAX_SESSION_PEOPLE = 100;
+
 function toPublicPerson({ name, groupSize, personToken }: GuestSessionPerson) {
   // Never includes personToken, join or saves: no guest procedure returns another person's token
   // (a client gets its own from joinSession; the admin export is the only place tokens leave in bulk).
@@ -616,6 +619,14 @@ export const guestRouter = createTRPCRouter({
         items: z.array(itemSchema).min(1).max(100),
         creatorName: z.string().trim().min(1).max(100),
         paidByName: z.string().trim().min(1).max(100),
+        // Everyone typed on "Who's splitting?", listed in this order (#263). The creator and the
+        // payer are added when it leaves them out, and a name typed twice is listed once, since
+        // people join by name.
+        people: z.array(z.string().trim().min(1).max(100)).max(MAX_SESSION_PEOPLE).optional(),
+        // Join the creator now and return their identity, so the creator's device already is them
+        // when the link is shared (#263). Opt-in because older clients join the creator by name
+        // afterwards, which is refused once someone holds the creator's token.
+        joinCreator: z.boolean().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -632,12 +643,24 @@ export const guestRouter = createTRPCRouter({
       const creatorName = input.creatorName.trim();
       const paidByName = input.paidByName.trim();
 
-      // Tokens are assigned lazily when participants, including creator/paidBy, first join this session.
-      const people: IdentifiedGuestPerson[] = [{ id: randomUUID(), name: creatorName }];
-      let paidByIndex = 0;
-      if (normalizeGuestName(paidByName) !== normalizeGuestName(creatorName)) {
-        people.push({ id: randomUUID(), name: paidByName });
-        paidByIndex = 1;
+      const people: IdentifiedGuestPerson[] = [];
+      const indexOf = (name: string) =>
+        people.findIndex((p) => normalizeGuestName(p.name) === normalizeGuestName(name));
+      for (const name of [...(input.people ?? []), creatorName, paidByName]) {
+        if (indexOf(name) < 0) people.push({ id: randomUUID(), name });
+      }
+      if (people.length > MAX_SESSION_PEOPLE) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: `Maximum ${MAX_SESSION_PEOPLE} people per session` });
+      }
+      const paidByIndex = indexOf(paidByName);
+
+      // Everyone else gets a token the first time they join this session
+      let creator: { personId: string; personToken: string; name: string } | null = null;
+      if (input.joinCreator) {
+        const creatorIndex = indexOf(creatorName);
+        const person = { ...people[creatorIndex]!, personToken: randomUUID() };
+        people[creatorIndex] = person;
+        creator = { personId: person.id, personToken: person.personToken, name: person.name };
       }
 
       // Auto-split multi-quantity items into individual rows for easier claiming
@@ -699,7 +722,7 @@ export const guestRouter = createTRPCRouter({
         itemCount: expandedItems.length,
       });
 
-      return { shareToken: session.shareToken };
+      return { shareToken: session.shareToken, creator };
     }),
 
   joinSession: publicProcedure
@@ -810,8 +833,8 @@ export const guestRouter = createTRPCRouter({
           return { personIndex: existingIndex, personId: existingPerson.id, personToken, name: existingPerson.name };
         }
 
-        if (people.length >= 100) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Maximum 100 people per session' });
+        if (people.length >= MAX_SESSION_PEOPLE) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: `Maximum ${MAX_SESSION_PEOPLE} people per session` });
         }
 
         const name = input.name.trim();

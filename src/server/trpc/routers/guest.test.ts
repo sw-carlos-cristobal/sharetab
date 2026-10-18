@@ -593,23 +593,89 @@ describe('guest.getSession people', () => {
 });
 
 describe('guest.createClaimSession', () => {
-  test('gives the creator and the payer ids', async () => {
+  const session = {
+    receiptData: { subtotal: 100, tax: 0, tip: 0, total: 100, currency: 'USD' },
+    items: [{ name: 'Tea', quantity: 1, unitPrice: 100, totalPrice: 100 }],
+  };
+
+  function created() {
+    return (
+      mockDb.guestSplit.create.mock.calls[0]![0] as {
+        data: { people: { id: string; name: string; personToken?: string }[]; paidByIndex: number };
+      }
+    ).data;
+  }
+
+  beforeEach(() => {
     mockDb.guestSplit.create.mockResolvedValue({ id: 'gs1', shareToken: 'share-token-123' });
     mockDb.guestSplit.deleteMany.mockResolvedValue({ count: 0 });
-    await (
-      await caller()
-    ).createClaimSession({
-      receiptData: { subtotal: 100, tax: 0, tip: 0, total: 100, currency: 'USD' },
-      items: [{ name: 'Tea', quantity: 1, unitPrice: 100, totalPrice: 100 }],
-      creatorName: 'Host',
-      paidByName: 'Payer',
-    });
-    const { people } = (mockDb.guestSplit.create.mock.calls[0]![0] as { data: { people: { id: string }[] } }).data;
+  });
+
+  test('gives the creator and the payer ids', async () => {
+    const result = await (await caller()).createClaimSession({ ...session, creatorName: 'Host', paidByName: 'Payer' });
+    const { people } = created();
     expect(people).toEqual([
       { id: expect.stringMatching(UUID), name: 'Host' },
       { id: expect.stringMatching(UUID), name: 'Payer' },
     ]);
     expect(people[0]!.id).not.toBe(people[1]!.id);
+    // Nobody is joined unless the client asks: older clients join the creator by name afterwards
+    expect(result).toEqual({ shareToken: 'share-token-123', creator: null });
+  });
+
+  // #263: Share Link dropped everyone typed on "Who's splitting?" except the payer
+  test('lists everyone typed, in order, with the payer where they were typed', async () => {
+    await (
+      await caller()
+    ).createClaimSession({ ...session, people: ['Dana', 'Pat', 'Lee'], creatorName: 'Pat', paidByName: 'Pat' });
+    const { people, paidByIndex } = created();
+    expect(people.map((p) => p.name)).toEqual(['Dana', 'Pat', 'Lee']);
+    expect(new Set(people.map((p) => p.id)).size).toBe(3);
+    expect(paidByIndex).toBe(1);
+  });
+
+  test('lists a name typed twice once, as first typed, since people join by name', async () => {
+    await (
+      await caller()
+    ).createClaimSession({ ...session, people: ['Pat', 'dana', ' Dana '], creatorName: 'pat', paidByName: 'PAT' });
+    const { people, paidByIndex } = created();
+    expect(people.map((p) => p.name)).toEqual(['Pat', 'dana']);
+    expect(paidByIndex).toBe(0);
+  });
+
+  test('adds the creator and the payer when the list leaves them out', async () => {
+    await (await caller()).createClaimSession({ ...session, people: ['Dana'], creatorName: 'Host', paidByName: 'Pat' });
+    const { people, paidByIndex } = created();
+    expect(people.map((p) => p.name)).toEqual(['Dana', 'Host', 'Pat']);
+    expect(paidByIndex).toBe(2);
+  });
+
+  test('refuses more than 100 people, the most a session can hold', async () => {
+    const hundred = Array.from({ length: 100 }, (_, i) => `Person ${i}`);
+    await expect(
+      (await caller()).createClaimSession({ ...session, people: hundred, creatorName: 'Host', paidByName: 'Host' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockDb.guestSplit.create).not.toHaveBeenCalled();
+  });
+
+  // #263: the creator landed on the join form, and whoever opened the link first could take the payer's place
+  test('joins the creator when asked, returning the identity their device stores', async () => {
+    const result = await (
+      await caller()
+    ).createClaimSession({
+      ...session,
+      people: ['Dana', 'Pat'],
+      creatorName: 'Pat',
+      paidByName: 'Pat',
+      joinCreator: true,
+    });
+    const { people } = created();
+    expect(result).toEqual({
+      shareToken: 'share-token-123',
+      creator: { personId: people[1]!.id, personToken: expect.stringMatching(UUID), name: 'Pat' },
+    });
+    expect(people[1]!.personToken).toBe(result.creator!.personToken);
+    expect(people[0]!.personToken).toBeUndefined();
   });
 });
 
