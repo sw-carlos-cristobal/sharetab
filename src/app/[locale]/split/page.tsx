@@ -8,7 +8,7 @@ import { trpc } from '@/lib/trpc';
 import { formatCents, centsToDecimal, parseToCents } from '@/lib/money';
 import { calculateSplitTotals } from '@/lib/split-calculator';
 import { canStoreClaimIdentity, setStoredClaimIdentity } from '@/lib/guest-session';
-import { loadingMessageKeys } from '@/lib/loading-messages';
+import { loadingMessageKeys, randomLoadingMessageIndex } from '@/lib/loading-messages';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -101,43 +101,45 @@ export default function GuestSplitPage() {
   const processReceipt = trpc.guest.processReceipt.useMutation();
   const uploadStatus = trpc.guest.getUploadStatus.useQuery();
   const uploadsDisabled = uploadStatus.data?.allowed === false;
-  const receiptData = trpc.guest.getReceiptItems.useQuery(
-    { receiptId: receiptId! },
-    { enabled: !!receiptId && step === 'people' },
-  );
   const createSplit = trpc.guest.createSplit.useMutation();
   const createClaimSession = trpc.guest.createClaimSession.useMutation();
+
+  // Each scan starts its loading messages at a random one
+  function startProcessing() {
+    setLoadingMsgIdx(randomLoadingMessageIndex());
+    setStep('processing');
+  }
 
   // Rotate loading messages
   useEffect(() => {
     if (step !== 'processing') return;
-    setLoadingMsgIdx(Math.floor(Math.random() * loadingMessageKeys.length));
     const interval = setInterval(() => {
       setLoadingMsgIdx((i) => (i + 1) % loadingMessageKeys.length);
     }, 5000);
     return () => clearInterval(interval);
   }, [step]);
 
-  // Load items when receipt data arrives
-  useEffect(() => {
-    if (receiptData.data && items.length === 0) {
-      const { receipt, items: dbItems } = receiptData.data;
-      setItems(
-        dbItems.map((i) => ({
-          name: i.name,
-          quantity: i.quantity,
-          unitPrice: i.unitPrice,
-          totalPrice: i.totalPrice,
-        })),
-      );
-      if (receipt.extractedData) {
-        setExtracted(receipt.extractedData);
-      }
-      if (receipt.imagePath) {
-        setImagePath(receipt.imagePath);
-      }
+  // Replaces the items (and their assignments) with a finished scan's, along with the receipt's
+  // totals and image. Read through the client, not a cached query, so a rescan's items can't come
+  // from the cache.
+  async function loadScannedItems(id: string) {
+    const { receipt, items: dbItems } = await utils.client.guest.getReceiptItems.query({ receiptId: id });
+    setItems(
+      dbItems.map((i) => ({
+        name: i.name,
+        quantity: i.quantity,
+        unitPrice: i.unitPrice,
+        totalPrice: i.totalPrice,
+      })),
+    );
+    setAssignments({});
+    if (receipt.extractedData) {
+      setExtracted(receipt.extractedData);
     }
-  }, [receiptData.data, items.length]);
+    if (receipt.imagePath) {
+      setImagePath(receipt.imagePath);
+    }
+  }
 
   // Guest uploads were turned off after this page loaded (or the session
   // ended or the account was suspended). Refetch so the notice replaces the
@@ -177,7 +179,7 @@ export default function GuestSplitPage() {
       const data = await res.json();
       setReceiptId(data.receiptId);
       setImagePath(data.imagePath);
-      setStep('processing');
+      startProcessing();
       setUploading(false);
 
       // Start AI processing
@@ -191,6 +193,7 @@ export default function GuestSplitPage() {
         total: result.total,
         currency: result.currency,
       });
+      await loadScannedItems(data.receiptId);
       setStep('people');
     } catch (err) {
       setUploading(false);
@@ -685,17 +688,12 @@ export default function GuestSplitPage() {
                         className="flex-1"
                         onClick={() => {
                           if (!correctionHint.trim() || !receiptId) return;
-                          setStep('processing');
+                          startProcessing();
                           setShowRescan(false);
                           processReceipt.mutate(
                             { receiptId, correctionHint: correctionHint.trim() },
                             {
-                              onSuccess: (data) => {
-                                // Drop the cached query data, otherwise the
-                                // load effect would repopulate the stale
-                                // pre-rescan items from the cache.
-                                utils.guest.getReceiptItems.reset({ receiptId });
-                                setItems([]); // will be refetched
+                              onSuccess: async (data) => {
                                 setExtracted({
                                   ...(data.merchantName !== undefined ? { merchantName: data.merchantName } : {}),
                                   ...(data.date !== undefined ? { date: data.date } : {}),
@@ -705,8 +703,14 @@ export default function GuestSplitPage() {
                                   total: data.total,
                                   currency: data.currency,
                                 });
-                                setAssignments({});
-                                setStep('people');
+                                try {
+                                  await loadScannedItems(receiptId);
+                                  setStep('people');
+                                } catch (err) {
+                                  // Shown on the upload step, as when a first scan's items fail to load
+                                  setErrorMessage(err instanceof Error ? err.message : t('upload.uploadFailed'));
+                                  setStep('upload');
+                                }
                               },
                               onError: (err) => {
                                 if (isGuestUploadsRefusal(err)) {

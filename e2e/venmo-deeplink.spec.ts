@@ -1,5 +1,14 @@
 import { test, expect } from '@playwright/test';
-import { login, users, authedContext, trpcMutation, trpcQuery, trpcResult } from './helpers';
+import {
+  login,
+  users,
+  authedContext,
+  joinGuestSession,
+  rememberClaimIdentity,
+  trpcMutation,
+  trpcQuery,
+  trpcResult,
+} from './helpers';
 
 test.use({ viewport: { width: 430, height: 932 } });
 
@@ -266,6 +275,69 @@ test.describe('Venmo deeplink payments', () => {
 
     await page.close();
     await browserCtx.close();
+  });
+
+  // #294: the claim page took the payer's handle from the session once, when the page first
+  // loaded, so a page opened before the handle was saved never showed it or the pay buttons
+  test('a claim page opened before the payer saved a handle shows it once the split is finalized', async ({
+    browser,
+  }) => {
+    const aliceCtx = await authedContext(users.alice.email, users.alice.password);
+    await trpcMutation(aliceCtx, 'auth.updateProfile', { venmoUsername: null });
+    const createRes = await trpcMutation(aliceCtx, 'guest.createClaimSession', {
+      receiptData: { merchantName: 'Late Handle Diner', subtotal: 2000, tax: 0, tip: 0, total: 2000, currency: 'USD' },
+      items: [
+        { name: 'Pasta', quantity: 1, unitPrice: 1200, totalPrice: 1200 },
+        { name: 'Salad', quantity: 1, unitPrice: 800, totalPrice: 800 },
+      ],
+      creatorName: 'Alice',
+      paidByName: 'Alice',
+      joinCreator: true,
+    });
+    expect(createRes.ok(), await createRes.text()).toBe(true);
+    const { shareToken, creator } = (await createRes.json()).result.data.json;
+    const bob = await joinGuestSession(aliceCtx, { token: shareToken, name: 'Bob' });
+
+    // Bob's page loads while the session has no handle
+    const bobCtx = await browser.newContext({ viewport: { width: 430, height: 932 } });
+    await rememberClaimIdentity(bobCtx, shareToken, { name: bob.name, personToken: bob.personToken });
+    const page = await bobCtx.newPage();
+    await page.goto(`/en/split/${shareToken}/claim`);
+    await expect(page.getByTestId('claim-item-0')).toBeVisible({ timeout: 15000 });
+
+    // Alice saves her handle, everyone claims, and Alice finalizes
+    const saved = await trpcMutation(aliceCtx, 'guest.setPayerVenmoHandle', {
+      token: shareToken,
+      handle: 'late-handle',
+    });
+    expect(saved.ok(), await saved.text()).toBe(true);
+    for (const [person, item] of [
+      [creator, 0],
+      [bob, 1],
+    ] as const) {
+      const claimed = await trpcMutation(aliceCtx, 'guest.claimItems', {
+        token: shareToken,
+        personId: person.personId,
+        personToken: person.personToken,
+        claimedItemIndices: [item],
+      });
+      expect(claimed.ok(), await claimed.text()).toBe(true);
+    }
+    const finalized = await trpcMutation(aliceCtx, 'guest.finalizeSession', {
+      token: shareToken,
+      personId: creator.personId,
+      personToken: creator.personToken,
+    });
+    expect(finalized.ok(), await finalized.text()).toBe(true);
+    await aliceCtx.dispose();
+
+    // Bob's page picks up the finalized split with the handle, and offers to pay Alice
+    await expect(page.getByTestId('venmo-handle-display')).toContainText('late-handle', { timeout: 15000 });
+    const payButtons = page.locator('[data-testid^="venmo-pay-"]');
+    await expect(payButtons).toHaveCount(1);
+    expect(await payButtons.first().getAttribute('href')).toContain('venmo.com/late-handle');
+
+    await bobCtx.close();
   });
 
   test('payer sees zero pay buttons, guest sees them on non-payer cards', async ({ browser }) => {

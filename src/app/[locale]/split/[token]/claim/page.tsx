@@ -137,9 +137,9 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   const [editingGroupSize, setEditingGroupSize] = useState(1);
   const [splittingItemIdx, setSplittingItemIdx] = useState<number | null>(null);
   const [splitQty, setSplitQty] = useState('');
-  const [venmoHandle, setVenmoHandle] = useState('');
-  const venmoInitRef = useRef(false);
-  const { data: authSession, status: authStatus } = useSession();
+  // The creator's edit of the payer's Venmo handle (see venmoHandle below)
+  const [venmoHandleEdit, setVenmoHandleEdit] = useState<string | null>(null);
+  const { data: authSession } = useSession();
 
   // --- tRPC ---
   const venmoSetting = trpc.admin.getVenmoEnabled.useQuery();
@@ -162,6 +162,12 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
         }),
     },
   );
+  // The payer's Venmo handle follows the session (falling back to the creator's profile) until the
+  // creator edits it, so a handle saved after this page loaded still shows
+  const venmoHandle =
+    venmoHandleEdit ??
+    session.data?.payerVenmoHandle ??
+    (session.data?.isCreator ? (profile.data?.venmoUsername ?? '') : '');
 
   // Where each person is in the session as last loaded
   const indexById = useMemo(
@@ -434,25 +440,6 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     pendingJoin.current = pending;
     joinSession.mutate({ token, ...input, joinKey: pending.joinKey, ...(personToken ? { personToken } : {}) });
   }
-
-  // Initialize venmo handle from split record, then creator's profile as fallback
-  useEffect(() => {
-    if (venmoInitRef.current) return;
-    if (session.data?.payerVenmoHandle) {
-      setVenmoHandle(session.data.payerVenmoHandle);
-      venmoInitRef.current = true;
-    } else if (session.data?.isCreator && profile.data?.venmoUsername) {
-      setVenmoHandle(profile.data.venmoUsername);
-      venmoInitRef.current = true;
-    } else if (
-      session.data &&
-      !session.isLoading &&
-      authStatus !== 'loading' &&
-      (profile.isFetched || !authSession?.user)
-    ) {
-      venmoInitRef.current = true;
-    }
-  }, [session.data, profile.data?.venmoUsername, profile.isFetched, session.isLoading, authSession?.user, authStatus]);
 
   // Read a personal link's token (it leaves the address bar once resumeSession answers for it)
   useEffect(() => {
@@ -965,7 +952,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
                 placeholder={tv('handlePlaceholder')}
                 aria-label={tv('handle')}
                 value={venmoHandle}
-                onChange={(e) => setVenmoHandle(e.target.value)}
+                onChange={(e) => setVenmoHandleEdit(e.target.value)}
                 onBlur={() => {
                   const trimmed = venmoHandle.trim() || null;
                   if (trimmed !== (session.data?.payerVenmoHandle ?? null)) {

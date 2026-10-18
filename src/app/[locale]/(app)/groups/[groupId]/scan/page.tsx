@@ -13,7 +13,7 @@ import { ArrowLeft, Loader2, Camera, RefreshCw, Users } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import { toast } from 'sonner';
 import { ItemAssignment } from '@/components/receipts/item-assignment';
-import { loadingMessageKeys } from '@/lib/loading-messages';
+import { loadingMessageKeys, randomLoadingMessageIndex } from '@/lib/loading-messages';
 import { canStoreClaimIdentity, setStoredClaimIdentity } from '@/lib/guest-session';
 
 type Step = 'upload' | 'processing' | 'assign' | 'error';
@@ -44,10 +44,15 @@ function ScanReceiptContent({ params }: { params: Promise<{ groupId: string }> }
   const [correctionHint, setCorrectionHint] = useState('');
   const [showRescan, setShowRescan] = useState(false);
 
+  // Each scan starts its loading messages at a random one
+  function startProcessing() {
+    setLoadingMsgIdx(randomLoadingMessageIndex());
+    setStep('processing');
+  }
+
   // Rotate loading messages while processing
   useEffect(() => {
     if (step !== 'processing') return;
-    setLoadingMsgIdx(Math.floor(Math.random() * loadingMessageKeys.length));
     const interval = setInterval(() => {
       setLoadingMsgIdx((i) => (i + 1) % loadingMessageKeys.length);
     }, 5000);
@@ -143,7 +148,7 @@ function ScanReceiptContent({ params }: { params: Promise<{ groupId: string }> }
 
       const data = await res.json();
       setReceiptId(data.receiptId);
-      setStep('processing');
+      startProcessing();
       setUploading(false);
 
       // Start AI processing with groupId
@@ -310,7 +315,7 @@ function ScanReceiptContent({ params }: { params: Promise<{ groupId: string }> }
                       className="flex-1"
                       onClick={() => {
                         if (!correctionHint.trim()) return;
-                        setStep('processing');
+                        startProcessing();
                         setShowRescan(false);
                         processReceipt.mutate({ receiptId, groupId, correctionHint: correctionHint.trim() });
                       }}
@@ -347,7 +352,7 @@ function ScanReceiptContent({ params }: { params: Promise<{ groupId: string }> }
               {receiptId && (
                 <Button
                   onClick={() => {
-                    setStep('processing');
+                    startProcessing();
                     processReceipt.mutate({ receiptId, groupId });
                   }}
                 >
