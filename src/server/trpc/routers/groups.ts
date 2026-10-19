@@ -175,38 +175,52 @@ export const groupsRouter = createTRPCRouter({
     if (ctx.membership.role === 'MEMBER') {
       throw new TRPCError({ code: 'FORBIDDEN', message: 'Only admins and owners can archive groups' });
     }
-    // An archived group refuses settlements (and expenses), so an open balance
-    // archived with it could only be settled by unarchiving the group first.
-    const unsettled = (await loadGroupBalances(ctx.db, input.groupId)).filter((b) => b.net !== 0);
-    if (unsettled.length > 0) {
-      // Settlements need both people to be members, so a balance with someone
-      // who left can't be settled until they rejoin. An account an admin
-      // deleted can't rejoin, so the expenses it's in have to change instead.
-      const members = await ctx.db.groupMember.findMany({
-        where: { groupId: input.groupId },
-        select: { userId: true },
+    return ctx.db.$transaction(async (tx) => {
+      // Archive first: the row lock this takes waits for every balance change
+      // in flight and holds off new ones until this transaction ends (see
+      // lockActiveGroup), so the balances read below are final (#289).
+      const { count } = await tx.group.updateMany({
+        where: { id: input.groupId, archivedAt: null },
+        data: { archivedAt: new Date() },
       });
-      const memberIds = new Set(members.map((m) => m.userId));
-      throw new TRPCError({
-        code: 'PRECONDITION_FAILED',
-        message: unsettled.some((b) => !memberIds.has(b.userId))
-          ? "Someone who is no longer in this group still owes or is owed money, so it can't be archived. Invite them back to settle up, or edit the expenses they're in."
-          : 'This group still has unsettled balances. Settle up before archiving it.',
+      const group = await tx.group.findUnique({ where: { id: input.groupId } });
+      if (!group) {
+        throw new TRPCError({ code: 'NOT_FOUND' });
+      }
+      if (count === 0) {
+        // Archived already
+        return group;
+      }
+      // An archived group refuses settlements (and expenses), so an open balance
+      // archived with it could only be settled by unarchiving the group first.
+      // Throwing here rolls the archive back.
+      const unsettled = (await loadGroupBalances(tx, input.groupId)).filter((b) => b.net !== 0);
+      if (unsettled.length > 0) {
+        // Settlements need both people to be members, so a balance with someone
+        // who left can't be settled until they rejoin. An account an admin
+        // deleted can't rejoin, so the expenses it's in have to change instead.
+        const members = await tx.groupMember.findMany({
+          where: { groupId: input.groupId },
+          select: { userId: true },
+        });
+        const memberIds = new Set(members.map((m) => m.userId));
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: unsettled.some((b) => !memberIds.has(b.userId))
+            ? "Someone who is no longer in this group still owes or is owed money, so it can't be archived. Invite them back to settle up, or edit the expenses they're in."
+            : 'This group still has unsettled balances. Settle up before archiving it.',
+        });
+      }
+      await tx.activityLog.create({
+        data: {
+          groupId: input.groupId,
+          userId: ctx.user.id,
+          type: 'GROUP_ARCHIVED',
+          metadata: { name: group.name },
+        },
       });
-    }
-    const group = await ctx.db.group.update({
-      where: { id: input.groupId },
-      data: { archivedAt: new Date() },
+      return group;
     });
-    await ctx.db.activityLog.create({
-      data: {
-        groupId: input.groupId,
-        userId: ctx.user.id,
-        type: 'GROUP_ARCHIVED',
-        metadata: { name: group.name },
-      },
-    });
-    return group;
   }),
 
   unarchive: groupMemberProcedure.input(z.object({ groupId: z.string() })).mutation(async ({ ctx, input }) => {

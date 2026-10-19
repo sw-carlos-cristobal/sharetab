@@ -8,6 +8,9 @@ import { logger } from '../../lib/logger';
 import { parseExtractedData } from '../../lib/json-schemas';
 import { getExchangeRate, convertCents } from '../../lib/exchange-rates';
 import { stripUndefined } from '../../lib/strip-undefined';
+import { lockActiveGroup } from '../../lib/group-balances';
+
+const ARCHIVED_CREATE_EXPENSE = 'Cannot create expenses in archived groups';
 
 /**
  * Verify that a receipt exists and the user has access to it (via group membership).
@@ -401,10 +404,11 @@ export const receiptsRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      // Verify group is not archived
+      // Refuse an archived group before the checks and rate lookup below;
+      // lockActiveGroup in the transaction is the check that holds (#289)
       const group = await ctx.db.group.findUnique({ where: { id: input.groupId } });
       if (group?.archivedAt) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Cannot create expenses in archived groups' });
+        throw new TRPCError({ code: 'BAD_REQUEST', message: ARCHIVED_CREATE_EXPENSE });
       }
 
       const receipt = await ctx.db.receipt.findUnique({
@@ -535,6 +539,7 @@ export const receiptsRouter = createTRPCRouter({
 
       // All writes in a single transaction for atomicity
       const expense = await ctx.db.$transaction(async (tx) => {
+        await lockActiveGroup(tx, input.groupId, ARCHIVED_CREATE_EXPENSE);
         const exp = await tx.expense.create({
           data: {
             groupId: input.groupId,

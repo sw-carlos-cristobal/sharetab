@@ -8,10 +8,11 @@ vi.mock('@/server/auth', () => ({ auth: vi.fn() }));
 const mockDb = {
   user: { findUnique: vi.fn() },
   group: { findUnique: vi.fn() },
-  groupMember: { findUnique: vi.fn() },
-  settlement: { findUnique: vi.fn(), findMany: vi.fn(), deleteMany: vi.fn() },
+  groupMember: { findUnique: vi.fn(), count: vi.fn() },
+  settlement: { findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn(), deleteMany: vi.fn() },
   activityLog: { create: vi.fn() },
   $transaction: vi.fn(),
+  $queryRaw: vi.fn(),
 };
 vi.mock('@/server/db', () => ({ db: mockDb }));
 vi.mock('@/server/lib/logger', () => ({
@@ -35,6 +36,8 @@ beforeEach(() => {
   // protectedProcedure looks the caller up; groupMemberProcedure checks membership.
   mockDb.user.findUnique.mockResolvedValue({ suspendedAt: null });
   mockDb.group.findUnique.mockResolvedValue({ archivedAt: null });
+  // The transaction's lock on the group row (#289) finds it active unless a test says otherwise
+  mockDb.$queryRaw.mockResolvedValue([{ archivedAt: null }]);
   mockDb.settlement.findUnique.mockResolvedValue(payment);
   mockDb.settlement.deleteMany.mockResolvedValue({ count: 1 });
   mockDb.$transaction.mockImplementation(async (arg: unknown) =>
@@ -126,5 +129,54 @@ describe('settlements.delete', () => {
 
     await expect(api.delete({ groupId: 'g1', settlementId: 's1' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
     expect(mockDb.activityLog.create).not.toHaveBeenCalled();
+  });
+});
+
+// #289: the archived check ran in its own statement before the write, so an
+// archive that landed in between let the payment through, and the group could
+// end up archived with a balance nobody can settle.
+describe('a group archived while a payment was on its way (#289)', () => {
+  const rawSql = () => mockDb.$queryRaw.mock.calls.map(([strings]) => (strings as string[]).join('?'));
+
+  beforeEach(() => {
+    // The early check still sees the group active, but by the time the
+    // transaction locks its row, it's archived
+    mockDb.group.findUnique.mockResolvedValue({ archivedAt: null, currency: 'USD' });
+    mockDb.$queryRaw.mockResolvedValue([{ archivedAt: new Date() }]);
+    mockDb.groupMember.count.mockResolvedValue(2);
+  });
+
+  test('create refuses, recording nothing', async () => {
+    asRole('MEMBER', 'bob');
+    const api = await caller('bob');
+    await expect(api.create({ groupId: 'g1', toId: 'alice', amount: 500 })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'Cannot create settlements in an archived group',
+    });
+    expect(mockDb.settlement.create).not.toHaveBeenCalled();
+    expect(mockDb.activityLog.create).not.toHaveBeenCalled();
+  });
+
+  test('delete refuses, deleting nothing', async () => {
+    asRole('MEMBER', 'bob');
+    const api = await caller('bob');
+    await expect(api.delete({ groupId: 'g1', settlementId: 's1' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'Cannot delete payments from an archived group',
+    });
+    expect(mockDb.settlement.deleteMany).not.toHaveBeenCalled();
+  });
+
+  test('an active group is locked FOR SHARE inside the transaction, before the write', async () => {
+    mockDb.$queryRaw.mockResolvedValue([{ archivedAt: null }]);
+    mockDb.settlement.create.mockResolvedValue({ id: 's2' });
+    asRole('MEMBER', 'bob');
+    const api = await caller('bob');
+    await api.create({ groupId: 'g1', toId: 'alice', amount: 500 });
+
+    expect(rawSql()).toEqual([expect.stringMatching(/FROM "Group" WHERE "id" = \? FOR SHARE/)]);
+    const [locked] = mockDb.$queryRaw.mock.invocationCallOrder;
+    expect(locked).toBeGreaterThan(mockDb.$transaction.mock.invocationCallOrder[0]!);
+    expect(locked).toBeLessThan(mockDb.settlement.create.mock.invocationCallOrder[0]!);
   });
 });

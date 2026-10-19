@@ -7,7 +7,7 @@ vi.mock('@/server/auth', () => ({ auth: vi.fn() }));
 
 const mockDb = {
   user: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
-  group: { create: vi.fn(), update: vi.fn(), findUnique: vi.fn() },
+  group: { create: vi.fn(), update: vi.fn(), updateMany: vi.fn(), findUnique: vi.fn() },
   groupMember: {
     findUnique: vi.fn(),
     findMany: vi.fn(),
@@ -702,15 +702,24 @@ describe('archiving a group', () => {
       { userId: 'bob', amount: 500 },
     ]),
   ];
+  // Calls made inside the archive's transaction, in order
+  let inTransaction: string[] | null = null;
+  const track = (name: string) => () => inTransaction?.push(name);
 
   beforeEach(() => {
+    inTransaction = null;
+    mockDb.$transaction.mockImplementation(async (fn: (tx: typeof mockDb) => unknown) => {
+      inTransaction = [];
+      return fn(mockDb);
+    });
     mockDb.groupMember.findMany.mockResolvedValue([{ userId: 'owner' }, { userId: 'bob' }]);
-    mockDb.group.update.mockResolvedValue({ id: 'g1', name: 'Trip', archivedAt: new Date() });
+    mockDb.group.updateMany.mockImplementation(async () => (track('archive')(), { count: 1 }));
+    mockDb.group.findUnique.mockResolvedValue({ id: 'g1', name: 'Trip', archivedAt: new Date() });
+    mockDb.expense.findMany.mockImplementation(async () => (track('read expenses')(), bobOwesHalf));
+    mockDb.settlement.findMany.mockImplementation(async () => (track('read payments')(), []));
   });
 
   test('is refused while anyone in the group owes money', async () => {
-    mockDb.expense.findMany.mockResolvedValue(bobOwesHalf);
-    mockDb.settlement.findMany.mockResolvedValue([]);
     const api = await caller();
     await expect(api.archive({ groupId: 'g1' })).rejects.toMatchObject({
       code: 'PRECONDITION_FAILED',
@@ -718,14 +727,12 @@ describe('archiving a group', () => {
     });
     expect(mockDb.expense.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { groupId: 'g1' } }));
     expect(mockDb.settlement.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { groupId: 'g1' } }));
-    expect(mockDb.group.update).not.toHaveBeenCalled();
+    expect(mockDb.activityLog.create).not.toHaveBeenCalled();
   });
 
   // Settlements need both people to be members, so "settle up" alone can't
   // clear a balance with someone who has left.
   test('says so when the open balance belongs to someone no longer in the group', async () => {
-    mockDb.expense.findMany.mockResolvedValue(bobOwesHalf);
-    mockDb.settlement.findMany.mockResolvedValue([]);
     mockDb.groupMember.findMany.mockResolvedValue([{ userId: 'owner' }]);
     const api = await caller();
     await expect(api.archive({ groupId: 'g1' })).rejects.toMatchObject({
@@ -733,19 +740,42 @@ describe('archiving a group', () => {
       message:
         "Someone who is no longer in this group still owes or is owed money, so it can't be archived. Invite them back to settle up, or edit the expenses they're in.",
     });
-    expect(mockDb.group.update).not.toHaveBeenCalled();
+    expect(mockDb.activityLog.create).not.toHaveBeenCalled();
   });
 
   test('goes ahead once everyone is settled up', async () => {
-    mockDb.expense.findMany.mockResolvedValue(bobOwesHalf);
     // Bob paid the owner back.
     mockDb.settlement.findMany.mockResolvedValue([
       { fromId: 'bob', toId: 'owner', amount: 500, baseCurrencyAmount: null },
     ]);
     const api = await caller();
-    await api.archive({ groupId: 'g1' });
-    expect(mockDb.group.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'g1' }, data: { archivedAt: expect.any(Date) } }),
-    );
+    await expect(api.archive({ groupId: 'g1' })).resolves.toMatchObject({ id: 'g1', name: 'Trip' });
+    expect(mockDb.group.updateMany).toHaveBeenCalledWith({
+      where: { id: 'g1', archivedAt: null },
+      data: { archivedAt: expect.any(Date) },
+    });
+    expect(mockDb.activityLog.create).toHaveBeenCalledWith({
+      data: { groupId: 'g1', userId: 'owner', type: 'GROUP_ARCHIVED', metadata: { name: 'Trip' } },
+    });
+  });
+
+  // #289: the balances were read, then the group archived in a separate
+  // statement, so an expense or payment written in between left the group
+  // archived with a balance nobody could settle. Archiving first takes the
+  // group's row lock, which waits for every balance change in flight (each holds
+  // the row FOR SHARE) and holds off new ones, so the balances read after it are
+  // final, and a refusal throws inside the transaction, undoing the archive.
+  test('archives before reading the balances, all in one transaction', async () => {
+    const api = await caller();
+    await expect(api.archive({ groupId: 'g1' })).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
+    expect(inTransaction).toEqual(['archive', 'read expenses', 'read payments']);
+  });
+
+  test('leaves a group archived already as it is', async () => {
+    mockDb.group.updateMany.mockResolvedValue({ count: 0 });
+    const api = await caller();
+    await expect(api.archive({ groupId: 'g1' })).resolves.toMatchObject({ id: 'g1' });
+    expect(mockDb.expense.findMany).not.toHaveBeenCalled();
+    expect(mockDb.activityLog.create).not.toHaveBeenCalled();
   });
 });

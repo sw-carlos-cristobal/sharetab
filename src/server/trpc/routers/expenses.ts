@@ -5,6 +5,11 @@ import { SplitMode } from '@/generated/prisma/client';
 import { getExchangeRate, convertCents } from '../../lib/exchange-rates';
 import { MAX_MONEY_CENTS } from '@/lib/money';
 import { stripUndefined } from '../../lib/strip-undefined';
+import { lockActiveGroup } from '../../lib/group-balances';
+
+const ARCHIVED_CREATE = 'Cannot add expenses to an archived group';
+const ARCHIVED_UPDATE = 'Cannot modify expenses in an archived group';
+const ARCHIVED_DELETE = 'Cannot delete expenses from an archived group';
 
 const expenseShareSchema = z.object({
   userId: z.string(),
@@ -96,16 +101,14 @@ export const expensesRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      // Block expenses on archived groups
+      // Refuse an archived group before the checks and rate lookup below;
+      // lockActiveGroup in the transaction is the check that holds (#289)
       const group = await ctx.db.group.findUnique({
         where: { id: input.groupId },
         select: { archivedAt: true, currency: true },
       });
       if (group?.archivedAt) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'Cannot add expenses to an archived group',
-        });
+        throw new TRPCError({ code: 'BAD_REQUEST', message: ARCHIVED_CREATE });
       }
 
       // Validate paidById is a member of the group
@@ -165,6 +168,7 @@ export const expensesRouter = createTRPCRouter({
       }
 
       const expense = await ctx.db.$transaction(async (tx) => {
+        await lockActiveGroup(tx, input.groupId, ARCHIVED_CREATE);
         const created = await tx.expense.create({
           data: {
             groupId: input.groupId,
@@ -238,16 +242,14 @@ export const expensesRouter = createTRPCRouter({
         }),
     )
     .mutation(async ({ ctx, input }) => {
-      // Block updates on archived groups
+      // Refuse an archived group before the checks and rate lookup below;
+      // lockActiveGroup in the transaction is the check that holds (#289)
       const groupCheck = await ctx.db.group.findUnique({
         where: { id: input.groupId },
         select: { archivedAt: true, currency: true },
       });
       if (groupCheck?.archivedAt) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'Cannot modify expenses in an archived group',
-        });
+        throw new TRPCError({ code: 'BAD_REQUEST', message: ARCHIVED_UPDATE });
       }
 
       const existing = await ctx.db.expense.findUnique({
@@ -331,6 +333,7 @@ export const expensesRouter = createTRPCRouter({
       }
 
       const expense = await ctx.db.$transaction(async (tx) => {
+        await lockActiveGroup(tx, groupId, ARCHIVED_UPDATE);
         if (shares) {
           await tx.expenseShare.deleteMany({ where: { expenseId } });
           await tx.expenseShare.createMany({
@@ -379,10 +382,7 @@ export const expensesRouter = createTRPCRouter({
         select: { archivedAt: true },
       });
       if (groupCheck?.archivedAt) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'Cannot delete expenses from an archived group',
-        });
+        throw new TRPCError({ code: 'BAD_REQUEST', message: ARCHIVED_DELETE });
       }
 
       const expense = await ctx.db.expense.findUnique({
@@ -402,6 +402,7 @@ export const expensesRouter = createTRPCRouter({
       }
 
       await ctx.db.$transaction(async (tx) => {
+        await lockActiveGroup(tx, input.groupId, ARCHIVED_DELETE);
         await tx.expense.delete({ where: { id: input.expenseId } });
 
         await tx.activityLog.create({

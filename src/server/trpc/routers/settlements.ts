@@ -3,6 +3,10 @@ import { TRPCError } from '@trpc/server';
 import { createTRPCRouter, groupMemberProcedure } from '../init';
 import { getExchangeRate, convertCents } from '../../lib/exchange-rates';
 import { MAX_MONEY_CENTS } from '@/lib/money';
+import { lockActiveGroup } from '../../lib/group-balances';
+
+const ARCHIVED_CREATE = 'Cannot create settlements in an archived group';
+const ARCHIVED_DELETE = 'Cannot delete payments from an archived group';
 
 export const settlementsRouter = createTRPCRouter({
   list: groupMemberProcedure
@@ -54,16 +58,14 @@ export const settlementsRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const effectiveFromId = input.fromId ?? ctx.user.id;
 
-      // Block settlements on archived groups
+      // Refuse an archived group before the checks and rate lookup below;
+      // lockActiveGroup in the transaction is the check that holds (#289)
       const group = await ctx.db.group.findUnique({
         where: { id: input.groupId },
         select: { archivedAt: true, currency: true },
       });
       if (group?.archivedAt) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'Cannot create settlements in an archived group',
-        });
+        throw new TRPCError({ code: 'BAD_REQUEST', message: ARCHIVED_CREATE });
       }
 
       // Cannot settle with yourself
@@ -119,6 +121,7 @@ export const settlementsRouter = createTRPCRouter({
       }
 
       const settlement = await ctx.db.$transaction(async (tx) => {
+        await lockActiveGroup(tx, input.groupId, ARCHIVED_CREATE);
         const created = await tx.settlement.create({
           data: {
             groupId: input.groupId,
@@ -156,10 +159,7 @@ export const settlementsRouter = createTRPCRouter({
         select: { archivedAt: true },
       });
       if (group?.archivedAt) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'Cannot delete payments from an archived group',
-        });
+        throw new TRPCError({ code: 'BAD_REQUEST', message: ARCHIVED_DELETE });
       }
 
       const settlement = await ctx.db.settlement.findUnique({
@@ -181,6 +181,7 @@ export const settlementsRouter = createTRPCRouter({
       }
 
       await ctx.db.$transaction(async (tx) => {
+        await lockActiveGroup(tx, input.groupId, ARCHIVED_DELETE);
         // deleteMany so a payment someone else deleted in the meantime is NOT_FOUND, not a Prisma error
         const { count } = await tx.settlement.deleteMany({
           where: { id: input.settlementId, groupId: input.groupId },

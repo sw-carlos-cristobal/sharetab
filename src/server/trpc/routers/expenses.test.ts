@@ -7,8 +7,13 @@ vi.mock('@/server/auth', () => ({ auth: vi.fn() }));
 
 const mockDb = {
   user: { findUnique: vi.fn() },
-  groupMember: { findUnique: vi.fn() },
-  expense: { findUnique: vi.fn() },
+  group: { findUnique: vi.fn() },
+  groupMember: { findUnique: vi.fn(), findFirst: vi.fn(), count: vi.fn() },
+  expense: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
+  expenseShare: { deleteMany: vi.fn(), createMany: vi.fn() },
+  activityLog: { create: vi.fn() },
+  $transaction: vi.fn(),
+  $queryRaw: vi.fn(),
 };
 vi.mock('@/server/db', () => ({ db: mockDb }));
 vi.mock('@/server/lib/logger', () => ({
@@ -48,5 +53,84 @@ describe('expenses.get (#280)', () => {
     const api = await caller();
     const expense = await api.get({ groupId: 'g1', expenseId: 'e1' });
     expect(expense).not.toHaveProperty('receipt');
+  });
+});
+
+// #289: each write checked archivedAt in its own statement before writing, so
+// an archive that landed in between let the write through, and the group could
+// end up archived with a balance nobody can settle. The check that counts now
+// locks the group's row as the write's transaction starts.
+describe('a group archived while a change was on its way (#289)', () => {
+  // The SQL of each $queryRaw call (a tagged template, strings first)
+  const rawSql = () => mockDb.$queryRaw.mock.calls.map(([strings]) => (strings as string[]).join('?'));
+  const ownExpense = {
+    id: 'e1',
+    groupId: 'g1',
+    paidById: 'u1',
+    addedById: 'u1',
+    amount: 1000,
+    currency: 'USD',
+    exchangeRate: 1,
+    baseCurrencyAmount: null,
+    expenseDate: new Date('2026-10-01T00:00:00Z'),
+  };
+  const newExpense = {
+    groupId: 'g1',
+    title: 'Dinner',
+    amount: 1000,
+    paidById: 'u1',
+    splitMode: 'EQUAL' as const,
+    shares: [{ userId: 'u1', amount: 1000 }],
+  };
+
+  beforeEach(() => {
+    // The early check still sees the group active...
+    mockDb.group.findUnique.mockResolvedValue({ archivedAt: null, currency: 'USD' });
+    // ...but by the time the transaction locks its row, it's archived
+    mockDb.$queryRaw.mockResolvedValue([{ archivedAt: new Date() }]);
+    mockDb.expense.findUnique.mockResolvedValue(ownExpense);
+    mockDb.groupMember.findFirst.mockResolvedValue({ userId: 'u1' });
+    mockDb.groupMember.count.mockResolvedValue(1);
+    mockDb.$transaction.mockImplementation(async (fn: (tx: typeof mockDb) => unknown) => fn(mockDb));
+  });
+
+  test('create refuses, writing nothing', async () => {
+    const api = await caller();
+    await expect(api.create(newExpense)).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'Cannot add expenses to an archived group',
+    });
+    expect(mockDb.expense.create).not.toHaveBeenCalled();
+    expect(mockDb.activityLog.create).not.toHaveBeenCalled();
+  });
+
+  test('update refuses, writing nothing', async () => {
+    const api = await caller();
+    await expect(
+      api.update({ groupId: 'g1', expenseId: 'e1', amount: 2000, shares: [{ userId: 'u1', amount: 2000 }] }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST', message: 'Cannot modify expenses in an archived group' });
+    expect(mockDb.expenseShare.deleteMany).not.toHaveBeenCalled();
+    expect(mockDb.expense.update).not.toHaveBeenCalled();
+  });
+
+  test('delete refuses, deleting nothing', async () => {
+    const api = await caller();
+    await expect(api.delete({ groupId: 'g1', expenseId: 'e1' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'Cannot delete expenses from an archived group',
+    });
+    expect(mockDb.expense.delete).not.toHaveBeenCalled();
+  });
+
+  test('an active group is locked FOR SHARE inside the transaction, before the write', async () => {
+    mockDb.$queryRaw.mockResolvedValue([{ archivedAt: null }]);
+    mockDb.expense.create.mockResolvedValue({ id: 'e2', shares: [] });
+    const api = await caller();
+    await api.create(newExpense);
+
+    expect(rawSql()).toEqual([expect.stringMatching(/FROM "Group" WHERE "id" = \? FOR SHARE/)]);
+    const [locked] = mockDb.$queryRaw.mock.invocationCallOrder;
+    expect(locked).toBeGreaterThan(mockDb.$transaction.mock.invocationCallOrder[0]!);
+    expect(locked).toBeLessThan(mockDb.expense.create.mock.invocationCallOrder[0]!);
   });
 });
