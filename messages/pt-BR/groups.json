@@ -85,7 +85,11 @@
     "archiving": "Arquivando...",
     "archiveGroup": "Arquivar grupo",
     "deleteDescription": "Excluir um grupo remove todas as despesas, pagamentos e dados de membros permanentemente.",
-    "deleting": "Excluindo..."
+    "deleting": "Excluindo...",
+    "leaveDescription": "Sair deste grupo. Suas despesas e pagamentos nele continuam, e você precisará de um novo convite para voltar. Acerte as contas primeiro.",
+    "leaveConfirm": "Sair deste grupo?",
+    "leaving": "Saindo...",
+    "leaveGroup": "Sair do grupo"
   },
   "settle": {
     "title": "Registrar um pagamento",

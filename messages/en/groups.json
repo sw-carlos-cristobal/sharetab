@@ -85,7 +85,11 @@
     "archiving": "Archiving...",
     "archiveGroup": "Archive group",
     "deleteDescription": "Deleting a group removes all expenses, settlements, and member data permanently.",
-    "deleting": "Deleting..."
+    "deleting": "Deleting...",
+    "leaveDescription": "Leave this group. Your expenses and payments in it stay, and you'll need a new invite to rejoin. Settle up first.",
+    "leaveConfirm": "Leave this group?",
+    "leaving": "Leaving...",
+    "leaveGroup": "Leave group"
   },
   "settle": {
     "title": "Record a payment",

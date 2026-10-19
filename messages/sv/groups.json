@@ -85,7 +85,11 @@
     "archiving": "Arkiverar...",
     "archiveGroup": "Arkivera grupp",
     "deleteDescription": "Att ta bort en grupp raderar alla utgifter, betalningar och medlemsdata permanent.",
-    "deleting": "Tar bort..."
+    "deleting": "Tar bort...",
+    "leaveDescription": "Lämna den här gruppen. Dina utgifter och betalningar i den finns kvar, och du behöver en ny inbjudan för att gå med igen. Gör upp först.",
+    "leaveConfirm": "Lämna den här gruppen?",
+    "leaving": "Lämnar...",
+    "leaveGroup": "Lämna grupp"
   },
   "settle": {
     "title": "Registrera en betalning",

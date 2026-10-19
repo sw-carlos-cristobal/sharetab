@@ -521,6 +521,84 @@ describe('removing a placeholder', () => {
   });
 });
 
+// #279: members had no way to leave a group, and the server let the owner
+// leave (leaving the group with nobody who can manage or delete it) and let a
+// member leave while owing money (the group, and that debt, then drop out of
+// their view).
+describe('leaving a group', () => {
+  // The owner paid $10.00 split with Bob, so Bob owes the owner $5.00.
+  const bobOwesHalf = [
+    {
+      paidById: 'owner',
+      amount: 1000,
+      baseCurrencyAmount: null,
+      shares: [
+        { userId: 'owner', amount: 500 },
+        { userId: 'bob', amount: 500 },
+      ],
+    },
+  ];
+  const bobPaidBack = [{ fromId: 'bob', toId: 'owner', amount: 500, baseCurrencyAmount: null }];
+
+  // The caller's lookups (user, then membership), then the target's membership and user rows
+  function setUp(
+    caller: { userId: string; role: 'OWNER' | 'MEMBER' },
+    target: { userId: string; role: 'OWNER' | 'MEMBER' },
+  ) {
+    mockDb.groupMember.findUnique
+      .mockResolvedValueOnce({ role: caller.role, userId: caller.userId, groupId: 'g1' })
+      .mockResolvedValueOnce({ id: `gm-${target.userId}`, role: target.role, userId: target.userId, groupId: 'g1' });
+    mockDb.user.findUnique
+      .mockResolvedValueOnce({ suspendedAt: null })
+      .mockResolvedValueOnce({ isPlaceholder: false, name: target.userId, placeholderName: null });
+    mockDb.expense.findMany.mockResolvedValue(bobOwesHalf);
+    mockDb.settlement.findMany.mockResolvedValue([]);
+  }
+
+  test("the owner can't leave", async () => {
+    setUp({ userId: 'owner', role: 'OWNER' }, { userId: 'owner', role: 'OWNER' });
+    mockDb.expense.findMany.mockResolvedValue([]);
+    const api = await caller('owner');
+    await expect(api.removeMember({ groupId: 'g1', userId: 'owner' })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      message: "The group's owner can't leave it. Delete the group instead if nobody needs it.",
+    });
+    expect(mockDb.groupMember.delete).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['owes money', 'bob'],
+    ['is owed money', 'owner'],
+  ] as const)("a member who %s can't leave", async (_, leaver) => {
+    setUp({ userId: leaver, role: 'MEMBER' }, { userId: leaver, role: 'MEMBER' });
+    const api = await caller(leaver);
+    await expect(api.removeMember({ groupId: 'g1', userId: leaver })).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: 'You still owe or are owed money in this group. Settle up before you leave.',
+    });
+    expect(mockDb.groupMember.delete).not.toHaveBeenCalled();
+  });
+
+  test('a member who is settled up leaves, and their history stays', async () => {
+    setUp({ userId: 'bob', role: 'MEMBER' }, { userId: 'bob', role: 'MEMBER' });
+    mockDb.settlement.findMany.mockResolvedValue(bobPaidBack);
+    const api = await caller('bob');
+    await expect(api.removeMember({ groupId: 'g1', userId: 'bob' })).resolves.toEqual({ success: true });
+    expect(mockDb.groupMember.delete).toHaveBeenCalledWith({ where: { id: 'gm-bob' } });
+    expect(mockDb.expense.updateMany).not.toHaveBeenCalled();
+    expect(mockDb.settlement.deleteMany).not.toHaveBeenCalled();
+  });
+
+  // Removing someone else is a separate decision for the owner, who still sees the
+  // balance (and the archive check names it), so it isn't held up by one.
+  test('the owner can still remove a member who owes money', async () => {
+    setUp({ userId: 'owner', role: 'OWNER' }, { userId: 'bob', role: 'MEMBER' });
+    const api = await caller('owner');
+    await expect(api.removeMember({ groupId: 'g1', userId: 'bob' })).resolves.toEqual({ success: true });
+    expect(mockDb.groupMember.delete).toHaveBeenCalledWith({ where: { id: 'gm-bob' } });
+  });
+});
+
 // #276: merging a placeholder into the member it stands for moves their
 // expenses, shares and payments over, so the balance follows them.
 describe('merging a placeholder into a member', () => {

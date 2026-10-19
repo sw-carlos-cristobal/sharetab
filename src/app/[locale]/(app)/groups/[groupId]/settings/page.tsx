@@ -11,7 +11,19 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { Archive, ArchiveRestore, ArrowLeft, Pencil, Trash2, UserPlus, Check, X, Link2, Merge } from 'lucide-react';
+import {
+  Archive,
+  ArchiveRestore,
+  ArrowLeft,
+  Pencil,
+  Trash2,
+  UserPlus,
+  Check,
+  X,
+  Link2,
+  LogOut,
+  Merge,
+} from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { InviteDialog } from '@/components/groups/invite-dialog';
 import { MergePlaceholderDialog } from '@/components/groups/merge-placeholder-dialog';
@@ -25,11 +37,14 @@ function GroupDetailsForm({
   initialName,
   initialDescription,
   initialCurrency,
+  readOnly,
 }: {
   groupId: string;
   initialName: string;
   initialDescription: string;
   initialCurrency: string;
+  /** Only owners and admins can change the details (#279) */
+  readOnly: boolean;
 }) {
   const t = useTranslations('groups');
   const utils = trpc.useUtils();
@@ -65,11 +80,16 @@ function GroupDetailsForm({
         <form onSubmit={handleSave} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">{t('settings.name')}</Label>
-            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
+            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required disabled={readOnly} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="description">{t('settings.description')}</Label>
-            <Input id="description" value={description} onChange={(e) => setDescription(e.target.value)} />
+            <Input
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              disabled={readOnly}
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="currency">{t('settings.currency')}</Label>
@@ -77,7 +97,8 @@ function GroupDetailsForm({
               id="currency"
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
-              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              disabled={readOnly}
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
             >
               {COMMON_CURRENCIES.map((c) => (
                 <option key={c.code} value={c.code}>
@@ -87,9 +108,11 @@ function GroupDetailsForm({
             </select>
             {updateGroup.error && <p className="text-xs text-destructive">{updateGroup.error.message}</p>}
           </div>
-          <Button type="submit" disabled={updateGroup.isPending}>
-            {updateGroup.isPending ? t('settings.saving') : t('settings.saveChanges')}
-          </Button>
+          {!readOnly && (
+            <Button type="submit" disabled={updateGroup.isPending}>
+              {updateGroup.isPending ? t('settings.saving') : t('settings.saveChanges')}
+            </Button>
+          )}
           {updateGroup.isSuccess && <p className="text-sm text-green-600">{t('settings.saved')}</p>}
         </form>
       </CardContent>
@@ -160,21 +183,36 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
     onError: (e) => toast.error(e.message),
   });
 
+  const leaveGroup = trpc.groups.removeMember.useMutation({
+    onSuccess: () => {
+      utils.groups.list.invalidate();
+      utils.groups.listArchived.invalidate();
+      router.push('/groups');
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   function handleAddPlaceholder(e: React.FormEvent) {
     e.preventDefault();
     if (!placeholderName.trim()) return;
     addPlaceholder.mutate({ groupId, name: placeholderName.trim() });
   }
 
-  if (group.isLoading) return <LoadingSpinner />;
+  // The controls below depend on the caller's role, so wait for it rather than flash the wrong ones
+  if (group.isLoading || profile.isLoading) return <LoadingSpinner />;
   if (!group.data) return <p className="text-destructive">{t('settings.notFound')}</p>;
 
   const placeholders = group.data.members
     .filter((m) => m.user.isPlaceholder)
     .map((m) => ({ ...m, displayName: m.user.placeholderName ?? m.user.name ?? '' }));
-  // Claim links and merges are for owners and admins, and an archived group refuses merges
-  const myRole = group.data.members.find((m) => m.user.id === profile.data?.id)?.role;
-  const canMerge = (myRole === 'OWNER' || myRole === 'ADMIN') && !group.data.archivedAt;
+  // The server refuses a plain member's changes to the group (details, placeholders,
+  // archiving) and deleting it to everyone but the owner, so they're only offered to
+  // those it allows (#279). Claim links and merges are for owners and admins, and an
+  // archived group refuses merges.
+  const myId = profile.data?.id;
+  const myRole = group.data.members.find((m) => m.user.id === myId)?.role;
+  const isOwnerOrAdmin = myRole === 'OWNER' || myRole === 'ADMIN';
+  const canMerge = isOwnerOrAdmin && !group.data.archivedAt;
   // Who a placeholder can be merged into: the members who joined with an account
   const accountMembers = group.data.members
     .filter((m) => !m.user.isPlaceholder)
@@ -225,137 +263,147 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
         initialName={group.data.name}
         initialDescription={group.data.description ?? ''}
         initialCurrency={group.data.currency}
+        readOnly={!isOwnerOrAdmin}
       />
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <UserPlus className="h-4 w-4" />
-            {t('settings.addMemberTitle')}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">{t('settings.addMemberDescription')}</p>
-          <form onSubmit={handleAddPlaceholder} className="flex gap-2">
-            <Input
-              placeholder={t('settings.namePlaceholder')}
-              value={placeholderName}
-              onChange={(e) => setPlaceholderName(e.target.value)}
-              required
-            />
-            <Button type="submit" disabled={addPlaceholder.isPending}>
-              {addPlaceholder.isPending ? t('settings.adding') : t('settings.add')}
-            </Button>
-          </form>
-          {addPlaceholder.error && <p className="text-sm text-destructive">{addPlaceholder.error.message}</p>}
+      {isOwnerOrAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <UserPlus className="h-4 w-4" />
+              {t('settings.addMemberTitle')}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">{t('settings.addMemberDescription')}</p>
+            <form onSubmit={handleAddPlaceholder} className="flex gap-2">
+              <Input
+                placeholder={t('settings.namePlaceholder')}
+                value={placeholderName}
+                onChange={(e) => setPlaceholderName(e.target.value)}
+                required
+              />
+              <Button type="submit" disabled={addPlaceholder.isPending}>
+                {addPlaceholder.isPending ? t('settings.adding') : t('settings.add')}
+              </Button>
+            </form>
+            {addPlaceholder.error && <p className="text-sm text-destructive">{addPlaceholder.error.message}</p>}
 
-          {placeholders.length > 0 && (
-            <div className="space-y-2 pt-2">
-              <p className="text-sm font-medium text-muted-foreground">
-                {t('settings.placeholderMembers', { count: placeholders.length })}
-              </p>
-              {placeholders.map((m) => (
-                <div key={m.user.id} className="flex items-center justify-between rounded-md border border-dashed p-2">
-                  {editingPlaceholder === m.user.id ? (
-                    <div className="flex flex-1 items-center gap-2">
-                      <Input
-                        value={editingName}
-                        onChange={(e) => setEditingName(e.target.value)}
-                        className="h-7 text-sm"
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter')
+            {placeholders.length > 0 && (
+              <div className="space-y-2 pt-2">
+                <p className="text-sm font-medium text-muted-foreground">
+                  {t('settings.placeholderMembers', { count: placeholders.length })}
+                </p>
+                {placeholders.map((m) => (
+                  <div
+                    key={m.user.id}
+                    className="flex items-center justify-between rounded-md border border-dashed p-2"
+                  >
+                    {editingPlaceholder === m.user.id ? (
+                      <div className="flex flex-1 items-center gap-2">
+                        <Input
+                          value={editingName}
+                          onChange={(e) => setEditingName(e.target.value)}
+                          className="h-7 text-sm"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter')
+                              renamePlaceholder.mutate({
+                                groupId,
+                                placeholderUserId: m.user.id,
+                                name: editingName.trim(),
+                              });
+                            if (e.key === 'Escape') setEditingPlaceholder(null);
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
                             renamePlaceholder.mutate({
                               groupId,
                               placeholderUserId: m.user.id,
                               name: editingName.trim(),
-                            });
-                          if (e.key === 'Escape') setEditingPlaceholder(null);
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() =>
-                          renamePlaceholder.mutate({ groupId, placeholderUserId: m.user.id, name: editingName.trim() })
-                        }
-                        className="text-primary hover:text-primary/80"
-                        disabled={renamePlaceholder.isPending}
-                      >
-                        <Check className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditingPlaceholder(null)}
-                        className="text-muted-foreground hover:text-foreground"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm">{m.user.placeholderName ?? m.user.name}</span>
-                        <Badge variant="outline" className="text-[10px]">
-                          {t('settings.pending')}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        {canMerge && (
-                          <>
-                            <button
-                              type="button"
-                              aria-label={t('settings.inviteToClaim', { name: m.displayName })}
-                              title={t('settings.inviteToClaim', { name: m.displayName })}
-                              onClick={() => setClaimFor({ id: m.user.id, name: m.displayName })}
-                              className="text-muted-foreground hover:text-foreground"
-                            >
-                              <Link2 className="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              aria-label={t('settings.mergeIntoMember', { name: m.displayName })}
-                              title={t('settings.mergeIntoMember', { name: m.displayName })}
-                              onClick={() => setMergeFor({ id: m.user.id, name: m.displayName })}
-                              className="text-muted-foreground hover:text-foreground"
-                            >
-                              <Merge className="h-3.5 w-3.5" />
-                            </button>
-                          </>
-                        )}
+                            })
+                          }
+                          className="text-primary hover:text-primary/80"
+                          disabled={renamePlaceholder.isPending}
+                        >
+                          <Check className="h-4 w-4" />
+                        </button>
                         <button
                           type="button"
-                          onClick={() => {
-                            setEditingPlaceholder(m.user.id);
-                            setEditingName(m.user.placeholderName ?? m.user.name ?? '');
-                          }}
+                          onClick={() => setEditingPlaceholder(null)}
                           className="text-muted-foreground hover:text-foreground"
                         >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (
-                              confirm(
-                                t('settings.removeConfirm', { name: m.user.placeholderName ?? m.user.name ?? '' }),
-                              )
-                            ) {
-                              removeMember.mutate({ groupId, userId: m.user.id });
-                            }
-                          }}
-                          className="text-muted-foreground hover:text-destructive"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
+                          <X className="h-4 w-4" />
                         </button>
                       </div>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm">{m.user.placeholderName ?? m.user.name}</span>
+                          <Badge variant="outline" className="text-[10px]">
+                            {t('settings.pending')}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {canMerge && (
+                            <>
+                              <button
+                                type="button"
+                                aria-label={t('settings.inviteToClaim', { name: m.displayName })}
+                                title={t('settings.inviteToClaim', { name: m.displayName })}
+                                onClick={() => setClaimFor({ id: m.user.id, name: m.displayName })}
+                                className="text-muted-foreground hover:text-foreground"
+                              >
+                                <Link2 className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                aria-label={t('settings.mergeIntoMember', { name: m.displayName })}
+                                title={t('settings.mergeIntoMember', { name: m.displayName })}
+                                onClick={() => setMergeFor({ id: m.user.id, name: m.displayName })}
+                                className="text-muted-foreground hover:text-foreground"
+                              >
+                                <Merge className="h-3.5 w-3.5" />
+                              </button>
+                            </>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingPlaceholder(m.user.id);
+                              setEditingName(m.user.placeholderName ?? m.user.name ?? '');
+                            }}
+                            className="text-muted-foreground hover:text-foreground"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (
+                                confirm(
+                                  t('settings.removeConfirm', { name: m.user.placeholderName ?? m.user.name ?? '' }),
+                                )
+                              ) {
+                                removeMember.mutate({ groupId, userId: m.user.id });
+                              }
+                            }}
+                            className="text-muted-foreground hover:text-destructive"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {claimFor && (
         <InviteDialog
@@ -384,7 +432,7 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
           <CardTitle className="text-destructive">{t('settings.dangerZone')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          {!group.data.archivedAt && (
+          {isOwnerOrAdmin && !group.data.archivedAt && (
             <div>
               <p className="mb-2 text-sm text-muted-foreground">{t('settings.archiveDescription')}</p>
               <Button
@@ -401,21 +449,42 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
               </Button>
             </div>
           )}
-          <div>
-            <p className="mb-2 text-sm text-muted-foreground">{t('settings.deleteDescription')}</p>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                if (confirm(t('settings.deleteConfirm'))) {
-                  deleteGroup.mutate({ groupId });
-                }
-              }}
-              disabled={deleteGroup.isPending}
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              {deleteGroup.isPending ? t('settings.deleting') : t('settings.deleteGroup')}
-            </Button>
-          </div>
+          {myRole === 'OWNER' ? (
+            <div>
+              <p className="mb-2 text-sm text-muted-foreground">{t('settings.deleteDescription')}</p>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  if (confirm(t('settings.deleteConfirm'))) {
+                    deleteGroup.mutate({ groupId });
+                  }
+                }}
+                disabled={deleteGroup.isPending}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                {deleteGroup.isPending ? t('settings.deleting') : t('settings.deleteGroup')}
+              </Button>
+            </div>
+          ) : (
+            // The owner can't leave (nobody else could manage or delete the group)
+            myId && (
+              <div>
+                <p className="mb-2 text-sm text-muted-foreground">{t('settings.leaveDescription')}</p>
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    if (confirm(t('settings.leaveConfirm'))) {
+                      leaveGroup.mutate({ groupId, userId: myId });
+                    }
+                  }}
+                  disabled={leaveGroup.isPending}
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  {leaveGroup.isPending ? t('settings.leaving') : t('settings.leaveGroup')}
+                </Button>
+              </div>
+            )
+          )}
         </CardContent>
       </Card>
     </div>

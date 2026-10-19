@@ -85,7 +85,11 @@
     "archiving": "归档中...",
     "archiveGroup": "归档群组",
     "deleteDescription": "删除群组将永久移除所有支出、结算和成员数据。",
-    "deleting": "删除中..."
+    "deleting": "删除中...",
+    "leaveDescription": "退出此群组。你在其中的支出和付款会保留，重新加入需要新的邀请。请先结清账目。",
+    "leaveConfirm": "退出此群组？",
+    "leaving": "正在退出...",
+    "leaveGroup": "退出群组"
   },
   "settle": {
     "title": "记录付款",

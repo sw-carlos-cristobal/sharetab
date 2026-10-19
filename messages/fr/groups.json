@@ -85,7 +85,11 @@
     "archiving": "Archivage...",
     "archiveGroup": "Archiver le groupe",
     "deleteDescription": "La suppression d'un groupe efface définitivement toutes les dépenses, règlements et données des membres.",
-    "deleting": "Suppression..."
+    "deleting": "Suppression...",
+    "leaveDescription": "Quitter ce groupe. Vos dépenses et paiements y restent, et il vous faudra une nouvelle invitation pour le rejoindre. Réglez vos comptes d'abord.",
+    "leaveConfirm": "Quitter ce groupe ?",
+    "leaving": "Départ...",
+    "leaveGroup": "Quitter le groupe"
   },
   "settle": {
     "title": "Enregistrer un paiement",

@@ -451,6 +451,26 @@ export const groupsRouter = createTRPCRouter({
       if (targetMember.role === 'OWNER' && !isSelf) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Cannot remove the owner' });
       }
+      // Nobody else could manage or delete the group, and there's no handing
+      // ownership over yet (#279)
+      if (targetMember.role === 'OWNER') {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: "The group's owner can't leave it. Delete the group instead if nobody needs it.",
+        });
+      }
+      // Someone who leaves no longer sees the group, so a debt in it would drop
+      // out of their view. The owner removing a member isn't held up by one: they
+      // still see it, and the archive check names it.
+      if (isSelf) {
+        const balance = (await loadGroupBalances(ctx.db, input.groupId)).find((b) => b.userId === ctx.user.id);
+        if (balance && balance.net !== 0) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'You still owe or are owed money in this group. Settle up before you leave.',
+          });
+        }
+      }
 
       const targetUser = await ctx.db.user.findUnique({
         where: { id: input.userId },

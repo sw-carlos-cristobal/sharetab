@@ -197,7 +197,7 @@ test.describe('Group Archiving', () => {
     // Settlements need both people to be members, so "settle up" alone can't
     // clear a balance with someone who has left.
     test('archive refusal says so when someone who left still has a balance', async () => {
-      const { owner, groupId, memberIds, memberContexts, dispose } = await createTestGroup(
+      const { owner, groupId, memberIds, dispose } = await createTestGroup(
         users.alice.email,
         users.alice.password,
         [{ email: users.bob.email, password: users.bob.password }],
@@ -216,8 +216,8 @@ test.describe('Group Archiving', () => {
           { userId: bobId, amount: 500 },
         ],
       });
-      // Bob leaves while still owing Alice.
-      await trpcMutation(memberContexts[0]!, 'groups.removeMember', { groupId, userId: bobId });
+      // Bob is removed while still owing Alice (he can't leave on his own with a balance, #279).
+      await trpcMutation(owner, 'groups.removeMember', { groupId, userId: bobId });
 
       const error = await trpcError(await trpcMutation(owner, 'groups.archive', { groupId }));
       expect(error?.data?.code).toBe('PRECONDITION_FAILED');

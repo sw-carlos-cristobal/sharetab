@@ -85,7 +85,11 @@
     "archiving": "アーカイブ中...",
     "archiveGroup": "グループをアーカイブ",
     "deleteDescription": "グループを削除すると、すべての経費、精算、メンバーデータが完全に削除されます。",
-    "deleting": "削除中..."
+    "deleting": "削除中...",
+    "leaveDescription": "このグループから退出します。グループ内の経費と支払いは残り、再参加するには新しい招待が必要です。先に精算してください。",
+    "leaveConfirm": "このグループから退出しますか？",
+    "leaving": "退出中...",
+    "leaveGroup": "グループから退出"
   },
   "settle": {
     "title": "支払いを記録",

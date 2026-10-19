@@ -85,7 +85,11 @@
     "archiving": "Archivando...",
     "archiveGroup": "Archivar grupo",
     "deleteDescription": "Eliminar un grupo borra todos los gastos, liquidaciones y datos de miembros permanentemente.",
-    "deleting": "Eliminando..."
+    "deleting": "Eliminando...",
+    "leaveDescription": "Salir de este grupo. Tus gastos y pagos en él se conservan, y necesitarás una nueva invitación para volver. Salda tus cuentas primero.",
+    "leaveConfirm": "¿Salir de este grupo?",
+    "leaving": "Saliendo...",
+    "leaveGroup": "Salir del grupo"
   },
   "settle": {
     "title": "Registrar un pago",
