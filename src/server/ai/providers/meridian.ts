@@ -34,8 +34,10 @@ export async function startMeridianProxy(): Promise<void> {
 // it. A body shaped like Meridian's (one of its statuses plus a version) means
 // it is listening, even when it answers 503 as unhealthy (e.g. no boot
 // identity); anything else on the port means our listen failed. isAvailable()
-// then only checks for a 2xx, which a "degraded" proxy (auth unverifiable,
-// e.g. no login) also returns.
+// then only checks for a 2xx, which a "degraded" proxy (auth unverifiable)
+// also returns. With no Claude login, Meridian 1.83 and later answer 503
+// "unhealthy" (1.71 answered "degraded"), so the provider reads as unavailable
+// and the app falls back to the next one.
 const MERIDIAN_READY_DEADLINE_MS = 10_000;
 const MERIDIAN_HEALTH_STATUSES = new Set(['healthy', 'degraded', 'unhealthy', 'draining']);
 
