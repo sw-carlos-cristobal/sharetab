@@ -31,7 +31,7 @@ import {
   Scissors,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { getInitials } from '@/lib/avatar';
+import { chipLabels, getInitials } from '@/lib/avatar';
 
 type Step = 'upload' | 'processing' | 'people' | 'assign';
 
@@ -481,6 +481,8 @@ export default function GuestSplitPage() {
   }
 
   const initials = getInitials;
+  // First names, or whole names where two people share one (#277)
+  const labels = chipLabels(people);
 
   return (
     <div className="space-y-6 pb-24">
@@ -1027,7 +1029,9 @@ export default function GuestSplitPage() {
                             <Avatar className="h-5 w-5">
                               <AvatarFallback className="text-[9px]">{initials(name)}</AvatarFallback>
                             </Avatar>
-                            {name.split(' ')[0]}
+                            <span data-testid="chip-label" className="max-w-[12rem] truncate" title={name.trim()}>
+                              {labels[personIdx]}
+                            </span>
                             {isAssigned && <Check className="h-3 w-3" />}
                           </button>
                         );

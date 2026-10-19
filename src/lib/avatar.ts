@@ -49,3 +49,21 @@ export function getInitials(name?: string | null, email?: string | null): string
   }
   return email?.[0]?.toUpperCase() ?? '?';
 }
+
+/**
+ * Labels for a row of person chips, one per name in order: the first name,
+ * or the whole name when someone else in the row has the same first name, so
+ * "Bob" and "Bob Smith" don't both read "Bob" (#277). People with identical
+ * names still look the same; nothing in the name tells them apart.
+ */
+export function chipLabels(names: readonly (string | null | undefined)[]): string[] {
+  const words = names.map((name) => name?.trim().split(/\s+/).filter(Boolean) ?? []);
+  const firstNameCounts = new Map<string, number>();
+  for (const [first] of words) {
+    if (first) firstNameCounts.set(first.toLowerCase(), (firstNameCounts.get(first.toLowerCase()) ?? 0) + 1);
+  }
+  return words.map(([first, ...rest]) => {
+    if (!first) return '?';
+    return (firstNameCounts.get(first.toLowerCase()) ?? 0) > 1 ? [first, ...rest].join(' ') : first;
+  });
+}
