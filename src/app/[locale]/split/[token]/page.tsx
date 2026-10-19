@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { Link } from '@/i18n/navigation';
 import { getInitials, guestAvatarColor } from '@/lib/avatar';
 import { buildVenmoPayUrl, isValidVenmoHandle } from '@/lib/venmo';
+import { groupSizeWeights, personItemShares } from '@/lib/split-calculator';
 
 export default function SharedSplitPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params);
@@ -80,6 +81,8 @@ export default function SharedSplitPage({ params }: { params: Promise<{ token: s
   const data = split.data!;
   const currency = data.receiptData.currency;
   const paidBy = data.people[data.paidByIndex]?.name ?? t('someone');
+  // Weighted the way the totals were, so each person's lines add up to their total
+  const weights = groupSizeWeights(data.people);
 
   async function handleShare() {
     const url = window.location.href;
@@ -165,11 +168,12 @@ export default function SharedSplitPage({ params }: { params: Promise<{ token: s
       <div className="space-y-3">
         <h3 className="font-semibold text-base">{t('eachPersonOwes')}</h3>
         {data.summary.map((person, idx) => {
-          // Find which items this person was assigned to
-          const personItems = data.assignments
-            .filter((a) => a.personIndices.includes(person.personIndex))
-            .map((a) => data.items[a.itemIndex])
-            .filter((item): item is NonNullable<typeof item> => item != null);
+          // The items this person is on, each at their share of its price
+          const personItems = personItemShares(person.personIndex, {
+            items: data.items,
+            assignments: data.assignments,
+            ...weights,
+          });
 
           return (
             <Card key={idx} data-testid={`person-card-${idx}`}>
@@ -183,27 +187,43 @@ export default function SharedSplitPage({ params }: { params: Promise<{ token: s
                     </Avatar>
                     <span className="font-semibold">{person.name}</span>
                   </div>
-                  <span className="text-xl font-bold text-primary">{formatCents(person.total, currency, locale)}</span>
+                  <span className="text-xl font-bold text-primary" data-testid={`person-total-${idx}`}>
+                    {formatCents(person.total, currency, locale)}
+                  </span>
                 </div>
 
                 {/* Item details */}
                 <div className="space-y-1 text-sm text-muted-foreground">
-                  {personItems.map((item, i) => (
-                    <div key={i} className="flex justify-between">
-                      <span>{item.name}</span>
-                      <span>{formatCents(item.totalPrice, currency, locale)}</span>
-                    </div>
-                  ))}
+                  {personItems.map(({ itemIndex, amount, share }, i) => {
+                    const item = data.items[itemIndex]!;
+                    return (
+                      <div key={i} className="flex justify-between gap-2">
+                        <span>
+                          {item.name}
+                          {share.numerator < share.denominator && (
+                            <span className="text-xs">
+                              {' '}
+                              {t('shareOf', {
+                                fraction: `${share.numerator}/${share.denominator}`,
+                                price: formatCents(item.totalPrice, currency, locale),
+                              })}
+                            </span>
+                          )}
+                        </span>
+                        <span data-testid="line-amount">{formatCents(amount, currency, locale)}</span>
+                      </div>
+                    );
+                  })}
                   {person.tax > 0 && (
                     <div className="flex justify-between">
                       <span>{t('tax')}</span>
-                      <span>{formatCents(person.tax, currency, locale)}</span>
+                      <span data-testid="line-amount">{formatCents(person.tax, currency, locale)}</span>
                     </div>
                   )}
                   {person.tip > 0 && (
                     <div className="flex justify-between">
                       <span>{t('tip')}</span>
-                      <span>{formatCents(person.tip, currency, locale)}</span>
+                      <span data-testid="line-amount">{formatCents(person.tip, currency, locale)}</span>
                     </div>
                   )}
                 </div>

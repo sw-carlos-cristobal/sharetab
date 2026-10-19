@@ -163,6 +163,7 @@
     "subtotal": "소계",
     "tax": "세금",
     "tip": "팁",
+    "shareOf": "({price}의 {fraction})",
     "total": "합계",
     "receiptDetails": "영수증 상세 내역",
     "expiresOn": "이 분할 링크는 {date}에 만료됩니다.",

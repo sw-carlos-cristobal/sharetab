@@ -163,6 +163,7 @@
     "subtotal": "Subtotal",
     "tax": "Impuestos",
     "tip": "Propina",
+    "shareOf": "({fraction} de {price})",
     "total": "Total",
     "receiptDetails": "Detalles del recibo",
     "expiresOn": "Este enlace de división expira el {date}.",
