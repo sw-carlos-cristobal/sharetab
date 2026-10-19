@@ -234,8 +234,9 @@ check_login_unchanged() {
 # Runs scripts/docker-smoke-meridian.mjs in the container: signs in as an
 # admin and runs the admin "Test Receipt Extraction" endpoint with the
 # meridian provider, the path the app takes. Without a Claude login it
-# expects Meridian's own authentication error; with --meridian-auth, the
-# receipt's total.
+# expects Meridian's own authentication error (from 1.83 on, Meridian reports
+# no login as unhealthy, so the app skips the provider and the script checks
+# Meridian's answers directly); with --meridian-auth, the receipt's total.
 check_meridian_via_app() {
   docker cp e2e/test-receipt.png "$CONTAINER:/tmp/smoke-receipt.png"
   docker cp scripts/docker-smoke-meridian.mjs "$CONTAINER:/tmp/smoke-meridian.mjs"
