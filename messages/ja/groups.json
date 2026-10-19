@@ -36,6 +36,7 @@
     "pending": "保留中",
     "archivedMessage": "このグループはアーカイブされています。アーカイブを解除するまで、経費の追加・変更や支払いの記録はできません。",
     "manage": "管理",
+    "askToUnarchive": "アーカイブを解除するには、グループのオーナーまたは管理者に依頼してください。",
     "allSettledUp": "すべて精算済み！",
     "pendingReceipts": "保留中のレシート",
     "receipt": "レシート",

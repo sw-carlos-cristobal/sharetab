@@ -51,6 +51,7 @@
     "category": "类别",
     "unknown": "未知",
     "deleting": "删除中...",
+    "archived": "该群组已归档，因此无法编辑或删除此支出。",
     "exchangeRate": "汇率：1 {from} = {rate} {to}",
     "notFound": "未找到支出",
     "notFoundDescription": "该支出不存在或已被删除。",

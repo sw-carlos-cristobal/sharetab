@@ -36,6 +36,7 @@
     "pending": "Pending",
     "archivedMessage": "This group is archived. Expenses can't be added or changed, and payments can't be recorded, until it's unarchived.",
     "manage": "Manage",
+    "askToUnarchive": "Ask a group owner or admin to unarchive it.",
     "allSettledUp": "All settled up!",
     "pendingReceipts": "Pending Receipts",
     "receipt": "Receipt",

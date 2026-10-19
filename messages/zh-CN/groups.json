@@ -36,6 +36,7 @@
     "pending": "待处理",
     "archivedMessage": "该群组已归档，取消归档前无法添加或修改支出，也无法记录付款。",
     "manage": "管理",
+    "askToUnarchive": "请让群组所有者或管理员取消归档。",
     "allSettledUp": "全部结清！",
     "pendingReceipts": "待处理收据",
     "receipt": "收据",

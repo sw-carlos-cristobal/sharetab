@@ -36,6 +36,7 @@
     "pending": "Väntande",
     "archivedMessage": "Denna grupp är arkiverad. Utgifter kan inte läggas till eller ändras, och betalningar kan inte registreras, förrän den avarkiveras.",
     "manage": "Hantera",
+    "askToUnarchive": "Be en ägare eller administratör av gruppen att avarkivera den.",
     "allSettledUp": "Allt är reglerat!",
     "pendingReceipts": "Väntande kvitton",
     "receipt": "Kvitto",

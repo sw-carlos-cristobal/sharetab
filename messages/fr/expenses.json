@@ -51,6 +51,7 @@
     "category": "Catégorie",
     "unknown": "Inconnu",
     "deleting": "Suppression...",
+    "archived": "Ce groupe est archivé : cette dépense ne peut donc être ni modifiée ni supprimée.",
     "exchangeRate": "Taux : 1 {from} = {rate} {to}",
     "notFound": "Dépense introuvable",
     "notFoundDescription": "Cette dépense n'existe pas ou a été supprimée.",

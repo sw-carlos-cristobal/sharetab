@@ -36,6 +36,7 @@
     "pending": "대기 중",
     "archivedMessage": "이 그룹은 보관되었습니다. 보관을 해제할 때까지 비용을 추가하거나 변경할 수 없고 결제도 기록할 수 없습니다.",
     "manage": "관리",
+    "askToUnarchive": "그룹 소유자나 관리자에게 보관 해제를 요청하세요.",
     "allSettledUp": "모두 정산 완료!",
     "pendingReceipts": "대기 중인 영수증",
     "receipt": "영수증",

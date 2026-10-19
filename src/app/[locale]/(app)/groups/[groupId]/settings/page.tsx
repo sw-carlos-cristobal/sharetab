@@ -203,16 +203,20 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
             <p className="text-amber-700 dark:text-amber-300">
               {t('settings.archivedOn', { date: new Date(group.data.archivedAt).toLocaleDateString(locale) })}
             </p>
+            {/* Only owners and admins can unarchive */}
+            {myRole === 'MEMBER' && <p className="text-amber-700 dark:text-amber-300">{t('detail.askToUnarchive')}</p>}
           </div>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => unarchiveGroup.mutate({ groupId })}
-            disabled={unarchiveGroup.isPending}
-          >
-            <ArchiveRestore className="mr-2 h-4 w-4" />
-            {t('settings.unarchive')}
-          </Button>
+          {myRole !== 'MEMBER' && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => unarchiveGroup.mutate({ groupId })}
+              disabled={unarchiveGroup.isPending}
+            >
+              <ArchiveRestore className="mr-2 h-4 w-4" />
+              {t('settings.unarchive')}
+            </Button>
+          )}
         </div>
       )}
 

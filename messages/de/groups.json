@@ -36,6 +36,7 @@
     "pending": "Ausstehend",
     "archivedMessage": "Diese Gruppe ist archiviert. Bis sie dearchiviert wird, können keine Ausgaben hinzugefügt oder geändert und keine Zahlungen erfasst werden.",
     "manage": "Verwalten",
+    "askToUnarchive": "Bitten Sie einen Besitzer oder Administrator der Gruppe, sie zu dearchivieren.",
     "allSettledUp": "Alles beglichen!",
     "pendingReceipts": "Ausstehende Belege",
     "receipt": "Beleg",

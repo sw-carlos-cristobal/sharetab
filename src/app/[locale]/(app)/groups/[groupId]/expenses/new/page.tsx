@@ -16,6 +16,7 @@ import { EqualSplit } from '@/components/expenses/equal-split';
 import { ExactSplit } from '@/components/expenses/exact-split';
 import { PercentageSplit } from '@/components/expenses/percentage-split';
 import { SharesSplit } from '@/components/expenses/shares-split';
+import { ArchivedGroupNotice } from '@/components/groups/archived-group-notice';
 
 type SplitMode = 'EQUAL' | 'EXACT' | 'PERCENTAGE' | 'SHARES';
 
@@ -113,6 +114,7 @@ export default function NewExpensePage({ params }: { params: Promise<{ groupId: 
   }
 
   if (group.isLoading) return <LoadingSpinner />;
+  if (group.data?.archivedAt) return <ArchivedGroupNotice groupId={groupId} />;
 
   return (
     <div className="mx-auto max-w-lg space-y-6">

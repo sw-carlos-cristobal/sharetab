@@ -153,16 +153,22 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
       {g.archivedAt && (
         <div className="flex items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-200">
           <Archive className="h-4 w-4 shrink-0" />
-          <span>{t('detail.archivedMessage')}</span>
-          <Button
-            variant="link"
-            size="sm"
-            className="ml-auto h-auto p-0 text-amber-800 dark:text-amber-200"
-            nativeButton={false}
-            render={<Link href={`/groups/${groupId}/settings`} />}
-          >
-            {t('detail.manage')}
-          </Button>
+          {/* Only owners and admins can unarchive, so a plain member is told whom to ask */}
+          <span>
+            {t('detail.archivedMessage')}
+            {myRole === 'MEMBER' && <> {t('detail.askToUnarchive')}</>}
+          </span>
+          {myRole !== 'MEMBER' && (
+            <Button
+              variant="link"
+              size="sm"
+              className="ml-auto h-auto p-0 text-amber-800 dark:text-amber-200"
+              nativeButton={false}
+              render={<Link href={`/groups/${groupId}/settings`} />}
+            >
+              {t('detail.manage')}
+            </Button>
+          )}
         </div>
       )}
 
@@ -283,36 +289,48 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
         <div>
           <h2 className="mb-3 text-lg font-semibold">{t('detail.pendingReceipts')}</h2>
           <div className="space-y-2">
-            {pendingReceipts.data.map((r) => (
-              <Card key={r.id} className="transition-colors hover:bg-muted/50">
-                <CardContent className="flex items-center justify-between py-3">
-                  <Link href={`/groups/${groupId}/scan?receiptId=${r.id}`} className="flex-1 min-w-0">
-                    <p className="font-medium">{r.extractedData?.merchantName ?? t('detail.receipt')}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {r.extractedData?.date ?? new Date(r.createdAt).toLocaleDateString(locale)}
-                      {' · '}
-                      {t('detail.savedForLater')}
-                    </p>
-                  </Link>
-                  <div className="flex items-center gap-3 ml-3">
-                    <p className="text-lg font-semibold">
-                      {r.extractedData ? formatCents(r.extractedData.total, g.currency, locale) : '—'}
-                    </p>
-                    <button
-                      type="button"
-                      className="text-muted-foreground hover:text-destructive transition-colors p-1"
-                      onClick={() => {
-                        if (confirm(t('detail.deleteReceiptConfirm'))) {
-                          deletePending.mutate({ receiptId: r.id });
-                        }
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+            {pendingReceipts.data.map((r) => {
+              const summary = (
+                <>
+                  <p className="font-medium">{r.extractedData?.merchantName ?? t('detail.receipt')}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {r.extractedData?.date ?? new Date(r.createdAt).toLocaleDateString(locale)}
+                    {' · '}
+                    {t('detail.savedForLater')}
+                  </p>
+                </>
+              );
+              return (
+                <Card key={r.id} className={g.archivedAt ? undefined : 'transition-colors hover:bg-muted/50'}>
+                  <CardContent className="flex items-center justify-between py-3">
+                    {/* An archived group refuses the expense finishing a saved receipt makes; deleting one still works */}
+                    {g.archivedAt ? (
+                      <div className="flex-1 min-w-0">{summary}</div>
+                    ) : (
+                      <Link href={`/groups/${groupId}/scan?receiptId=${r.id}`} className="flex-1 min-w-0">
+                        {summary}
+                      </Link>
+                    )}
+                    <div className="flex items-center gap-3 ml-3">
+                      <p className="text-lg font-semibold">
+                        {r.extractedData ? formatCents(r.extractedData.total, g.currency, locale) : '—'}
+                      </p>
+                      <button
+                        type="button"
+                        className="text-muted-foreground hover:text-destructive transition-colors p-1"
+                        onClick={() => {
+                          if (confirm(t('detail.deleteReceiptConfirm'))) {
+                            deletePending.mutate({ receiptId: r.id });
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </div>
       )}
@@ -347,15 +365,17 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
             <CardContent className="py-8 text-center">
               <Receipt className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
               <p className="text-muted-foreground">{t('detail.noExpenses')}</p>
-              <Button
-                className="mt-4"
-                size="sm"
-                nativeButton={false}
-                render={<Link href={`/groups/${groupId}/expenses/new`} />}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                {t('detail.addFirstExpense')}
-              </Button>
+              {!g.archivedAt && (
+                <Button
+                  className="mt-4"
+                  size="sm"
+                  nativeButton={false}
+                  render={<Link href={`/groups/${groupId}/expenses/new`} />}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  {t('detail.addFirstExpense')}
+                </Button>
+              )}
             </CardContent>
           </Card>
         )}

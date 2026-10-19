@@ -13,6 +13,7 @@ import { ArrowLeft, Loader2, Camera, RefreshCw, Users } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import { toast } from 'sonner';
 import { ItemAssignment } from '@/components/receipts/item-assignment';
+import { ArchivedGroupNotice } from '@/components/groups/archived-group-notice';
 import { loadingMessageKeys, randomLoadingMessageIndex } from '@/lib/loading-messages';
 import { canStoreClaimIdentity, setStoredClaimIdentity } from '@/lib/guest-session';
 
@@ -204,6 +205,9 @@ function ScanReceiptContent({ params }: { params: Promise<{ groupId: string }> }
       </div>
     );
   }
+
+  // An archived group refuses new expenses, including finishing a saved receipt
+  if (group.data?.archivedAt) return <ArchivedGroupNotice groupId={groupId} />;
 
   return (
     <div className="mx-auto max-w-lg space-y-6">

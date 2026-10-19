@@ -36,6 +36,7 @@
     "pending": "Pendente",
     "archivedMessage": "Este grupo está arquivado. Até ser desarquivado, não é possível adicionar ou alterar despesas nem registrar pagamentos.",
     "manage": "Gerenciar",
+    "askToUnarchive": "Peça a um proprietário ou administrador do grupo para desarquivá-lo.",
     "allSettledUp": "Tudo acertado!",
     "pendingReceipts": "Recibos pendentes",
     "receipt": "Recibo",

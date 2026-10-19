@@ -36,6 +36,7 @@
     "pending": "En attente",
     "archivedMessage": "Ce groupe est archivé. Tant qu'il n'est pas désarchivé, les dépenses ne peuvent pas être ajoutées ni modifiées, et les paiements ne peuvent pas être enregistrés.",
     "manage": "Gérer",
+    "askToUnarchive": "Demandez à un propriétaire ou administrateur du groupe de le désarchiver.",
     "allSettledUp": "Tout est réglé !",
     "pendingReceipts": "Reçus en attente",
     "receipt": "Reçu",

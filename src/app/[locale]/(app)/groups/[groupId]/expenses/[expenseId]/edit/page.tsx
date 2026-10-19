@@ -18,6 +18,7 @@ import { EqualSplit } from '@/components/expenses/equal-split';
 import { ExactSplit } from '@/components/expenses/exact-split';
 import { PercentageSplit } from '@/components/expenses/percentage-split';
 import { SharesSplit } from '@/components/expenses/shares-split';
+import { ArchivedGroupNotice } from '@/components/groups/archived-group-notice';
 import { splitEditorSeed, type EditableSplitMode as SplitMode } from '@/lib/split-editor-seed';
 
 type RouterOutputs = inferRouterOutputs<AppRouter>;
@@ -57,6 +58,7 @@ export default function EditExpensePage({ params }: { params: Promise<{ groupId:
       </div>
     );
   }
+  if (group.data.archivedAt) return <ArchivedGroupNotice groupId={groupId} />;
 
   return <EditExpenseForm groupId={groupId} expenseId={expenseId} expense={expense.data} group={group.data} />;
 }

@@ -51,6 +51,7 @@
     "category": "Kategori",
     "unknown": "Okänd",
     "deleting": "Tar bort...",
+    "archived": "Denna grupp är arkiverad, så utgiften kan inte redigeras eller raderas.",
     "exchangeRate": "Kurs: 1 {from} = {rate} {to}",
     "notFound": "Utgift hittades inte",
     "notFoundDescription": "Denna utgift finns inte eller har tagits bort.",

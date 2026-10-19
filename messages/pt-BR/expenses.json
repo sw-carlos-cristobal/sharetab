@@ -51,6 +51,7 @@
     "category": "Categoria",
     "unknown": "Desconhecido",
     "deleting": "Excluindo...",
+    "archived": "Este grupo está arquivado, então esta despesa não pode ser editada nem excluída.",
     "exchangeRate": "Taxa: 1 {from} = {rate} {to}",
     "notFound": "Despesa não encontrada",
     "notFoundDescription": "Esta despesa não existe ou foi excluída.",

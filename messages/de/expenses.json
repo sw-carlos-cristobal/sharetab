@@ -51,6 +51,7 @@
     "category": "Kategorie",
     "unknown": "Unbekannt",
     "deleting": "Löschen...",
+    "archived": "Diese Gruppe ist archiviert, daher kann diese Ausgabe nicht bearbeitet oder gelöscht werden.",
     "exchangeRate": "Kurs: 1 {from} = {rate} {to}",
     "notFound": "Ausgabe nicht gefunden",
     "notFoundDescription": "Diese Ausgabe existiert nicht oder wurde gelöscht.",

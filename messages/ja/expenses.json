@@ -51,6 +51,7 @@
     "category": "カテゴリ",
     "unknown": "不明",
     "deleting": "削除中...",
+    "archived": "このグループはアーカイブされているため、この経費は編集・削除できません。",
     "exchangeRate": "レート: 1 {from} = {rate} {to}",
     "notFound": "経費が見つかりません",
     "notFoundDescription": "この経費は存在しないか、削除されました。",

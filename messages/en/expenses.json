@@ -51,6 +51,7 @@
     "delete": "Delete",
     "deleteConfirm": "Delete this expense?",
     "deleting": "Deleting...",
+    "archived": "This group is archived, so this expense can't be edited or deleted.",
     "exchangeRate": "Rate: 1 {from} = {rate} {to}",
     "notFound": "Expense not found",
     "notFoundDescription": "This expense doesn't exist or has been deleted.",

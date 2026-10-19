@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ArrowLeft, Trash2, Pencil } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { toast } from 'sonner';
 
 export default function ExpenseDetailPage({ params }: { params: Promise<{ groupId: string; expenseId: string }> }) {
   const { groupId, expenseId } = use(params);
@@ -22,6 +23,7 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ groupI
   const group = trpc.groups.get.useQuery({ groupId });
   const deleteExpense = trpc.expenses.delete.useMutation({
     onSuccess: () => router.push(`/groups/${groupId}`),
+    onError: (err) => toast.error(err.message),
   });
 
   if (expense.isLoading) return <LoadingSpinner />;
@@ -125,30 +127,34 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ groupI
         </CardContent>
       </Card>
 
-      <div className="flex gap-2">
-        <Button
-          variant="outline"
-          className="flex-1"
-          nativeButton={false}
-          render={<Link href={`/groups/${groupId}/expenses/${expenseId}/edit`} />}
-        >
-          <Pencil className="mr-2 h-4 w-4" />
-          {t('detail.edit')}
-        </Button>
-        <Button
-          variant="destructive"
-          className="flex-1"
-          onClick={() => {
-            if (confirm(t('detail.deleteConfirm'))) {
-              deleteExpense.mutate({ groupId, expenseId });
-            }
-          }}
-          disabled={deleteExpense.isPending}
-        >
-          <Trash2 className="mr-2 h-4 w-4" />
-          {deleteExpense.isPending ? t('detail.deleting') : t('detail.delete')}
-        </Button>
-      </div>
+      {/* An archived group refuses edits and deletes, so offer them only once the group is known to be active */}
+      {group.data?.archivedAt && <p className="text-center text-sm text-muted-foreground">{t('detail.archived')}</p>}
+      {group.data && !group.data.archivedAt && (
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            className="flex-1"
+            nativeButton={false}
+            render={<Link href={`/groups/${groupId}/expenses/${expenseId}/edit`} />}
+          >
+            <Pencil className="mr-2 h-4 w-4" />
+            {t('detail.edit')}
+          </Button>
+          <Button
+            variant="destructive"
+            className="flex-1"
+            onClick={() => {
+              if (confirm(t('detail.deleteConfirm'))) {
+                deleteExpense.mutate({ groupId, expenseId });
+              }
+            }}
+            disabled={deleteExpense.isPending}
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            {deleteExpense.isPending ? t('detail.deleting') : t('detail.delete')}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

@@ -51,6 +51,7 @@
     "delete": "Eliminar",
     "deleteConfirm": "¿Eliminar este gasto?",
     "deleting": "Eliminando...",
+    "archived": "Este grupo está archivado, así que este gasto no se puede editar ni eliminar.",
     "exchangeRate": "Tasa: 1 {from} = {rate} {to}",
     "notFound": "Gasto no encontrado",
     "notFoundDescription": "Este gasto no existe o ha sido eliminado.",
