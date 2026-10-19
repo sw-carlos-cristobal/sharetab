@@ -206,7 +206,7 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
             {/* Only owners and admins can unarchive */}
             {myRole === 'MEMBER' && <p className="text-amber-700 dark:text-amber-300">{t('detail.askToUnarchive')}</p>}
           </div>
-          {myRole !== 'MEMBER' && (
+          {(myRole === 'OWNER' || myRole === 'ADMIN') && (
             <Button
               size="sm"
               variant="outline"

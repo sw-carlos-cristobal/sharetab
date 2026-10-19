@@ -1,7 +1,6 @@
 'use client';
 
 import { use, useState, useRef, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
 import { useLocale, useTranslations } from 'next-intl';
 import { trpc } from '@/lib/trpc';
 import { formatCents } from '@/lib/money';
@@ -32,7 +31,10 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
   }>({ open: false });
 
   const t = useTranslations('groups');
-  const { data: authSession } = useSession();
+  // Who tRPC acts as: the impersonated user while an admin impersonates, where
+  // useSession() would still report the admin.
+  const profile = trpc.auth.getProfile.useQuery();
+  const myId = profile.data?.id;
   const group = trpc.groups.get.useQuery({ groupId });
   const expenses = trpc.expenses.list.useQuery({ groupId, limit: 10 });
   const debts = trpc.balances.getSimplifiedDebts.useQuery({ groupId });
@@ -82,7 +84,7 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
 
   const g = group.data;
   const memberMap = new Map(g.members.map((m) => [m.user.id, m.user]));
-  const myRole = g.members.find((m) => m.user.id === authSession?.user?.id)?.role;
+  const myRole = g.members.find((m) => m.user.id === myId)?.role;
 
   return (
     <div className="space-y-6">
@@ -158,7 +160,7 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
             {t('detail.archivedMessage')}
             {myRole === 'MEMBER' && <> {t('detail.askToUnarchive')}</>}
           </span>
-          {myRole !== 'MEMBER' && (
+          {(myRole === 'OWNER' || myRole === 'ADMIN') && (
             <Button
               variant="link"
               size="sm"
@@ -196,7 +198,7 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
               const from = memberMap.get(debt.from);
               const to = memberMap.get(debt.to);
               const toName = to?.name ?? to?.email ?? t('detail.unknown');
-              const isMyDebt = debt.from === authSession?.user?.id;
+              const isMyDebt = debt.from === myId;
               const showVenmo =
                 !g.archivedAt &&
                 venmoSetting.data?.enabled &&
@@ -427,7 +429,7 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
       <PaymentsList
         groupId={groupId}
         groupCurrency={g.currency}
-        currentUserId={authSession?.user?.id}
+        currentUserId={myId}
         isOwnerOrAdmin={myRole === 'OWNER' || myRole === 'ADMIN'}
         archived={!!g.archivedAt}
       />
