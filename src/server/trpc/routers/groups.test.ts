@@ -597,6 +597,26 @@ describe('leaving a group', () => {
     await expect(api.removeMember({ groupId: 'g1', userId: 'bob' })).resolves.toEqual({ success: true });
     expect(mockDb.groupMember.delete).toHaveBeenCalledWith({ where: { id: 'gm-bob' } });
   });
+
+  // Codex on #308: a balance change that checked this member before they left
+  // could commit after the balance check, leaving them gone with a balance. The
+  // leave locks the group's row against those writes (they hold it FOR SHARE,
+  // see lockActiveGroup) before it reads the balance and removes the membership.
+  test('locks the group row before reading the balance and removing the membership', async () => {
+    setUp({ userId: 'bob', role: 'MEMBER' }, { userId: 'bob', role: 'MEMBER' });
+    mockDb.settlement.findMany.mockResolvedValue(bobPaidBack);
+    const api = await caller('bob');
+    await api.removeMember({ groupId: 'g1', userId: 'bob' });
+
+    const lockCall = mockDb.$queryRaw.mock.calls.findIndex(([strings]) =>
+      /FROM "Group" WHERE "id" = .* FOR NO KEY UPDATE/.test((strings as string[]).join('?')),
+    );
+    expect(lockCall).toBeGreaterThanOrEqual(0);
+    const locked = mockDb.$queryRaw.mock.invocationCallOrder[lockCall]!;
+    expect(locked).toBeGreaterThan(mockDb.$transaction.mock.invocationCallOrder[0]!);
+    expect(locked).toBeLessThan(mockDb.expense.findMany.mock.invocationCallOrder[0]!);
+    expect(locked).toBeLessThan(mockDb.groupMember.delete.mock.invocationCallOrder[0]!);
+  });
 });
 
 // #276: merging a placeholder into the member it stands for moves their

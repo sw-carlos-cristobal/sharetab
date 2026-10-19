@@ -437,23 +437,6 @@ export const receiptsRouter = createTRPCRouter({
       const tax = extractedData.tax;
       const tip = input.tipOverride ?? extractedData.tip;
 
-      // Verify paidBy and all assignees are members of this group
-      const groupMembers = await ctx.db.groupMember.findMany({
-        where: { groupId: input.groupId },
-        select: { userId: true },
-      });
-      const memberIds = new Set(groupMembers.map((m) => m.userId));
-      if (!memberIds.has(input.paidById)) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Payer is not a member of this group' });
-      }
-      for (const a of input.assignments) {
-        for (const uid of a.userIds) {
-          if (!memberIds.has(uid)) {
-            throw new TRPCError({ code: 'BAD_REQUEST', message: 'Assignee is not a member of this group' });
-          }
-        }
-      }
-
       // Build item map and verify all referenced items belong to this receipt
       const itemMap = new Map(receipt.items.map((item) => [item.id, item]));
       for (const a of input.assignments) {
@@ -540,6 +523,25 @@ export const receiptsRouter = createTRPCRouter({
       // All writes in a single transaction for atomicity
       const expense = await ctx.db.$transaction(async (tx) => {
         await lockActiveGroup(tx, input.groupId, ARCHIVED_CREATE_EXPENSE);
+
+        // Verify paidBy and all assignees are members of this group (after the lock,
+        // so someone leaving meanwhile is either gone or waits for this, #279)
+        const groupMembers = await tx.groupMember.findMany({
+          where: { groupId: input.groupId },
+          select: { userId: true },
+        });
+        const memberIds = new Set(groupMembers.map((m) => m.userId));
+        if (!memberIds.has(input.paidById)) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Payer is not a member of this group' });
+        }
+        for (const a of input.assignments) {
+          for (const uid of a.userIds) {
+            if (!memberIds.has(uid)) {
+              throw new TRPCError({ code: 'BAD_REQUEST', message: 'Assignee is not a member of this group' });
+            }
+          }
+        }
+
         const exp = await tx.expense.create({
           data: {
             groupId: input.groupId,

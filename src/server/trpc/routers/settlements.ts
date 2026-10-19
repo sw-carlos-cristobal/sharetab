@@ -84,20 +84,6 @@ export const settlementsRouter = createTRPCRouter({
         });
       }
 
-      // Validate both fromId and toId are members of the group
-      const memberCount = await ctx.db.groupMember.count({
-        where: {
-          groupId: input.groupId,
-          userId: { in: [effectiveFromId, input.toId] },
-        },
-      });
-      if (memberCount < (effectiveFromId === input.toId ? 1 : 2)) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'Both the payer and recipient must be members of this group',
-        });
-      }
-
       // Currency conversion: compute base currency amount if currencies differ
       const groupCurrency = group?.currency ?? 'USD';
       let exchangeRate: number | null = null;
@@ -122,6 +108,22 @@ export const settlementsRouter = createTRPCRouter({
 
       const settlement = await ctx.db.$transaction(async (tx) => {
         await lockActiveGroup(tx, input.groupId, ARCHIVED_CREATE);
+
+        // Validate both fromId and toId are members of the group (after the lock,
+        // so someone leaving meanwhile is either gone or waits for this, #279)
+        const memberCount = await tx.groupMember.count({
+          where: {
+            groupId: input.groupId,
+            userId: { in: [effectiveFromId, input.toId] },
+          },
+        });
+        if (memberCount < 2) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Both the payer and recipient must be members of this group',
+          });
+        }
+
         const created = await tx.settlement.create({
           data: {
             groupId: input.groupId,

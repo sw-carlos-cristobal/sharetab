@@ -3,7 +3,7 @@ import type { Prisma } from '@/generated/prisma/client';
 import { TRPCError } from '@trpc/server';
 import { createTRPCRouter, protectedProcedure, groupMemberProcedure } from '../init';
 import { stripUndefined } from '../../lib/strip-undefined';
-import { loadGroupBalances } from '../../lib/group-balances';
+import { loadGroupBalances, lockGroupMembers } from '../../lib/group-balances';
 import { mergePlaceholderIntoUser } from '../../lib/placeholder-merge';
 import { checkRateLimit } from '../../lib/rate-limit';
 
@@ -459,44 +459,50 @@ export const groupsRouter = createTRPCRouter({
           message: "The group's owner can't leave it. Delete the group instead if nobody needs it.",
         });
       }
-      // Someone who leaves no longer sees the group, so a debt in it would drop
-      // out of their view. The owner removing a member isn't held up by one: they
-      // still see it, and the archive check names it.
-      if (isSelf) {
-        const balance = (await loadGroupBalances(ctx.db, input.groupId)).find((b) => b.userId === ctx.user.id);
-        if (balance && balance.net !== 0) {
-          throw new TRPCError({
-            code: 'PRECONDITION_FAILED',
-            message: 'You still owe or are owed money in this group. Settle up before you leave.',
-          });
-        }
-      }
 
       const targetUser = await ctx.db.user.findUnique({
         where: { id: input.userId },
         select: { isPlaceholder: true, name: true, placeholderName: true },
       });
 
-      if (targetUser?.isPlaceholder) {
-        // A placeholder can't log in to settle up, rejoin or be merged once
-        // gone, so one who is in any expense or payment stays. Moving their part
-        // onto other people writes off what they owe or are owed, and dropping
-        // only the membership leaves a balance that comes back (say an old
-        // expense is deleted) with nobody able to settle it.
-        const [shares, expenses, settlements] = await Promise.all([
-          ctx.db.expenseShare.count({ where: { userId: input.userId } }),
-          ctx.db.expense.count({ where: { OR: [{ paidById: input.userId }, { addedById: input.userId }] } }),
-          ctx.db.settlement.count({ where: { OR: [{ fromId: input.userId }, { toId: input.userId }] } }),
-        ]);
-        if (shares + expenses + settlements > 0) {
-          const name = targetUser.placeholderName ?? targetUser.name ?? 'This member';
-          throw new TRPCError({
-            code: 'PRECONDITION_FAILED',
-            message: `${name} is in expenses or payments in this group, so they can't be removed. Take them out of those first.`,
-          });
+      await ctx.db.$transaction(async (tx) => {
+        // Waits for balance changes in flight and holds off new ones, so the
+        // checks below see every change, and a change that starts meanwhile
+        // finds this person gone (#279)
+        await lockGroupMembers(tx, input.groupId);
+
+        // Someone who leaves no longer sees the group, so a debt in it would drop
+        // out of their view. The owner removing a member isn't held up by one: they
+        // still see it, and the archive check names it.
+        if (isSelf) {
+          const balance = (await loadGroupBalances(tx, input.groupId)).find((b) => b.userId === ctx.user.id);
+          if (balance && balance.net !== 0) {
+            throw new TRPCError({
+              code: 'PRECONDITION_FAILED',
+              message: 'You still owe or are owed money in this group. Settle up before you leave.',
+            });
+          }
         }
 
-        await ctx.db.$transaction(async (tx) => {
+        if (targetUser?.isPlaceholder) {
+          // A placeholder can't log in to settle up, rejoin or be merged once
+          // gone, so one who is in any expense or payment stays. Moving their part
+          // onto other people writes off what they owe or are owed, and dropping
+          // only the membership leaves a balance that comes back (say an old
+          // expense is deleted) with nobody able to settle it.
+          const [shares, expenses, settlements] = await Promise.all([
+            tx.expenseShare.count({ where: { userId: input.userId } }),
+            tx.expense.count({ where: { OR: [{ paidById: input.userId }, { addedById: input.userId }] } }),
+            tx.settlement.count({ where: { OR: [{ fromId: input.userId }, { toId: input.userId }] } }),
+          ]);
+          if (shares + expenses + settlements > 0) {
+            const name = targetUser.placeholderName ?? targetUser.name ?? 'This member';
+            throw new TRPCError({
+              code: 'PRECONDITION_FAILED',
+              message: `${name} is in expenses or payments in this group, so they can't be removed. Take them out of those first.`,
+            });
+          }
+
           await tx.receiptItemAssignment.deleteMany({ where: { userId: input.userId } });
           await tx.activityLog.create({
             data: {
@@ -509,21 +515,19 @@ export const groupsRouter = createTRPCRouter({
           // Nothing refers to them: delete the user (GroupMember cascades; their
           // activity-log entries stay, with the user link cleared)
           await tx.user.delete({ where: { id: input.userId } });
-        });
-      } else {
-        // Real user — preserve financial history, just remove the membership
-        await ctx.db.$transaction([
-          ctx.db.groupMember.delete({ where: { id: targetMember.id } }),
-          ctx.db.activityLog.create({
+        } else {
+          // Real user — preserve financial history, just remove the membership
+          await tx.groupMember.delete({ where: { id: targetMember.id } });
+          await tx.activityLog.create({
             data: {
               groupId: input.groupId,
               userId: ctx.user.id,
               type: 'MEMBER_LEFT',
               metadata: { removedUserId: input.userId },
             },
-          }),
-        ]);
-      }
+          });
+        }
+      });
 
       return { success: true };
     }),

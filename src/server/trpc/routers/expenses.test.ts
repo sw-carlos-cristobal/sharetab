@@ -133,4 +133,41 @@ describe('a group archived while a change was on its way (#289)', () => {
     expect(locked).toBeGreaterThan(mockDb.$transaction.mock.invocationCallOrder[0]!);
     expect(locked).toBeLessThan(mockDb.expense.create.mock.invocationCallOrder[0]!);
   });
+
+  // Codex on #308: a write that checked its people were members before a leave
+  // committed could still write them in afterwards. Checked after the group
+  // lock, a leave in progress has either finished (and they're gone) or waits.
+  test('create checks its people are members inside the transaction, after the lock', async () => {
+    mockDb.$queryRaw.mockResolvedValue([{ archivedAt: null }]);
+    mockDb.expense.create.mockResolvedValue({ id: 'e2', shares: [] });
+    const api = await caller();
+    await api.create(newExpense);
+
+    const [locked] = mockDb.$queryRaw.mock.invocationCallOrder;
+    expect(mockDb.groupMember.findFirst.mock.invocationCallOrder[0]).toBeGreaterThan(locked!);
+    expect(mockDb.groupMember.count.mock.invocationCallOrder[0]).toBeGreaterThan(locked!);
+    expect(mockDb.groupMember.count.mock.invocationCallOrder[0]).toBeLessThan(
+      mockDb.expense.create.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  test('update checks its people are members inside the transaction, after the lock', async () => {
+    mockDb.$queryRaw.mockResolvedValue([{ archivedAt: null }]);
+    mockDb.expense.update.mockResolvedValue({ id: 'e1' });
+    const api = await caller();
+    await api.update({
+      groupId: 'g1',
+      expenseId: 'e1',
+      paidById: 'u1',
+      amount: 2000,
+      shares: [{ userId: 'u1', amount: 2000 }],
+    });
+
+    const [locked] = mockDb.$queryRaw.mock.invocationCallOrder;
+    expect(mockDb.groupMember.findFirst.mock.invocationCallOrder[0]).toBeGreaterThan(locked!);
+    expect(mockDb.groupMember.count.mock.invocationCallOrder[0]).toBeGreaterThan(locked!);
+    expect(mockDb.groupMember.count.mock.invocationCallOrder[0]).toBeLessThan(
+      mockDb.expenseShare.deleteMany.mock.invocationCallOrder[0]!,
+    );
+  });
 });

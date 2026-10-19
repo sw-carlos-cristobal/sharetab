@@ -110,4 +110,18 @@ describe('a group archived while a receipt was being finished (#289)', () => {
     expect(locked).toBeGreaterThan(mockDb.$transaction.mock.invocationCallOrder[0]!);
     expect(locked).toBeLessThan(mockDb.expense.create.mock.invocationCallOrder[0]!);
   });
+
+  // Codex on #308: see the expenses test of the same name
+  test('assignItemsAndCreateExpense checks its people are members inside the transaction, after the lock', async () => {
+    mockDb.$queryRaw.mockResolvedValue([{ archivedAt: null }]);
+    mockDb.expense.create.mockResolvedValue({ id: 'e1' });
+    const api = await caller();
+    await api.assignItemsAndCreateExpense(finish);
+
+    const [locked] = mockDb.$queryRaw.mock.invocationCallOrder;
+    expect(mockDb.groupMember.findMany.mock.invocationCallOrder[0]).toBeGreaterThan(locked!);
+    expect(mockDb.groupMember.findMany.mock.invocationCallOrder[0]).toBeLessThan(
+      mockDb.expense.create.mock.invocationCallOrder[0]!,
+    );
+  });
 });

@@ -179,4 +179,19 @@ describe('a group archived while a payment was on its way (#289)', () => {
     expect(locked).toBeGreaterThan(mockDb.$transaction.mock.invocationCallOrder[0]!);
     expect(locked).toBeLessThan(mockDb.settlement.create.mock.invocationCallOrder[0]!);
   });
+
+  // Codex on #308: see the expenses test of the same name
+  test('create checks the payer and recipient are members inside the transaction, after the lock', async () => {
+    mockDb.$queryRaw.mockResolvedValue([{ archivedAt: null }]);
+    mockDb.settlement.create.mockResolvedValue({ id: 's2' });
+    asRole('MEMBER', 'bob');
+    const api = await caller('bob');
+    await api.create({ groupId: 'g1', toId: 'alice', amount: 500 });
+
+    const [locked] = mockDb.$queryRaw.mock.invocationCallOrder;
+    expect(mockDb.groupMember.count.mock.invocationCallOrder[0]).toBeGreaterThan(locked!);
+    expect(mockDb.groupMember.count.mock.invocationCallOrder[0]).toBeLessThan(
+      mockDb.settlement.create.mock.invocationCallOrder[0]!,
+    );
+  });
 });

@@ -36,6 +36,10 @@ export async function loadGroupBalances(db: Prisma.TransactionClient, groupId: s
  * reads include their changes. A transaction that asks for the lock while an
  * archive is in progress waits for it, then sees archivedAt and refuses. FOR
  * SHARE, not FOR UPDATE, so balance changes don't wait for each other.
+ *
+ * Check that the people the write involves are members after this, in the
+ * same transaction: a member leaving takes lockGroupMembers, so a leave in
+ * progress has either finished (and they're gone) or waits for this write.
  */
 export async function lockActiveGroup(tx: Prisma.TransactionClient, groupId: string, message: string): Promise<void> {
   // Prisma has no row-lock API
@@ -47,4 +51,15 @@ export async function lockActiveGroup(tx: Prisma.TransactionClient, groupId: str
   if (group.archivedAt) {
     throw new TRPCError({ code: 'BAD_REQUEST', message });
   }
+}
+
+/**
+ * Lock a group's row for a transaction that removes someone from it, so it
+ * waits for every balance change in flight (each holds lockActiveGroup's FOR
+ * SHARE) and holds off new ones until it ends. A balance read after this is
+ * final until then, and a write that starts meanwhile finds the person gone
+ * when it checks membership. Call it first in the transaction (#279).
+ */
+export async function lockGroupMembers(tx: Prisma.TransactionClient, groupId: string): Promise<void> {
+  await tx.$queryRaw`SELECT 1 FROM "Group" WHERE "id" = ${groupId} FOR NO KEY UPDATE`;
 }

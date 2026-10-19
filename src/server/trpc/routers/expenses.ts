@@ -111,26 +111,6 @@ export const expensesRouter = createTRPCRouter({
         throw new TRPCError({ code: 'BAD_REQUEST', message: ARCHIVED_CREATE });
       }
 
-      // Validate paidById is a member of the group
-      const paidByMember = await ctx.db.groupMember.findFirst({
-        where: { groupId: input.groupId, userId: input.paidById },
-      });
-      if (!paidByMember) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Paid-by user is not a member of this group' });
-      }
-
-      // Validate all share userIds are group members
-      const shareUserIds = input.shares.map((s) => s.userId);
-      const memberCount = await ctx.db.groupMember.count({
-        where: { groupId: input.groupId, userId: { in: shareUserIds } },
-      });
-      if (memberCount !== new Set(shareUserIds).size) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'One or more share users are not members of this group',
-        });
-      }
-
       // Validate shares sum equals total (in expense's original currency)
       const sharesSum = input.shares.reduce((sum, s) => sum + s.amount, 0);
       if (sharesSum !== input.amount) {
@@ -169,6 +149,28 @@ export const expensesRouter = createTRPCRouter({
 
       const expense = await ctx.db.$transaction(async (tx) => {
         await lockActiveGroup(tx, input.groupId, ARCHIVED_CREATE);
+
+        // Validate paidById is a member of the group (after the lock, so someone
+        // leaving meanwhile is either gone or waits for this, #279)
+        const paidByMember = await tx.groupMember.findFirst({
+          where: { groupId: input.groupId, userId: input.paidById },
+        });
+        if (!paidByMember) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Paid-by user is not a member of this group' });
+        }
+
+        // Validate all share userIds are group members
+        const shareUserIds = input.shares.map((s) => s.userId);
+        const memberCount = await tx.groupMember.count({
+          where: { groupId: input.groupId, userId: { in: shareUserIds } },
+        });
+        if (memberCount !== new Set(shareUserIds).size) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'One or more share users are not members of this group',
+          });
+        }
+
         const created = await tx.expense.create({
           data: {
             groupId: input.groupId,
@@ -268,31 +270,9 @@ export const expensesRouter = createTRPCRouter({
         });
       }
 
-      // Validate paidById is a member of the group (if provided)
-      if (input.paidById) {
-        const paidByMember = await ctx.db.groupMember.findFirst({
-          where: { groupId: input.groupId, userId: input.paidById },
-        });
-        if (!paidByMember) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Paid-by user is not a member of this group' });
-        }
-      }
-
       const { groupId, expenseId, shares, currency: inputCurrency, exchangeRate: inputExchangeRate, ...data } = input;
 
       if (shares) {
-        // Validate all share userIds are group members
-        const shareUserIds = shares.map((s) => s.userId);
-        const memberCount = await ctx.db.groupMember.count({
-          where: { groupId, userId: { in: shareUserIds } },
-        });
-        if (memberCount !== new Set(shareUserIds).size) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'One or more share users are not members of this group',
-          });
-        }
-
         const expectedAmount = data.amount ?? existing.amount;
         const sharesSum = shares.reduce((sum, s) => sum + s.amount, 0);
         if (sharesSum !== expectedAmount) {
@@ -334,6 +314,30 @@ export const expensesRouter = createTRPCRouter({
 
       const expense = await ctx.db.$transaction(async (tx) => {
         await lockActiveGroup(tx, groupId, ARCHIVED_UPDATE);
+
+        // Validate a new payer and the shares' people are members (after the lock,
+        // so someone leaving meanwhile is either gone or waits for this, #279)
+        if (input.paidById) {
+          const paidByMember = await tx.groupMember.findFirst({
+            where: { groupId, userId: input.paidById },
+          });
+          if (!paidByMember) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'Paid-by user is not a member of this group' });
+          }
+        }
+        if (shares) {
+          const shareUserIds = shares.map((s) => s.userId);
+          const memberCount = await tx.groupMember.count({
+            where: { groupId, userId: { in: shareUserIds } },
+          });
+          if (memberCount !== new Set(shareUserIds).size) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'One or more share users are not members of this group',
+            });
+          }
+        }
+
         if (shares) {
           await tx.expenseShare.deleteMany({ where: { expenseId } });
           await tx.expenseShare.createMany({
