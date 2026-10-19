@@ -3,6 +3,10 @@ import { resolve } from 'path';
 import { login, users, createTestGroup, trpcMutation, FAKE_JPEG } from './helpers';
 
 const RECEIPT_IMAGE = resolve('e2e/test-receipt.png');
+const LONG_NAMES = [
+  'Christopher Alexander Montgomery-Whitfield Smith',
+  'Christopher Alexander Montgomery-Whitfield Jones',
+];
 
 // The label of each person chip in the first item card (the chip also holds the
 // avatar's initials, so read the label alone)
@@ -44,7 +48,7 @@ test.describe('Receipt assignment chips tell people with one first name apart', 
     }
   });
 
-  test('Quick Split: Bob and Bob Real get distinct chips, Ann Lee stays Ann', async ({ page }) => {
+  test('Quick Split: people who share a first name get distinct chips, shown in full', async ({ page }) => {
     // A real extraction when the server under test uses a live AI provider (see quick-split-scan-again.spec.ts)
     test.setTimeout(180_000);
     await page.goto('/en/split');
@@ -55,11 +59,28 @@ test.describe('Receipt assignment chips tell people with one first name apart', 
     await page.getByTestId('person-input-1').fill('Bob Real');
     await page.getByTestId('add-person-btn').click();
     await page.getByTestId('person-input-2').fill('Ann Lee');
+    // Long enough that cutting the chip to a fixed width would leave both the same
+    for (const [i, name] of LONG_NAMES.entries()) {
+      await page.getByTestId('add-person-btn').click();
+      await page.getByTestId(`person-input-${3 + i}`).fill(name);
+    }
     await page.getByTestId('next-assign-btn').click();
     await expect(page.getByTestId('guest-assign-step')).toBeVisible();
 
     const firstCard = page.locator('[data-testid^="guest-item-card-"]').first();
-    await expect(chipLabels(firstCard)).toHaveText(['Bob', 'Bob Real', 'Ann'], { timeout: 15_000 });
-    await expect(chipLabels(firstCard).last()).toHaveAttribute('title', 'Ann Lee');
+    await expect(chipLabels(firstCard)).toHaveText(['Bob', 'Bob Real', 'Ann', ...LONG_NAMES], { timeout: 15_000 });
+    await expect(chipLabels(firstCard).nth(2)).toHaveAttribute('title', 'Ann Lee');
+    // Hovering for the title doesn't work on a phone, so no label may be cut off,
+    // and at phone width a long one wraps inside its chip instead of overflowing the card
+    const overflowing = () =>
+      firstCard.evaluate((card) => {
+        const right = card.getBoundingClientRect().right;
+        return [...card.querySelectorAll<HTMLElement>('[data-testid="chip-label"]')]
+          .filter((l) => l.scrollWidth > l.clientWidth || l.getBoundingClientRect().right > right)
+          .map((l) => l.textContent);
+      });
+    expect(await overflowing()).toEqual([]);
+    await page.setViewportSize({ width: 375, height: 800 });
+    expect(await overflowing()).toEqual([]);
   });
 });

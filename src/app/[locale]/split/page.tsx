@@ -1020,7 +1020,7 @@ export default function GuestSplitPage() {
                             key={personIdx}
                             type="button"
                             onClick={() => toggleAssignment(itemIdx, personIdx)}
-                            className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-sm transition-colors min-h-[36px] ${
+                            className={`flex max-w-full items-center gap-1 rounded-full px-3 py-1.5 text-sm transition-colors min-h-[36px] ${
                               isAssigned
                                 ? 'bg-primary text-primary-foreground'
                                 : 'bg-muted text-muted-foreground hover:bg-muted/80'
@@ -1029,7 +1029,11 @@ export default function GuestSplitPage() {
                             <Avatar className="h-5 w-5">
                               <AvatarFallback className="text-[9px]">{initials(name)}</AvatarFallback>
                             </Avatar>
-                            <span data-testid="chip-label" className="max-w-[12rem] truncate" title={name.trim()}>
+                            <span
+                              data-testid="chip-label"
+                              className="min-w-0 text-left [overflow-wrap:anywhere]"
+                              title={name.trim()}
+                            >
                               {labels[personIdx]}
                             </span>
                             {isAssigned && <Check className="h-3 w-3" />}

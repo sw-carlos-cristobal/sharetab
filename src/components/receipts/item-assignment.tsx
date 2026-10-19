@@ -756,7 +756,7 @@ export function ItemAssignment({
                         type="button"
                         onClick={() => toggleAssignment(item.id, m.id)}
                         data-testid={`member-toggle-${m.id}`}
-                        className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors ${
+                        className={`flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors ${
                           isAssigned
                             ? 'bg-primary text-primary-foreground'
                             : 'bg-muted text-muted-foreground hover:bg-muted/80'
@@ -765,7 +765,11 @@ export function ItemAssignment({
                         <Avatar className="h-4 w-4">
                           <AvatarFallback className="text-[8px]">{memberInitials.get(m.id) ?? '?'}</AvatarFallback>
                         </Avatar>
-                        <span data-testid="chip-label" className="max-w-[12rem] truncate" title={m.name ?? undefined}>
+                        <span
+                          data-testid="chip-label"
+                          className="min-w-0 text-left [overflow-wrap:anywhere]"
+                          title={m.name ?? undefined}
+                        >
                           {memberLabels.get(m.id) ?? '?'}
                         </span>
                         {isAssigned && <Check className="h-3 w-3" />}
