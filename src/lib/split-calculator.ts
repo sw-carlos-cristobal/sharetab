@@ -19,33 +19,9 @@ export function calculateSplitTotals(params: {
     const item = items[assignment.itemIndex];
     if (!item || assignment.personIndices.length === 0) continue;
 
-    if (personWeights) {
-      // Weighted proportional splitting
-      const totalWeight = Math.max(
-        1,
-        assignment.personIndices.reduce((sum, pi) => sum + (personWeights[pi] ?? 1), 0),
-      );
-      let allocated = 0;
-      for (const [i, personIdx] of assignment.personIndices.entries()) {
-        const weight = personWeights[personIdx] ?? 1;
-        let amount: number;
-        if (i === assignment.personIndices.length - 1) {
-          amount = item.totalPrice - allocated;
-        } else {
-          amount = Math.floor((item.totalPrice * weight) / totalWeight);
-        }
-        allocated += amount;
-        personSubtotals.set(personIdx, (personSubtotals.get(personIdx) ?? 0) + amount);
-      }
-    } else {
-      // Equal splitting (original behavior)
-      const perPerson = Math.floor(item.totalPrice / assignment.personIndices.length);
-      const remainder = item.totalPrice - perPerson * assignment.personIndices.length;
-
-      for (const [i, personIdx] of assignment.personIndices.entries()) {
-        const amount = perPerson + (i < remainder ? 1 : 0);
-        personSubtotals.set(personIdx, (personSubtotals.get(personIdx) ?? 0) + amount);
-      }
+    const amounts = splitItemPrice(item.totalPrice, assignment.personIndices, personWeights);
+    for (const [i, personIdx] of assignment.personIndices.entries()) {
+      personSubtotals.set(personIdx, (personSubtotals.get(personIdx) ?? 0) + amounts[i]!);
     }
   }
 
@@ -78,6 +54,81 @@ export function calculateSplitTotals(params: {
   }
 
   return results;
+}
+
+/**
+ * How one item's price is divided among the people on it, in cents, in `personIndices` order.
+ * `calculateSplitTotals` adds these up into each person's item total.
+ */
+function splitItemPrice(totalPrice: number, personIndices: number[], personWeights?: number[]): number[] {
+  if (personWeights) {
+    // Weighted proportional splitting: each share rounded down, the last person taking what's left
+    const totalWeight = itemWeight(personIndices, personWeights);
+    let allocated = 0;
+    return personIndices.map((personIdx, i) => {
+      const amount =
+        i === personIndices.length - 1
+          ? totalPrice - allocated
+          : Math.floor((totalPrice * (personWeights[personIdx] ?? 1)) / totalWeight);
+      allocated += amount;
+      return amount;
+    });
+  }
+  // Equal splitting (original behavior): the leftover cents go to the first people
+  const perPerson = Math.floor(totalPrice / personIndices.length);
+  const remainder = totalPrice - perPerson * personIndices.length;
+  return personIndices.map((_, i) => perPerson + (i < remainder ? 1 : 0));
+}
+
+function itemWeight(personIndices: number[], personWeights: number[]): number {
+  return Math.max(
+    1,
+    personIndices.reduce((sum, pi) => sum + (personWeights[pi] ?? 1), 0),
+  );
+}
+
+/**
+ * The items `personIndex` is on, each with the part of its price they pay (#278): the amounts
+ * `calculateSplitTotals` adds up into their item total, so a summary that lists them adds up to
+ * it. `share` is that part of the item as a reduced fraction.
+ */
+export function personItemShares(
+  personIndex: number,
+  params: Pick<Parameters<typeof calculateSplitTotals>[0], 'items' | 'assignments' | 'personWeights'>,
+): { itemIndex: number; amount: number; share: { numerator: number; denominator: number } }[] {
+  const { items, assignments, personWeights } = params;
+  const shares: ReturnType<typeof personItemShares> = [];
+  for (const { itemIndex, personIndices } of assignments) {
+    const item = items[itemIndex];
+    if (!item || !personIndices.includes(personIndex)) continue;
+
+    const amounts = splitItemPrice(item.totalPrice, personIndices, personWeights);
+    let amount = 0;
+    let numerator = 0;
+    for (const [i, personIdx] of personIndices.entries()) {
+      if (personIdx !== personIndex) continue;
+      amount += amounts[i]!;
+      numerator += personWeights ? (personWeights[personIdx] ?? 1) : 1;
+    }
+    const denominator = personWeights ? itemWeight(personIndices, personWeights) : personIndices.length;
+    const divisor = greatestCommonDivisor(numerator, denominator);
+    shares.push({ itemIndex, amount, share: { numerator: numerator / divisor, denominator: denominator / divisor } });
+  }
+  return shares;
+}
+
+function greatestCommonDivisor(a: number, b: number): number {
+  return b === 0 ? a : greatestCommonDivisor(b, a % b);
+}
+
+/**
+ * The weights a split of these people is calculated with: their group sizes, or none while
+ * everyone counts once. Finalizing a claim session, the claim page and the split summary all use
+ * it, since an unweighted split rounds a shared item's cents differently from one weighted 1 to 1.
+ */
+export function groupSizeWeights(people: { groupSize?: number | undefined }[]): { personWeights?: number[] } {
+  const personWeights = people.map((p) => p.groupSize ?? 1);
+  return personWeights.some((w) => w > 1) ? { personWeights } : {};
 }
 
 /**

@@ -163,6 +163,7 @@
     "subtotal": "Zwischensumme",
     "tax": "Steuer",
     "tip": "Trinkgeld",
+    "shareOf": "({fraction} von {price})",
     "total": "Gesamt",
     "receiptDetails": "Belegdetails",
     "expiresOn": "Dieser Teilungs-Link läuft am {date} ab.",

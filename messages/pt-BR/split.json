@@ -163,6 +163,7 @@
     "subtotal": "Subtotal",
     "tax": "Impostos",
     "tip": "Gorjeta",
+    "shareOf": "({fraction} de {price})",
     "total": "Total",
     "receiptDetails": "Detalhes do recibo",
     "expiresOn": "Este link de divisão expira em {date}.",

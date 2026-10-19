@@ -163,6 +163,7 @@
     "subtotal": "Subtotal",
     "tax": "Tax",
     "tip": "Tip",
+    "shareOf": "({fraction} of {price})",
     "total": "Total",
     "receiptDetails": "Receipt details",
     "expiresOn": "This split link expires on {date}.",

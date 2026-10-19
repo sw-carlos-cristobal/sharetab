@@ -163,6 +163,7 @@
     "subtotal": "小计",
     "tax": "税费",
     "tip": "小费",
+    "shareOf": "（{price}的{fraction}）",
     "total": "合计",
     "receiptDetails": "小票详情",
     "expiresOn": "此分摊链接将于{date}过期。",

@@ -163,6 +163,7 @@
     "subtotal": "小計",
     "tax": "税金",
     "tip": "チップ",
+    "shareOf": "（{price}の{fraction}）",
     "total": "合計",
     "receiptDetails": "レシートの詳細",
     "expiresOn": "この割り勘リンクは{date}に期限切れになります。",

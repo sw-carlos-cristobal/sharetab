@@ -163,6 +163,7 @@
     "subtotal": "Sous-total",
     "tax": "Taxes",
     "tip": "Pourboire",
+    "shareOf": "({fraction} de {price})",
     "total": "Total",
     "receiptDetails": "Détails du reçu",
     "expiresOn": "Ce lien de partage expire le {date}.",

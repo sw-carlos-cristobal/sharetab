@@ -43,7 +43,7 @@ import {
   sleep,
   type SaveReload,
 } from '@/lib/claim-save';
-import { calculateClaimTotals } from '@/lib/split-calculator';
+import { calculateClaimTotals, groupSizeWeights } from '@/lib/split-calculator';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -575,10 +575,8 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
 
     const serverAssignments = session.data.assignments;
 
-    // Build personWeights from group sizes
-    const personWeights = session.data.people.map((p) => p.groupSize ?? 1);
-    const hasWeights = personWeights.some((w) => w > 1);
-    const weightsParam = hasWeights ? { personWeights } : {};
+    // Group sizes weight the items people share
+    const weightsParam = groupSizeWeights(session.data.people);
 
     if (localEdits.size > 0 || savingByIndex.size > 0) {
       // Build assignment map from server state

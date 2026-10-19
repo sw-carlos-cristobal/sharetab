@@ -163,6 +163,7 @@
     "subtotal": "Delsumma",
     "tax": "Moms",
     "tip": "Dricks",
+    "shareOf": "({fraction} av {price})",
     "total": "Totalt",
     "receiptDetails": "Kvittodetaljer",
     "expiresOn": "Denna delningslänk går ut den {date}.",

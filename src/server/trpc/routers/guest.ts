@@ -16,7 +16,7 @@ import {
   parseGuestAssignments,
   validSaveRecords,
 } from '../../lib/json-schemas';
-import { calculateSplitTotals } from '@/lib/split-calculator';
+import { calculateSplitTotals, groupSizeWeights } from '@/lib/split-calculator';
 import { normalizeGuestName } from '@/lib/guest-session';
 import { canUseGuestUploads } from '../../lib/guest-uploads';
 import { checkJoinRateLimit } from '../../lib/guest-join-limit';
@@ -1296,17 +1296,14 @@ export const guestRouter = createTRPCRouter({
 
         const tip = input.tipOverride ?? receiptData.tip;
 
-        // Build personWeights from each person's groupSize for proportional splitting
-        const personWeights = people.map((p) => p.groupSize ?? 1);
-        const hasWeights = personWeights.some((w) => w > 1);
-
+        // Each person's groupSize weights the items they share
         const summary = calculateSplitTotals({
           items,
           assignments,
           tax: receiptData.tax,
           tip,
           peopleCount: people.length,
-          ...(hasWeights ? { personWeights } : {}),
+          ...groupSizeWeights(people),
         });
 
         const summaryWithNames = summary.map((s) => ({

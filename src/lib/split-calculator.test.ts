@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { calculateClaimTotals, calculateSplitTotals } from './split-calculator';
+import { calculateClaimTotals, calculateSplitTotals, groupSizeWeights, personItemShares } from './split-calculator';
 
 describe('calculateSplitTotals', () => {
   test('splits single item between two people equally', () => {
@@ -404,5 +404,101 @@ describe('calculateClaimTotals', () => {
       { personIndex: 1, itemTotal: 1000, tax: 100, tip: 0, total: 1100 },
     ]);
     expect(result.unclaimed).toEqual({ itemTotal: 1000, tax: 100, tip: 0, total: 1100 });
+  });
+});
+
+// #278: the split summary listed a shared item at its full price under each person on it
+describe('personItemShares', () => {
+  test("lists a shared item at the person's share of its price", () => {
+    const params = {
+      items: [{ totalPrice: 1600 }, { totalPrice: 375 }, { totalPrice: 900 }],
+      assignments: [
+        { itemIndex: 0, personIndices: [0] },
+        { itemIndex: 1, personIndices: [0, 1] },
+        { itemIndex: 2, personIndices: [1] },
+      ],
+    };
+
+    expect(personItemShares(0, params)).toEqual([
+      { itemIndex: 0, amount: 1600, share: { numerator: 1, denominator: 1 } },
+      { itemIndex: 1, amount: 188, share: { numerator: 1, denominator: 2 } },
+    ]);
+    expect(personItemShares(1, params)).toEqual([
+      { itemIndex: 1, amount: 187, share: { numerator: 1, denominator: 2 } },
+      { itemIndex: 2, amount: 900, share: { numerator: 1, denominator: 1 } },
+    ]);
+  });
+
+  test('weights a shared item by group size, the last person on it taking the leftover cent', () => {
+    const params = {
+      items: [{ totalPrice: 100 }],
+      assignments: [{ itemIndex: 0, personIndices: [0, 1] }],
+      personWeights: [1, 2],
+    };
+
+    expect(personItemShares(0, params)).toEqual([
+      { itemIndex: 0, amount: 33, share: { numerator: 1, denominator: 3 } },
+    ]);
+    expect(personItemShares(1, params)).toEqual([
+      { itemIndex: 0, amount: 67, share: { numerator: 2, denominator: 3 } },
+    ]);
+  });
+
+  test('reduces the share, and a group alone on an item pays all of it', () => {
+    const params = {
+      items: [{ totalPrice: 1000 }, { totalPrice: 500 }],
+      assignments: [
+        { itemIndex: 0, personIndices: [0, 1] },
+        { itemIndex: 1, personIndices: [0] },
+      ],
+      personWeights: [2, 2],
+    };
+
+    expect(personItemShares(0, params)).toEqual([
+      { itemIndex: 0, amount: 500, share: { numerator: 1, denominator: 2 } },
+      { itemIndex: 1, amount: 500, share: { numerator: 1, denominator: 1 } },
+    ]);
+  });
+
+  test('skips items the person is not on and assignments to items that do not exist', () => {
+    const params = {
+      items: [{ totalPrice: 1000 }],
+      assignments: [
+        { itemIndex: 0, personIndices: [1] },
+        { itemIndex: 5, personIndices: [0] },
+      ],
+    };
+
+    expect(personItemShares(0, params)).toEqual([]);
+  });
+
+  test.each([
+    ['equal split', undefined],
+    ['weighted split', [3, 1, 2]],
+  ])("each person's shares add up to their item total (%s)", (_, personWeights) => {
+    const items = [{ totalPrice: 1001 }, { totalPrice: 377 }, { totalPrice: 250 }, { totalPrice: 99 }];
+    const assignments = [
+      { itemIndex: 0, personIndices: [0, 1, 2] },
+      { itemIndex: 1, personIndices: [2, 0] },
+      { itemIndex: 2, personIndices: [1] },
+      { itemIndex: 3, personIndices: [1, 2] },
+    ];
+    const weights = personWeights ? { personWeights } : {};
+    const totals = calculateSplitTotals({ items, assignments, tax: 0, tip: 0, peopleCount: 3, ...weights });
+
+    for (const person of totals) {
+      const shares = personItemShares(person.personIndex, { items, assignments, ...weights });
+      expect(shares.reduce((sum, s) => sum + s.amount, 0)).toBe(person.itemTotal);
+    }
+  });
+});
+
+describe('groupSizeWeights', () => {
+  test('gives no weights while everyone counts once', () => {
+    expect(groupSizeWeights([{ groupSize: 1 }, {}, { groupSize: 1 }])).toEqual({});
+  });
+
+  test('weights everyone by group size once someone is a group', () => {
+    expect(groupSizeWeights([{ groupSize: 1 }, {}, { groupSize: 3 }])).toEqual({ personWeights: [1, 1, 3] });
   });
 });
