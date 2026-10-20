@@ -7,7 +7,7 @@ vi.mock('@/server/auth', () => ({ auth: vi.fn() }));
 
 const mockDb = {
   user: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
-  group: { create: vi.fn(), update: vi.fn(), updateMany: vi.fn(), findUnique: vi.fn() },
+  group: { create: vi.fn(), update: vi.fn(), updateMany: vi.fn(), findUnique: vi.fn(), delete: vi.fn() },
   groupMember: {
     findUnique: vi.fn(),
     findMany: vi.fn(),
@@ -798,6 +798,60 @@ describe('transferring ownership', () => {
     });
     expect(mockDb.groupMember.update).not.toHaveBeenCalled();
     expect(mockDb.activityLog.create).not.toHaveBeenCalled();
+  });
+});
+
+// #309: ownership can move while a delete is in flight. A delete can't be undone, so
+// the owner's role is read again once the delete holds the lock a transfer takes.
+describe('deleting a group', () => {
+  test('the owner deletes it', async () => {
+    mockMemberships({ owner: member('owner', 'OWNER') });
+    const api = await caller('owner');
+    await expect(api.delete({ groupId: 'g1' })).resolves.toEqual({ success: true });
+    expect(mockDb.group.delete).toHaveBeenCalledWith({ where: { id: 'g1' } });
+  });
+
+  test("locks the group before reading the owner's role and deleting it", async () => {
+    mockMemberships({ owner: member('owner', 'OWNER') });
+    const api = await caller('owner');
+    await api.delete({ groupId: 'g1' });
+
+    const lockCall = mockDb.$queryRaw.mock.calls.findIndex(([strings]) =>
+      /FROM "Group" WHERE "id" = .* FOR NO KEY UPDATE/.test((strings as string[]).join('?')),
+    );
+    expect(lockCall).toBeGreaterThanOrEqual(0);
+    const locked = mockDb.$queryRaw.mock.invocationCallOrder[lockCall]!;
+    expect(locked).toBeGreaterThan(mockDb.$transaction.mock.invocationCallOrder[0]!);
+    // The read after the middleware's
+    const reads = mockDb.groupMember.findUnique.mock.invocationCallOrder.slice(1);
+    expect(reads.length).toBeGreaterThanOrEqual(1);
+    for (const read of reads) expect(read).toBeGreaterThan(locked);
+    expect(mockDb.group.delete.mock.invocationCallOrder[0]!).toBeGreaterThan(locked);
+  });
+
+  test.each(['MEMBER', 'ADMIN'] as const)('is refused to a group %s', async (role) => {
+    mockMemberships({ owner: member('owner', role) });
+    const api = await caller('owner');
+    await expect(api.delete({ groupId: 'g1' })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      message: 'Only the owner can delete a group',
+    });
+    expect(mockDb.group.delete).not.toHaveBeenCalled();
+  });
+
+  // The old owner sends a delete while handing the group over: it would otherwise
+  // delete a group someone else now owns
+  test('is refused once the caller has handed the group over', async () => {
+    mockMemberships(
+      { owner: member('owner', 'OWNER'), bob: member('bob', 'MEMBER') },
+      { owner: member('owner', 'MEMBER'), bob: member('bob', 'OWNER') },
+    );
+    const api = await caller('owner');
+    await expect(api.delete({ groupId: 'g1' })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      message: 'Only the owner can delete a group',
+    });
+    expect(mockDb.group.delete).not.toHaveBeenCalled();
   });
 });
 

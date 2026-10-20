@@ -164,10 +164,24 @@ export const groupsRouter = createTRPCRouter({
     }),
 
   delete: groupMemberProcedure.input(z.object({ groupId: z.string() })).mutation(async ({ ctx, input }) => {
+    const notOwner = new TRPCError({ code: 'FORBIDDEN', message: 'Only the owner can delete a group' });
     if (ctx.membership.role !== 'OWNER') {
-      throw new TRPCError({ code: 'FORBIDDEN', message: 'Only the owner can delete a group' });
+      throw notOwner;
     }
-    await ctx.db.group.delete({ where: { id: input.groupId } });
+    await ctx.db.$transaction(async (tx) => {
+      // A transfer of ownership takes the same lock, so the role read below is
+      // current: a delete the old owner sent while handing the group over is
+      // refused, rather than deleting a group someone else now owns (#309).
+      await lockGroupMembers(tx, input.groupId);
+      const owner = await tx.groupMember.findUnique({
+        where: { userId_groupId: { userId: ctx.user.id, groupId: input.groupId } },
+        select: { role: true },
+      });
+      if (owner?.role !== 'OWNER') {
+        throw notOwner;
+      }
+      await tx.group.delete({ where: { id: input.groupId } });
+    });
     return { success: true };
   }),
 
