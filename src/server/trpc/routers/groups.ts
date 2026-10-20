@@ -436,40 +436,50 @@ export const groupsRouter = createTRPCRouter({
     .input(z.object({ groupId: z.string(), userId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const isSelf = input.userId === ctx.user.id;
-      const isAdmin = ctx.membership.role === 'OWNER' || ctx.membership.role === 'ADMIN';
-
-      if (!isSelf && !isAdmin) {
+      // Checked again under the lock below; this keeps a plain member's attempt from taking it
+      if (!isSelf && ctx.membership.role === 'MEMBER') {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Cannot remove other members' });
       }
-
-      const targetMember = await ctx.db.groupMember.findUnique({
-        where: { userId_groupId: { userId: input.userId, groupId: input.groupId } },
-      });
-      if (!targetMember) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Member not found' });
-      }
-      if (targetMember.role === 'OWNER' && !isSelf) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Cannot remove the owner' });
-      }
-      // Nobody else could manage or delete the group, and there's no handing
-      // ownership over yet (#279)
-      if (targetMember.role === 'OWNER') {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: "The group's owner can't leave it. Delete the group instead if nobody needs it.",
-        });
-      }
-
-      const targetUser = await ctx.db.user.findUnique({
-        where: { id: input.userId },
-        select: { isPlaceholder: true, name: true, placeholderName: true },
-      });
 
       await ctx.db.$transaction(async (tx) => {
         // Waits for balance changes in flight and holds off new ones, so the
         // checks below see every change, and a change that starts meanwhile
-        // finds this person gone (#279)
+        // finds this person gone (#279). A transfer of ownership takes the same
+        // lock, so the roles read below are current (#309).
         await lockGroupMembers(tx, input.groupId);
+
+        if (!isSelf) {
+          const caller = await tx.groupMember.findUnique({
+            where: { userId_groupId: { userId: ctx.user.id, groupId: input.groupId } },
+            select: { role: true },
+          });
+          if (caller?.role !== 'OWNER' && caller?.role !== 'ADMIN') {
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'Cannot remove other members' });
+          }
+        }
+
+        const targetMember = await tx.groupMember.findUnique({
+          where: { userId_groupId: { userId: input.userId, groupId: input.groupId } },
+        });
+        if (!targetMember) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Member not found' });
+        }
+        if (targetMember.role === 'OWNER' && !isSelf) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Cannot remove the owner' });
+        }
+        // Nobody else could manage or delete the group (#279)
+        if (targetMember.role === 'OWNER') {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message:
+              "The group's owner can't leave it. Transfer ownership to another member first, or delete the group if nobody needs it.",
+          });
+        }
+
+        const targetUser = await tx.user.findUnique({
+          where: { id: input.userId },
+          select: { isPlaceholder: true, name: true, placeholderName: true },
+        });
 
         // Someone who leaves no longer sees the group, so a debt in it would drop
         // out of their view. The owner removing a member isn't held up by one: they
@@ -527,6 +537,68 @@ export const groupsRouter = createTRPCRouter({
             },
           });
         }
+      });
+
+      return { success: true };
+    }),
+
+  // Hands the group to another member, so its owner can leave it (#309). The old
+  // owner becomes a plain member: nothing assigns ADMIN, so the new owner would
+  // have no way to take it back.
+  transferOwnership: groupMemberProcedure
+    .input(z.object({ groupId: z.string(), newOwnerId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const notOwner = new TRPCError({ code: 'FORBIDDEN', message: 'Only the owner can transfer ownership' });
+      if (ctx.membership.role !== 'OWNER') {
+        throw notOwner;
+      }
+      if (input.newOwnerId === ctx.user.id) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'You already own this group' });
+      }
+
+      await ctx.db.$transaction(async (tx) => {
+        // A removal or leave takes the same lock, so neither can take the new
+        // owner out between the checks and the role change. The caller's role is
+        // read again under it: of two transfers sent at once, the second finds
+        // they no longer own the group, rather than making a second owner.
+        await lockGroupMembers(tx, input.groupId);
+
+        const [owner, newOwner] = await Promise.all([
+          tx.groupMember.findUnique({
+            where: { userId_groupId: { userId: ctx.user.id, groupId: input.groupId } },
+          }),
+          tx.groupMember.findUnique({
+            where: { userId_groupId: { userId: input.newOwnerId, groupId: input.groupId } },
+            include: { user: { select: { isPlaceholder: true, suspendedAt: true } } },
+          }),
+        ]);
+        if (owner?.role !== 'OWNER') {
+          throw notOwner;
+        }
+        if (!newOwner) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Member not found' });
+        }
+        // Someone who can't sign in couldn't manage the group, or hand it on
+        if (newOwner.user.isPlaceholder) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Only a member with an account can own a group' });
+        }
+        if (newOwner.user.suspendedAt) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: "That member's account is suspended, so they can't own the group",
+          });
+        }
+
+        await tx.groupMember.update({ where: { id: newOwner.id }, data: { role: 'OWNER' } });
+        await tx.groupMember.update({ where: { id: owner.id }, data: { role: 'MEMBER' } });
+        await tx.activityLog.create({
+          data: {
+            groupId: input.groupId,
+            userId: ctx.user.id,
+            type: 'OWNERSHIP_TRANSFERRED',
+            metadata: { fromUserId: ctx.user.id, toUserId: input.newOwnerId },
+          },
+        });
       });
 
       return { success: true };

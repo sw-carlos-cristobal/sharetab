@@ -89,7 +89,10 @@
     "leaveDescription": "Diese Gruppe verlassen. Ihre Ausgaben und Zahlungen darin bleiben erhalten, und Sie brauchen eine neue Einladung, um wieder beizutreten. Gleichen Sie zuerst Ihre Schulden aus.",
     "leaveConfirm": "Diese Gruppe verlassen?",
     "leaving": "Verlassen...",
-    "leaveGroup": "Gruppe verlassen"
+    "leaveGroup": "Gruppe verlassen",
+    "transferDescription": "Übergeben Sie diese Gruppe an ein anderes Mitglied. Sie werden dann normales Mitglied und können die Gruppe verlassen.",
+    "transferNoCandidates": "Niemand sonst in dieser Gruppe hat bisher ein Konto, daher können Sie sie an niemanden übergeben. Platzhalter-Mitglieder können keine Gruppe besitzen.",
+    "transferOwnership": "Eigentümerschaft übertragen"
   },
   "settle": {
     "title": "Zahlung erfassen",
@@ -126,6 +129,16 @@
     "submit": "Zusammenführen",
     "merging": "Wird zusammengeführt...",
     "done": "{name} wurde mit {member} zusammengeführt"
+  },
+  "transfer": {
+    "title": "Eigentümerschaft übertragen",
+    "description": "Wer die Gruppe übernimmt, kann sie verwalten und löschen. Sie werden normales Mitglied, und nur diese Person kann sie Ihnen zurückgeben.",
+    "target": "Übergeben an",
+    "choose": "Mitglied auswählen",
+    "confirm": "Die Gruppe gehört dann {name}, und Sie werden normales Mitglied.",
+    "submit": "Übertragen",
+    "transferring": "Wird übertragen...",
+    "done": "Die Gruppe gehört jetzt {name}"
   },
   "empty": "Noch keine Gruppen",
   "emptyDescription": "Erstellen Sie Ihre erste Gruppe, um Ausgaben mit Freunden zu teilen.",

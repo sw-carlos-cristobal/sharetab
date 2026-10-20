@@ -89,7 +89,10 @@
     "leaveDescription": "退出此群组。你在其中的支出和付款会保留，重新加入需要新的邀请。请先结清账目。",
     "leaveConfirm": "退出此群组？",
     "leaving": "正在退出...",
-    "leaveGroup": "退出群组"
+    "leaveGroup": "退出群组",
+    "transferDescription": "将此群组转交给其他成员。你将成为普通成员，之后可以退出群组。",
+    "transferNoCandidates": "此群组中还没有其他拥有账户的成员，因此无法转交。占位成员不能拥有群组。",
+    "transferOwnership": "转让所有权"
   },
   "settle": {
     "title": "记录付款",
@@ -126,6 +129,16 @@
     "submit": "合并",
     "merging": "合并中...",
     "done": "已将{name}合并到{member}"
+  },
+  "transfer": {
+    "title": "转让所有权",
+    "description": "新所有者可以管理和删除此群组。你将成为普通成员，只有新所有者才能把它转回给你。",
+    "target": "转让给",
+    "choose": "选择成员",
+    "confirm": "{name}将成为此群组的所有者，你将成为普通成员。",
+    "submit": "转让",
+    "transferring": "转让中...",
+    "done": "{name}现在是此群组的所有者"
   },
   "empty": "暂无群组",
   "emptyDescription": "创建您的第一个群组，开始与朋友分摊费用。",

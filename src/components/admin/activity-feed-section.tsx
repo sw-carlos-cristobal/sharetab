@@ -30,6 +30,7 @@ export function ActivityFeedSection() {
     PLACEHOLDER_MERGED: t('activity.typePlaceholderMerged'),
     GROUP_ARCHIVED: t('activity.typeGroupArchived'),
     GROUP_UNARCHIVED: t('activity.typeGroupUnarchived'),
+    OWNERSHIP_TRANSFERRED: t('activity.typeOwnershipTransferred'),
   };
 
   return (

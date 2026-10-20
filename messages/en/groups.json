@@ -89,7 +89,10 @@
     "leaveDescription": "Leave this group. Your expenses and payments in it stay, and you'll need a new invite to rejoin. Settle up first.",
     "leaveConfirm": "Leave this group?",
     "leaving": "Leaving...",
-    "leaveGroup": "Leave group"
+    "leaveGroup": "Leave group",
+    "transferDescription": "Hand this group to another member. You'll become a regular member, and can then leave it.",
+    "transferNoCandidates": "Nobody else in this group has an account yet, so there's nobody to hand it to. Placeholder members can't own a group.",
+    "transferOwnership": "Transfer ownership"
   },
   "settle": {
     "title": "Record a payment",
@@ -126,6 +129,16 @@
     "submit": "Merge",
     "merging": "Merging...",
     "done": "Merged {name} into {member}"
+  },
+  "transfer": {
+    "title": "Transfer ownership",
+    "description": "The new owner can manage and delete this group. You'll become a regular member, and only they can give it back.",
+    "target": "Hand over to",
+    "choose": "Choose a member",
+    "confirm": "{name} will own this group, and you'll become a regular member.",
+    "submit": "Transfer",
+    "transferring": "Transferring...",
+    "done": "{name} now owns this group"
   },
   "empty": "No groups yet",
   "emptyDescription": "Create your first group to start splitting expenses with friends.",

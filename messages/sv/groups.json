@@ -89,7 +89,10 @@
     "leaveDescription": "Lämna den här gruppen. Dina utgifter och betalningar i den finns kvar, och du behöver en ny inbjudan för att gå med igen. Gör upp först.",
     "leaveConfirm": "Lämna den här gruppen?",
     "leaving": "Lämnar...",
-    "leaveGroup": "Lämna grupp"
+    "leaveGroup": "Lämna grupp",
+    "transferDescription": "Lämna över den här gruppen till en annan medlem. Du blir då en vanlig medlem och kan sedan lämna gruppen.",
+    "transferNoCandidates": "Ingen annan i den här gruppen har ett konto än, så det finns ingen att lämna över den till. Platshållarmedlemmar kan inte äga en grupp.",
+    "transferOwnership": "Överför ägarskap"
   },
   "settle": {
     "title": "Registrera en betalning",
@@ -126,6 +129,16 @@
     "submit": "Slå samman",
     "merging": "Slår samman...",
     "done": "{name} slogs samman med {member}"
+  },
+  "transfer": {
+    "title": "Överför ägarskap",
+    "description": "Den som tar över kan hantera och radera gruppen. Du blir en vanlig medlem, och bara den personen kan ge tillbaka den.",
+    "target": "Lämna över till",
+    "choose": "Välj en medlem",
+    "confirm": "{name} blir ägare till gruppen, och du blir en vanlig medlem.",
+    "submit": "Överför",
+    "transferring": "Överför...",
+    "done": "{name} äger nu gruppen"
   },
   "empty": "Inga grupper än",
   "emptyDescription": "Skapa din första grupp för att börja dela utgifter med vänner.",

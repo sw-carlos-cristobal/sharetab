@@ -15,6 +15,7 @@ import {
   Archive,
   ArchiveRestore,
   ArrowLeft,
+  Crown,
   Pencil,
   Trash2,
   UserPlus,
@@ -27,6 +28,7 @@ import {
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { InviteDialog } from '@/components/groups/invite-dialog';
 import { MergePlaceholderDialog } from '@/components/groups/merge-placeholder-dialog';
+import { TransferOwnershipDialog } from '@/components/groups/transfer-ownership-dialog';
 import { toast } from 'sonner';
 
 // Details form is a separate component so its state is initialized exactly
@@ -137,6 +139,7 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
   // The placeholder whose claim link or merge dialog is open
   const [claimFor, setClaimFor] = useState<{ id: string; name: string } | null>(null);
   const [mergeFor, setMergeFor] = useState<{ id: string; name: string } | null>(null);
+  const [transferOpen, setTransferOpen] = useState(false);
 
   const deleteGroup = trpc.groups.delete.useMutation({
     onSuccess: () => {
@@ -217,6 +220,8 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
   const accountMembers = group.data.members
     .filter((m) => !m.user.isPlaceholder)
     .map((m) => ({ id: m.user.id, name: m.user.name ?? m.user.email ?? '' }));
+  // Who the owner can hand the group to (#309)
+  const newOwnerCandidates = accountMembers.filter((m) => m.id !== myId);
 
   return (
     <div className="mx-auto max-w-lg space-y-6">
@@ -424,6 +429,9 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
           onOpenChange={(open) => !open && setMergeFor(null)}
         />
       )}
+      {transferOpen && (
+        <TransferOwnershipDialog groupId={groupId} members={newOwnerCandidates} open onOpenChange={setTransferOpen} />
+      )}
 
       <Separator />
 
@@ -449,6 +457,22 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
               </Button>
             </div>
           )}
+          {myRole === 'OWNER' && (
+            // The owner can't leave until they hand the group to someone else
+            <div>
+              <p className="mb-2 text-sm text-muted-foreground">
+                {newOwnerCandidates.length > 0 ? t('settings.transferDescription') : t('settings.transferNoCandidates')}
+              </p>
+              <Button
+                variant="outline"
+                onClick={() => setTransferOpen(true)}
+                disabled={newOwnerCandidates.length === 0}
+              >
+                <Crown className="mr-2 h-4 w-4" />
+                {t('settings.transferOwnership')}
+              </Button>
+            </div>
+          )}
           {myRole === 'OWNER' ? (
             <div>
               <p className="mb-2 text-sm text-muted-foreground">{t('settings.deleteDescription')}</p>
@@ -466,7 +490,8 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
               </Button>
             </div>
           ) : (
-            // The owner can't leave (nobody else could manage or delete the group)
+            // The owner can't leave (nobody else could manage or delete the group);
+            // they transfer ownership first
             myId && (
               <div>
                 <p className="mb-2 text-sm text-muted-foreground">{t('settings.leaveDescription')}</p>

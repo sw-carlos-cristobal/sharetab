@@ -12,6 +12,7 @@ const mockDb = {
     findUnique: vi.fn(),
     findMany: vi.fn(),
     create: vi.fn(),
+    update: vi.fn(),
     delete: vi.fn(),
     deleteMany: vi.fn(),
     count: vi.fn(),
@@ -63,6 +64,30 @@ beforeEach(() => {
   // The merge locks the target's membership row; it's there unless a test says otherwise
   mockDb.$queryRaw.mockResolvedValue([{ id: 'gm-target' }]);
 });
+
+type Membership = { id: string; role: 'OWNER' | 'ADMIN' | 'MEMBER'; userId: string; groupId: string };
+const member = (userId: string, role: Membership['role'], extra: object = {}) => ({
+  id: `gm-${userId}`,
+  role,
+  userId,
+  groupId: 'g1',
+  ...extra,
+});
+
+// Memberships by user id as the request finds them before it locks the group (the
+// middleware's check), and once it holds the lock: a transfer that commits in between
+// changes them (#309)
+function mockMemberships(before: Record<string, object>, after: Record<string, object> = before) {
+  let locked = false;
+  mockDb.$queryRaw.mockImplementation(async () => {
+    locked = true;
+    return [];
+  });
+  mockDb.groupMember.findUnique.mockImplementation(
+    async ({ where }: { where: { userId_groupId: { userId: string } } }) =>
+      (locked ? after : before)[where.userId_groupId.userId] ?? null,
+  );
+}
 
 describe('group and placeholder names are trimmed', () => {
   test('create refuses a group name that is only whitespace', async () => {
@@ -463,10 +488,8 @@ describe('invites', () => {
 // whatever they owed or were owed vanished from everyone else's balance.
 describe('removing a placeholder', () => {
   function setUp({ shares = 0, expenses = 0, settlements = 0 } = {}) {
-    // The caller lookup and membership check, then the target's membership and user rows.
-    mockDb.groupMember.findUnique
-      .mockResolvedValueOnce({ role: 'OWNER', userId: 'owner', groupId: 'g1' })
-      .mockResolvedValueOnce({ id: 'gm-p1', role: 'MEMBER', userId: 'p1', groupId: 'g1' });
+    mockMemberships({ owner: member('owner', 'OWNER'), p1: member('p1', 'MEMBER') });
+    // The caller lookup, then the target's user row
     mockDb.user.findUnique
       .mockResolvedValueOnce({ suspendedAt: null })
       .mockResolvedValueOnce({ isPlaceholder: true, name: 'Alice', placeholderName: 'Alice' });
@@ -540,14 +563,15 @@ describe('leaving a group', () => {
   ];
   const bobPaidBack = [{ fromId: 'bob', toId: 'owner', amount: 500, baseCurrencyAmount: null }];
 
-  // The caller's lookups (user, then membership), then the target's membership and user rows
+  // The caller's user lookup, then the target's user row
   function setUp(
     caller: { userId: string; role: 'OWNER' | 'MEMBER' },
     target: { userId: string; role: 'OWNER' | 'MEMBER' },
   ) {
-    mockDb.groupMember.findUnique
-      .mockResolvedValueOnce({ role: caller.role, userId: caller.userId, groupId: 'g1' })
-      .mockResolvedValueOnce({ id: `gm-${target.userId}`, role: target.role, userId: target.userId, groupId: 'g1' });
+    mockMemberships({
+      [caller.userId]: member(caller.userId, caller.role),
+      [target.userId]: member(target.userId, target.role),
+    });
     mockDb.user.findUnique
       .mockResolvedValueOnce({ suspendedAt: null })
       .mockResolvedValueOnce({ isPlaceholder: false, name: target.userId, placeholderName: null });
@@ -561,7 +585,8 @@ describe('leaving a group', () => {
     const api = await caller('owner');
     await expect(api.removeMember({ groupId: 'g1', userId: 'owner' })).rejects.toMatchObject({
       code: 'FORBIDDEN',
-      message: "The group's owner can't leave it. Delete the group instead if nobody needs it.",
+      message:
+        "The group's owner can't leave it. Transfer ownership to another member first, or delete the group if nobody needs it.",
     });
     expect(mockDb.groupMember.delete).not.toHaveBeenCalled();
   });
@@ -616,6 +641,163 @@ describe('leaving a group', () => {
     expect(locked).toBeGreaterThan(mockDb.$transaction.mock.invocationCallOrder[0]!);
     expect(locked).toBeLessThan(mockDb.expense.findMany.mock.invocationCallOrder[0]!);
     expect(locked).toBeLessThan(mockDb.groupMember.delete.mock.invocationCallOrder[0]!);
+  });
+
+  // #309: ownership can move while a removal is in flight. A transfer takes the same
+  // lock, so the roles a removal decides on are read once it holds the lock.
+  describe('when ownership moved after the request started', () => {
+    beforeEach(() => {
+      mockDb.user.findUnique
+        .mockResolvedValueOnce({ suspendedAt: null })
+        .mockResolvedValueOnce({ isPlaceholder: false, name: 'x', placeholderName: null });
+      mockDb.expense.findMany.mockResolvedValue([]);
+      mockDb.settlement.findMany.mockResolvedValue([]);
+    });
+
+    test("the new owner can't leave", async () => {
+      mockMemberships(
+        { owner: member('owner', 'OWNER'), bob: member('bob', 'MEMBER') },
+        { owner: member('owner', 'MEMBER'), bob: member('bob', 'OWNER') },
+      );
+      const api = await caller('bob');
+      await expect(api.removeMember({ groupId: 'g1', userId: 'bob' })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message:
+          "The group's owner can't leave it. Transfer ownership to another member first, or delete the group if nobody needs it.",
+      });
+      expect(mockDb.groupMember.delete).not.toHaveBeenCalled();
+    });
+
+    test("the new owner can't be removed", async () => {
+      mockMemberships(
+        { owner: member('owner', 'OWNER'), bob: member('bob', 'MEMBER') },
+        { owner: member('owner', 'ADMIN'), bob: member('bob', 'OWNER') },
+      );
+      const api = await caller('owner');
+      await expect(api.removeMember({ groupId: 'g1', userId: 'bob' })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: 'Cannot remove the owner',
+      });
+      expect(mockDb.groupMember.delete).not.toHaveBeenCalled();
+    });
+
+    test("the former owner can't remove anyone", async () => {
+      mockMemberships(
+        { owner: member('owner', 'OWNER'), bob: member('bob', 'MEMBER'), carol: member('carol', 'MEMBER') },
+        { owner: member('owner', 'MEMBER'), bob: member('bob', 'OWNER'), carol: member('carol', 'MEMBER') },
+      );
+      const api = await caller('owner');
+      await expect(api.removeMember({ groupId: 'g1', userId: 'carol' })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: 'Cannot remove other members',
+      });
+      expect(mockDb.groupMember.delete).not.toHaveBeenCalled();
+    });
+  });
+});
+
+// #309: an owner had no way to hand the group over, so they couldn't leave a group
+// other people still use
+describe('transferring ownership', () => {
+  const account = { isPlaceholder: false, suspendedAt: null };
+
+  test('makes a member with an account the owner, and the old owner a member', async () => {
+    mockMemberships({ owner: member('owner', 'OWNER'), bob: member('bob', 'MEMBER', { user: account }) });
+    const api = await caller('owner');
+    await expect(api.transferOwnership({ groupId: 'g1', newOwnerId: 'bob' })).resolves.toEqual({ success: true });
+    expect(mockDb.groupMember.update).toHaveBeenCalledWith({ where: { id: 'gm-bob' }, data: { role: 'OWNER' } });
+    expect(mockDb.groupMember.update).toHaveBeenCalledWith({ where: { id: 'gm-owner' }, data: { role: 'MEMBER' } });
+    expect(mockDb.activityLog.create).toHaveBeenCalledWith({
+      data: {
+        groupId: 'g1',
+        userId: 'owner',
+        type: 'OWNERSHIP_TRANSFERRED',
+        metadata: { fromUserId: 'owner', toUserId: 'bob' },
+      },
+    });
+  });
+
+  // A removal or leave takes the same lock, so neither can slip in between the checks
+  // and the role change (lockGroupMembers)
+  test('locks the group before reading the roles and changing them', async () => {
+    mockMemberships({ owner: member('owner', 'OWNER'), bob: member('bob', 'MEMBER', { user: account }) });
+    const api = await caller('owner');
+    await api.transferOwnership({ groupId: 'g1', newOwnerId: 'bob' });
+
+    const lockCall = mockDb.$queryRaw.mock.calls.findIndex(([strings]) =>
+      /FROM "Group" WHERE "id" = .* FOR NO KEY UPDATE/.test((strings as string[]).join('?')),
+    );
+    expect(lockCall).toBeGreaterThanOrEqual(0);
+    const locked = mockDb.$queryRaw.mock.invocationCallOrder[lockCall]!;
+    expect(locked).toBeGreaterThan(mockDb.$transaction.mock.invocationCallOrder[0]!);
+    // Every membership read after the middleware's
+    const reads = mockDb.groupMember.findUnique.mock.invocationCallOrder.slice(1);
+    expect(reads.length).toBeGreaterThanOrEqual(2);
+    for (const read of reads) expect(read).toBeGreaterThan(locked);
+  });
+
+  test.each(['MEMBER', 'ADMIN'] as const)('is refused to a group %s', async (role) => {
+    mockMemberships({ owner: member('owner', role), bob: member('bob', 'MEMBER', { user: account }) });
+    const api = await caller('owner');
+    await expect(api.transferOwnership({ groupId: 'g1', newOwnerId: 'bob' })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      message: 'Only the owner can transfer ownership',
+    });
+    expect(mockDb.groupMember.update).not.toHaveBeenCalled();
+  });
+
+  // Two transfers sent at once (say to two different members) both pass the
+  // middleware's check; without the check under the lock, the second would leave
+  // the group with two owners
+  test('is refused once the caller no longer owns the group', async () => {
+    mockMemberships(
+      { owner: member('owner', 'OWNER'), bob: member('bob', 'MEMBER', { user: account }) },
+      { owner: member('owner', 'MEMBER'), bob: member('bob', 'MEMBER', { user: account }) },
+    );
+    const api = await caller('owner');
+    await expect(api.transferOwnership({ groupId: 'g1', newOwnerId: 'bob' })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      message: 'Only the owner can transfer ownership',
+    });
+    expect(mockDb.groupMember.update).not.toHaveBeenCalled();
+  });
+
+  test('is refused to the owner themselves', async () => {
+    mockMemberships({ owner: member('owner', 'OWNER', { user: account }) });
+    const api = await caller('owner');
+    await expect(api.transferOwnership({ groupId: 'g1', newOwnerId: 'owner' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'You already own this group',
+    });
+    expect(mockDb.groupMember.update).not.toHaveBeenCalled();
+  });
+
+  test('is refused to someone not in the group', async () => {
+    mockMemberships({ owner: member('owner', 'OWNER') });
+    const api = await caller('owner');
+    await expect(api.transferOwnership({ groupId: 'g1', newOwnerId: 'bob' })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+      message: 'Member not found',
+    });
+    expect(mockDb.groupMember.update).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['a placeholder', { isPlaceholder: true, suspendedAt: null }, 'Only a member with an account can own a group'],
+    [
+      'a suspended account',
+      { isPlaceholder: false, suspendedAt: new Date() },
+      "That member's account is suspended, so they can't own the group",
+    ],
+  ])('is refused to %s', async (_, user, message) => {
+    mockMemberships({ owner: member('owner', 'OWNER'), bob: member('bob', 'MEMBER', { user }) });
+    const api = await caller('owner');
+    await expect(api.transferOwnership({ groupId: 'g1', newOwnerId: 'bob' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message,
+    });
+    expect(mockDb.groupMember.update).not.toHaveBeenCalled();
+    expect(mockDb.activityLog.create).not.toHaveBeenCalled();
   });
 });
 

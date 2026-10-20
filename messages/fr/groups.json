@@ -89,7 +89,10 @@
     "leaveDescription": "Quitter ce groupe. Vos dépenses et paiements y restent, et il vous faudra une nouvelle invitation pour le rejoindre. Réglez vos comptes d'abord.",
     "leaveConfirm": "Quitter ce groupe ?",
     "leaving": "Départ...",
-    "leaveGroup": "Quitter le groupe"
+    "leaveGroup": "Quitter le groupe",
+    "transferDescription": "Confiez ce groupe à un autre membre. Vous deviendrez un membre ordinaire et pourrez ensuite le quitter.",
+    "transferNoCandidates": "Personne d'autre dans ce groupe n'a encore de compte, il n'y a donc personne à qui le confier. Les membres provisoires ne peuvent pas posséder un groupe.",
+    "transferOwnership": "Transférer la propriété"
   },
   "settle": {
     "title": "Enregistrer un paiement",
@@ -126,6 +129,16 @@
     "submit": "Fusionner",
     "merging": "Fusion...",
     "done": "{name} a été fusionné avec {member}"
+  },
+  "transfer": {
+    "title": "Transférer la propriété",
+    "description": "La personne qui le reçoit pourra gérer et supprimer ce groupe. Vous deviendrez un membre ordinaire, et seule cette personne pourra vous le rendre.",
+    "target": "Confier à",
+    "choose": "Choisissez un membre",
+    "confirm": "Le groupe appartiendra à {name}, et vous deviendrez un membre ordinaire.",
+    "submit": "Transférer",
+    "transferring": "Transfert...",
+    "done": "Le groupe appartient maintenant à {name}"
   },
   "empty": "Aucun groupe",
   "emptyDescription": "Créez votre premier groupe pour commencer à partager les dépenses entre amis.",

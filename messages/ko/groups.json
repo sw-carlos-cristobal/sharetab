@@ -89,7 +89,10 @@
     "leaveDescription": "이 그룹에서 나갑니다. 그룹의 비용과 결제 내역은 남으며, 다시 참여하려면 새 초대가 필요합니다. 먼저 정산하세요.",
     "leaveConfirm": "이 그룹에서 나가시겠습니까?",
     "leaving": "나가는 중...",
-    "leaveGroup": "그룹 나가기"
+    "leaveGroup": "그룹 나가기",
+    "transferDescription": "이 그룹을 다른 멤버에게 넘깁니다. 회원님은 일반 멤버가 되며, 그 후 그룹에서 나갈 수 있습니다.",
+    "transferNoCandidates": "이 그룹에는 아직 계정이 있는 다른 멤버가 없어 넘길 사람이 없습니다. 임시 멤버는 그룹을 소유할 수 없습니다.",
+    "transferOwnership": "소유권 이전"
   },
   "settle": {
     "title": "결제 기록",
@@ -126,6 +129,16 @@
     "submit": "병합",
     "merging": "병합 중...",
     "done": "{name}님을 {member}님과 병합했습니다"
+  },
+  "transfer": {
+    "title": "소유권 이전",
+    "description": "새 소유자는 이 그룹을 관리하고 삭제할 수 있습니다. 회원님은 일반 멤버가 되며, 소유권은 새 소유자만 되돌려 줄 수 있습니다.",
+    "target": "넘겨받을 멤버",
+    "choose": "멤버 선택",
+    "confirm": "{name}님이 이 그룹의 소유자가 되고, 회원님은 일반 멤버가 됩니다.",
+    "submit": "이전",
+    "transferring": "이전 중...",
+    "done": "이제 {name}님이 이 그룹의 소유자입니다"
   },
   "empty": "그룹이 없습니다",
   "emptyDescription": "친구들과 비용 분할을 시작하려면 첫 번째 그룹을 만드세요.",

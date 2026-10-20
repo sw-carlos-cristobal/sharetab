@@ -162,6 +162,7 @@
     "typePlaceholderMerged": "合并占位成员",
     "typeGroupArchived": "群组归档",
     "typeGroupUnarchived": "取消群组归档",
+    "typeOwnershipTransferred": "所有权已转让",
     "typePlaceholderCreated": "添加占位成员",
     "typeSettlementCreated": "结算",
     "typeSettlementDeleted": "删除结算"

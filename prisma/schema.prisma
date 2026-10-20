@@ -324,6 +324,7 @@ enum ActivityType {
   PLACEHOLDER_MERGED
   GROUP_ARCHIVED
   GROUP_UNARCHIVED
+  OWNERSHIP_TRANSFERRED
 }
 
 // ─── ADMIN ─────────────────────────────────────────────────

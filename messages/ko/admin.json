@@ -162,6 +162,7 @@
     "typePlaceholderMerged": "임시 멤버 병합",
     "typeGroupArchived": "그룹 보관",
     "typeGroupUnarchived": "그룹 보관 해제",
+    "typeOwnershipTransferred": "소유권 이전",
     "typePlaceholderCreated": "임시 멤버 추가",
     "typeSettlementCreated": "정산",
     "typeSettlementDeleted": "정산 삭제"
