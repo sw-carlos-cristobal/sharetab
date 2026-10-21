@@ -62,12 +62,14 @@ describe('GET /api/uploads/[...path]', () => {
     expect((await get()).status).toBe(200);
   });
 
-  test('only a split that has not expired counts', async () => {
+  // Codex on #319: splits made before #318 took any receipt id without checking the caller,
+  // so only one whose creator was checked (receiptShared) counts
+  test('only a split that has not expired, and whose creator could see the receipt, counts', async () => {
     groupReceipt();
     const before = Date.now();
     await get();
     expect(mockDb.guestSplit.findFirst).toHaveBeenCalledWith({
-      where: { receiptId: 'r1', expiresAt: { gt: expect.any(Date) } },
+      where: { receiptId: 'r1', receiptShared: true, expiresAt: { gt: expect.any(Date) } },
       select: { id: true },
     });
     const { where } = mockDb.guestSplit.findFirst.mock.calls[0]![0] as { where: { expiresAt: { gt: Date } } };

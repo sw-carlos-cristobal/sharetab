@@ -403,6 +403,10 @@ model GuestSplit {
   id          String   @id @default(cuid())
   shareToken  String   @unique @default(cuid())
   receiptId   String?
+  // Its creator could see the receipt when it was made (lockReceiptForSplit), so /api/uploads
+  // serves the receipt's image to anyone while it's open (#318). Splits made before that
+  // check existed stay false
+  receiptShared Boolean @default(false)
   receiptData Json     // {merchantName, date, subtotal, tax, tip, total, currency}
   items       Json     // [{name, quantity, unitPrice, totalPrice}]
   people      Json     // [{id?, name, personToken?, groupSize?, join?, saves?}] (see src/server/lib/guest-people.ts)

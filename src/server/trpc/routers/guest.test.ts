@@ -1468,7 +1468,9 @@ describe('making a split from a receipt', () => {
       await makeSplit[name](await caller({ user: { id: 'owner' } }));
 
       expect(mockDb.guestSplit.create).toHaveBeenCalledTimes(2);
-      for (const [arg] of mockDb.guestSplit.create.mock.calls) expect(arg.data).toMatchObject({ receiptId: 'r1' });
+      for (const [arg] of mockDb.guestSplit.create.mock.calls) {
+        expect(arg.data).toMatchObject({ receiptId: 'r1', receiptShared: true });
+      }
     },
   );
 
@@ -1486,7 +1488,7 @@ describe('making a split from a receipt', () => {
       expect(mockDb.guestSplit.create.mock.invocationCallOrder[0]!).toBeGreaterThan(
         mockDb.$queryRaw.mock.invocationCallOrder[lockCall]!,
       );
-      expect(mockDb.guestSplit.create.mock.calls[0]![0].data).toMatchObject({ receiptId: 'r1' });
+      expect(mockDb.guestSplit.create.mock.calls[0]![0].data).toMatchObject({ receiptId: 'r1', receiptShared: true });
     },
   );
 
@@ -1498,6 +1500,7 @@ describe('making a split from a receipt', () => {
 
       expect(mockDb.guestSplit.create).toHaveBeenCalledTimes(1);
       expect(mockDb.guestSplit.create.mock.calls[0]![0].data).not.toHaveProperty('receiptId');
+      expect(mockDb.guestSplit.create.mock.calls[0]![0].data).not.toHaveProperty('receiptShared');
     },
   );
 });

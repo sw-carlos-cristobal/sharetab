@@ -14,7 +14,7 @@ const MIME_TYPES: Record<string, string> = {
 
 async function isSharedForClaiming(receiptId: string) {
   const split = await db.guestSplit.findFirst({
-    where: { receiptId, expiresAt: { gt: new Date() } },
+    where: { receiptId, receiptShared: true, expiresAt: { gt: new Date() } },
     select: { id: true },
   });
   return split !== null;
@@ -48,7 +48,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ pat
   } else if (await isSharedForClaiming(receipt.id)) {
     // So is a group's receipt while a split made from it is open (#318): the group scan
     // page's Share Link makes a claim session from it, whose page shows the image to
-    // anyone with the link
+    // anyone with the link. Only a split whose creator could see the receipt counts
+    // (receiptShared), not one made before that was checked
   } else if (session?.user?.id) {
     // Authenticated user: must be the uploader or a member of the receipt's group
     const isUploader = receipt.uploadedById === session.user.id;
