@@ -72,9 +72,9 @@ export async function deleteUnusedSplitReceipts(
  * the split is saved without the receipt, instead of pointing at one deleted a moment later.
  *
  * A split's page shows its receipt's image to anyone with the link, and `/api/uploads` serves
- * it to anyone while the split is open (#318), so only a guest upload, or a group's receipt
- * for its uploader or a member of its group (the group scan page's Share Link), can be used;
- * any other is refused as not found.
+ * it to anyone while the split is open (#318), so only a guest upload, or a receipt the caller
+ * can open on the group's pages (the group scan page's Share Link), can be used; any other is
+ * refused as not found.
  */
 export async function lockReceiptForSplit(
   tx: Prisma.TransactionClient,
@@ -86,16 +86,26 @@ export async function lockReceiptForSplit(
     SELECT "isGuest", "uploadedById", "groupId" FROM "Receipt" WHERE "id" = ${receiptId} FOR KEY SHARE`;
   if (!receipt) return undefined;
   if (receipt.isGuest) return receiptId;
-  if (userId !== undefined) {
-    if (receipt.uploadedById === userId) return receiptId;
-    if (receipt.groupId !== null) {
-      const member = await tx.groupMember.findUnique({
-        where: { userId_groupId: { userId, groupId: receipt.groupId } },
-      });
-      if (member) return receiptId;
-    }
-  }
+  if (userId !== undefined && (await canOpenReceipt(tx, receipt, userId))) return receiptId;
   throw new TRPCError({ code: 'NOT_FOUND', message: 'Receipt not found' });
+}
+
+// The access the group's pages give (`verifyReceiptAccess` in the receipts router): a group's
+// receipt to its members, one outside a group to its uploader. The split procedures are public,
+// so the caller's session (a JWT, valid until it expires) is checked against the account here:
+// a suspended one, or one deleted into a placeholder, can't share a receipt
+async function canOpenReceipt(
+  tx: Prisma.TransactionClient,
+  receipt: { uploadedById: string | null; groupId: string | null },
+  userId: string,
+): Promise<boolean> {
+  const user = await tx.user.findUnique({ where: { id: userId }, select: { suspendedAt: true, isPlaceholder: true } });
+  if (!user || user.suspendedAt !== null || user.isPlaceholder) return false;
+  if (receipt.groupId === null) return receipt.uploadedById === userId;
+  const member = await tx.groupMember.findUnique({
+    where: { userId_groupId: { userId, groupId: receipt.groupId } },
+  });
+  return member !== null;
 }
 
 type Db = { $transaction<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> };

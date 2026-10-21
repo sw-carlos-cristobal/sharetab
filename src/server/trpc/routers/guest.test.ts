@@ -1459,11 +1459,12 @@ describe('making a split from a receipt', () => {
   );
 
   test.each(Object.keys(makeSplit) as (keyof typeof makeSplit)[])(
-    "%s takes a group's receipt from a member of its group, or from its uploader",
+    "%s takes a group's receipt from a member of its group, and one outside a group from its uploader",
     async (name) => {
       mockDb.$queryRaw.mockResolvedValue([groupReceipt]);
       mockDb.groupMember.findUnique.mockResolvedValue({ userId: 'user-1', groupId: 'g1' });
       await makeSplit[name](await caller(signedIn));
+      mockDb.$queryRaw.mockResolvedValue([{ ...groupReceipt, groupId: null }]);
       mockDb.groupMember.findUnique.mockResolvedValue(null);
       await makeSplit[name](await caller({ user: { id: 'owner' } }));
 
@@ -1471,6 +1472,34 @@ describe('making a split from a receipt', () => {
       for (const [arg] of mockDb.guestSplit.create.mock.calls) {
         expect(arg.data).toMatchObject({ receiptId: 'r1', receiptShared: true });
       }
+    },
+  );
+
+  // Codex on #319: the same access the group's pages give (verifyReceiptAccess), so its
+  // uploader who has left the group can't share it either
+  test.each(Object.keys(makeSplit) as (keyof typeof makeSplit)[])(
+    "%s refuses a group's receipt to its uploader once they're not in the group",
+    async (name) => {
+      mockDb.$queryRaw.mockResolvedValue([groupReceipt]);
+      await expect(makeSplit[name](await caller({ user: { id: 'owner' } }))).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+      expect(mockDb.guestSplit.create).not.toHaveBeenCalled();
+    },
+  );
+
+  // Codex on #319: these procedures are public, so the session (a JWT, valid until it expires)
+  // hasn't been checked against the account
+  test.each(Object.keys(makeSplit) as (keyof typeof makeSplit)[])(
+    "%s refuses a group's receipt to a member whose account is suspended or was deleted",
+    async (name) => {
+      mockDb.$queryRaw.mockResolvedValue([groupReceipt]);
+      mockDb.groupMember.findUnique.mockResolvedValue({ userId: 'user-1', groupId: 'g1' });
+      for (const account of [{ suspendedAt: new Date() }, { suspendedAt: null, isPlaceholder: true }, null]) {
+        mockDb.user.findUnique.mockResolvedValue(account);
+        await expect(makeSplit[name](await caller(signedIn))).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      }
+      expect(mockDb.guestSplit.create).not.toHaveBeenCalled();
     },
   );
 
