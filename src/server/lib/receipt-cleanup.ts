@@ -1,4 +1,5 @@
 import { unlink } from 'fs/promises';
+import { TRPCError } from '@trpc/server';
 import { Prisma } from '@/generated/prisma/client';
 import { logger } from './logger';
 import { resolveUploadPath } from './upload-dir';
@@ -69,14 +70,32 @@ export async function deleteUnusedSplitReceipts(
  * its id, or `undefined` when the receipt is gone. A deletion of the receipt's last split
  * or of its group then either waits for the new split and sees it, or finishes first and
  * the split is saved without the receipt, instead of pointing at one deleted a moment later.
+ *
+ * A split's page shows its receipt's image to anyone with the link, and `/api/uploads` serves
+ * it to anyone while the split is open (#318), so only a guest upload, or a group's receipt
+ * for its uploader or a member of its group (the group scan page's Share Link), can be used;
+ * any other is refused as not found.
  */
 export async function lockReceiptForSplit(
   tx: Prisma.TransactionClient,
   receiptId: string | undefined,
+  userId: string | undefined,
 ): Promise<string | undefined> {
   if (receiptId === undefined) return undefined;
-  const found = await tx.$queryRaw<unknown[]>`SELECT 1 FROM "Receipt" WHERE "id" = ${receiptId} FOR KEY SHARE`;
-  return found.length > 0 ? receiptId : undefined;
+  const [receipt] = await tx.$queryRaw<{ isGuest: boolean; uploadedById: string | null; groupId: string | null }[]>`
+    SELECT "isGuest", "uploadedById", "groupId" FROM "Receipt" WHERE "id" = ${receiptId} FOR KEY SHARE`;
+  if (!receipt) return undefined;
+  if (receipt.isGuest) return receiptId;
+  if (userId !== undefined) {
+    if (receipt.uploadedById === userId) return receiptId;
+    if (receipt.groupId !== null) {
+      const member = await tx.groupMember.findUnique({
+        where: { userId_groupId: { userId, groupId: receipt.groupId } },
+      });
+      if (member) return receiptId;
+    }
+  }
+  throw new TRPCError({ code: 'NOT_FOUND', message: 'Receipt not found' });
 }
 
 type Db = { $transaction<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> };

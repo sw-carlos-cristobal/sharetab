@@ -73,6 +73,11 @@ describe('a group archived while a receipt was being finished (#289)', () => {
     paidById: 'u1',
     assignments: [{ receiptItemId: 'i1', userIds: ['u1'] }],
   };
+  // What the transaction's row locks read: the group, and the receipt (still in the group)
+  const locksRead = (group: object, receipt: object | null = { groupId: 'g1' }) =>
+    mockDb.$queryRaw.mockImplementation(async (strings: TemplateStringsArray) =>
+      strings.join('?').includes('FROM "Receipt"') ? (receipt ? [receipt] : []) : [group],
+    );
 
   beforeEach(() => {
     mockDb.groupMember.findUnique.mockResolvedValue({ role: 'MEMBER', userId: 'u1', groupId: 'g1' });
@@ -88,7 +93,7 @@ describe('a group archived while a receipt was being finished (#289)', () => {
     // The early check still sees the group active, but by the time the
     // transaction locks its row, it's archived
     mockDb.group.findUnique.mockResolvedValue({ archivedAt: null, currency: 'USD' });
-    mockDb.$queryRaw.mockResolvedValue([{ archivedAt: new Date() }]);
+    locksRead({ archivedAt: new Date() });
     mockDb.$transaction.mockImplementation(async (fn: (tx: typeof mockDb) => unknown) => fn(mockDb));
   });
 
@@ -103,12 +108,15 @@ describe('a group archived while a receipt was being finished (#289)', () => {
   });
 
   test('an active group is locked FOR SHARE inside the transaction, before the write', async () => {
-    mockDb.$queryRaw.mockResolvedValue([{ archivedAt: null }]);
+    locksRead({ archivedAt: null });
     mockDb.expense.create.mockResolvedValue({ id: 'e1' });
     const api = await caller();
     await api.assignItemsAndCreateExpense(finish);
 
-    expect(rawSql()).toEqual([expect.stringMatching(/FROM "Group" WHERE "id" = \? FOR SHARE/)]);
+    expect(rawSql()).toEqual([
+      expect.stringMatching(/FROM "Group" WHERE "id" = \? FOR SHARE/),
+      expect.stringMatching(/FROM "Receipt" WHERE "id" = \? FOR SHARE/),
+    ]);
     const [locked] = mockDb.$queryRaw.mock.invocationCallOrder;
     expect(locked).toBeGreaterThan(mockDb.$transaction.mock.invocationCallOrder[0]!);
     expect(locked).toBeLessThan(mockDb.expense.create.mock.invocationCallOrder[0]!);
@@ -116,7 +124,7 @@ describe('a group archived while a receipt was being finished (#289)', () => {
 
   // Codex on #308: see the expenses test of the same name
   test('assignItemsAndCreateExpense checks its people are members inside the transaction, after the lock', async () => {
-    mockDb.$queryRaw.mockResolvedValue([{ archivedAt: null }]);
+    locksRead({ archivedAt: null });
     mockDb.expense.create.mockResolvedValue({ id: 'e1' });
     const api = await caller();
     await api.assignItemsAndCreateExpense(finish);
@@ -126,6 +134,27 @@ describe('a group archived while a receipt was being finished (#289)', () => {
     expect(mockDb.groupMember.findMany.mock.invocationCallOrder[0]).toBeLessThan(
       mockDb.expense.create.mock.invocationCallOrder[0]!,
     );
+  });
+
+  // Codex on #319: deleting a receipt from the pending list keeps it off the group while a
+  // claim session uses it (#318), so an expense that passed the checks above just before
+  // must see that under the receipt's lock, not link a receipt the group can no longer open
+  test('a receipt taken off the group meanwhile is refused, writing nothing', async () => {
+    locksRead({ archivedAt: null }, { groupId: null });
+    const api = await caller();
+    await expect(api.assignItemsAndCreateExpense(finish)).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: 'Receipt was removed from this group',
+    });
+    expect(mockDb.expense.create).not.toHaveBeenCalled();
+    expect(mockDb.receiptItemAssignment.deleteMany).not.toHaveBeenCalled();
+  });
+
+  test('a receipt deleted meanwhile is refused, writing nothing', async () => {
+    locksRead({ archivedAt: null }, null);
+    const api = await caller();
+    await expect(api.assignItemsAndCreateExpense(finish)).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(mockDb.expense.create).not.toHaveBeenCalled();
   });
 });
 

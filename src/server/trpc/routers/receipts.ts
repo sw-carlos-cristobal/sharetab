@@ -525,6 +525,15 @@ export const receiptsRouter = createTRPCRouter({
       const expense = await ctx.db.$transaction(async (tx) => {
         await lockActiveGroup(tx, input.groupId, ARCHIVED_CREATE_EXPENSE);
 
+        // Deleting the receipt from the pending list takes it off the group, and keeps it while
+        // a claim session uses it (#318). Under its lock, that either waits for this expense
+        // (and is refused) or finished first and is seen here
+        const [current] = await tx.$queryRaw<{ groupId: string | null }[]>`
+          SELECT "groupId" FROM "Receipt" WHERE "id" = ${input.receiptId} FOR SHARE`;
+        if (!current || current.groupId !== receipt.groupId) {
+          throw new TRPCError({ code: 'CONFLICT', message: 'Receipt was removed from this group' });
+        }
+
         // Verify paidBy and all assignees are members of this group (after the lock,
         // so someone leaving meanwhile is either gone or waits for this, #279)
         const groupMembers = await tx.groupMember.findMany({

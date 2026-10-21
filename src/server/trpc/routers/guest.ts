@@ -536,7 +536,7 @@ export const guestRouter = createTRPCRouter({
       );
 
       const guestSplit = await ctx.db.$transaction(async (tx) => {
-        const receiptId = await lockReceiptForSplit(tx, input.receiptId);
+        const receiptId = await lockReceiptForSplit(tx, input.receiptId, ctx.session?.user?.id);
         return tx.guestSplit.create({
           data: {
             ...(receiptId !== undefined ? { receiptId } : {}),
@@ -714,7 +714,7 @@ export const guestRouter = createTRPCRouter({
       );
 
       const session = await ctx.db.$transaction(async (tx) => {
-        const receiptId = await lockReceiptForSplit(tx, input.receiptId);
+        const receiptId = await lockReceiptForSplit(tx, input.receiptId, ctx.session?.user?.id);
         return tx.guestSplit.create({
           data: {
             ...(receiptId !== undefined ? { receiptId } : {}),

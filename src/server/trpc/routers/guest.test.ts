@@ -9,6 +9,7 @@ const mockDb = {
   systemSetting: { findUnique: vi.fn() },
   user: { findUnique: vi.fn() },
   receipt: { findUnique: vi.fn(), findMany: vi.fn(), updateMany: vi.fn(), update: vi.fn(), deleteMany: vi.fn() },
+  groupMember: { findUnique: vi.fn() },
   guestSplit: {
     findUnique: vi.fn(),
     findMany: vi.fn(),
@@ -1434,14 +1435,47 @@ describe('making a split from a receipt', () => {
       api.createClaimSession({ receiptId: 'r1', receiptData, items, creatorName: 'Pat', paidByName: 'Pat' }),
   };
 
+  const guestUpload = { isGuest: true, uploadedById: null, groupId: null };
+  const groupReceipt = { isGuest: false, uploadedById: 'owner', groupId: 'g1' };
+
   beforeEach(() => {
     mockDb.guestSplit.create.mockResolvedValue({ id: 's1', shareToken: 'tok' });
+    mockDb.groupMember.findUnique.mockResolvedValue(null);
   });
+
+  // Codex on #319: a split's receipt is shown to anyone with its link, so making one from a
+  // group's receipt would publish a photo only the group could see
+  test.each(Object.keys(makeSplit) as (keyof typeof makeSplit)[])(
+    "%s refuses a group's receipt to someone outside the group",
+    async (name) => {
+      mockDb.$queryRaw.mockResolvedValue([groupReceipt]);
+      await expect(makeSplit[name](await caller())).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      await expect(makeSplit[name](await caller(signedIn))).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(mockDb.groupMember.findUnique).toHaveBeenCalledWith({
+        where: { userId_groupId: { userId: 'user-1', groupId: 'g1' } },
+      });
+      expect(mockDb.guestSplit.create).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each(Object.keys(makeSplit) as (keyof typeof makeSplit)[])(
+    "%s takes a group's receipt from a member of its group, or from its uploader",
+    async (name) => {
+      mockDb.$queryRaw.mockResolvedValue([groupReceipt]);
+      mockDb.groupMember.findUnique.mockResolvedValue({ userId: 'user-1', groupId: 'g1' });
+      await makeSplit[name](await caller(signedIn));
+      mockDb.groupMember.findUnique.mockResolvedValue(null);
+      await makeSplit[name](await caller({ user: { id: 'owner' } }));
+
+      expect(mockDb.guestSplit.create).toHaveBeenCalledTimes(2);
+      for (const [arg] of mockDb.guestSplit.create.mock.calls) expect(arg.data).toMatchObject({ receiptId: 'r1' });
+    },
+  );
 
   test.each(Object.keys(makeSplit) as (keyof typeof makeSplit)[])(
     '%s locks the receipt before saving the split',
     async (name) => {
-      mockDb.$queryRaw.mockResolvedValue([{ id: 'r1' }]);
+      mockDb.$queryRaw.mockResolvedValue([guestUpload]);
       await makeSplit[name](await caller());
 
       const lockCall = mockDb.$queryRaw.mock.calls.findIndex(([strings]) =>

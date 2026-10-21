@@ -241,4 +241,51 @@ test.describe('A group receipt shared for claiming (#318)', () => {
       await dispose();
     }
   });
+
+  // Codex on #319: a split's receipt is shown to anyone with its link, so someone outside the
+  // group who knows the receipt's id mustn't be able to make one and publish the photo
+  test("someone outside the group can't make a split from its receipt, so the photo stays private", async () => {
+    const { owner, groupId, dispose } = await createTestGroup(
+      users.alice.email,
+      users.alice.password,
+      [],
+      'Private Receipt',
+    );
+    const anyone = await request.newContext({ baseURL: BASE });
+    const bob = await authedContext(users.bob.email, users.bob.password);
+    try {
+      const uploadRes = await owner.post('/api/upload', {
+        multipart: { file: { name: 'receipt.jpg', mimeType: 'image/jpeg', buffer: FAKE_JPEG } },
+      });
+      const { receiptId, imagePath } = (await uploadRes.json()) as { receiptId: string; imagePath: string };
+      const processed = await trpcMutation(owner, 'receipts.processReceipt', { receiptId, groupId }, 60_000);
+      expect(processed.ok(), await processed.text()).toBe(true);
+
+      const split = {
+        receiptId,
+        receiptData: { merchantName: 'Private Cafe', subtotal: 1000, tax: 0, tip: 0, total: 1000, currency: 'USD' },
+        items: [{ name: 'Tea', quantity: 1, unitPrice: 1000, totalPrice: 1000 }],
+      };
+      for (const ctx of [anyone, bob]) {
+        const claim = await trpcMutation(ctx, 'guest.createClaimSession', {
+          ...split,
+          creatorName: 'Eve',
+          paidByName: 'Eve',
+        });
+        expect((await trpcError(claim))?.data?.code).toBe('NOT_FOUND');
+        const quick = await trpcMutation(ctx, 'guest.createSplit', {
+          ...split,
+          people: [{ name: 'Eve' }],
+          assignments: [{ itemIndex: 0, personIndices: [0] }],
+        });
+        expect((await trpcError(quick))?.data?.code).toBe('NOT_FOUND');
+      }
+      expect((await anyone.get(`/api/uploads/${imagePath}`)).status()).toBe(401);
+      expect((await bob.get(`/api/uploads/${imagePath}`)).status()).toBe(403);
+    } finally {
+      await bob.dispose();
+      await anyone.dispose();
+      await dispose();
+    }
+  });
 });
