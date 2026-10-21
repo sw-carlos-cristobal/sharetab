@@ -423,4 +423,7 @@ model GuestSplit {
 
   @@index([userId])
   @@index([expiresAt])
+  // /api/uploads looks up a receipt's splits on every non-guest image load (#318), and the
+  // receipt cleanups check whether a split uses a receipt
+  @@index([receiptId])
 }
