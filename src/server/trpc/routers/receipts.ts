@@ -19,7 +19,7 @@ const ARCHIVED_CREATE_EXPENSE = 'Cannot create expenses in archived groups';
  * Prisma cannot statically infer dynamic includes -- callers should cast as needed.
  */
 async function verifyReceiptAccess(
-  db: PrismaClient,
+  db: PrismaClient | Prisma.TransactionClient,
   receiptId: string,
   userId: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -619,10 +619,12 @@ export const receiptsRouter = createTRPCRouter({
       await verifyReceiptAccess(ctx.db, input.receiptId, ctx.user.id);
 
       await ctx.db.$transaction(async (tx) => {
-        const receipt = await tx.receipt.findUnique({
-          where: { id: input.receiptId },
-        });
-        if (!receipt || receipt.status !== 'COMPLETED') {
+        // Deleting it from the pending list takes it off the group and keeps it while a claim
+        // session uses it (#318). Under its lock, that either waits for this save or is seen
+        // here, and the access check above runs again on what the delete left
+        await tx.$queryRaw`SELECT 1 FROM "Receipt" WHERE "id" = ${input.receiptId} FOR NO KEY UPDATE`;
+        const receipt = await verifyReceiptAccess(tx, input.receiptId, ctx.user.id);
+        if (receipt.status !== 'COMPLETED') {
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'Receipt must be processed first' });
         }
         // Check it's not already linked to an expense

@@ -245,3 +245,45 @@ describe('deleting a pending receipt (#318)', () => {
     expect(mockDb.$transaction).not.toHaveBeenCalled();
   });
 });
+
+// Codex on #319: deleting a receipt from the pending list now keeps it (off the group) while a
+// claim session uses it, so a save for later that read it just before must not put it back
+describe('saving a receipt for later while it is deleted from the pending list (#318)', () => {
+  const rawSql = () => mockDb.$queryRaw.mock.calls.map(([strings]) => (strings as string[]).join('?'));
+  const inGroup = {
+    id: 'r1',
+    status: 'COMPLETED',
+    groupId: 'g1',
+    uploadedById: 'u2',
+    group: { members: [{ userId: 'u1' }] },
+  };
+  const offGroup = { id: 'r1', status: 'COMPLETED', groupId: null, uploadedById: 'u2', group: null };
+
+  beforeEach(() => {
+    mockDb.groupMember.findUnique.mockResolvedValue({ role: 'MEMBER', userId: 'u1', groupId: 'g1' });
+    mockDb.$transaction.mockImplementation(async (fn: (tx: typeof mockDb) => unknown) => fn(mockDb));
+    mockDb.$queryRaw.mockResolvedValue([{ '?column?': 1 }]);
+    mockDb.expense.findUnique.mockResolvedValue(null);
+  });
+
+  test('a receipt taken off the group before the save got its lock is refused, and stays off it', async () => {
+    // The check before the transaction saw it in the group; under the lock it's gone from it
+    mockDb.receipt.findUnique.mockResolvedValueOnce(inGroup).mockResolvedValue(offGroup);
+    const api = await caller();
+    await expect(api.saveForLater({ groupId: 'g1', receiptId: 'r1' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(mockDb.receipt.update).not.toHaveBeenCalled();
+  });
+
+  test("the receipt is locked before it's read in the transaction", async () => {
+    mockDb.receipt.findUnique.mockResolvedValue(inGroup);
+    const api = await caller();
+    await api.saveForLater({ groupId: 'g1', receiptId: 'r1' });
+
+    expect(rawSql()[0]).toMatch(/FROM "Receipt" WHERE "id" = \? FOR NO KEY UPDATE/);
+    const [locked] = mockDb.$queryRaw.mock.invocationCallOrder;
+    expect(locked).toBeGreaterThan(mockDb.$transaction.mock.invocationCallOrder[0]!);
+    const lastRead = mockDb.receipt.findUnique.mock.invocationCallOrder.at(-1)!;
+    expect(lastRead).toBeGreaterThan(locked!);
+    expect(mockDb.receipt.update.mock.invocationCallOrder[0]).toBeGreaterThan(lastRead);
+  });
+});
