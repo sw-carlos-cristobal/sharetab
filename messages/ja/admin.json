@@ -16,7 +16,10 @@
     "orphanedFiles": "孤立ファイル",
     "orphanDescription": "データベース内のどのレシートにも参照されていないディスク上のファイル",
     "cleanUp": "クリーンアップ",
-    "cleanedUp": "{count}ファイルをクリーンアップしました（{size}を解放）"
+    "cleanedUp": "{count}ファイルをクリーンアップしました（{size}を解放）",
+    "unusedReceipts": "未使用のレシート",
+    "unusedDescription": "グループ・支出・割り勘のどれにも使われていない1日以上前のレシート（{size}）",
+    "unusedCleanedUp": "{count}件のレシートを削除しました"
   },
   "users": {
     "title": "ユーザー管理",
@@ -228,6 +231,7 @@
     "actionRegModeChanged": "登録モード変更",
     "actionTestEmail": "テストメール",
     "actionSplitsCleaned": "割り勘クリーンアップ",
+    "actionUnusedReceiptsCleaned": "未使用レシート削除",
     "actionMeridianLogin": "Meridianログイン",
     "actionMeridianLoggedIn": "Meridianログイン完了",
     "actionMeridianLoginFailed": "Meridianログイン失敗",

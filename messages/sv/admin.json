@@ -16,7 +16,10 @@
     "orphanedFiles": "Föräldralösa filer",
     "orphanDescription": "filer på disk som inte refereras av något kvitto i databasen",
     "cleanUp": "Rensa",
-    "cleanedUp": "{count} filer rensade ({size} frigjort)"
+    "cleanedUp": "{count} filer rensade ({size} frigjort)",
+    "unusedReceipts": "Oanvända kvitton",
+    "unusedDescription": "kvitton äldre än en dag som ingen grupp, utgift eller delning använder ({size})",
+    "unusedCleanedUp": "{count} kvitton raderade"
   },
   "users": {
     "title": "Användarhantering",
@@ -228,6 +231,7 @@
     "actionRegModeChanged": "Registreringsläge ändrat",
     "actionTestEmail": "Testmeddelande",
     "actionSplitsCleaned": "Delningar rensade",
+    "actionUnusedReceiptsCleaned": "Oanvända kvitton rensade",
     "actionMeridianLogin": "Meridian-inloggning",
     "actionMeridianLoggedIn": "Meridian inloggad",
     "actionMeridianLoginFailed": "Meridian-inloggning misslyckades",

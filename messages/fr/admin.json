@@ -16,7 +16,10 @@
     "orphanedFiles": "Fichiers orphelins",
     "orphanDescription": "fichiers sur le disque non référencés par aucun reçu dans la base de données",
     "cleanUp": "Nettoyer",
-    "cleanedUp": "{count} fichiers nettoyés ({size} libérés)"
+    "cleanedUp": "{count} fichiers nettoyés ({size} libérés)",
+    "unusedReceipts": "Reçus inutilisés",
+    "unusedDescription": "reçus de plus d'un jour qu'aucun groupe, dépense ou partage n'utilise ({size})",
+    "unusedCleanedUp": "{count} reçus supprimés"
   },
   "users": {
     "title": "Gestion des utilisateurs",
@@ -228,6 +231,7 @@
     "actionRegModeChanged": "Mode d'inscription modifié",
     "actionTestEmail": "E-mail de test",
     "actionSplitsCleaned": "Partages nettoyés",
+    "actionUnusedReceiptsCleaned": "Reçus inutilisés nettoyés",
     "actionMeridianLogin": "Connexion Meridian",
     "actionMeridianLoggedIn": "Meridian connecté",
     "actionMeridianLoginFailed": "Échec connexion Meridian",

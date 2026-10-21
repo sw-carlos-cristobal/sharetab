@@ -16,7 +16,10 @@
     "orphanedFiles": "Orphaned Files",
     "orphanDescription": "files on disk not referenced by any receipt in the database",
     "cleanUp": "Clean up",
-    "cleanedUp": "Cleaned up {count} files ({size} freed)"
+    "cleanedUp": "Cleaned up {count} files ({size} freed)",
+    "unusedReceipts": "Unused Receipts",
+    "unusedDescription": "receipts over a day old that no group, expense or split uses ({size})",
+    "unusedCleanedUp": "Deleted {count} receipts"
   },
   "users": {
     "title": "User Management",
@@ -228,6 +231,7 @@
     "actionRegModeChanged": "Reg. Mode Changed",
     "actionTestEmail": "Test Email",
     "actionSplitsCleaned": "Splits Cleaned",
+    "actionUnusedReceiptsCleaned": "Unused Receipts Cleaned",
     "actionMeridianLogin": "Meridian Login",
     "actionMeridianLoggedIn": "Meridian Logged In",
     "actionMeridianLoginFailed": "Meridian Login Failed",

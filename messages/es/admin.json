@@ -16,7 +16,10 @@
     "orphanedFiles": "Archivos huérfanos",
     "orphanDescription": "archivos en disco no referenciados por ningún recibo en la base de datos",
     "cleanUp": "Limpiar",
-    "cleanedUp": "{count} archivos limpiados ({size} liberados)"
+    "cleanedUp": "{count} archivos limpiados ({size} liberados)",
+    "unusedReceipts": "Recibos sin usar",
+    "unusedDescription": "recibos de más de un día que ningún grupo, gasto ni división usa ({size})",
+    "unusedCleanedUp": "{count} recibos eliminados"
   },
   "users": {
     "title": "Gestión de usuarios",
@@ -228,6 +231,7 @@
     "actionRegModeChanged": "Modo de registro cambiado",
     "actionTestEmail": "Correo de prueba",
     "actionSplitsCleaned": "Divisiones limpiadas",
+    "actionUnusedReceiptsCleaned": "Recibos sin usar limpiados",
     "actionMeridianLogin": "Inicio de sesión Meridian",
     "actionMeridianLoggedIn": "Meridian conectado",
     "actionMeridianLoginFailed": "Inicio de sesión Meridian fallido",

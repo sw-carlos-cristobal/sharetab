@@ -104,14 +104,18 @@ vi.mock('@/server/db', () => ({ db: mockDb }));
 vi.mock('@/server/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-const { removeReceiptFiles, deleteExpiredSplits } = vi.hoisted(() => ({
+const { removeReceiptFiles, deleteExpiredSplits, countUnusedReceipts, deleteUnusedReceipts } = vi.hoisted(() => ({
   removeReceiptFiles: vi.fn(),
   deleteExpiredSplits: vi.fn(),
+  countUnusedReceipts: vi.fn(),
+  deleteUnusedReceipts: vi.fn(),
 }));
 vi.mock('@/server/lib/receipt-cleanup', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/server/lib/receipt-cleanup')>()),
   removeReceiptFiles,
   deleteExpiredSplits,
+  countUnusedReceipts,
+  deleteUnusedReceipts,
 }));
 vi.mock('@/server/lib/rate-limit', () => ({
   checkRateLimit: vi.fn().mockReturnValue({ allowed: true }),
@@ -245,6 +249,7 @@ describe('admin router procedures existence', () => {
     expect(procedures).toContain('deleteGroup');
     expect(procedures).toContain('getStorageStats');
     expect(procedures).toContain('cleanupOrphans');
+    expect(procedures).toContain('cleanupUnusedReceipts');
 
     // New procedures
     expect(procedures).toContain('getAuditLog');
@@ -655,5 +660,60 @@ describe('cleanupExpiredSplits', () => {
     expect(mockDb.adminAuditLog.create).toHaveBeenCalledWith({
       data: { adminId: 'admin-1', action: 'EXPIRED_SPLITS_CLEANED', metadata: { deletedCount: 1001 } },
     });
+  });
+});
+
+// #312: receipts no group, expense or split uses stayed for good, with their image files
+// (the queries are in receipt-cleanup.ts)
+describe('unused receipts', () => {
+  beforeEach(() => {
+    vi.stubEnv('ADMIN_EMAIL', 'admin@example.com');
+    vi.stubEnv('UPLOAD_DIR', '/nonexistent-sharetab-uploads');
+    vi.clearAllMocks();
+    mockDb.user.findUnique.mockResolvedValue({ suspendedAt: null });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test('storage stats count them, with their size', async () => {
+    mockDb.receipt.count.mockResolvedValue(5);
+    mockDb.receipt.findMany.mockResolvedValue([]);
+    countUnusedReceipts.mockResolvedValue({ count: 2, bytes: 2048 });
+    const api = await callerAs(adminSession);
+
+    await expect(api.getStorageStats()).resolves.toMatchObject({
+      receiptCount: 5,
+      unusedReceiptCount: 2,
+      unusedReceiptBytes: 2048,
+      unusedReceiptBytesFormatted: '2 KB',
+    });
+    expect(countUnusedReceipts).toHaveBeenCalledWith(mockDb);
+  });
+
+  test('cleaning up deletes them in batches and records it in the audit log', async () => {
+    deleteUnusedReceipts.mockResolvedValue(3);
+    const api = await callerAs(adminSession);
+
+    await expect(api.cleanupUnusedReceipts()).resolves.toEqual({ deletedCount: 3 });
+    expect(deleteUnusedReceipts).toHaveBeenCalledWith(mockDb, 500);
+    expect(mockDb.adminAuditLog.create).toHaveBeenCalledWith({
+      data: { adminId: 'admin-1', action: 'UNUSED_RECEIPTS_CLEANED', metadata: { deletedCount: 3 } },
+    });
+  });
+
+  test('with none to clean up, records nothing', async () => {
+    deleteUnusedReceipts.mockResolvedValue(0);
+    const api = await callerAs(adminSession);
+
+    await expect(api.cleanupUnusedReceipts()).resolves.toEqual({ deletedCount: 0 });
+    expect(mockDb.adminAuditLog.create).not.toHaveBeenCalled();
+  });
+
+  test('a member who is not the admin is refused', async () => {
+    const api = await callerAs({ user: { id: 'user-1', email: 'user@example.com' } });
+    await expect(api.cleanupUnusedReceipts()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(deleteUnusedReceipts).not.toHaveBeenCalled();
   });
 });

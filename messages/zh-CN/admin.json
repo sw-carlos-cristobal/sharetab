@@ -16,7 +16,10 @@
     "orphanedFiles": "孤立文件",
     "orphanDescription": "磁盘上未被数据库中任何收据引用的文件",
     "cleanUp": "清理",
-    "cleanedUp": "已清理 {count} 个文件（释放了 {size}）"
+    "cleanedUp": "已清理 {count} 个文件（释放了 {size}）",
+    "unusedReceipts": "未使用的收据",
+    "unusedDescription": "超过一天且未被任何群组、支出或分账使用的收据（{size}）",
+    "unusedCleanedUp": "已删除 {count} 张收据"
   },
   "users": {
     "title": "用户管理",
@@ -228,6 +231,7 @@
     "actionRegModeChanged": "注册模式变更",
     "actionTestEmail": "测试邮件",
     "actionSplitsCleaned": "分账清理",
+    "actionUnusedReceiptsCleaned": "未使用收据清理",
     "actionMeridianLogin": "Meridian 登录",
     "actionMeridianLoggedIn": "Meridian 已登录",
     "actionMeridianLoginFailed": "Meridian 登录失败",

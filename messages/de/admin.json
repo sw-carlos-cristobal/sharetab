@@ -16,7 +16,10 @@
     "orphanedFiles": "Verwaiste Dateien",
     "orphanDescription": "Dateien auf der Festplatte, die von keinem Beleg in der Datenbank referenziert werden",
     "cleanUp": "Bereinigen",
-    "cleanedUp": "{count} Dateien bereinigt ({size} freigegeben)"
+    "cleanedUp": "{count} Dateien bereinigt ({size} freigegeben)",
+    "unusedReceipts": "Ungenutzte Belege",
+    "unusedDescription": "Belege, älter als ein Tag, die keine Gruppe, Ausgabe oder Aufteilung verwendet ({size})",
+    "unusedCleanedUp": "{count} Belege gelöscht"
   },
   "users": {
     "title": "Benutzerverwaltung",
@@ -228,6 +231,7 @@
     "actionRegModeChanged": "Registrierungsmodus geändert",
     "actionTestEmail": "Test-E-Mail",
     "actionSplitsCleaned": "Aufteilungen bereinigt",
+    "actionUnusedReceiptsCleaned": "Ungenutzte Belege bereinigt",
     "actionMeridianLogin": "Meridian-Anmeldung",
     "actionMeridianLoggedIn": "Meridian angemeldet",
     "actionMeridianLoginFailed": "Meridian-Anmeldung fehlgeschlagen",

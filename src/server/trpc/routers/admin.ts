@@ -15,7 +15,12 @@ import path from 'path';
 import { getRecentLogs } from '@/server/lib/logger';
 import { deleteGroupWithData } from '@/server/lib/group-delete';
 import { lockGroupMembers } from '@/server/lib/group-balances';
-import { deleteExpiredSplits, removeReceiptFiles } from '@/server/lib/receipt-cleanup';
+import {
+  countUnusedReceipts,
+  deleteExpiredSplits,
+  deleteUnusedReceipts,
+  removeReceiptFiles,
+} from '@/server/lib/receipt-cleanup';
 import {
   checkMeridianHealth,
   invalidateMeridianHealthCache,
@@ -962,6 +967,8 @@ export const adminRouter = createTRPCRouter({
       await scanDir(uploadDir);
     }
 
+    const unused = await countUnusedReceipts(ctx.db);
+
     return {
       receiptCount,
       diskFiles,
@@ -969,6 +976,9 @@ export const adminRouter = createTRPCRouter({
       totalDiskUsageFormatted: formatBytes(totalDiskUsage),
       orphanCount,
       orphanPaths,
+      unusedReceiptCount: unused.count,
+      unusedReceiptBytes: unused.bytes,
+      unusedReceiptBytesFormatted: formatBytes(unused.bytes),
     };
   }),
 
@@ -1032,6 +1042,16 @@ export const adminRouter = createTRPCRouter({
       freedBytesFormatted: formatBytes(freedBytes),
     };
   }),
+
+  // Receipts no group, expense or split uses, a day or more old (#312), with their files
+  cleanupUnusedReceipts: adminProcedure.mutation(async ({ ctx }) => {
+    const deletedCount = await deleteUnusedReceipts(ctx.db, 500);
+    if (deletedCount > 0) {
+      await logAdminAction(ctx.db, ctx.user.id, 'UNUSED_RECEIPTS_CLEANED', null, { deletedCount });
+    }
+    return { deletedCount };
+  }),
+
   // ─── Guest Split Cleanup ──────────────────────────────────
 
   getExpiredSplitCount: adminProcedure.query(async ({ ctx }) => {

@@ -52,6 +52,10 @@ export function AuditLogSection() {
       label: t('audit.actionSplitsCleaned'),
       color: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
     },
+    UNUSED_RECEIPTS_CLEANED: {
+      label: t('audit.actionUnusedReceiptsCleaned'),
+      color: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
+    },
     MERIDIAN_LOGIN_STARTED: {
       label: t('audit.actionMeridianLogin'),
       color: 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-400',

@@ -16,7 +16,10 @@
     "orphanedFiles": "고아 파일",
     "orphanDescription": "데이터베이스의 어떤 영수증에도 참조되지 않는 디스크 파일",
     "cleanUp": "정리",
-    "cleanedUp": "{count}개 파일 정리 완료 ({size} 확보)"
+    "cleanedUp": "{count}개 파일 정리 완료 ({size} 확보)",
+    "unusedReceipts": "사용되지 않는 영수증",
+    "unusedDescription": "그룹, 지출, 정산 어디에도 쓰이지 않는 하루 이상 지난 영수증 ({size})",
+    "unusedCleanedUp": "{count}개 영수증 삭제 완료"
   },
   "users": {
     "title": "사용자 관리",
@@ -228,6 +231,7 @@
     "actionRegModeChanged": "가입 방식 변경",
     "actionTestEmail": "테스트 이메일",
     "actionSplitsCleaned": "정산 정리",
+    "actionUnusedReceiptsCleaned": "미사용 영수증 정리",
     "actionMeridianLogin": "Meridian 로그인",
     "actionMeridianLoggedIn": "Meridian 로그인 완료",
     "actionMeridianLoginFailed": "Meridian 로그인 실패",
