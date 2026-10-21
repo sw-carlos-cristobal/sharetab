@@ -110,8 +110,8 @@ test.describe('Claim page — someone else removes a person listed earlier', () 
 
     // Dee is now third, where Cat used to be; Cat removes her
     await expect(page.getByTestId('switch-person-2')).toContainText('Dee');
-    page.once('dialog', (dialog) => void dialog.accept());
     await page.getByTestId('remove-person-2').click();
+    await page.getByRole('alertdialog', { name: 'Remove Dee?' }).getByRole('button', { name: 'Remove' }).click();
     await expect(page.getByText('Person removed').first()).toBeVisible({ timeout: 15000 });
 
     // Cat is still Cat here, on this device and after a reload

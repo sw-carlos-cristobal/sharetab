@@ -189,6 +189,8 @@ export function RegistrationControlSection() {
                             size="icon-sm"
                             onClick={() => revokeInvite.mutate({ inviteId: inv.id })}
                             disabled={revokeInvite.isPending}
+                            aria-label={t('registration.revoke')}
+                            title={t('registration.revoke')}
                           >
                             <Ban className="h-4 w-4 text-destructive" />
                           </Button>

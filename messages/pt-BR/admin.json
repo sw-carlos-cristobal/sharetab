@@ -98,6 +98,7 @@
     "colStatus": "Status",
     "colCreated": "Criado",
     "statusRevoked": "Revogado",
+    "revoke": "Revogar convite",
     "statusUsedBy": "Usado por {name}",
     "statusActive": "Ativo",
     "statusExpired": "Expirado"
@@ -261,6 +262,7 @@
     "tryAgain": "Tentar novamente",
     "testExtraction": "Testar extração de recibos",
     "changeFile": "Alterar",
+    "removeFile": "Remover arquivo",
     "uploadFile": "Enviar",
     "test": "Testar",
     "testSuccess": "Respondeu em {duration}ms",
@@ -291,6 +293,7 @@
     "loginSuccess": "Autenticação OAuth do ChatGPT concluída.",
     "testExtraction": "Testar extração de recibos",
     "changeFile": "Alterar",
+    "removeFile": "Remover arquivo",
     "uploadFile": "Enviar",
     "test": "Testar",
     "testSuccess": "Respondeu em {duration}ms",

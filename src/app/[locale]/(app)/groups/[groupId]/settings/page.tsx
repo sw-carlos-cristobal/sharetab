@@ -29,6 +29,7 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { InviteDialog } from '@/components/groups/invite-dialog';
 import { MergePlaceholderDialog } from '@/components/groups/merge-placeholder-dialog';
 import { TransferOwnershipDialog } from '@/components/groups/transfer-ownership-dialog';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { toast } from 'sonner';
 
 // Details form is a separate component so its state is initialized exactly
@@ -140,6 +141,8 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
   const [claimFor, setClaimFor] = useState<{ id: string; name: string } | null>(null);
   const [mergeFor, setMergeFor] = useState<{ id: string; name: string } | null>(null);
   const [transferOpen, setTransferOpen] = useState(false);
+  const [removeFor, setRemoveFor] = useState<{ id: string; name: string } | null>(null);
+  const [confirming, setConfirming] = useState<'archive' | 'delete' | 'leave' | null>(null);
 
   const deleteGroup = trpc.groups.delete.useMutation({
     onSuccess: () => {
@@ -341,6 +344,8 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
                           }
                           className="text-primary hover:text-primary/80"
                           disabled={renamePlaceholder.isPending}
+                          aria-label={t('settings.saveName')}
+                          title={t('settings.saveName')}
                         >
                           <Check className="h-4 w-4" />
                         </button>
@@ -348,6 +353,8 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
                           type="button"
                           onClick={() => setEditingPlaceholder(null)}
                           className="text-muted-foreground hover:text-foreground"
+                          aria-label={t('settings.cancelRename')}
+                          title={t('settings.cancelRename')}
                         >
                           <X className="h-4 w-4" />
                         </button>
@@ -385,9 +392,11 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
                           )}
                           <button
                             type="button"
+                            aria-label={t('settings.renamePlaceholder', { name: m.displayName })}
+                            title={t('settings.renamePlaceholder', { name: m.displayName })}
                             onClick={() => {
                               setEditingPlaceholder(m.user.id);
-                              setEditingName(m.user.placeholderName ?? m.user.name ?? '');
+                              setEditingName(m.displayName);
                             }}
                             className="text-muted-foreground hover:text-foreground"
                           >
@@ -395,15 +404,9 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
                           </button>
                           <button
                             type="button"
-                            onClick={() => {
-                              if (
-                                confirm(
-                                  t('settings.removeConfirm', { name: m.user.placeholderName ?? m.user.name ?? '' }),
-                                )
-                              ) {
-                                removeMember.mutate({ groupId, userId: m.user.id });
-                              }
-                            }}
+                            aria-label={t('settings.removePlaceholder', { name: m.displayName })}
+                            title={t('settings.removePlaceholder', { name: m.displayName })}
+                            onClick={() => setRemoveFor({ id: m.user.id, name: m.displayName })}
                             className="text-muted-foreground hover:text-destructive"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -441,6 +444,39 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
       {transferOpen && (
         <TransferOwnershipDialog groupId={groupId} members={newOwnerCandidates} open onOpenChange={setTransferOpen} />
       )}
+      <ConfirmDialog
+        open={removeFor !== null}
+        onOpenChange={(open) => !open && setRemoveFor(null)}
+        title={t('settings.removeTitle', { name: removeFor?.name ?? '' })}
+        description={t('settings.removeDescription', { name: removeFor?.name ?? '' })}
+        confirmLabel={t('settings.remove')}
+        onConfirm={() => removeFor && removeMember.mutate({ groupId, userId: removeFor.id })}
+      />
+      <ConfirmDialog
+        open={confirming === 'archive'}
+        onOpenChange={(open) => !open && setConfirming(null)}
+        title={t('settings.archiveTitle')}
+        description={t('settings.archiveConfirmDescription')}
+        confirmLabel={t('settings.archiveGroup')}
+        destructive={false}
+        onConfirm={() => archiveGroup.mutate({ groupId })}
+      />
+      <ConfirmDialog
+        open={confirming === 'delete'}
+        onOpenChange={(open) => !open && setConfirming(null)}
+        title={t('settings.deleteTitle')}
+        description={t('settings.deleteConfirmDescription')}
+        confirmLabel={t('settings.deleteGroup')}
+        onConfirm={() => deleteGroup.mutate({ groupId })}
+      />
+      <ConfirmDialog
+        open={confirming === 'leave'}
+        onOpenChange={(open) => !open && setConfirming(null)}
+        title={t('settings.leaveTitle')}
+        description={t('settings.leaveConfirmDescription')}
+        confirmLabel={t('settings.leaveGroup')}
+        onConfirm={() => myId && leaveGroup.mutate({ groupId, userId: myId })}
+      />
 
       <Separator />
 
@@ -452,15 +488,7 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
           {isOwnerOrAdmin && !group.data.archivedAt && (
             <div>
               <p className="mb-2 text-sm text-muted-foreground">{t('settings.archiveDescription')}</p>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  if (confirm(t('settings.archiveConfirm'))) {
-                    archiveGroup.mutate({ groupId });
-                  }
-                }}
-                disabled={archiveGroup.isPending}
-              >
+              <Button variant="outline" onClick={() => setConfirming('archive')} disabled={archiveGroup.isPending}>
                 <Archive className="mr-2 h-4 w-4" />
                 {archiveGroup.isPending ? t('settings.archiving') : t('settings.archiveGroup')}
               </Button>
@@ -485,15 +513,7 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
           {myRole === 'OWNER' ? (
             <div>
               <p className="mb-2 text-sm text-muted-foreground">{t('settings.deleteDescription')}</p>
-              <Button
-                variant="destructive"
-                onClick={() => {
-                  if (confirm(t('settings.deleteConfirm'))) {
-                    deleteGroup.mutate({ groupId });
-                  }
-                }}
-                disabled={deleteGroup.isPending}
-              >
+              <Button variant="destructive" onClick={() => setConfirming('delete')} disabled={deleteGroup.isPending}>
                 <Trash2 className="mr-2 h-4 w-4" />
                 {deleteGroup.isPending ? t('settings.deleting') : t('settings.deleteGroup')}
               </Button>
@@ -504,15 +524,7 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
             myId && (
               <div>
                 <p className="mb-2 text-sm text-muted-foreground">{t('settings.leaveDescription')}</p>
-                <Button
-                  variant="destructive"
-                  onClick={() => {
-                    if (confirm(t('settings.leaveConfirm'))) {
-                      leaveGroup.mutate({ groupId, userId: myId });
-                    }
-                  }}
-                  disabled={leaveGroup.isPending}
-                >
+                <Button variant="destructive" onClick={() => setConfirming('leave')} disabled={leaveGroup.isPending}>
                   <LogOut className="mr-2 h-4 w-4" />
                   {leaveGroup.isPending ? t('settings.leaving') : t('settings.leaveGroup')}
                 </Button>

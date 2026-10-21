@@ -11,7 +11,8 @@
   "finalized": "Completado",
   "untitled": "Division sin titulo",
   "delete": "Eliminar división",
-  "deleteConfirm": "¿Eliminar esta división? Esta acción no se puede deshacer.",
+  "deleteTitle": "¿Eliminar esta división?",
+  "deleteDescription": "Su enlace dejará de funcionar para todas las personas con quienes lo compartiste. Esta acción no se puede deshacer.",
   "deleted": "División eliminada",
   "loading": "Cargando..."
 }

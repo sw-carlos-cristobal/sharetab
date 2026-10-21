@@ -108,6 +108,8 @@ npx prisma db push   # Push schema without migration (dev only)
 - Prisma v7: import from `@/generated/prisma/client` (not `@/generated/prisma` — no index.ts)
 - shadcn/ui v4: Button uses `render` prop for polymorphism, NOT `asChild`
 - shadcn/ui v4: When rendering Button as a Link, add `nativeButton={false}` — **every** `render={<Link>}` needs this
+- Ask before a destructive action with `ConfirmDialog` (`src/components/confirm-dialog.tsx`, on shadcn's `AlertDialog`), never `window.confirm` (#267): the browser's box can't be translated and can't say what the action will do. Open it from state (`open={removeFor !== null}`, clearing the state on close); it keeps the text it was opened with while it animates closed. E2e tests click its buttons inside `getByRole('alertdialog')`
+- Icon-only buttons need an `aria-label` (and a `title` for a mouse hover), translated like any other text
 - Split components (`equal-split`, `exact-split`, `percentage-split`, `shares-split`): `useEffect` deps must only include user-controlled state (`selected`, `amounts`, etc.) and `totalCents` — never `members` or `onChange` (causes infinite re-renders)
 - Dark mode: class-based via `next-themes` ThemeProvider; toggle in sidebar and mobile menu
 - Theme: emerald/teal accent color (OKLCH), neutral backgrounds — defined in `globals.css`

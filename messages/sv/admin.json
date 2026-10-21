@@ -98,6 +98,7 @@
     "colStatus": "Status",
     "colCreated": "Skapad",
     "statusRevoked": "Återkallad",
+    "revoke": "Återkalla inbjudan",
     "statusUsedBy": "Använd av {name}",
     "statusActive": "Aktiv",
     "statusExpired": "Utgången"
@@ -261,6 +262,7 @@
     "tryAgain": "Försök igen",
     "testExtraction": "Testa kvittoextraktion",
     "changeFile": "Byt",
+    "removeFile": "Ta bort fil",
     "uploadFile": "Ladda upp",
     "test": "Testa",
     "testSuccess": "Svarade på {duration}ms",
@@ -291,6 +293,7 @@
     "loginSuccess": "ChatGPT OAuth-autentisering slutförd.",
     "testExtraction": "Testa kvittoextraktion",
     "changeFile": "Byt",
+    "removeFile": "Ta bort fil",
     "uploadFile": "Ladda upp",
     "test": "Testa",
     "testSuccess": "Svarade på {duration}ms",

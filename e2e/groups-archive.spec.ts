@@ -292,8 +292,8 @@ test.describe('Group Archiving', () => {
       );
 
       await page.goto(`/en/groups/${groupId}/settings`);
-      page.on('dialog', (dialog) => dialog.accept());
       await page.getByRole('button', { name: /Archive group/ }).click();
+      await page.getByRole('alertdialog').getByRole('button', { name: 'Archive group' }).click();
       await page.waitForURL('**/groups', { timeout: 10000 });
 
       await dispose();
@@ -435,8 +435,8 @@ test.describe('Group Archiving', () => {
       await expect(page.getByText('No expenses yet.')).toBeVisible();
       await expect(page.getByRole('button', { name: 'Add your first expense' })).toHaveCount(0);
 
-      page.on('dialog', (dialog) => dialog.accept());
       await page.locator('[data-slot="card"]', { hasText: 'The Golden Fork' }).getByRole('button').click();
+      await page.getByRole('alertdialog').getByRole('button', { name: 'Delete', exact: true }).click();
       await expect(page.getByText('The Golden Fork')).toHaveCount(0);
 
       await dispose();
@@ -474,8 +474,8 @@ test.describe('Group Archiving', () => {
       await login(page, users.bob.email, users.bob.password);
 
       await page.goto(`/en/groups/${groupId}/expenses/${expenseId}`);
-      page.on('dialog', (dialog) => dialog.accept());
       await page.getByRole('button', { name: 'Delete', exact: true }).click();
+      await page.getByRole('alertdialog').getByRole('button', { name: 'Delete', exact: true }).click();
       await expect(
         page.getByText('Only the expense creator, payer, or group owner/admin can delete this expense'),
       ).toBeVisible();

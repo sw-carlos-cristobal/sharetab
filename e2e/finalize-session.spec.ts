@@ -158,9 +158,15 @@ test.describe('Finalize claim session', () => {
     await finalizeBtn.scrollIntoViewIfNeeded();
     await expect(finalizeBtn).toBeVisible({ timeout: 5000 });
 
-    // Accept the confirmation dialog
-    page.on('dialog', (dialog) => dialog.accept());
+    // The page asks first (#267); Cancel leaves the session open
     await finalizeBtn.click();
+    const confirm = page.getByRole('alertdialog', { name: 'Finalize this split?' });
+    await expect(confirm).toContainText('nobody can change their claims');
+    await confirm.getByRole('button', { name: 'Cancel' }).click();
+    await expect(confirm).toBeHidden();
+    await expect(finalizeBtn).toBeVisible();
+    await finalizeBtn.click();
+    await confirm.getByRole('button', { name: 'Finalize Split' }).click();
 
     // Should transition to finalized summary view
     await expect(page.getByText(/finalized/i).first()).toBeVisible({ timeout: 15000 });

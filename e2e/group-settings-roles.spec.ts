@@ -63,8 +63,11 @@ test.describe('Group settings by role', () => {
     try {
       await login(page, users.bob.email, users.bob.password);
       await page.goto(`/en/groups/${groupId}/settings`);
-      page.on('dialog', (dialog) => dialog.accept());
       await page.getByRole('button', { name: /Leave group/ }).click();
+      await page
+        .getByRole('alertdialog', { name: 'Leave this group?' })
+        .getByRole('button', { name: 'Leave group' })
+        .click();
 
       await page.waitForURL(/\/en\/groups$/, { timeout: 10_000 });
       await page.getByPlaceholder('Search groups...').fill('Settings Leave Test');
@@ -97,8 +100,11 @@ test.describe('Group settings by role', () => {
     try {
       await login(page, users.bob.email, users.bob.password);
       await page.goto(`/en/groups/${groupId}/settings`);
-      page.on('dialog', (dialog) => dialog.accept());
       await page.getByRole('button', { name: /Leave group/ }).click();
+      await page
+        .getByRole('alertdialog', { name: 'Leave this group?' })
+        .getByRole('button', { name: 'Leave group' })
+        .click();
 
       await expect(
         page.getByText('You still owe or are owed money in this group. Settle up before you leave.'),
@@ -162,8 +168,11 @@ test.describe('Transferring ownership', () => {
       );
       expect(roles).toEqual({ [memberIds[users.alice.email]!]: 'MEMBER', [memberIds[users.bob.email]!]: 'OWNER' });
 
-      page.on('dialog', (dialog) => dialog.accept());
       await page.getByRole('button', { name: /Leave group/ }).click();
+      await page
+        .getByRole('alertdialog', { name: 'Leave this group?' })
+        .getByRole('button', { name: 'Leave group' })
+        .click();
       await page.waitForURL(/\/en\/groups$/, { timeout: 10_000 });
     } finally {
       // Only Bob can delete it now

@@ -11,7 +11,8 @@
   "finalized": "完了",
   "untitled": "無題の割り勘",
   "delete": "分割を削除",
-  "deleteConfirm": "この分割を削除しますか？元に戻せません。",
+  "deleteTitle": "この分割を削除しますか？",
+  "deleteDescription": "共有したすべての人に対してリンクが使えなくなります。元に戻せません。",
   "deleted": "分割を削除しました",
   "loading": "読み込み中..."
 }

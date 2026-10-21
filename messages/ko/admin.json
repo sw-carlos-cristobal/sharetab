@@ -98,6 +98,7 @@
     "colStatus": "상태",
     "colCreated": "생성일",
     "statusRevoked": "취소됨",
+    "revoke": "초대 취소",
     "statusUsedBy": "{name}이(가) 사용함",
     "statusActive": "활성",
     "statusExpired": "만료됨"
@@ -261,6 +262,7 @@
     "tryAgain": "다시 시도",
     "testExtraction": "영수증 추출 테스트",
     "changeFile": "변경",
+    "removeFile": "파일 제거",
     "uploadFile": "업로드",
     "test": "테스트",
     "testSuccess": "{duration}ms 만에 응답",
@@ -291,6 +293,7 @@
     "loginSuccess": "ChatGPT OAuth 인증이 완료되었습니다.",
     "testExtraction": "영수증 추출 테스트",
     "changeFile": "변경",
+    "removeFile": "파일 제거",
     "uploadFile": "업로드",
     "test": "테스트",
     "testSuccess": "{duration}ms 만에 응답",

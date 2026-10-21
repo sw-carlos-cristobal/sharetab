@@ -1,6 +1,6 @@
 'use client';
 
-import { use } from 'react';
+import { use, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Link, useRouter } from '@/i18n/navigation';
 import { trpc } from '@/lib/trpc';
@@ -12,12 +12,14 @@ import { Separator } from '@/components/ui/separator';
 import { ArrowLeft, Trash2, Pencil } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { toast } from 'sonner';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 
 export default function ExpenseDetailPage({ params }: { params: Promise<{ groupId: string; expenseId: string }> }) {
   const { groupId, expenseId } = use(params);
   const locale = useLocale();
   const router = useRouter();
   const t = useTranslations('expenses');
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const expense = trpc.expenses.get.useQuery({ groupId, expenseId });
   const group = trpc.groups.get.useQuery({ groupId });
@@ -143,11 +145,7 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ groupI
           <Button
             variant="destructive"
             className="flex-1"
-            onClick={() => {
-              if (confirm(t('detail.deleteConfirm'))) {
-                deleteExpense.mutate({ groupId, expenseId });
-              }
-            }}
+            onClick={() => setConfirmDelete(true)}
             disabled={deleteExpense.isPending}
           >
             <Trash2 className="mr-2 h-4 w-4" />
@@ -155,6 +153,14 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ groupI
           </Button>
         </div>
       )}
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title={t('detail.deleteTitle')}
+        description={t('detail.deleteDescription', { title: e.title })}
+        confirmLabel={t('detail.delete')}
+        onConfirm={() => deleteExpense.mutate({ groupId, expenseId })}
+      />
     </div>
   );
 }

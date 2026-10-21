@@ -98,6 +98,7 @@
     "colStatus": "状态",
     "colCreated": "创建时间",
     "statusRevoked": "已撤销",
+    "revoke": "撤销邀请",
     "statusUsedBy": "{name} 已使用",
     "statusActive": "有效",
     "statusExpired": "已过期"
@@ -261,6 +262,7 @@
     "tryAgain": "重试",
     "testExtraction": "测试收据提取",
     "changeFile": "更换",
+    "removeFile": "移除文件",
     "uploadFile": "上传",
     "test": "测试",
     "testSuccess": "在 {duration}ms 内响应",
@@ -291,6 +293,7 @@
     "loginSuccess": "ChatGPT OAuth 认证完成。",
     "testExtraction": "测试收据提取",
     "changeFile": "更换",
+    "removeFile": "移除文件",
     "uploadFile": "上传",
     "test": "测试",
     "testSuccess": "在 {duration}ms 内响应",

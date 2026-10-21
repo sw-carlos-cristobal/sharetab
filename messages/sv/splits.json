@@ -11,7 +11,8 @@
   "finalized": "Slutford",
   "untitled": "Namnlos delning",
   "delete": "Ta bort delning",
-  "deleteConfirm": "Ta bort denna delning? Detta kan inte ångras.",
+  "deleteTitle": "Ta bort denna delning?",
+  "deleteDescription": "Länken slutar fungera för alla du delade den med. Detta kan inte ångras.",
   "deleted": "Delning borttagen",
   "loading": "Laddar..."
 }

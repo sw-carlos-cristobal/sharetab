@@ -66,6 +66,7 @@ import { toast } from 'sonner';
 import { Link } from '@/i18n/navigation';
 import { buildVenmoPayUrl, isValidVenmoHandle } from '@/lib/venmo';
 import { getInitials, guestAvatarColor } from '@/lib/avatar';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 
 // How one claim save attempt ended: the answer's conflicts when stored, the server's message
 // when refused
@@ -137,6 +138,8 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   const [editingGroupSize, setEditingGroupSize] = useState(1);
   const [splittingItemIdx, setSplittingItemIdx] = useState<number | null>(null);
   const [splitQty, setSplitQty] = useState('');
+  const [removeFor, setRemoveFor] = useState<{ id: string; name: string } | null>(null);
+  const [confirmFinalize, setConfirmFinalize] = useState(false);
   // The creator's edit of the payer's Venmo handle (see venmoHandle below)
   const [venmoHandleEdit, setVenmoHandleEdit] = useState<string | null>(null);
   const { data: authSession } = useSession();
@@ -1344,6 +1347,8 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
                       variant="ghost"
                       className="h-7 px-2"
                       disabled={editPersonName.isPending}
+                      aria-label={t('saveName')}
+                      title={t('saveName')}
                     >
                       <Check className="h-3.5 w-3.5" />
                     </Button>
@@ -1353,6 +1358,8 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
                       variant="ghost"
                       className="h-7 px-2"
                       onClick={() => setEditingPersonId(null)}
+                      aria-label={t('cancelButton')}
+                      title={t('cancelButton')}
                     >
                       <X className="h-3.5 w-3.5" />
                     </Button>
@@ -1382,15 +1389,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
                     {data.people.length > 1 && (
                       <button
                         type="button"
-                        onClick={() => {
-                          if (confirm(t('removePersonConfirm', { name: person.name }))) {
-                            removePerson.mutate({
-                              token,
-                              personToken: personToken!,
-                              targetId: person.id,
-                            });
-                          }
-                        }}
+                        onClick={() => setRemoveFor({ id: person.id, name: person.name })}
                         className="text-muted-foreground hover:text-destructive p-1"
                         aria-label={t('removePerson')}
                         data-testid={`remove-person-${idx}`}
@@ -1724,15 +1723,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
               <Button
                 variant="outline"
                 className="w-full h-12 mb-2"
-                onClick={() => {
-                  if (confirm(t('finalizeConfirm'))) {
-                    finalizeSession.mutate({
-                      token,
-                      personId: myPersonId,
-                      personToken,
-                    });
-                  }
-                }}
+                onClick={() => setConfirmFinalize(true)}
                 disabled={finalizeSession.isPending}
                 data-testid="finalize-btn"
               >
@@ -1772,6 +1763,40 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
           </Button>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={removeFor !== null}
+        onOpenChange={(open) => !open && setRemoveFor(null)}
+        title={t('removePersonTitle', { name: removeFor?.name ?? '' })}
+        description={t('removePersonDescription')}
+        confirmLabel={t('remove')}
+        onConfirm={() =>
+          removeFor &&
+          personToken &&
+          removePerson.mutate({
+            token,
+            personToken,
+            targetId: removeFor.id,
+          })
+        }
+      />
+      <ConfirmDialog
+        open={confirmFinalize}
+        onOpenChange={setConfirmFinalize}
+        title={t('finalizeTitle')}
+        description={t('finalizeDescription')}
+        confirmLabel={t('finalizeSplit')}
+        destructive={false}
+        onConfirm={() =>
+          personToken &&
+          myPersonId !== null &&
+          finalizeSession.mutate({
+            token,
+            personId: myPersonId,
+            personToken,
+          })
+        }
+      />
     </div>
   );
 }

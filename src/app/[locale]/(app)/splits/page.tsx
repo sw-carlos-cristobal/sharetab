@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { Link } from '@/i18n/navigation';
 import { trpc } from '@/lib/trpc';
 import { formatCents } from '@/lib/money';
@@ -9,10 +10,13 @@ import { Button } from '@/components/ui/button';
 import { Scissors, Receipt, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslations, useLocale } from 'next-intl';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 
 export default function SplitsPage() {
   const t = useTranslations('splits');
+  const tc = useTranslations('common');
   const locale = useLocale();
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = trpc.guest.mySplits.useInfiniteQuery(
     { limit: 20 },
@@ -101,11 +105,7 @@ export default function SplitsPage() {
             </Link>
             <button
               type="button"
-              onClick={() => {
-                if (confirm(t('deleteConfirm'))) {
-                  deleteSplit.mutate({ id: split.id });
-                }
-              }}
+              onClick={() => setDeleteId(split.id)}
               className="absolute top-3 right-3 rounded-md p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
               aria-label={t('delete')}
               data-testid={`delete-split-${split.id}`}
@@ -123,6 +123,15 @@ export default function SplitsPage() {
           </Button>
         </div>
       )}
+
+      <ConfirmDialog
+        open={deleteId !== null}
+        onOpenChange={(open) => !open && setDeleteId(null)}
+        title={t('deleteTitle')}
+        description={t('deleteDescription')}
+        confirmLabel={tc('actions.delete')}
+        onConfirm={() => deleteId && deleteSplit.mutate({ id: deleteId })}
+      />
     </div>
   );
 }

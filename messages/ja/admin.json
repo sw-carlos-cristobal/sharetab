@@ -98,6 +98,7 @@
     "colStatus": "ステータス",
     "colCreated": "作成日",
     "statusRevoked": "取り消し済み",
+    "revoke": "招待を取り消す",
     "statusUsedBy": "{name}が使用",
     "statusActive": "有効",
     "statusExpired": "期限切れ"
@@ -261,6 +262,7 @@
     "tryAgain": "再試行",
     "testExtraction": "レシート抽出をテスト",
     "changeFile": "変更",
+    "removeFile": "ファイルを削除",
     "uploadFile": "アップロード",
     "test": "テスト",
     "testSuccess": "{duration}msで応答",
@@ -291,6 +293,7 @@
     "loginSuccess": "ChatGPT OAuthの認証が完了しました。",
     "testExtraction": "レシート抽出をテスト",
     "changeFile": "変更",
+    "removeFile": "ファイルを削除",
     "uploadFile": "アップロード",
     "test": "テスト",
     "testSuccess": "{duration}msで応答",

@@ -14,6 +14,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { chipLabels } from '@/lib/avatar';
 import { Check, Users, Pencil, Trash2, Plus, Image as ImageIcon, Scissors, Bookmark } from 'lucide-react';
 import { toast } from 'sonner';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 
 type Member = { id: string; name: string | null };
 
@@ -61,6 +62,7 @@ export function ItemAssignment({
   const [newItem, setNewItem] = useState({ name: '', quantity: '1', totalPrice: '' });
   const [splittingItem, setSplittingItem] = useState<string | null>(null);
   const [splitQuantity, setSplitQuantity] = useState('');
+  const [removeItem, setRemoveItem] = useState<{ id: string; name: string } | null>(null);
 
   const createExpense = trpc.receipts.assignItemsAndCreateExpense.useMutation({
     onSuccess: onComplete,
@@ -674,17 +676,17 @@ export function ItemAssignment({
                         type="button"
                         onClick={() => startEditing(item)}
                         className="text-muted-foreground hover:text-foreground"
+                        aria-label={t('editItem', { name: item.name })}
+                        title={t('editItem', { name: item.name })}
                       >
                         <Pencil className="h-3 w-3" />
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
-                          if (confirm(t('removeConfirm', { name: item.name }))) {
-                            deleteItem.mutate({ itemId: item.id });
-                          }
-                        }}
+                        onClick={() => setRemoveItem({ id: item.id, name: item.name })}
                         className="text-muted-foreground hover:text-destructive"
+                        aria-label={t('removeItem', { name: item.name })}
+                        title={t('removeItem', { name: item.name })}
                       >
                         <Trash2 className="h-3 w-3" />
                       </button>
@@ -842,6 +844,14 @@ export function ItemAssignment({
           {saveForLater.isPending ? t('saving') : t('saveForLater')}
         </Button>
       )}
+      <ConfirmDialog
+        open={removeItem !== null}
+        onOpenChange={(open) => !open && setRemoveItem(null)}
+        title={t('removeTitle', { name: removeItem?.name ?? '' })}
+        description={t('removeDescription')}
+        confirmLabel={t('remove')}
+        onConfirm={() => removeItem && deleteItem.mutate({ itemId: removeItem.id })}
+      />
     </form>
   );
 }

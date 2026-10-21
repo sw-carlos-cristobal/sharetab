@@ -286,8 +286,8 @@ test.describe('Expenses', () => {
       await page.waitForURL(/\/expenses\/\w+$/);
 
       // Confirm delete
-      page.on('dialog', (dialog) => dialog.accept());
       await page.getByRole('button', { name: /Delete/i }).click();
+      await page.getByRole('alertdialog').getByRole('button', { name: 'Delete', exact: true }).click();
 
       // Should redirect back to group
       await page.waitForURL(/\/groups\/\w+$/, { timeout: 10000 });

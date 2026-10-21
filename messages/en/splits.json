@@ -11,7 +11,8 @@
   "finalized": "Complete",
   "untitled": "Untitled split",
   "delete": "Delete split",
-  "deleteConfirm": "Delete this split? This cannot be undone.",
+  "deleteTitle": "Delete this split?",
+  "deleteDescription": "Its link stops working for everyone you shared it with. This can't be undone.",
   "deleted": "Split deleted",
   "loading": "Loading..."
 }

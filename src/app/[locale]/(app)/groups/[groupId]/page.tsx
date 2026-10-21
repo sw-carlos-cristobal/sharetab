@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { InviteDialog } from '@/components/groups/invite-dialog';
 import { SettleDialog } from '@/components/groups/settle-dialog';
 import { PaymentsList } from '@/components/groups/payments-list';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { getInitials, avatarColor } from '@/lib/avatar';
 
 export default function GroupDetailPage({ params }: { params: Promise<{ groupId: string }> }) {
@@ -29,8 +30,12 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
     to?: string;
     amount?: number;
   }>({ open: false });
+  // The Venmo payment to ask about once the payer is back from Venmo
+  const [venmoPaid, setVenmoPaid] = useState<{ from: string; to: string; amount: number; toName: string } | null>(null);
+  const [deleteReceiptId, setDeleteReceiptId] = useState<string | null>(null);
 
   const t = useTranslations('groups');
+  const tc = useTranslations('common');
   // Who tRPC acts as: the impersonated user while an admin impersonates, where
   // useSession() would still report the admin.
   const profile = trpc.auth.getProfile.useQuery();
@@ -106,6 +111,8 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
           <Button
             variant="outline"
             size="sm"
+            aria-label={t('settings.title')}
+            title={t('settings.title')}
             nativeButton={false}
             render={<Link href={`/groups/${groupId}/settings`} />}
           >
@@ -247,23 +254,7 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
                         window.open(venmoUrl, '_blank', 'noopener,noreferrer');
                         settleTimerRef.current = setTimeout(() => {
                           settleTimerRef.current = null;
-                          if (
-                            confirm(
-                              t('detail.venmoPaymentConfirm', {
-                                amount: formatCents(debt.amount, g.currency, locale),
-                                name: toName,
-                              }),
-                            )
-                          ) {
-                            settleVenmo.mutate({
-                              groupId,
-                              fromId: debt.from,
-                              toId: debt.to,
-                              amount: debt.amount,
-                              currency: g.currency,
-                              note: t('detail.settledViaVenmo'),
-                            });
-                          }
+                          setVenmoPaid({ from: debt.from, to: debt.to, amount: debt.amount, toName });
                         }, 2000);
                       }}
                       data-testid={`venmo-settle-${i}`}
@@ -320,11 +311,9 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
                       <button
                         type="button"
                         className="text-muted-foreground hover:text-destructive transition-colors p-1"
-                        onClick={() => {
-                          if (confirm(t('detail.deleteReceiptConfirm'))) {
-                            deletePending.mutate({ receiptId: r.id });
-                          }
-                        }}
+                        aria-label={t('detail.deleteReceipt')}
+                        title={t('detail.deleteReceipt')}
+                        onClick={() => setDeleteReceiptId(r.id)}
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -445,6 +434,37 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
         currency={g.currency}
         open={settleState.open}
         onOpenChange={(open) => setSettleState((s) => ({ ...s, open }))}
+      />
+      <ConfirmDialog
+        open={venmoPaid !== null}
+        onOpenChange={(open) => !open && setVenmoPaid(null)}
+        title={t('detail.venmoPaidTitle')}
+        description={t('detail.venmoPaidDescription', {
+          amount: venmoPaid ? formatCents(venmoPaid.amount, g.currency, locale) : '',
+          name: venmoPaid?.toName ?? '',
+        })}
+        confirmLabel={t('detail.venmoPaidConfirm')}
+        cancelLabel={t('detail.venmoPaidCancel')}
+        destructive={false}
+        onConfirm={() =>
+          venmoPaid &&
+          settleVenmo.mutate({
+            groupId,
+            fromId: venmoPaid.from,
+            toId: venmoPaid.to,
+            amount: venmoPaid.amount,
+            currency: g.currency,
+            note: t('detail.settledViaVenmo'),
+          })
+        }
+      />
+      <ConfirmDialog
+        open={deleteReceiptId !== null}
+        onOpenChange={(open) => !open && setDeleteReceiptId(null)}
+        title={t('detail.deleteReceiptTitle')}
+        description={t('detail.deleteReceiptDescription')}
+        confirmLabel={tc('actions.delete')}
+        onConfirm={() => deleteReceiptId && deletePending.mutate({ receiptId: deleteReceiptId })}
       />
     </div>
   );

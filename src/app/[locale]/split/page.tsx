@@ -939,6 +939,8 @@ export default function GuestSplitPage() {
                             type="button"
                             onClick={() => startEditing(itemIdx)}
                             className="text-muted-foreground hover:text-foreground p-1"
+                            aria-label={t('assign.editItem', { name: item.name })}
+                            title={t('assign.editItem', { name: item.name })}
                           >
                             <Pencil className="h-3 w-3" />
                           </button>
@@ -946,6 +948,8 @@ export default function GuestSplitPage() {
                             type="button"
                             onClick={() => deleteItem(itemIdx)}
                             className="text-muted-foreground hover:text-destructive p-1"
+                            aria-label={t('assign.removeItem', { name: item.name })}
+                            title={t('assign.removeItem', { name: item.name })}
                           >
                             <Trash2 className="h-3 w-3" />
                           </button>

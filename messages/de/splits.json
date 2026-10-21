@@ -11,7 +11,8 @@
   "finalized": "Abgeschlossen",
   "untitled": "Unbenannte Teilung",
   "delete": "Split löschen",
-  "deleteConfirm": "Diesen Split löschen? Dies kann nicht rückgängig gemacht werden.",
+  "deleteTitle": "Diesen Split löschen?",
+  "deleteDescription": "Der Link funktioniert dann für niemanden mehr, mit dem Sie ihn geteilt haben. Dies kann nicht rückgängig gemacht werden.",
   "deleted": "Split gelöscht",
   "loading": "Laden..."
 }

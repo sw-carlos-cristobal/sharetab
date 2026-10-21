@@ -22,6 +22,7 @@
     "saving": "保存中...",
     "submit": "送信",
     "openMenu": "メニューを開く",
+    "toggleTheme": "テーマを切り替え",
     "copyFailed": "リンクをクリップボードにコピーできませんでした"
   },
   "brand": {
