@@ -105,8 +105,9 @@ export async function deleteExpiredSplits(db: Db, batchSize: number): Promise<nu
 
 // Quick Split keeps a scan only in the page until a split is made from it, and the group
 // scan page saves its upload to the group once processing starts, so a receipt nothing
-// uses yet may still be on its way. Only ones nothing changed for a day count as unused:
-// scanning one again marks it PROCESSING first, so one being scanned isn't
+// uses yet may still be on its way. Only ones nothing changed for a day count as unused.
+// Scanning one again marks it PROCESSING first, which updates `updatedAt`, so a receipt
+// being scanned is newer than the cutoff and isn't counted
 const UNUSED_RECEIPT_MIN_AGE_MS = 24 * 60 * 60 * 1000;
 const unusedReceiptCutoff = () => new Date(Date.now() - UNUSED_RECEIPT_MIN_AGE_MS);
 
