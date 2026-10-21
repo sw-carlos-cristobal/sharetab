@@ -8,12 +8,38 @@ import { deleteGroupWithData } from '../../lib/group-delete';
 import { removeReceiptFiles } from '../../lib/receipt-cleanup';
 import { mergePlaceholderIntoUser } from '../../lib/placeholder-merge';
 import { checkRateLimit } from '../../lib/rate-limit';
+import { normalizeGuestName } from '@/lib/guest-session';
 
 // Invite tokens are cuids (25 characters); a defensive bound so oversized input never reaches the lookup.
 const inviteTokenSchema = z.string().max(64);
 // getInvite answers whether a token is live without using it up, so cap how fast one account can ask.
 const INVITE_LOOKUP_LIMIT = 30;
 const INVITE_LOOKUP_WINDOW_MS = 60 * 1000;
+
+// "Alice" and "alice" could both be added, and the expense pickers then showed two rows that
+// look the same (#265). A placeholder's name is compared with every member's, ignoring case
+// and surrounding spaces, as claim sessions compare names. The caller holds
+// `lockGroupMembers`, so two people adding one name at the same moment can't both see it free.
+async function assertPlaceholderNameFree(
+  tx: Prisma.TransactionClient,
+  groupId: string,
+  name: string,
+  exceptUserId?: string,
+): Promise<void> {
+  const members = await tx.groupMember.findMany({
+    where: { groupId },
+    select: { userId: true, user: { select: { name: true, placeholderName: true } } },
+  });
+  const wanted = normalizeGuestName(name);
+  const taken = members.some(
+    (m) =>
+      m.userId !== exceptUserId &&
+      [m.user.placeholderName, m.user.name].some((n) => n != null && normalizeGuestName(n) === wanted),
+  );
+  if (taken) {
+    throw new TRPCError({ code: 'CONFLICT', message: 'Someone in this group already has that name' });
+  }
+}
 
 export const groupsRouter = createTRPCRouter({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -636,17 +662,21 @@ export const groupsRouter = createTRPCRouter({
       const { randomUUID } = await import('crypto');
       const placeholderEmail = `placeholder-${randomUUID()}@placeholder.local`;
 
-      // One write: if the group is deleted meanwhile, the membership can't be made
-      // and the placeholder is rolled back with it, instead of staying with no group (#265)
-      const user = await ctx.db.user.create({
-        data: {
-          email: placeholderEmail,
-          name: input.name,
-          isPlaceholder: true,
-          placeholderName: input.name,
-          createdByUserId: ctx.user.id,
-          groupMembers: { create: { groupId: input.groupId } },
-        },
+      const user = await ctx.db.$transaction(async (tx) => {
+        await lockGroupMembers(tx, input.groupId);
+        await assertPlaceholderNameFree(tx, input.groupId, input.name);
+        // One write: if the group is deleted meanwhile, the membership can't be made
+        // and the placeholder is rolled back with it, instead of staying with no group (#265)
+        return tx.user.create({
+          data: {
+            email: placeholderEmail,
+            name: input.name,
+            isPlaceholder: true,
+            placeholderName: input.name,
+            createdByUserId: ctx.user.id,
+            groupMembers: { create: { groupId: input.groupId } },
+          },
+        });
       });
 
       await ctx.db.activityLog.create({
@@ -677,9 +707,13 @@ export const groupsRouter = createTRPCRouter({
       if (!membership) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Placeholder is not a member of this group' });
       }
-      return ctx.db.user.update({
-        where: { id: input.placeholderUserId },
-        data: { placeholderName: input.name, name: input.name },
+      return ctx.db.$transaction(async (tx) => {
+        await lockGroupMembers(tx, input.groupId);
+        await assertPlaceholderNameFree(tx, input.groupId, input.name, input.placeholderUserId);
+        return tx.user.update({
+          where: { id: input.placeholderUserId },
+          data: { placeholderName: input.name, name: input.name },
+        });
       });
     }),
 

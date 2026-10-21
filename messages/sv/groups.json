@@ -74,6 +74,7 @@
     "namePlaceholder": "Namn (t.ex. David)",
     "adding": "Lägger till...",
     "add": "Lägg till",
+    "placeholderNameTaken": "Någon i den här gruppen heter redan {name}.",
     "placeholderMembers": "Platshållarmedlemmar ({count})",
     "pending": "Väntande",
     "removeConfirm": "Ta bort \"{name}\"?",

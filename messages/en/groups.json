@@ -74,6 +74,7 @@
     "namePlaceholder": "Name (e.g., Dave)",
     "adding": "Adding...",
     "add": "Add",
+    "placeholderNameTaken": "Someone in this group is already called {name}.",
     "placeholderMembers": "Placeholder members ({count})",
     "pending": "Pending",
     "removeConfirm": "Remove \"{name}\"?",

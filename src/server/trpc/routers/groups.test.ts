@@ -69,6 +69,7 @@ beforeEach(() => {
   );
   // The merge locks the target's membership row; it's there unless a test says otherwise
   mockDb.$queryRaw.mockResolvedValue([{ id: 'gm-target' }]);
+  mockDb.groupMember.findMany.mockResolvedValue([]);
 });
 
 type Membership = { id: string; role: 'OWNER' | 'ADMIN' | 'MEMBER'; userId: string; groupId: string };
@@ -156,6 +157,76 @@ describe('group and placeholder names are trimmed', () => {
       code: 'BAD_REQUEST',
     });
     expect(mockDb.user.update).not.toHaveBeenCalled();
+  });
+});
+
+// #265: "Alice" and "alice" could both be added to a group, and the expense pickers then
+// showed two rows that look the same. A placeholder's name is compared with every
+// member's, ignoring case and surrounding spaces, as claim sessions compare names.
+describe('placeholder names are unique in the group', () => {
+  const members = [
+    { userId: 'owner', user: { name: 'Olivia Owner', placeholderName: null } },
+    { userId: 'p1', user: { name: 'Alice', placeholderName: 'Alice' } },
+  ];
+  const lockIndex = () =>
+    mockDb.$queryRaw.mock.calls.findIndex(([strings]) =>
+      /FROM "Group" WHERE "id" = \? FOR NO KEY UPDATE/.test((strings as string[]).join('?')),
+    );
+
+  beforeEach(() => {
+    mockDb.groupMember.findMany.mockResolvedValue(members);
+    mockDb.user.create.mockResolvedValue({ id: 'p2', name: 'Bob' });
+  });
+
+  test.each(['alice', '  ALICE ', 'olivia owner'])(
+    'addPlaceholder refuses %j, a name a member already has',
+    async (name) => {
+      const api = await caller();
+      await expect(api.addPlaceholder({ groupId: 'g1', name })).rejects.toMatchObject({ code: 'CONFLICT' });
+      expect(mockDb.user.create).not.toHaveBeenCalled();
+      expect(mockDb.activityLog.create).not.toHaveBeenCalled();
+    },
+  );
+
+  // Two people adding "Alice" at the same moment would each see no Alice yet
+  test('addPlaceholder reads the names under the group member lock, then adds', async () => {
+    const api = await caller();
+    await api.addPlaceholder({ groupId: 'g1', name: 'Bob' });
+
+    expect(lockIndex()).toBeGreaterThanOrEqual(0);
+    const locked = mockDb.$queryRaw.mock.invocationCallOrder[lockIndex()]!;
+    expect(mockDb.groupMember.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { groupId: 'g1' } }));
+    expect(mockDb.groupMember.findMany.mock.invocationCallOrder[0]!).toBeGreaterThan(locked);
+    expect(mockDb.user.create.mock.invocationCallOrder[0]!).toBeGreaterThan(locked);
+  });
+
+  test('renamePlaceholder refuses a name another member already has', async () => {
+    mockDb.user.findUnique
+      .mockResolvedValueOnce({ suspendedAt: null })
+      .mockResolvedValueOnce({ id: 'p3', isPlaceholder: true });
+    const api = await caller();
+    await expect(
+      api.renamePlaceholder({ groupId: 'g1', placeholderUserId: 'p3', name: 'ALICE' }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(mockDb.user.update).not.toHaveBeenCalled();
+  });
+
+  test("renamePlaceholder reads the names under the group member lock, and lets a placeholder change its own name's case", async () => {
+    mockDb.user.findUnique
+      .mockResolvedValueOnce({ suspendedAt: null })
+      .mockResolvedValueOnce({ id: 'p1', isPlaceholder: true });
+    mockDb.user.update.mockResolvedValue({ id: 'p1', name: 'alice' });
+    const api = await caller();
+    await api.renamePlaceholder({ groupId: 'g1', placeholderUserId: 'p1', name: 'alice' });
+
+    expect(mockDb.user.update).toHaveBeenCalledWith({
+      where: { id: 'p1' },
+      data: { placeholderName: 'alice', name: 'alice' },
+    });
+    expect(lockIndex()).toBeGreaterThanOrEqual(0);
+    expect(mockDb.groupMember.findMany.mock.invocationCallOrder[0]!).toBeGreaterThan(
+      mockDb.$queryRaw.mock.invocationCallOrder[lockIndex()]!,
+    );
   });
 });
 

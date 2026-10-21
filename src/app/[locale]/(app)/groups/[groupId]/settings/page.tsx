@@ -178,7 +178,7 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
       setEditingPlaceholder(null);
       utils.groups.get.invalidate({ groupId });
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e, { name }) => toast.error(placeholderError(e, name)),
   });
 
   const removeMember = trpc.groups.removeMember.useMutation({
@@ -194,6 +194,11 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
     },
     onError: (e) => toast.error(e.message),
   });
+
+  // The server refuses a placeholder name someone in the group already has (#265)
+  function placeholderError(e: { message: string; data?: { code?: string } | null | undefined }, name: string) {
+    return e.data?.code === 'CONFLICT' ? t('settings.placeholderNameTaken', { name }) : e.message;
+  }
 
   function handleAddPlaceholder(e: React.FormEvent) {
     e.preventDefault();
@@ -292,7 +297,11 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
                 {addPlaceholder.isPending ? t('settings.adding') : t('settings.add')}
               </Button>
             </form>
-            {addPlaceholder.error && <p className="text-sm text-destructive">{addPlaceholder.error.message}</p>}
+            {addPlaceholder.error && (
+              <p className="text-sm text-destructive" data-testid="placeholder-error">
+                {placeholderError(addPlaceholder.error, addPlaceholder.variables?.name ?? '')}
+              </p>
+            )}
 
             {placeholders.length > 0 && (
               <div className="space-y-2 pt-2">

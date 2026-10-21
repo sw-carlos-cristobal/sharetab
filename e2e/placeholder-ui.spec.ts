@@ -57,6 +57,32 @@ test.describe('Placeholder Members UI', () => {
     // Should show the Pending badge
     await expect(page.getByText('Pending')).toBeVisible();
   });
+
+  // #265: "Alice" and "alice" could both be added, and the expense pickers then showed two
+  // rows that look the same
+  test('a placeholder named like someone already in the group is refused', async ({ page }) => {
+    const { owner, groupId, dispose } = await createTestGroup(
+      users.alice.email,
+      users.alice.password,
+      [],
+      'Placeholder Names',
+    );
+    try {
+      expect((await trpcMutation(owner, 'groups.addPlaceholder', { groupId, name: 'Dana' })).ok()).toBe(true);
+      await page.goto(`/en/groups/${groupId}/settings`);
+
+      await page.getByPlaceholder('Name (e.g., Dave)').fill('  dana ');
+      await page.getByRole('button', { name: 'Add' }).click();
+      await expect(page.getByTestId('placeholder-error')).toHaveText('Someone in this group is already called dana.');
+      await expect(page.getByText('Dana', { exact: true })).toHaveCount(1);
+
+      // An account member's name counts too
+      const res = await trpcMutation(owner, 'groups.addPlaceholder', { groupId, name: 'alice johnson' });
+      expect((await res.json()).error?.json?.data?.code).toBe('CONFLICT');
+    } finally {
+      await dispose();
+    }
+  });
 });
 
 // #276: the server could merge a placeholder into a member, but no screen offered it.

@@ -74,6 +74,7 @@
     "namePlaceholder": "Nom (ex. David)",
     "adding": "Ajout en cours...",
     "add": "Ajouter",
+    "placeholderNameTaken": "Quelqu'un dans ce groupe s'appelle déjà {name}.",
     "placeholderMembers": "Membres provisoires ({count})",
     "pending": "En attente",
     "removeConfirm": "Supprimer « {name} » ?",

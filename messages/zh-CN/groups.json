@@ -74,6 +74,7 @@
     "namePlaceholder": "姓名（例如：小明）",
     "adding": "添加中...",
     "add": "添加",
+    "placeholderNameTaken": "该群组中已有人叫 {name}。",
     "placeholderMembers": "占位成员（{count}人）",
     "pending": "待处理",
     "removeConfirm": "移除「{name}」？",

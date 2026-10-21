@@ -74,6 +74,7 @@
     "namePlaceholder": "이름 (예: 민수)",
     "adding": "추가 중...",
     "add": "추가",
+    "placeholderNameTaken": "이 그룹에 이미 {name}(이)라는 사람이 있습니다.",
     "placeholderMembers": "임시 멤버 ({count}명)",
     "pending": "대기 중",
     "removeConfirm": "\"{name}\"을(를) 삭제하시겠습니까?",

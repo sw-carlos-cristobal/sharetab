@@ -74,6 +74,7 @@
     "namePlaceholder": "名前（例：太郎）",
     "adding": "追加中...",
     "add": "追加",
+    "placeholderNameTaken": "このグループには既に{name}という名前の人がいます。",
     "placeholderMembers": "仮メンバー（{count}人）",
     "pending": "保留中",
     "removeConfirm": "「{name}」を削除しますか？",
