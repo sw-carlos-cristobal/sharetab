@@ -1411,5 +1411,59 @@ describe('creating a split', () => {
       assignments: [{ itemIndex: 0, personIndices: [0] }],
     });
     expect(deleteExpiredSplits).toHaveBeenCalledWith(mockDb, 100);
+    expect(mockDb.$queryRaw).not.toHaveBeenCalled();
   });
+});
+
+// #265: a split made from a receipt while the receipt's last split or its group was being
+// deleted could be saved pointing at the receipt deleted a moment later
+describe('making a split from a receipt', () => {
+  const receiptData = { subtotal: 1000, tax: 0, tip: 0, total: 1000, currency: 'USD' };
+  const items = [{ name: 'Pizza', quantity: 1, unitPrice: 1000, totalPrice: 1000 }];
+  type Api = Awaited<ReturnType<typeof caller>>;
+  const makeSplit = {
+    createSplit: (api: Api) =>
+      api.createSplit({
+        receiptId: 'r1',
+        receiptData,
+        items,
+        people: [{ name: 'Pat' }],
+        assignments: [{ itemIndex: 0, personIndices: [0] }],
+      }),
+    createClaimSession: (api: Api) =>
+      api.createClaimSession({ receiptId: 'r1', receiptData, items, creatorName: 'Pat', paidByName: 'Pat' }),
+  };
+
+  beforeEach(() => {
+    mockDb.guestSplit.create.mockResolvedValue({ id: 's1', shareToken: 'tok' });
+  });
+
+  test.each(Object.keys(makeSplit) as (keyof typeof makeSplit)[])(
+    '%s locks the receipt before saving the split',
+    async (name) => {
+      mockDb.$queryRaw.mockResolvedValue([{ id: 'r1' }]);
+      await makeSplit[name](await caller());
+
+      const lockCall = mockDb.$queryRaw.mock.calls.findIndex(([strings]) =>
+        /FROM "Receipt" WHERE "id" = .* FOR KEY SHARE/.test((strings as string[]).join('?')),
+      );
+      expect(lockCall).toBeGreaterThanOrEqual(0);
+      expect(mockDb.$transaction).toHaveBeenCalled();
+      expect(mockDb.guestSplit.create.mock.invocationCallOrder[0]!).toBeGreaterThan(
+        mockDb.$queryRaw.mock.invocationCallOrder[lockCall]!,
+      );
+      expect(mockDb.guestSplit.create.mock.calls[0]![0].data).toMatchObject({ receiptId: 'r1' });
+    },
+  );
+
+  test.each(Object.keys(makeSplit) as (keyof typeof makeSplit)[])(
+    '%s from a receipt deleted meanwhile is saved without it',
+    async (name) => {
+      mockDb.$queryRaw.mockResolvedValue([]);
+      await makeSplit[name](await caller());
+
+      expect(mockDb.guestSplit.create).toHaveBeenCalledTimes(1);
+      expect(mockDb.guestSplit.create.mock.calls[0]![0].data).not.toHaveProperty('receiptId');
+    },
+  );
 });

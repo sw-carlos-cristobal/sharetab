@@ -639,15 +639,21 @@ describe('cleanupExpiredSplits', () => {
     vi.unstubAllEnvs();
   });
 
+  // A batch comes back short when the background cleanup or a user deleted some of its
+  // splits first, with more left after it, so only an empty batch means none are left
   test('deletes expired splits batch by batch until none are left', async () => {
-    deleteExpiredSplits.mockResolvedValueOnce(500).mockResolvedValueOnce(500).mockResolvedValueOnce(3);
+    deleteExpiredSplits
+      .mockResolvedValueOnce(500)
+      .mockResolvedValueOnce(498)
+      .mockResolvedValueOnce(3)
+      .mockResolvedValueOnce(0);
     const api = await callerAs(adminSession);
-    await expect(api.cleanupExpiredSplits()).resolves.toEqual({ deletedCount: 1003 });
+    await expect(api.cleanupExpiredSplits()).resolves.toEqual({ deletedCount: 1001 });
 
-    expect(deleteExpiredSplits).toHaveBeenCalledTimes(3);
+    expect(deleteExpiredSplits).toHaveBeenCalledTimes(4);
     expect(deleteExpiredSplits).toHaveBeenCalledWith(mockDb, 500);
     expect(mockDb.adminAuditLog.create).toHaveBeenCalledWith({
-      data: { adminId: 'admin-1', action: 'EXPIRED_SPLITS_CLEANED', metadata: { deletedCount: 1003 } },
+      data: { adminId: 'admin-1', action: 'EXPIRED_SPLITS_CLEANED', metadata: { deletedCount: 1001 } },
     });
   });
 });

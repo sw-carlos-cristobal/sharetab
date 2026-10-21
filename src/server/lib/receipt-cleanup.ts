@@ -51,12 +51,29 @@ export async function deleteUnusedSplitReceipts(tx: Prisma.TransactionClient, re
   return deleteReceiptsNoSplitUses(tx, receipts);
 }
 
+/**
+ * For a split being made from a receipt, in the transaction that saves it: locks the
+ * receipt's row the way a foreign key would (`GuestSplit.receiptId` has none) and returns
+ * its id, or `undefined` when the receipt is gone. A deletion of the receipt's last split
+ * or of its group then either waits for the new split and sees it, or finishes first and
+ * the split is saved without the receipt, instead of pointing at one deleted a moment later.
+ */
+export async function lockReceiptForSplit(
+  tx: Prisma.TransactionClient,
+  receiptId: string | undefined,
+): Promise<string | undefined> {
+  if (receiptId === undefined) return undefined;
+  const found = await tx.$queryRaw<unknown[]>`SELECT 1 FROM "Receipt" WHERE "id" = ${receiptId} FOR KEY SHARE`;
+  return found.length > 0 ? receiptId : undefined;
+}
+
 type Db = { $transaction<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> };
 
 /**
  * Deletes up to `batchSize` expired splits (they expire a week after they're made, or
  * when their creator ends them) with the receipts only they used. Returns how many
- * splits were deleted, so a caller clearing a backlog knows whether to go again.
+ * splits were deleted; a caller clearing a backlog goes again until that's none, since
+ * a batch is short too when someone else deleted some of its splits first.
  */
 export async function deleteExpiredSplits(db: Db, batchSize: number): Promise<number> {
   const { count, imagePaths } = await db.$transaction(async (tx) => {

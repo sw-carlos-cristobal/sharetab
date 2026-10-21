@@ -1050,7 +1050,7 @@ export const adminRouter = createTRPCRouter({
     for (;;) {
       const count = await deleteExpiredSplits(ctx.db, batchSize);
       deletedCount += count;
-      if (count < batchSize) break;
+      if (count === 0) break;
     }
 
     if (deletedCount > 0) {
