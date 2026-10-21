@@ -80,9 +80,14 @@ export const receiptsRouter = createTRPCRouter({
       // (crashed run) and may be re-claimed. The threshold deliberately
       // exceeds the worst-case provider pipeline (2 passes x per-provider
       // timeouts of 30-120s) so a slow-but-live run is never re-claimed.
+      // It also claims it only while it's still in the group the access check above found it
+      // in: deleting it from the pending list takes it off the group and keeps it while a
+      // claim session uses it (#318), and this update, queued behind that delete's row lock,
+      // would otherwise put it back
       const claimed = await ctx.db.receipt.updateMany({
         where: {
           id: input.receiptId,
+          groupId: receipt.groupId,
           OR: [{ status: { not: 'PROCESSING' } }, { updatedAt: { lt: new Date(Date.now() - 15 * 60 * 1000) } }],
         },
         data: {
@@ -91,9 +96,13 @@ export const receiptsRouter = createTRPCRouter({
         },
       });
       if (claimed.count === 0) {
+        const now = await ctx.db.receipt.findUnique({ where: { id: input.receiptId }, select: { groupId: true } });
         throw new TRPCError({
           code: 'CONFLICT',
-          message: 'Receipt is already being processed',
+          message:
+            now?.groupId === receipt.groupId
+              ? 'Receipt is already being processed'
+              : 'Receipt was removed from this group',
         });
       }
 

@@ -12,7 +12,14 @@ const mockDb = {
   user: { findUnique: vi.fn() },
   group: { findUnique: vi.fn() },
   groupMember: { findUnique: vi.fn(), findMany: vi.fn() },
-  receipt: { findUnique: vi.fn(), findMany: vi.fn(), update: vi.fn(), delete: vi.fn(), deleteMany: vi.fn() },
+  receipt: {
+    findUnique: vi.fn(),
+    findMany: vi.fn(),
+    update: vi.fn(),
+    updateMany: vi.fn(),
+    delete: vi.fn(),
+    deleteMany: vi.fn(),
+  },
   receiptItem: { findUnique: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), deleteMany: vi.fn() },
   receiptItemAssignment: { deleteMany: vi.fn(), createMany: vi.fn() },
   expense: { create: vi.fn(), findUnique: vi.fn() },
@@ -285,5 +292,49 @@ describe('saving a receipt for later while it is deleted from the pending list (
     const lastRead = mockDb.receipt.findUnique.mock.invocationCallOrder.at(-1)!;
     expect(lastRead).toBeGreaterThan(locked!);
     expect(mockDb.receipt.update.mock.invocationCallOrder[0]).toBeGreaterThan(lastRead);
+  });
+});
+
+// Codex on #319: processing a receipt for a group also sets its group, so one queued behind a
+// delete from the pending list must not put the receipt back in the group
+describe('processing a receipt while it is deleted from the pending list (#318)', () => {
+  const inGroup = {
+    id: 'r1',
+    status: 'COMPLETED',
+    groupId: 'g1',
+    uploadedById: 'u2',
+    group: { members: [{ userId: 'u1' }] },
+  };
+
+  beforeEach(() => {
+    mockDb.groupMember.findUnique.mockResolvedValue({ role: 'MEMBER', userId: 'u1', groupId: 'g1' });
+    mockDb.receipt.findUnique.mockResolvedValue(inGroup);
+  });
+
+  test('claims it only while it is still where the access check found it', async () => {
+    mockDb.receipt.updateMany.mockResolvedValue({ count: 0 });
+    const api = await caller();
+    await expect(api.processReceipt({ receiptId: 'r1', groupId: 'g1' })).rejects.toMatchObject({ code: 'CONFLICT' });
+
+    expect(mockDb.receipt.updateMany.mock.calls[0]![0].where).toMatchObject({ id: 'r1', groupId: 'g1' });
+  });
+
+  test('says it was removed from the group when that is why the claim failed', async () => {
+    mockDb.receipt.updateMany.mockResolvedValue({ count: 0 });
+    mockDb.receipt.findUnique.mockResolvedValueOnce(inGroup).mockResolvedValue({ groupId: null });
+    const api = await caller();
+    await expect(api.processReceipt({ receiptId: 'r1', groupId: 'g1' })).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: 'Receipt was removed from this group',
+    });
+  });
+
+  test('a receipt still in its group but being processed is reported as that', async () => {
+    mockDb.receipt.updateMany.mockResolvedValue({ count: 0 });
+    const api = await caller();
+    await expect(api.processReceipt({ receiptId: 'r1', groupId: 'g1' })).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: 'Receipt is already being processed',
+    });
   });
 });
