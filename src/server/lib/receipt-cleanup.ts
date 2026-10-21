@@ -36,10 +36,15 @@ export async function deleteReceiptsNoSplitUses(
  * After the caller deleted splits made from these receipts, in its transaction:
  * deletes the receipts nothing else uses (no group, no expense, no other split).
  * `deleteUnusedReceipts` passes it receipts it found unused, to check them again
- * under their row locks. Returns their image paths, for `removeReceiptFiles` once
- * the transaction commits.
+ * under their row locks, with `unchangedSince` to keep one changed since (scanned
+ * again, say). Returns their image paths, for `removeReceiptFiles` once the
+ * transaction commits.
  */
-export async function deleteUnusedSplitReceipts(tx: Prisma.TransactionClient, receiptIds: string[]): Promise<string[]> {
+export async function deleteUnusedSplitReceipts(
+  tx: Prisma.TransactionClient,
+  receiptIds: string[],
+  unchangedSince?: Date,
+): Promise<string[]> {
   const ids = [...new Set(receiptIds)];
   if (ids.length === 0) return [];
   // Two splits made from one receipt, deleted at the same moment, would otherwise each
@@ -47,7 +52,12 @@ export async function deleteUnusedSplitReceipts(tx: Prisma.TransactionClient, re
   // came from. The checks below run once the other deletion has committed.
   await tx.$queryRaw`SELECT 1 FROM "Receipt" WHERE "id" IN (${Prisma.join(ids)}) ORDER BY "id" FOR UPDATE`;
   const receipts = await tx.receipt.findMany({
-    where: { id: { in: ids }, groupId: null, expense: { is: null } },
+    where: {
+      id: { in: ids },
+      groupId: null,
+      expense: { is: null },
+      ...(unchangedSince ? { updatedAt: { lt: unchangedSince } } : {}),
+    },
     select: { id: true, imagePath: true },
   });
   return deleteReceiptsNoSplitUses(tx, receipts);
@@ -95,13 +105,15 @@ export async function deleteExpiredSplits(db: Db, batchSize: number): Promise<nu
 
 // Quick Split keeps a scan only in the page until a split is made from it, and the group
 // scan page saves its upload to the group once processing starts, so a receipt nothing
-// uses yet may still be on its way; only older ones count as unused
+// uses yet may still be on its way. Only ones nothing changed for a day count as unused:
+// scanning one again marks it PROCESSING first, so one being scanned isn't
 const UNUSED_RECEIPT_MIN_AGE_MS = 24 * 60 * 60 * 1000;
+const unusedReceiptCutoff = () => new Date(Date.now() - UNUSED_RECEIPT_MIN_AGE_MS);
 
-// Receipts (as `r`) no group, expense or split uses, made before the cutoff (#312): ones
-// left behind before #265, and scans never saved to a group or made into a split
-const unusedReceipts = () => Prisma.sql`"Receipt" r
-  WHERE r."createdAt" < ${new Date(Date.now() - UNUSED_RECEIPT_MIN_AGE_MS)}
+// Receipts (as `r`) no group, expense or split uses, unchanged since the cutoff (#312):
+// ones left behind before #265, and scans never saved to a group or made into a split
+const unusedReceipts = (cutoff: Date) => Prisma.sql`"Receipt" r
+  WHERE r."updatedAt" < ${cutoff}
     AND r."groupId" IS NULL
     AND NOT EXISTS (SELECT 1 FROM "Expense" e WHERE e."receiptId" = r."id")
     AND NOT EXISTS (SELECT 1 FROM "GuestSplit" s WHERE s."receiptId" = r."id")`;
@@ -111,7 +123,7 @@ type RawDb = { $queryRaw<T>(query: Prisma.Sql): Promise<T> };
 /** How many receipts nothing uses there are, and their image files' total size. */
 export async function countUnusedReceipts(db: RawDb): Promise<{ count: number; bytes: number }> {
   const [row] = await db.$queryRaw<{ count: number; bytes: number }[]>(
-    Prisma.sql`SELECT count(*)::int AS "count", coalesce(sum(r."fileSize"), 0)::float8 AS "bytes" FROM ${unusedReceipts()}`,
+    Prisma.sql`SELECT count(*)::int AS "count", coalesce(sum(r."fileSize"), 0)::float8 AS "bytes" FROM ${unusedReceipts(unusedReceiptCutoff())}`,
   );
   return { count: row?.count ?? 0, bytes: row?.bytes ?? 0 };
 }
@@ -119,21 +131,23 @@ export async function countUnusedReceipts(db: RawDb): Promise<{ count: number; b
 /**
  * Deletes the receipts nothing uses, `batchSize` at a time, with their image files.
  * Each batch checks its receipts again under their row locks (`deleteUnusedSplitReceipts`),
- * so one saved to a group, made into an expense or split meanwhile stays; it then no
- * longer counts as unused, so the batches go on until none are left. Returns how many
- * were deleted.
+ * so one saved to a group, made into an expense or split, or scanned again meanwhile
+ * stays; it then no longer counts as unused, so the batches go on until none are left.
+ * Returns how many were deleted.
  */
 export async function deleteUnusedReceipts(db: Db, batchSize: number): Promise<number> {
+  const cutoff = unusedReceiptCutoff();
   let deletedCount = 0;
   for (;;) {
     const imagePaths = await db.$transaction(async (tx) => {
       const picked = await tx.$queryRaw<{ id: string }[]>(
-        Prisma.sql`SELECT r."id" FROM ${unusedReceipts()} ORDER BY r."id" LIMIT ${batchSize}`,
+        Prisma.sql`SELECT r."id" FROM ${unusedReceipts(cutoff)} ORDER BY r."id" LIMIT ${batchSize}`,
       );
       if (picked.length === 0) return null;
       return deleteUnusedSplitReceipts(
         tx,
         picked.map((r) => r.id),
+        cutoff,
       );
     });
     if (imagePaths === null) return deletedCount;

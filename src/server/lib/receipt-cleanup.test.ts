@@ -135,12 +135,12 @@ describe('unused receipts', () => {
   type Query = { text: string; values: unknown[] };
   const isQuery = (arg: unknown): arg is Query => typeof (arg as Query)?.text === 'string';
 
-  // A scan in progress has no split yet, so only receipts more than a day old count
+  // A scan in progress has no split yet, so only receipts nothing changed for a day count
   function expectUnusedReceiptQuery(query: Query) {
     expect(query.text).toMatch(/"groupId" IS NULL/);
     expect(query.text).toMatch(/NOT EXISTS \(SELECT 1 FROM "Expense" e WHERE e\."receiptId" = r\."id"\)/);
     expect(query.text).toMatch(/NOT EXISTS \(SELECT 1 FROM "GuestSplit" s WHERE s\."receiptId" = r\."id"\)/);
-    expect(query.text).toMatch(/r\."createdAt" < \$1/);
+    expect(query.text).toMatch(/r\."updatedAt" < \$1/);
     const cutoff = query.values[0] as Date;
     expect(Math.abs(cutoff.getTime() - (Date.now() - DAY))).toBeLessThan(5000);
   }
@@ -178,8 +178,9 @@ describe('unused receipts', () => {
     expectUnusedReceiptQuery(pick);
     expect(pick.text).toMatch(/LIMIT \$2/);
     expect(pick.values[1]).toBe(500);
+    // One scanned again since it was picked has changed, so it stays too
     expect(tx.receipt.findMany).toHaveBeenCalledWith({
-      where: { id: { in: ['r1', 'r2'] }, groupId: null, expense: { is: null } },
+      where: { id: { in: ['r1', 'r2'] }, groupId: null, expense: { is: null }, updatedAt: { lt: pick.values[0] } },
       select: { id: true, imagePath: true },
     });
     expect(tx.receipt.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['r1'] } } });
