@@ -62,6 +62,7 @@ function RegisterForm() {
   const [password, setPassword] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [error, setError] = useState('');
+  const [nameError, setNameError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const regMode = trpc.auth.getRegistrationMode.useQuery();
@@ -75,11 +76,17 @@ function RegisterForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    // The server refuses a name that's only spaces (#270), which no retry fixes (#265)
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      setNameError(t('error.nameRequired'));
+      return;
+    }
     setLoading(true);
 
     try {
       await registerMutation.mutateAsync({
-        name,
+        name: trimmedName,
         email,
         password,
         ...(mode === 'invite-only' && inviteCode ? { inviteCode } : {}),
@@ -133,9 +140,19 @@ function RegisterForm() {
                 type="text"
                 placeholder={t('namePlaceholder')}
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  setNameError('');
+                }}
                 required
+                aria-invalid={nameError ? true : undefined}
+                aria-describedby={nameError ? 'name-error' : undefined}
               />
+              {nameError && (
+                <p id="name-error" className="text-sm text-destructive">
+                  {nameError}
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="email">{t('email')}</Label>

@@ -34,6 +34,24 @@ test.describe('Authentication', () => {
       // Should stay on register page (HTML minlength=6 prevents submission)
       await expect(page).toHaveURL(/register/);
     });
+
+    // #265: the server refuses a name that's only spaces (#270), and the form said only
+    // "Registration failed. Please try again.", which no retry fixes
+    test('a name that is only spaces is refused on the name field', async ({ page }) => {
+      await page.goto('/en/register');
+      await page.getByLabel('Name').fill('   ');
+      await page.getByLabel('Email').fill(uniqueEmail('blank'));
+      await page.getByLabel('Password').fill('testpass123');
+      await page.getByRole('button', { name: 'Create account' }).click();
+
+      await expect(page.getByText('Enter your name.')).toBeVisible();
+      await expect(page.getByLabel('Name')).toHaveAttribute('aria-invalid', 'true');
+      await expect(page.getByText('Registration failed')).toHaveCount(0);
+      await expect(page).toHaveURL(/register/);
+
+      await page.getByLabel('Name').fill('Real Name');
+      await expect(page.getByText('Enter your name.')).toHaveCount(0);
+    });
   });
 
   // ── Login ─────────────────────────────────────────────────
