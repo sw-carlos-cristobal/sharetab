@@ -5,15 +5,18 @@ vi.mock('next/headers', () => ({
 }));
 vi.mock('@/server/auth', () => ({ auth: vi.fn() }));
 vi.mock('@/server/lib/receipt-processor', () => ({ processReceiptImage: vi.fn() }));
+const unlink = vi.fn();
+vi.mock('fs/promises', async (importOriginal) => ({ ...(await importOriginal<object>()), unlink }));
 
 const mockDb = {
   user: { findUnique: vi.fn() },
   group: { findUnique: vi.fn() },
   groupMember: { findUnique: vi.fn(), findMany: vi.fn() },
-  receipt: { findUnique: vi.fn() },
-  receiptItem: { findUnique: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
+  receipt: { findUnique: vi.fn(), findMany: vi.fn(), update: vi.fn(), delete: vi.fn(), deleteMany: vi.fn() },
+  receiptItem: { findUnique: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), deleteMany: vi.fn() },
   receiptItemAssignment: { deleteMany: vi.fn(), createMany: vi.fn() },
-  expense: { create: vi.fn() },
+  expense: { create: vi.fn(), findUnique: vi.fn() },
+  guestSplit: { findMany: vi.fn() },
   activityLog: { create: vi.fn() },
   $transaction: vi.fn(),
   $queryRaw: vi.fn(),
@@ -123,5 +126,93 @@ describe('a group archived while a receipt was being finished (#289)', () => {
     expect(mockDb.groupMember.findMany.mock.invocationCallOrder[0]).toBeLessThan(
       mockDb.expense.create.mock.invocationCallOrder[0]!,
     );
+  });
+});
+
+// #318: the group scan page's Share Link makes a claim session from a group receipt, and
+// deleting the receipt from the group's pending list deleted it under the claim page, which
+// shows its photo. It now leaves the group, and goes only once no split uses it.
+describe('deleting a pending receipt (#318)', () => {
+  const rawSql = () => mockDb.$queryRaw.mock.calls.map(([strings]) => (strings as string[]).join('?'));
+
+  beforeEach(() => {
+    mockDb.$transaction.mockImplementation((fn: (tx: typeof mockDb) => unknown) => fn(mockDb));
+    mockDb.$queryRaw.mockResolvedValue([{ '?column?': 1 }]);
+    mockDb.receipt.findUnique.mockResolvedValue({
+      id: 'r1',
+      groupId: 'g1',
+      uploadedById: 'u1',
+      savedById: null,
+      imagePath: 'receipts/r1.jpg',
+    });
+    mockDb.expense.findUnique.mockResolvedValue(null);
+    // Off the group, with no expense: what the cleanup finds under the lock
+    mockDb.receipt.findMany.mockResolvedValue([{ id: 'r1', imagePath: 'receipts/r1.jpg' }]);
+    mockDb.guestSplit.findMany.mockResolvedValue([]);
+  });
+
+  test('one a claim session uses leaves the group, and stays for the claim page', async () => {
+    mockDb.guestSplit.findMany.mockResolvedValue([{ receiptId: 'r1' }]);
+    const api = await caller();
+    await api.deletePending({ receiptId: 'r1' });
+
+    expect(mockDb.receipt.update).toHaveBeenCalledWith({ where: { id: 'r1' }, data: { groupId: null } });
+    expect(mockDb.receipt.delete).not.toHaveBeenCalled();
+    expect(mockDb.receipt.deleteMany).not.toHaveBeenCalled();
+    expect(unlink).not.toHaveBeenCalled();
+  });
+
+  test('one nothing else uses is deleted, its file once the transaction has committed', async () => {
+    let committed = false;
+    mockDb.$transaction.mockImplementation(async (fn: (tx: typeof mockDb) => unknown) => {
+      const result = await fn(mockDb);
+      committed = true;
+      return result;
+    });
+    unlink.mockImplementation(async () => expect(committed).toBe(true));
+    const api = await caller();
+    await api.deletePending({ receiptId: 'r1' });
+
+    expect(mockDb.receipt.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['r1'] } } });
+    expect(unlink).toHaveBeenCalledTimes(1);
+    expect(unlink.mock.calls[0]![0]).toMatch(/receipts\/r1\.jpg$/);
+  });
+
+  test('locks the receipt before checking for an expense, so one made meanwhile is seen', async () => {
+    const api = await caller();
+    await api.deletePending({ receiptId: 'r1' });
+
+    expect(rawSql()[0]).toMatch(/FROM "Receipt" WHERE "id" = \? FOR UPDATE/);
+    const [locked] = mockDb.$queryRaw.mock.invocationCallOrder;
+    expect(locked).toBeGreaterThan(mockDb.$transaction.mock.invocationCallOrder[0]!);
+    expect(mockDb.expense.findUnique.mock.invocationCallOrder[0]).toBeGreaterThan(locked!);
+    expect(mockDb.receipt.update.mock.invocationCallOrder[0]).toBeGreaterThan(
+      mockDb.expense.findUnique.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  test('one an expense was made from is refused and kept', async () => {
+    mockDb.expense.findUnique.mockResolvedValue({ id: 'e1' });
+    const api = await caller();
+    await expect(api.deletePending({ receiptId: 'r1' })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+    expect(mockDb.receipt.update).not.toHaveBeenCalled();
+    expect(mockDb.receipt.delete).not.toHaveBeenCalled();
+    expect(mockDb.receipt.deleteMany).not.toHaveBeenCalled();
+    expect(unlink).not.toHaveBeenCalled();
+  });
+
+  test('one deleted by someone else in the meantime is NOT_FOUND', async () => {
+    mockDb.$queryRaw.mockResolvedValue([]);
+    const api = await caller();
+    await expect(api.deletePending({ receiptId: 'r1' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(mockDb.receipt.update).not.toHaveBeenCalled();
+  });
+
+  test('someone who neither uploaded nor saved it is refused', async () => {
+    mockDb.receipt.findUnique.mockResolvedValue({ id: 'r1', groupId: 'g1', uploadedById: 'u2', savedById: 'u3' });
+    const api = await caller();
+    await expect(api.deletePending({ receiptId: 'r1' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(mockDb.$transaction).not.toHaveBeenCalled();
   });
 });

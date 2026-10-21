@@ -9,6 +9,7 @@ import { parseExtractedData } from '../../lib/json-schemas';
 import { getExchangeRate, convertCents } from '../../lib/exchange-rates';
 import { stripUndefined } from '../../lib/strip-undefined';
 import { lockActiveGroup } from '../../lib/group-balances';
+import { deleteUnusedSplitReceipts, removeReceiptFiles } from '../../lib/receipt-cleanup';
 
 const ARCHIVED_CREATE_EXPENSE = 'Cannot create expenses in archived groups';
 
@@ -751,30 +752,25 @@ export const receiptsRouter = createTRPCRouter({
     if (!isUploader && !isSaver) {
       throw new TRPCError({ code: 'FORBIDDEN' });
     }
-    // Can't delete if already linked to expense
-    const expense = await ctx.db.expense.findUnique({
-      where: { receiptId: input.receiptId },
+
+    // It leaves the group's pending list either way. A claim session made from it (the group
+    // scan page's Share Link) still shows its image, so then it stays until no split uses it
+    // and deleteUnusedSplitReceipts deletes it (#318); otherwise it's deleted now. The row
+    // lock comes first, so an expense or a split being made from it meanwhile is seen.
+    const imagePaths = await ctx.db.$transaction(async (tx) => {
+      const locked = await tx.$queryRaw<unknown[]>`SELECT 1 FROM "Receipt" WHERE "id" = ${input.receiptId} FOR UPDATE`;
+      if (locked.length === 0) {
+        throw new TRPCError({ code: 'NOT_FOUND' });
+      }
+      // Can't delete if already linked to expense
+      const expense = await tx.expense.findUnique({ where: { receiptId: input.receiptId } });
+      if (expense) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Receipt has an expense' });
+      }
+      await tx.receipt.update({ where: { id: input.receiptId }, data: { groupId: null } });
+      return deleteUnusedSplitReceipts(tx, [input.receiptId]);
     });
-    if (expense) {
-      throw new TRPCError({ code: 'BAD_REQUEST', message: 'Receipt has an expense' });
-    }
-
-    await ctx.db.receiptItem.deleteMany({ where: { receiptId: input.receiptId } });
-    await ctx.db.receipt.delete({ where: { id: input.receiptId } });
-
-    // Clean up the uploaded image file
-    try {
-      const { unlink } = await import('fs/promises');
-      const { resolveUploadPath } = await import('../../lib/upload-dir');
-      const filepath = resolveUploadPath(receipt.imagePath);
-      await unlink(filepath);
-    } catch {
-      // Non-fatal: file may already be missing
-      logger.warn('receipt.delete.fileCleanupFailed', {
-        receiptId: input.receiptId,
-        imagePath: receipt.imagePath,
-      });
-    }
+    await removeReceiptFiles(imagePaths);
 
     return { success: true };
   }),

@@ -12,6 +12,14 @@ const MIME_TYPES: Record<string, string> = {
   heic: 'image/heic',
 };
 
+async function isSharedForClaiming(receiptId: string) {
+  const split = await db.guestSplit.findFirst({
+    where: { receiptId, expiresAt: { gt: new Date() } },
+    select: { id: true },
+  });
+  return split !== null;
+}
+
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
   const session = await auth();
 
@@ -37,6 +45,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ pat
 
   if (receipt.isGuest) {
     // Guest receipts are viewable by anyone (authenticated or not)
+  } else if (await isSharedForClaiming(receipt.id)) {
+    // So is a group's receipt while a split made from it is open (#318): the group scan
+    // page's Share Link makes a claim session from it, whose page shows the image to
+    // anyone with the link
   } else if (session?.user?.id) {
     // Authenticated user: must be the uploader or a member of the receipt's group
     const isUploader = receipt.uploadedById === session.user.id;
