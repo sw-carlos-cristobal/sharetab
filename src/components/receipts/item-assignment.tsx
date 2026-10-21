@@ -35,6 +35,9 @@ export function ItemAssignment({
   const locale = useLocale();
   const t = useTranslations('expenses.receipt');
   const receiptData = trpc.receipts.getReceiptItems.useQuery({ receiptId });
+  // Who tRPC acts as: the impersonated user while an admin impersonates, where
+  // useSession() would still report the admin
+  const profile = trpc.auth.getProfile.useQuery();
   const utils = trpc.useUtils();
 
   const [assignments, setAssignments] = useState<Assignments>({});
@@ -155,6 +158,11 @@ export function ItemAssignment({
   const parsedTip = parseFloat(tipOverride);
   const tip =
     extracted && tipOverride !== '' && isFinite(parsedTip) ? Math.round(parsedTip * 100) : (extracted?.tip ?? 0);
+  // Until someone picks a payer or a saved one loads, default to the current user (when
+  // they're in the group), as Add Expense does (#271, #265)
+  const currentUserId = profile.data?.id;
+  const defaultPaidById = currentUserId && members.some((m) => m.id === currentUserId) ? currentUserId : '';
+  const effectivePaidById = paidById || defaultPaidById;
 
   // Note (Finding #29): toggleAssignment and assignAllToEveryone are intentionally
   // duplicated from split/page.tsx. This component uses Record<string, Set<string>>
@@ -308,13 +316,13 @@ export function ItemAssignment({
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!paidById || !allAssigned) return;
+    if (!effectivePaidById || !allAssigned) return;
 
     createExpense.mutate({
       groupId,
       receiptId,
       title,
-      paidById,
+      paidById: effectivePaidById,
       tipOverride:
         tipOverride !== '' && isFinite(parseFloat(tipOverride)) ? Math.round(parseFloat(tipOverride) * 100) : undefined,
       assignments: Object.entries(assignments)
@@ -330,7 +338,7 @@ export function ItemAssignment({
     saveForLater.mutate({
       groupId,
       receiptId,
-      paidById: paidById || null,
+      paidById: effectivePaidById || null,
       assignments: Object.entries(assignments)
         .filter(([, userIds]) => userIds.size > 0)
         .map(([receiptItemId, userIds]) => ({
@@ -511,7 +519,7 @@ export function ItemAssignment({
             <Label htmlFor="paidBy">{t('paidBy')}</Label>
             <select
               id="paidBy"
-              value={paidById}
+              value={effectivePaidById}
               onChange={(e) => setPaidById(e.target.value)}
               required
               className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
@@ -811,7 +819,7 @@ export function ItemAssignment({
       <Button
         type="submit"
         className="w-full"
-        disabled={createExpense.isPending || !allAssigned || !paidById}
+        disabled={createExpense.isPending || !allAssigned || !effectivePaidById}
         data-testid="create-expense-btn"
       >
         {createExpense.isPending
