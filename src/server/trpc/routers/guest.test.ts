@@ -8,14 +8,31 @@ vi.mock('@/server/auth', () => ({ auth: vi.fn() }));
 const mockDb = {
   systemSetting: { findUnique: vi.fn() },
   user: { findUnique: vi.fn() },
-  receipt: { findUnique: vi.fn(), updateMany: vi.fn(), update: vi.fn() },
-  guestSplit: { findUnique: vi.fn(), update: vi.fn(), create: vi.fn(), deleteMany: vi.fn() },
+  receipt: { findUnique: vi.fn(), findMany: vi.fn(), updateMany: vi.fn(), update: vi.fn(), deleteMany: vi.fn() },
+  guestSplit: {
+    findUnique: vi.fn(),
+    findMany: vi.fn(),
+    update: vi.fn(),
+    create: vi.fn(),
+    delete: vi.fn(),
+    deleteMany: vi.fn(),
+  },
+  $queryRaw: vi.fn(),
   // Interactive transactions run their callback against the same mocks.
   $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(mockDb)),
 };
 vi.mock('@/server/db', () => ({ db: mockDb }));
 vi.mock('@/server/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+const { removeReceiptFiles, deleteExpiredSplits } = vi.hoisted(() => ({
+  removeReceiptFiles: vi.fn(),
+  deleteExpiredSplits: vi.fn(),
+}));
+vi.mock('@/server/lib/receipt-cleanup', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/server/lib/receipt-cleanup')>()),
+  removeReceiptFiles,
+  deleteExpiredSplits,
 }));
 
 const { processReceiptImage, checkRateLimit, peekRateLimit } = vi.hoisted(() => ({
@@ -55,6 +72,8 @@ beforeEach(async () => {
   checkRateLimit.mockReturnValue({ allowed: true, retryAfterMs: 0 });
   peekRateLimit.mockReturnValue({ allowed: true, retryAfterMs: 0 });
   mockDb.user.findUnique.mockResolvedValue({ suspendedAt: null });
+  // New splits clear expired ones in the background
+  deleteExpiredSplits.mockResolvedValue(0);
 });
 
 describe('AI provider setup (#280)', () => {
@@ -608,7 +627,6 @@ describe('guest.createClaimSession', () => {
 
   beforeEach(() => {
     mockDb.guestSplit.create.mockResolvedValue({ id: 'gs1', shareToken: 'share-token-123' });
-    mockDb.guestSplit.deleteMany.mockResolvedValue({ count: 0 });
   });
 
   test('gives the creator and the payer ids', async () => {
@@ -1305,5 +1323,93 @@ describe('guest.finalizeSession', () => {
       code: 'BAD_REQUEST',
     });
     expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+});
+
+// #265: deleting a Quick Split left its scanned receipt behind, with its items and image file
+describe('deleting a split', () => {
+  beforeEach(() => {
+    mockDb.guestSplit.findUnique.mockResolvedValue({ userId: 'user-1', receiptId: 'r1' });
+    mockDb.receipt.findMany.mockResolvedValue([{ id: 'r1', imagePath: 'receipts/r1.jpg' }]);
+    mockDb.guestSplit.findMany.mockResolvedValue([]);
+    mockDb.$queryRaw.mockResolvedValue([]);
+  });
+
+  test("deletes its receipt, and the image file once that's committed", async () => {
+    const api = await caller(signedIn);
+    await expect(api.deleteSplit({ id: 's1' })).resolves.toEqual({ success: true });
+
+    expect(mockDb.guestSplit.delete).toHaveBeenCalledWith({ where: { id: 's1' } });
+    // A group's receipt stays with the group, and so does one an expense was made from
+    expect(mockDb.receipt.findMany).toHaveBeenCalledWith({
+      where: { id: { in: ['r1'] }, groupId: null, expense: { is: null } },
+      select: { id: true, imagePath: true },
+    });
+    expect(mockDb.receipt.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['r1'] } } });
+    expect(removeReceiptFiles).toHaveBeenCalledWith(['receipts/r1.jpg']);
+    expect(removeReceiptFiles.mock.invocationCallOrder[0]!).toBeGreaterThan(
+      mockDb.receipt.deleteMany.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  test('keeps a receipt another split still shows', async () => {
+    mockDb.guestSplit.findMany.mockResolvedValue([{ receiptId: 'r1' }]);
+    const api = await caller(signedIn);
+    await api.deleteSplit({ id: 's1' });
+
+    expect(mockDb.guestSplit.delete).toHaveBeenCalledWith({ where: { id: 's1' } });
+    expect(mockDb.receipt.deleteMany).not.toHaveBeenCalled();
+    expect(removeReceiptFiles).toHaveBeenCalledWith([]);
+  });
+
+  // Two splits made from one receipt, deleted at the same moment, would each still
+  // see the other and both keep it
+  test('locks the receipt before checking who else uses it', async () => {
+    const api = await caller(signedIn);
+    await api.deleteSplit({ id: 's1' });
+
+    const lockCall = mockDb.$queryRaw.mock.calls.findIndex(([strings]) =>
+      /FROM "Receipt" WHERE "id" IN .* FOR UPDATE/.test((strings as string[]).join('?')),
+    );
+    expect(lockCall).toBeGreaterThanOrEqual(0);
+    const locked = mockDb.$queryRaw.mock.invocationCallOrder[lockCall]!;
+    expect(locked).toBeGreaterThan(mockDb.guestSplit.delete.mock.invocationCallOrder[0]!);
+    expect(mockDb.receipt.findMany.mock.invocationCallOrder[0]!).toBeGreaterThan(locked);
+    expect(mockDb.guestSplit.findMany.mock.invocationCallOrder[0]!).toBeGreaterThan(locked);
+  });
+
+  test('a split without a receipt deletes just the split', async () => {
+    mockDb.guestSplit.findUnique.mockResolvedValue({ userId: 'user-1', receiptId: null });
+    const api = await caller(signedIn);
+    await api.deleteSplit({ id: 's1' });
+
+    expect(mockDb.guestSplit.delete).toHaveBeenCalledWith({ where: { id: 's1' } });
+    expect(mockDb.receipt.findMany).not.toHaveBeenCalled();
+    expect(mockDb.receipt.deleteMany).not.toHaveBeenCalled();
+  });
+
+  test("someone else's split is refused, and nothing is deleted", async () => {
+    mockDb.guestSplit.findUnique.mockResolvedValue({ userId: 'user-2', receiptId: 'r1' });
+    const api = await caller(signedIn);
+    await expect(api.deleteSplit({ id: 's1' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(mockDb.guestSplit.delete).not.toHaveBeenCalled();
+    expect(mockDb.receipt.deleteMany).not.toHaveBeenCalled();
+    expect(removeReceiptFiles).not.toHaveBeenCalled();
+  });
+});
+
+// #265: each new split clears expired ones (in the background), now with the receipts
+// only they used
+describe('creating a split', () => {
+  test('clears a batch of expired splits with their receipts', async () => {
+    mockDb.guestSplit.create.mockResolvedValue({ id: 's1', shareToken: 'tok' });
+    const api = await caller();
+    await api.createSplit({
+      receiptData: { subtotal: 1000, tax: 0, tip: 0, total: 1000, currency: 'USD' },
+      items: [{ name: 'Pizza', quantity: 1, unitPrice: 1000, totalPrice: 1000 }],
+      people: [{ name: 'Pat' }],
+      assignments: [{ itemIndex: 0, personIndices: [0] }],
+    });
+    expect(deleteExpiredSplits).toHaveBeenCalledWith(mockDb, 100);
   });
 });

@@ -4,6 +4,8 @@ import { TRPCError } from '@trpc/server';
 import { createTRPCRouter, protectedProcedure, groupMemberProcedure } from '../init';
 import { stripUndefined } from '../../lib/strip-undefined';
 import { loadGroupBalances, lockGroupMembers } from '../../lib/group-balances';
+import { deleteGroupWithData } from '../../lib/group-delete';
+import { removeReceiptFiles } from '../../lib/receipt-cleanup';
 import { mergePlaceholderIntoUser } from '../../lib/placeholder-merge';
 import { checkRateLimit } from '../../lib/rate-limit';
 
@@ -168,7 +170,7 @@ export const groupsRouter = createTRPCRouter({
     if (ctx.membership.role !== 'OWNER') {
       throw notOwner;
     }
-    await ctx.db.$transaction(async (tx) => {
+    const imagePaths = await ctx.db.$transaction(async (tx) => {
       // A transfer of ownership takes the same lock, so the role read below is
       // current: a delete the old owner sent while handing the group over is
       // refused, rather than deleting a group someone else now owns (#309).
@@ -180,8 +182,9 @@ export const groupsRouter = createTRPCRouter({
       if (owner?.role !== 'OWNER') {
         throw notOwner;
       }
-      await tx.group.delete({ where: { id: input.groupId } });
+      return deleteGroupWithData(tx, input.groupId);
     });
+    await removeReceiptFiles(imagePaths);
     return { success: true };
   }),
 
@@ -633,6 +636,8 @@ export const groupsRouter = createTRPCRouter({
       const { randomUUID } = await import('crypto');
       const placeholderEmail = `placeholder-${randomUUID()}@placeholder.local`;
 
+      // One write: if the group is deleted meanwhile, the membership can't be made
+      // and the placeholder is rolled back with it, instead of staying with no group (#265)
       const user = await ctx.db.user.create({
         data: {
           email: placeholderEmail,
@@ -640,11 +645,8 @@ export const groupsRouter = createTRPCRouter({
           isPlaceholder: true,
           placeholderName: input.name,
           createdByUserId: ctx.user.id,
+          groupMembers: { create: { groupId: input.groupId } },
         },
-      });
-
-      await ctx.db.groupMember.create({
-        data: { userId: user.id, groupId: input.groupId },
       });
 
       await ctx.db.activityLog.create({

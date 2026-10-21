@@ -13,6 +13,9 @@ import fs from 'fs';
 import * as fsp from 'fs/promises';
 import path from 'path';
 import { getRecentLogs } from '@/server/lib/logger';
+import { deleteGroupWithData } from '@/server/lib/group-delete';
+import { lockGroupMembers } from '@/server/lib/group-balances';
+import { deleteExpiredSplits, removeReceiptFiles } from '@/server/lib/receipt-cleanup';
 import {
   checkMeridianHealth,
   invalidateMeridianHealthCache,
@@ -575,7 +578,12 @@ export const adminRouter = createTRPCRouter({
       });
     }
 
-    await ctx.db.group.delete({ where: { id: input.groupId } });
+    const imagePaths = await ctx.db.$transaction(async (tx) => {
+      // Waits for balance changes, removals and transfers in flight, as the owner's delete does
+      await lockGroupMembers(tx, input.groupId);
+      return deleteGroupWithData(tx, input.groupId);
+    });
+    await removeReceiptFiles(imagePaths);
 
     await logAdminAction(ctx.db, ctx.user.id, 'GROUP_DELETED', input.groupId, { name: group.name });
 
@@ -1035,15 +1043,21 @@ export const adminRouter = createTRPCRouter({
   }),
 
   cleanupExpiredSplits: adminProcedure.mutation(async ({ ctx }) => {
-    const result = await ctx.db.guestSplit.deleteMany({
-      where: { expiresAt: { lt: new Date() } },
-    });
-
-    if (result.count > 0) {
-      await logAdminAction(ctx.db, ctx.user.id, 'EXPIRED_SPLITS_CLEANED', null, { deletedCount: result.count });
+    // With the receipts only they used (#265), a batch at a time so a large backlog
+    // doesn't make one long transaction
+    const batchSize = 500;
+    let deletedCount = 0;
+    for (;;) {
+      const count = await deleteExpiredSplits(ctx.db, batchSize);
+      deletedCount += count;
+      if (count < batchSize) break;
     }
 
-    return { deletedCount: result.count };
+    if (deletedCount > 0) {
+      await logAdminAction(ctx.db, ctx.user.id, 'EXPIRED_SPLITS_CLEANED', null, { deletedCount });
+    }
+
+    return { deletedCount };
   }),
 
   // ─── Server Logs ─────────────────────────────────────────

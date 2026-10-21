@@ -6,7 +6,7 @@ vi.mock('next/headers', () => ({
 vi.mock('@/server/auth', () => ({ auth: vi.fn() }));
 
 const mockDb = {
-  user: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
+  user: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(), deleteMany: vi.fn() },
   group: { create: vi.fn(), update: vi.fn(), updateMany: vi.fn(), findUnique: vi.fn(), delete: vi.fn() },
   groupMember: {
     findUnique: vi.fn(),
@@ -30,7 +30,8 @@ const mockDb = {
     delete: vi.fn(),
   },
   settlement: { count: vi.fn(), findMany: vi.fn(), updateMany: vi.fn(), deleteMany: vi.fn() },
-  receipt: { updateMany: vi.fn() },
+  receipt: { updateMany: vi.fn(), findMany: vi.fn(), deleteMany: vi.fn() },
+  guestSplit: { findMany: vi.fn() },
   receiptItem: { findMany: vi.fn() },
   receiptItemAssignment: {
     findMany: vi.fn(),
@@ -45,6 +46,11 @@ const mockDb = {
 vi.mock('@/server/db', () => ({ db: mockDb }));
 vi.mock('@/server/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+const { removeReceiptFiles } = vi.hoisted(() => ({ removeReceiptFiles: vi.fn() }));
+vi.mock('@/server/lib/receipt-cleanup', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/server/lib/receipt-cleanup')>()),
+  removeReceiptFiles,
 }));
 
 async function caller(userId = 'owner') {
@@ -124,6 +130,20 @@ describe('group and placeholder names are trimmed', () => {
     expect(mockDb.user.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ name: 'Dave', placeholderName: 'Dave' }) }),
     );
+  });
+
+  // #265: a group deleted between two separate writes left the new placeholder with no
+  // group. One write rolls the placeholder back when its membership can't be made.
+  test('addPlaceholder creates the placeholder and its membership in one write', async () => {
+    mockDb.user.create.mockResolvedValue({ id: 'p1', name: 'Dave' });
+    const api = await caller();
+    await api.addPlaceholder({ groupId: 'g1', name: 'Dave' });
+    expect(mockDb.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ isPlaceholder: true, groupMembers: { create: { groupId: 'g1' } } }),
+      }),
+    );
+    expect(mockDb.groupMember.create).not.toHaveBeenCalled();
   });
 
   test('renamePlaceholder refuses a name that is only whitespace', async () => {
@@ -804,6 +824,12 @@ describe('transferring ownership', () => {
 // #309: ownership can move while a delete is in flight. A delete can't be undone, so
 // the owner's role is read again once the delete holds the lock a transfer takes.
 describe('deleting a group', () => {
+  beforeEach(() => {
+    mockDb.receipt.findMany.mockResolvedValue([]);
+    mockDb.groupMember.findMany.mockResolvedValue([]);
+    mockDb.guestSplit.findMany.mockResolvedValue([]);
+  });
+
   test('the owner deletes it', async () => {
     mockMemberships({ owner: member('owner', 'OWNER') });
     const api = await caller('owner');
@@ -852,6 +878,100 @@ describe('deleting a group', () => {
       message: 'Only the owner can delete a group',
     });
     expect(mockDb.group.delete).not.toHaveBeenCalled();
+    expect(mockDb.receipt.deleteMany).not.toHaveBeenCalled();
+    expect(removeReceiptFiles).not.toHaveBeenCalled();
+  });
+
+  // #265: the group's scanned receipts stayed behind, with their items, assignments
+  // and image files
+  test("deletes the group's receipts, and their image files once that's committed", async () => {
+    mockMemberships({ owner: member('owner', 'OWNER') });
+    mockDb.receipt.findMany.mockResolvedValue([
+      { id: 'r1', imagePath: 'receipts/r1.jpg' },
+      { id: 'r2', imagePath: 'receipts/r2.jpg' },
+    ]);
+    const api = await caller('owner');
+    await api.delete({ groupId: 'g1' });
+
+    expect(mockDb.receipt.findMany).toHaveBeenCalledWith({
+      where: { groupId: 'g1' },
+      select: { id: true, imagePath: true },
+    });
+    expect(mockDb.receipt.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['r1', 'r2'] } } });
+    expect(removeReceiptFiles).toHaveBeenCalledWith(['receipts/r1.jpg', 'receipts/r2.jpg']);
+    // Only once the transaction is over, so a rollback can't leave a receipt without its image
+    expect(removeReceiptFiles.mock.invocationCallOrder[0]!).toBeGreaterThan(
+      mockDb.group.delete.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  // The claim page shows the receipt's image, so the receipt stays until its last
+  // split goes (guest.deleteSplit)
+  test('keeps a receipt that a Quick Split or claim session still shows', async () => {
+    mockMemberships({ owner: member('owner', 'OWNER') });
+    mockDb.receipt.findMany.mockResolvedValue([
+      { id: 'r1', imagePath: 'receipts/r1.jpg' },
+      { id: 'r2', imagePath: 'receipts/r2.jpg' },
+    ]);
+    mockDb.guestSplit.findMany.mockResolvedValue([{ receiptId: 'r2' }]);
+    const api = await caller('owner');
+    await api.delete({ groupId: 'g1' });
+
+    expect(mockDb.guestSplit.findMany).toHaveBeenCalledWith({
+      where: { receiptId: { in: ['r1', 'r2'] } },
+      select: { receiptId: true },
+    });
+    expect(mockDb.receipt.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['r1'] } } });
+    expect(removeReceiptFiles).toHaveBeenCalledWith(['receipts/r1.jpg']);
+  });
+
+  // Nothing new can join the group or be scanned into it once its receipts are read,
+  // and a split deleted at the same moment waits for the receipt it shares
+  test('locks the group and its receipts before reading them', async () => {
+    mockMemberships({ owner: member('owner', 'OWNER') });
+    const api = await caller('owner');
+    await api.delete({ groupId: 'g1' });
+
+    const sql = mockDb.$queryRaw.mock.calls.map(([strings]) => (strings as string[]).join('?'));
+    const groupLock = sql.findIndex((q) => /FROM "Group" WHERE "id" = \? FOR UPDATE/.test(q));
+    const receiptLock = sql.findIndex((q) => /FROM "Receipt" WHERE "groupId" = \?.* FOR UPDATE/.test(q));
+    expect(groupLock).toBeGreaterThanOrEqual(0);
+    expect(receiptLock).toBeGreaterThanOrEqual(0);
+    const order = mockDb.$queryRaw.mock.invocationCallOrder;
+    expect(order[receiptLock]!).toBeGreaterThan(order[groupLock]!);
+    expect(mockDb.receipt.findMany.mock.invocationCallOrder[0]!).toBeGreaterThan(order[receiptLock]!);
+    expect(mockDb.groupMember.findMany.mock.invocationCallOrder[0]!).toBeGreaterThan(order[groupLock]!);
+  });
+
+  // #265: placeholders can't sign in or be in another group, so once the group is gone
+  // nothing can reach them
+  test('deletes its placeholder members once the group is gone', async () => {
+    mockMemberships({ owner: member('owner', 'OWNER') });
+    mockDb.groupMember.findMany.mockResolvedValue([{ userId: 'p1' }, { userId: 'p2' }]);
+    const api = await caller('owner');
+    await api.delete({ groupId: 'g1' });
+
+    expect(mockDb.groupMember.findMany).toHaveBeenCalledWith({
+      where: { groupId: 'g1', user: { isPlaceholder: true } },
+      select: { userId: true },
+    });
+    // Only ones nothing else refers to, so a placeholder that somehow is
+    // can't make the delete fail
+    expect(mockDb.user.deleteMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: ['p1', 'p2'] },
+        isPlaceholder: true,
+        groupMembers: { none: {} },
+        expensesPaid: { none: {} },
+        expensesAdded: { none: {} },
+        expenseShares: { none: {} },
+        settlementsPaid: { none: {} },
+        settlementsFor: { none: {} },
+      },
+    });
+    expect(mockDb.user.deleteMany.mock.invocationCallOrder[0]!).toBeGreaterThan(
+      mockDb.group.delete.mock.invocationCallOrder[0]!,
+    );
   });
 });
 

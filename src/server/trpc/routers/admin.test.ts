@@ -45,11 +45,14 @@ vi.mock('@/server/auth', () => ({
 // Mock Prisma client
 const mockDb = {
   $queryRaw: vi.fn(),
+  // Interactive transactions run their callback against the same mocks
+  $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(mockDb)),
   user: {
     findMany: vi.fn(),
     findUnique: vi.fn(),
     count: vi.fn(),
     delete: vi.fn(),
+    deleteMany: vi.fn(),
     update: vi.fn(),
   },
   group: {
@@ -57,6 +60,12 @@ const mockDb = {
     findUnique: vi.fn(),
     count: vi.fn(),
     delete: vi.fn(),
+  },
+  groupMember: {
+    findMany: vi.fn(),
+  },
+  guestSplit: {
+    findMany: vi.fn(),
   },
   expense: {
     count: vi.fn(),
@@ -68,6 +77,7 @@ const mockDb = {
   receipt: {
     count: vi.fn(),
     findMany: vi.fn(),
+    deleteMany: vi.fn(),
     groupBy: vi.fn().mockResolvedValue([]),
   },
   adminAuditLog: {
@@ -93,6 +103,15 @@ const mockDb = {
 vi.mock('@/server/db', () => ({ db: mockDb }));
 vi.mock('@/server/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+const { removeReceiptFiles, deleteExpiredSplits } = vi.hoisted(() => ({
+  removeReceiptFiles: vi.fn(),
+  deleteExpiredSplits: vi.fn(),
+}));
+vi.mock('@/server/lib/receipt-cleanup', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/server/lib/receipt-cleanup')>()),
+  removeReceiptFiles,
+  deleteExpiredSplits,
 }));
 vi.mock('@/server/lib/rate-limit', () => ({
   checkRateLimit: vi.fn().mockReturnValue({ allowed: true }),
@@ -568,5 +587,67 @@ describe('Meridian login and status', () => {
 
     expect(status).toMatchObject({ status: 'healthy', email: 'me@example.com' });
     expect(status).not.toHaveProperty('error');
+  });
+});
+
+// #265: deleting a group left its placeholder users and scanned receipts behind. The
+// admin dashboard's delete removes them as the owner's does (groups.test.ts covers
+// what's kept).
+describe('deleteGroup', () => {
+  beforeEach(() => {
+    vi.stubEnv('ADMIN_EMAIL', 'admin@example.com');
+    vi.clearAllMocks();
+    mockDb.user.findUnique.mockResolvedValue({ suspendedAt: null });
+    mockDb.group.findUnique.mockResolvedValue({ id: 'g1', name: 'Trip' });
+    mockDb.$queryRaw.mockResolvedValue([]);
+    mockDb.receipt.findMany.mockResolvedValue([{ id: 'r1', imagePath: 'receipts/r1.jpg' }]);
+    mockDb.guestSplit.findMany.mockResolvedValue([]);
+    mockDb.groupMember.findMany.mockResolvedValue([{ userId: 'p1' }]);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test('deletes the group with its receipts and placeholder members, then the image files', async () => {
+    const api = await callerAs(adminSession);
+    await expect(api.deleteGroup({ groupId: 'g1' })).resolves.toEqual({ deleted: true, groupId: 'g1' });
+
+    expect(mockDb.$transaction).toHaveBeenCalled();
+    expect(mockDb.group.delete).toHaveBeenCalledWith({ where: { id: 'g1' } });
+    expect(mockDb.receipt.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['r1'] } } });
+    expect(mockDb.user.deleteMany).toHaveBeenCalledWith({
+      where: expect.objectContaining({ id: { in: ['p1'] }, isPlaceholder: true }),
+    });
+    expect(removeReceiptFiles).toHaveBeenCalledWith(['receipts/r1.jpg']);
+    expect(removeReceiptFiles.mock.invocationCallOrder[0]!).toBeGreaterThan(
+      mockDb.group.delete.mock.invocationCallOrder[0]!,
+    );
+  });
+});
+
+// #265: expired splits go with the receipts only they used (receipt-cleanup.test.ts),
+// in batches so a backlog doesn't make one long transaction
+describe('cleanupExpiredSplits', () => {
+  beforeEach(() => {
+    vi.stubEnv('ADMIN_EMAIL', 'admin@example.com');
+    vi.clearAllMocks();
+    mockDb.user.findUnique.mockResolvedValue({ suspendedAt: null });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test('deletes expired splits batch by batch until none are left', async () => {
+    deleteExpiredSplits.mockResolvedValueOnce(500).mockResolvedValueOnce(500).mockResolvedValueOnce(3);
+    const api = await callerAs(adminSession);
+    await expect(api.cleanupExpiredSplits()).resolves.toEqual({ deletedCount: 1003 });
+
+    expect(deleteExpiredSplits).toHaveBeenCalledTimes(3);
+    expect(deleteExpiredSplits).toHaveBeenCalledWith(mockDb, 500);
+    expect(mockDb.adminAuditLog.create).toHaveBeenCalledWith({
+      data: { adminId: 'admin-1', action: 'EXPIRED_SPLITS_CLEANED', metadata: { deletedCount: 1003 } },
+    });
   });
 });
