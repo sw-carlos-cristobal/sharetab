@@ -61,7 +61,7 @@ test.describe('Confirmation dialogs', () => {
       await remove.click();
       const dialog = page.getByRole('alertdialog', { name: 'Remove Dana?' });
       await expect(dialog).toBeVisible();
-      await expect(dialog).toContainText("can't be removed until they're taken out of it");
+      await expect(dialog).toContainText("can't be removed until they've settled up");
 
       // Cancel leaves Dana, and puts focus back on the button that opened it
       await dialog.getByRole('button', { name: 'Cancel' }).click();

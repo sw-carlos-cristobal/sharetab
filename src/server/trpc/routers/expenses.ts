@@ -141,9 +141,10 @@ export const expensesRouter = createTRPCRouter({
         await lockActiveGroup(tx, input.groupId, 'archivedAddExpense');
 
         // Validate paidById is a member of the group (after the lock, so someone
-        // leaving meanwhile is either gone or waits for this, #279)
+        // leaving meanwhile is either gone or waits for this, #279). A placeholder
+        // removed from the group isn't (#284).
         const paidByMember = await tx.groupMember.findFirst({
-          where: { groupId: input.groupId, userId: input.paidById },
+          where: { groupId: input.groupId, userId: input.paidById, removedAt: null },
         });
         if (!paidByMember) {
           throw new AppError('BAD_REQUEST', 'paidByNotMember');
@@ -152,7 +153,7 @@ export const expensesRouter = createTRPCRouter({
         // Validate all share userIds are group members
         const shareUserIds = input.shares.map((s) => s.userId);
         const memberCount = await tx.groupMember.count({
-          where: { groupId: input.groupId, userId: { in: shareUserIds } },
+          where: { groupId: input.groupId, userId: { in: shareUserIds }, removedAt: null },
         });
         if (memberCount !== new Set(shareUserIds).size) {
           throw new AppError('BAD_REQUEST', 'shareUsersNotMembers');
@@ -294,10 +295,24 @@ export const expensesRouter = createTRPCRouter({
         await lockActiveGroup(tx, groupId, 'archivedEditExpense');
 
         // Validate a new payer and the shares' people are members (after the lock,
-        // so someone leaving meanwhile is either gone or waits for this, #279)
+        // so someone leaving meanwhile is either gone or waits for this, #279). A
+        // placeholder removed from the group stays in the part they had in this
+        // expense, so editing it keeps that part theirs instead of moving it onto
+        // someone else, but isn't put in a part they didn't have (#284). Who has
+        // which part is read under the expense's row lock, so two edits at once
+        // can't each check against what the other is replacing.
+        const [stored] = await tx.$queryRaw<{ paidById: string }[]>`
+          SELECT "paidById" FROM "Expense" WHERE "id" = ${expenseId} FOR NO KEY UPDATE`;
+        const storedShareIds = (await tx.expenseShare.findMany({ where: { expenseId }, select: { userId: true } })).map(
+          (s) => s.userId,
+        );
         if (input.paidById) {
           const paidByMember = await tx.groupMember.findFirst({
-            where: { groupId, userId: input.paidById },
+            where: {
+              groupId,
+              userId: input.paidById,
+              ...(input.paidById === stored?.paidById ? {} : { removedAt: null }),
+            },
           });
           if (!paidByMember) {
             throw new AppError('BAD_REQUEST', 'paidByNotMember');
@@ -306,7 +321,11 @@ export const expensesRouter = createTRPCRouter({
         if (shares) {
           const shareUserIds = shares.map((s) => s.userId);
           const memberCount = await tx.groupMember.count({
-            where: { groupId, userId: { in: shareUserIds } },
+            where: {
+              groupId,
+              userId: { in: shareUserIds },
+              OR: [{ removedAt: null }, { userId: { in: storedShareIds } }],
+            },
           });
           if (memberCount !== new Set(shareUserIds).size) {
             throw new AppError('BAD_REQUEST', 'shareUsersNotMembers');

@@ -100,11 +100,23 @@ function EditExpenseForm({
   const [title, setTitle] = useState(expense.title);
   const [amountStr, setAmountStr] = useState(() => centsToDecimal(expense.amount));
   const [category, setCategory] = useState(expense.category ?? '');
+  // A placeholder removed from the group keeps the part they had in this
+  // expense, the payment or a share, so editing it doesn't move that part onto
+  // someone else; the server refuses them anywhere else (#284).
+  const payerChoices = useMemo(
+    () => [...group.members, ...group.removedMembers.filter((m) => m.user.id === expense.paidById)],
+    [group, expense],
+  );
+  const shareChoices = useMemo(
+    () => [...group.members, ...group.removedMembers.filter((m) => expense.shares.some((s) => s.userId === m.user.id))],
+    [group, expense],
+  );
+
   // The saved payer may have left the group (member removal preserves
   // financial history). Server-side membership validation would reject the
   // stale id, so start empty and force the user to pick a current member.
   const [paidById, setPaidById] = useState(() =>
-    group.members.some((m) => m.user.id === expense.paidById) ? expense.paidById : '',
+    payerChoices.some((m) => m.user.id === expense.paidById) ? expense.paidById : '',
   );
   const [shares, setShares] = useState<ShareEntry[]>([]);
   const [currency, setCurrency] = useState<string>(expense.currency);
@@ -126,14 +138,15 @@ function EditExpenseForm({
   // the expense saveable — and a warning banner tells the user to review it.
   const { savedShares, hasFormerMemberShares } = useMemo(() => {
     const currentMemberIds = new Set(group.members.map((m) => m.user.id));
+    const keptIds = new Set(shareChoices.map((m) => m.user.id));
     const toSeed = (s: ExpenseData['shares'][number]): ShareEntry => ({
       userId: s.userId,
       amount: s.amount,
       ...(s.percentage != null ? { percentage: s.percentage } : {}),
       ...(s.shares != null ? { shares: s.shares } : {}),
     });
-    const kept = expense.shares.filter((s) => currentMemberIds.has(s.userId)).map(toSeed);
-    const dropped = expense.shares.filter((s) => !currentMemberIds.has(s.userId));
+    const kept = expense.shares.filter((s) => keptIds.has(s.userId)).map(toSeed);
+    const dropped = expense.shares.filter((s) => !keptIds.has(s.userId));
     if (dropped.length === 0) {
       return { savedShares: kept, hasFormerMemberShares: false };
     }
@@ -142,7 +155,7 @@ function EditExpenseForm({
     const droppedUnits = dropped.reduce((sum, s) => sum + (s.shares ?? 0), 0);
     const targetId = currentMemberIds.has(expense.paidById)
       ? expense.paidById
-      : (kept[0]?.userId ?? group.members[0]?.user.id);
+      : (kept.find((s) => currentMemberIds.has(s.userId))?.userId ?? group.members[0]?.user.id);
     if (!targetId) {
       return { savedShares: kept, hasFormerMemberShares: true };
     }
@@ -179,7 +192,7 @@ function EditExpenseForm({
       ),
       hasFormerMemberShares: true,
     };
-  }, [expense, group]);
+  }, [expense, group, shareChoices]);
   const {
     mode: initialSplitMode,
     initialSelected,
@@ -195,10 +208,12 @@ function EditExpenseForm({
     },
   });
 
-  const members: MemberInfo[] = group.members.map((m) => ({
+  const toMemberInfo = (m: GroupData['members'][number]): MemberInfo => ({
     id: m.user.id,
     name: m.user.placeholderName ?? m.user.name ?? m.user.email,
-  }));
+  });
+  const members = shareChoices.map(toMemberInfo);
+  const payers = payerChoices.map(toMemberInfo);
 
   const amountCents = parseToCents(amountStr);
   const groupCurrency = group.currency;
@@ -372,7 +387,7 @@ function EditExpenseForm({
                 className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
                 <option value="">{t('new.selectMember')}</option>
-                {members.map((m) => (
+                {payers.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.name ?? t('new.unnamed')}
                   </option>

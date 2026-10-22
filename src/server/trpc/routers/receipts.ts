@@ -515,9 +515,10 @@ export const receiptsRouter = createTRPCRouter({
         }
 
         // Verify paidBy and all assignees are members of this group (after the lock,
-        // so someone leaving meanwhile is either gone or waits for this, #279)
+        // so someone leaving meanwhile is either gone or waits for this, #279). A
+        // placeholder removed from the group isn't (#284).
         const groupMembers = await tx.groupMember.findMany({
-          where: { groupId: input.groupId },
+          where: { groupId: input.groupId, removedAt: null },
           select: { userId: true },
         });
         const memberIds = new Set(groupMembers.map((m) => m.userId));
@@ -630,6 +631,7 @@ export const receiptsRouter = createTRPCRouter({
             where: {
               groupId: input.groupId,
               userId: { in: Array.from(userIdsToValidate) },
+              removedAt: null,
             },
             select: { userId: true },
           });

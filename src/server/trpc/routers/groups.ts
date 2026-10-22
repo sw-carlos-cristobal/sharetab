@@ -20,25 +20,26 @@ const INVITE_LOOKUP_WINDOW_MS = 60 * 1000;
 // look the same (#265). A placeholder's name is compared with every member's, ignoring case
 // and surrounding spaces, as claim sessions compare names. The caller holds
 // `lockGroupMembers`, so two people adding one name at the same moment can't both see it free.
-async function assertPlaceholderNameFree(
-  tx: Prisma.TransactionClient,
-  groupId: string,
-  name: string,
-  exceptUserId?: string,
-): Promise<void> {
+//
+// Whoever has the name: a member, or else a placeholder removed from the group (#284), who
+// keeps their name since the expenses they're in still show it. null when nobody has it.
+async function findNameHolder(tx: Prisma.TransactionClient, groupId: string, name: string, exceptUserId?: string) {
   const members = await tx.groupMember.findMany({
     where: { groupId },
-    select: { userId: true, user: { select: { name: true, placeholderName: true } } },
+    select: {
+      userId: true,
+      removedAt: true,
+      user: { select: { name: true, placeholderName: true, isPlaceholder: true } },
+    },
+    orderBy: { joinedAt: 'asc' },
   });
   const wanted = normalizeGuestName(name);
-  const taken = members.some(
+  const holders = members.filter(
     (m) =>
       m.userId !== exceptUserId &&
       [m.user.placeholderName, m.user.name].some((n) => n != null && normalizeGuestName(n) === wanted),
   );
-  if (taken) {
-    throw new AppError('CONFLICT', 'placeholderNameTaken');
-  }
+  return holders.find((m) => !m.removedAt) ?? holders[0] ?? null;
 }
 
 export const groupsRouter = createTRPCRouter({
@@ -51,6 +52,7 @@ export const groupsRouter = createTRPCRouter({
       take: 200,
       include: {
         members: {
+          where: { removedAt: null },
           include: {
             user: {
               select: { id: true, name: true, email: true, image: true, isPlaceholder: true, placeholderName: true },
@@ -73,6 +75,7 @@ export const groupsRouter = createTRPCRouter({
       take: 200,
       include: {
         members: {
+          where: { removedAt: null },
           include: {
             user: {
               select: { id: true, name: true, email: true, image: true, isPlaceholder: true, placeholderName: true },
@@ -110,7 +113,14 @@ export const groupsRouter = createTRPCRouter({
     if (!group) {
       throw new AppError('NOT_FOUND', 'groupNotFound');
     }
-    return group;
+    // Placeholders removed from the group are listed apart: they're no longer
+    // members, but their names still show in the expenses and balances they're
+    // in, and a balance with them can still be settled (#284)
+    return {
+      ...group,
+      members: group.members.filter((m) => !m.removedAt),
+      removedMembers: group.members.filter((m) => m.removedAt),
+    };
   }),
 
   create: protectedProcedure
@@ -238,6 +248,8 @@ export const groupsRouter = createTRPCRouter({
         // Settlements need both people to be members, so a balance with someone
         // who left can't be settled until they rejoin. An account an admin
         // deleted can't rejoin, so the expenses it's in have to change instead.
+        // A placeholder removed from the group keeps their row and can still be
+        // settled with (#284), so they count here.
         const members = await tx.groupMember.findMany({
           where: { groupId: input.groupId },
           select: { userId: true },
@@ -313,10 +325,7 @@ export const groupsRouter = createTRPCRouter({
         if (group?.archivedAt) {
           throw new AppError('BAD_REQUEST', 'mergeArchivedGroup');
         }
-        const membership = await ctx.db.groupMember.findUnique({
-          where: { userId_groupId: { userId: input.placeholderUserId, groupId: input.groupId } },
-        });
-        if (!membership) {
+        if (!(await findPlaceholderMember(ctx.db, input.placeholderUserId, input.groupId))) {
           throw new AppError('BAD_REQUEST', 'placeholderNotMember');
         }
       }
@@ -346,7 +355,7 @@ export const groupsRouter = createTRPCRouter({
         expiresAt: true,
         groupId: true,
         placeholderUserId: true,
-        group: { select: { name: true, _count: { select: { members: true } } } },
+        group: { select: { name: true, _count: { select: { members: { where: { removedAt: null } } } } } },
         createdBy: { select: { name: true, isPlaceholder: true, suspendedAt: true } },
       },
     });
@@ -411,7 +420,11 @@ export const groupsRouter = createTRPCRouter({
             if (await isUsedBy(tx, invite.id, ctx.user.id)) return;
             throw new AppError('NOT_FOUND', 'inviteInvalid');
           }
-          if (!(await mergePlaceholderIntoUser(tx, placeholderUserId, ctx.user.id, invite.groupId))) {
+          if (
+            !(await mergePlaceholderIntoUser(tx, placeholderUserId, ctx.user.id, invite.groupId, {
+              requireCurrent: true,
+            }))
+          ) {
             throw new AppError('CONFLICT', 'placeholderGone');
           }
         });
@@ -445,7 +458,11 @@ export const groupsRouter = createTRPCRouter({
 
       if (invite.placeholderUserId) {
         // Lost to a merge that got there first since the check above
-        if (!(await mergePlaceholderIntoUser(tx, invite.placeholderUserId, ctx.user.id, invite.groupId))) {
+        if (
+          !(await mergePlaceholderIntoUser(tx, invite.placeholderUserId, ctx.user.id, invite.groupId, {
+            requireCurrent: true,
+          }))
+        ) {
           throw new AppError('CONFLICT', 'placeholderGone');
         }
       }
@@ -492,7 +509,7 @@ export const groupsRouter = createTRPCRouter({
         const targetMember = await tx.groupMember.findUnique({
           where: { userId_groupId: { userId: input.userId, groupId: input.groupId } },
         });
-        if (!targetMember) {
+        if (!targetMember || targetMember.removedAt) {
           throw new AppError('NOT_FOUND', 'memberNotFound');
         }
         if (targetMember.role === 'OWNER' && !isSelf) {
@@ -519,24 +536,46 @@ export const groupsRouter = createTRPCRouter({
         }
 
         if (targetUser?.isPlaceholder) {
-          // A placeholder can't log in to settle up, rejoin or be merged once
-          // gone, so one who is in any expense or payment stays. Moving their part
-          // onto other people writes off what they owe or are owed, and dropping
-          // only the membership leaves a balance that comes back (say an old
-          // expense is deleted) with nobody able to settle it.
+          // A placeholder can't log in to settle up or rejoin, and moving their part
+          // onto other people writes off what they owe or are owed (#260). So one
+          // who is in any expense or payment goes only at a zero balance, and only
+          // from the member list: their history stays theirs, so a balance that comes
+          // back (say an old expense is deleted) shows under their name and can be
+          // settled with them (#284).
           const [shares, expenses, settlements] = await Promise.all([
             tx.expenseShare.count({ where: { userId: input.userId } }),
             tx.expense.count({ where: { OR: [{ paidById: input.userId }, { addedById: input.userId }] } }),
             tx.settlement.count({ where: { OR: [{ fromId: input.userId }, { toId: input.userId }] } }),
           ]);
-          if (shares + expenses + settlements > 0) {
-            const name = targetUser.placeholderName ?? targetUser.name;
-            throw name
-              ? new AppError('PRECONDITION_FAILED', 'placeholderInUse', { name })
-              : new AppError('PRECONDITION_FAILED', 'memberInUse');
+          const inHistory = shares + expenses + settlements > 0;
+          if (inHistory) {
+            const balance = (await loadGroupBalances(tx, input.groupId)).find((b) => b.userId === input.userId);
+            if (balance && balance.net !== 0) {
+              const name = targetUser.placeholderName ?? targetUser.name;
+              throw name
+                ? new AppError('PRECONDITION_FAILED', 'placeholderUnsettled', { name })
+                : new AppError('PRECONDITION_FAILED', 'memberUnsettled');
+            }
           }
 
-          await tx.receiptItemAssignment.deleteMany({ where: { userId: input.userId } });
+          if (inHistory) {
+            // A receipt saved for later can't become an expense with them in it. The
+            // ones already made into expenses keep who had which item, which a merge
+            // hands over.
+            const pending = { groupId: input.groupId, expense: { is: null } };
+            await tx.receiptItemAssignment.deleteMany({
+              where: { userId: input.userId, receiptItem: { receipt: pending } },
+            });
+            await tx.receipt.updateMany({ where: { paidById: input.userId, ...pending }, data: { paidById: null } });
+            // Unless a merge took them meanwhile
+            const { count } = await tx.groupMember.updateMany({
+              where: { id: targetMember.id, removedAt: null },
+              data: { removedAt: new Date() },
+            });
+            if (count === 0) {
+              throw new AppError('NOT_FOUND', 'memberNotFound');
+            }
+          }
           await tx.activityLog.create({
             data: {
               groupId: input.groupId,
@@ -545,9 +584,12 @@ export const groupsRouter = createTRPCRouter({
               metadata: { removedUserId: input.userId, wasPlaceholder: true },
             },
           });
-          // Nothing refers to them: delete the user (GroupMember cascades; their
-          // activity-log entries stay, with the user link cleared)
-          await tx.user.delete({ where: { id: input.userId } });
+          if (!inHistory) {
+            // Nothing refers to them: delete the user (GroupMember cascades; their
+            // activity-log entries stay, with the user link cleared)
+            await tx.receiptItemAssignment.deleteMany({ where: { userId: input.userId } });
+            await tx.user.delete({ where: { id: input.userId } });
+          }
         } else {
           // Real user — preserve financial history, just remove the membership
           await tx.groupMember.delete({ where: { id: targetMember.id } });
@@ -639,12 +681,32 @@ export const groupsRouter = createTRPCRouter({
       const { randomUUID } = await import('crypto');
       const placeholderEmail = `placeholder-${randomUUID()}@placeholder.local`;
 
-      const user = await ctx.db.$transaction(async (tx) => {
+      const { user, restored } = await ctx.db.$transaction(async (tx) => {
         await lockGroupMembers(tx, input.groupId);
-        await assertPlaceholderNameFree(tx, input.groupId, input.name);
+        const holder = await findNameHolder(tx, input.groupId, input.name);
+        if (holder && !holder.removedAt) {
+          throw new AppError('CONFLICT', 'placeholderNameTaken');
+        }
+        // Adding a removed placeholder's name brings them back with their history,
+        // rather than a second person by that name (#284). A merge that took them
+        // meanwhile leaves nobody to bring back, and the name is free.
+        if (holder?.user.isPlaceholder) {
+          const { count } = await tx.groupMember.updateMany({
+            where: { userId: holder.userId, groupId: input.groupId, removedAt: { not: null } },
+            data: { removedAt: null },
+          });
+          if (count === 1) {
+            return {
+              user: { id: holder.userId, name: holder.user.placeholderName ?? holder.user.name },
+              restored: true,
+            };
+          }
+        } else if (holder) {
+          throw new AppError('CONFLICT', 'placeholderNameTaken');
+        }
         // One write: if the group is deleted meanwhile, the membership can't be made
         // and the placeholder is rolled back with it, instead of staying with no group (#265)
-        return tx.user.create({
+        const created = await tx.user.create({
           data: {
             email: placeholderEmail,
             name: input.name,
@@ -654,6 +716,7 @@ export const groupsRouter = createTRPCRouter({
             groupMembers: { create: { groupId: input.groupId } },
           },
         });
+        return { user: { id: created.id, name: created.name }, restored: false };
       });
 
       await ctx.db.activityLog.create({
@@ -661,11 +724,15 @@ export const groupsRouter = createTRPCRouter({
           groupId: input.groupId,
           userId: ctx.user.id,
           type: 'PLACEHOLDER_CREATED',
-          metadata: { placeholderName: input.name, placeholderUserId: user.id },
+          metadata: {
+            placeholderName: user.name,
+            placeholderUserId: user.id,
+            ...(restored ? { restored: true } : {}),
+          },
         },
       });
 
-      return { id: user.id, name: user.name, isPlaceholder: true };
+      return { id: user.id, name: user.name, isPlaceholder: true, restored };
     }),
 
   renamePlaceholder: groupMemberProcedure
@@ -678,15 +745,18 @@ export const groupsRouter = createTRPCRouter({
       if (!user?.isPlaceholder) {
         throw new AppError('BAD_REQUEST', 'userNotPlaceholder');
       }
-      const membership = await ctx.db.groupMember.findUnique({
-        where: { userId_groupId: { userId: input.placeholderUserId, groupId: input.groupId } },
-      });
-      if (!membership) {
-        throw new AppError('FORBIDDEN', 'placeholderNotMember');
-      }
       return ctx.db.$transaction(async (tx) => {
         await lockGroupMembers(tx, input.groupId);
-        await assertPlaceholderNameFree(tx, input.groupId, input.name, input.placeholderUserId);
+        // Under the lock, so one removed meanwhile is seen as removed (#284)
+        const membership = await tx.groupMember.findUnique({
+          where: { userId_groupId: { userId: input.placeholderUserId, groupId: input.groupId } },
+        });
+        if (!membership || membership.removedAt) {
+          throw new AppError('FORBIDDEN', 'placeholderNotMember');
+        }
+        if (await findNameHolder(tx, input.groupId, input.name, input.placeholderUserId)) {
+          throw new AppError('CONFLICT', 'placeholderNameTaken');
+        }
         return tx.user.update({
           where: { id: input.placeholderUserId },
           data: { placeholderName: input.name, name: input.name },
@@ -752,7 +822,11 @@ async function isUsedBy(db: Prisma.TransactionClient, inviteId: string, userId: 
   return invite?.usedById === userId;
 }
 
-/** The user if they're still a placeholder and a member of the group, else null. */
+/**
+ * The user if they're still a placeholder and a member of the group, else null. One removed
+ * from the group (#284) is not: a claim link made for them stops working until they're added
+ * back.
+ */
 async function findPlaceholderMember(db: Prisma.TransactionClient, userId: string, groupId: string) {
   const user = await db.user.findUnique({
     where: { id: userId },
@@ -762,5 +836,5 @@ async function findPlaceholderMember(db: Prisma.TransactionClient, userId: strin
   const membership = await db.groupMember.findUnique({
     where: { userId_groupId: { userId, groupId } },
   });
-  return membership ? user : null;
+  return membership && !membership.removedAt ? user : null;
 }

@@ -3,7 +3,7 @@ import { AppError } from '@/server/lib/app-error';
 import { createTRPCRouter, groupMemberProcedure } from '../init';
 import { getExchangeRate, convertCents } from '../../lib/exchange-rates';
 import { MAX_MONEY_CENTS } from '@/lib/money';
-import { lockActiveGroup } from '../../lib/group-balances';
+import { loadGroupBalances, lockActiveGroup } from '../../lib/group-balances';
 
 export const settlementsRouter = createTRPCRouter({
   list: groupMemberProcedure
@@ -107,6 +107,29 @@ export const settlementsRouter = createTRPCRouter({
         });
         if (memberCount < 2) {
           throw new AppError('BAD_REQUEST', 'settlementPartiesNotMembers');
+        }
+
+        // A placeholder removed from the group (#284) is still counted above, so a
+        // balance that comes back to them can be settled. But the payment may only
+        // settle it, not make a new one: they're no longer in the group. Two such
+        // payments at once can each pass (the lock above is shared); what they
+        // overpay can still be settled the same way.
+        const removed = await tx.groupMember.findMany({
+          where: { groupId: input.groupId, userId: { in: [effectiveFromId, input.toId] }, removedAt: { not: null } },
+          select: { userId: true },
+        });
+        if (removed.length > 0) {
+          const balances = await loadGroupBalances(tx, input.groupId);
+          const net = (userId: string) => balances.find((b) => b.userId === userId)?.net ?? 0;
+          // Balances are in the group's currency
+          const paid = baseCurrencyAmount ?? input.amount;
+          // A positive net is owed to them: paying them settles it, and they pay what they owe
+          const settles = removed.every(({ userId }) =>
+            userId === input.toId ? paid <= net(userId) : paid <= -net(userId),
+          );
+          if (!settles) {
+            throw new AppError('BAD_REQUEST', 'settlementRemovedMemberOverpaid');
+          }
         }
 
         const created = await tx.settlement.create({

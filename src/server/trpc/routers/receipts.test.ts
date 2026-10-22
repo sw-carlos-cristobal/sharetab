@@ -141,6 +141,10 @@ describe('a group archived while a receipt was being finished (#289)', () => {
     expect(mockDb.groupMember.findMany.mock.invocationCallOrder[0]).toBeLessThan(
       mockDb.expense.create.mock.invocationCallOrder[0]!,
     );
+    // Not a placeholder removed from the group (#284)
+    expect(mockDb.groupMember.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { groupId: 'g1', removedAt: null } }),
+    );
   });
 
   // Codex on #319: deleting a receipt from the pending list keeps it off the group while a
@@ -292,6 +296,19 @@ describe('saving a receipt for later while it is deleted from the pending list (
     const lastRead = mockDb.receipt.findUnique.mock.invocationCallOrder.at(-1)!;
     expect(lastRead).toBeGreaterThan(locked!);
     expect(mockDb.receipt.update.mock.invocationCallOrder[0]).toBeGreaterThan(lastRead);
+  });
+
+  test('a placeholder removed from the group is not saved as the payer (#284)', async () => {
+    mockDb.receipt.findUnique.mockResolvedValue(inGroup);
+    mockDb.groupMember.findMany.mockResolvedValue([]);
+    const api = await caller();
+    await expect(api.saveForLater({ groupId: 'g1', receiptId: 'r1', paidById: 'hal' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    expect(mockDb.groupMember.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { groupId: 'g1', userId: { in: ['hal'] }, removedAt: null } }),
+    );
+    expect(mockDb.receipt.update).not.toHaveBeenCalled();
   });
 });
 

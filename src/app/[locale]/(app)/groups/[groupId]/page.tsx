@@ -88,7 +88,11 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
   }
 
   const g = group.data;
-  const memberMap = new Map(g.members.map((m) => [m.user.id, m.user]));
+  // A placeholder removed from the group still has their name in the balances: one that
+  // comes back (an old expense changed) shows under it, and can be settled with them (#284)
+  const memberMap = new Map([...g.members, ...g.removedMembers].map((m) => [m.user.id, m.user]));
+  const inDebts = new Set(debts.data?.debts.flatMap((d) => [d.from, d.to]) ?? []);
+  const settleParties = [...g.members, ...g.removedMembers.filter((m) => inDebts.has(m.user.id))];
   const myRole = g.members.find((m) => m.user.id === myId)?.role;
 
   return (
@@ -427,7 +431,7 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
 
       <SettleDialog
         groupId={groupId}
-        members={g.members.map((m) => ({ id: m.user.id, name: m.user.name ?? m.user.email }))}
+        members={settleParties.map((m) => ({ id: m.user.id, name: m.user.name ?? m.user.email }))}
         {...(settleState.from !== undefined ? { suggestedFrom: settleState.from } : {})}
         {...(settleState.to !== undefined ? { suggestedTo: settleState.to } : {})}
         {...(settleState.amount !== undefined ? { suggestedAmount: settleState.amount } : {})}

@@ -13,6 +13,7 @@ const mockDb = {
     findMany: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
+    updateMany: vi.fn(),
     delete: vi.fn(),
     deleteMany: vi.fn(),
     count: vi.fn(),
@@ -95,6 +96,14 @@ function mockMemberships(before: Record<string, object>, after: Record<string, o
       (locked ? after : before)[where.userId_groupId.userId] ?? null,
   );
 }
+
+// #284: a placeholder can't sign in, but an admin can impersonate one
+test("a removed placeholder's membership doesn't open the group", async () => {
+  mockDb.groupMember.findUnique.mockResolvedValue({ ...member('owner', 'MEMBER'), removedAt: new Date() });
+  mockDb.group.findUnique.mockResolvedValue({ id: 'g1', members: [] });
+  const api = await caller();
+  await expect(api.get({ groupId: 'g1' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+});
 
 describe('group and placeholder names are trimmed', () => {
   test('create refuses a group name that is only whitespace', async () => {
@@ -198,6 +207,79 @@ describe('placeholder names are unique in the group', () => {
     expect(mockDb.groupMember.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { groupId: 'g1' } }));
     expect(mockDb.groupMember.findMany.mock.invocationCallOrder[0]!).toBeGreaterThan(locked);
     expect(mockDb.user.create.mock.invocationCallOrder[0]!).toBeGreaterThan(locked);
+  });
+
+  // #284: a removed placeholder keeps their name, since their expenses still show it
+  describe('when a removed placeholder has the name', () => {
+    const hal = {
+      userId: 'p9',
+      removedAt: new Date('2026-10-01'),
+      user: { name: 'Hal', placeholderName: 'Hal', isPlaceholder: true },
+    };
+
+    beforeEach(() => {
+      mockDb.groupMember.findMany.mockResolvedValue([...members, hal]);
+      mockDb.groupMember.updateMany.mockResolvedValue({ count: 1 });
+    });
+
+    test('addPlaceholder brings them back instead of adding someone new', async () => {
+      const api = await caller();
+      await expect(api.addPlaceholder({ groupId: 'g1', name: ' hal ' })).resolves.toEqual({
+        id: 'p9',
+        name: 'Hal',
+        isPlaceholder: true,
+        restored: true,
+      });
+      expect(mockDb.groupMember.updateMany).toHaveBeenCalledWith({
+        where: { userId: 'p9', groupId: 'g1', removedAt: { not: null } },
+        data: { removedAt: null },
+      });
+      expect(mockDb.user.create).not.toHaveBeenCalled();
+      expect(mockDb.activityLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: 'PLACEHOLDER_CREATED',
+            metadata: { placeholderName: 'Hal', placeholderUserId: 'p9', restored: true },
+          }),
+        }),
+      );
+    });
+
+    // Only possible with names added before #265 made them unique
+    test('addPlaceholder refuses a name a current member has, even if someone removed has it too', async () => {
+      mockDb.groupMember.findMany.mockResolvedValue([
+        hal,
+        { userId: 'p8', removedAt: null, user: { name: 'hal', placeholderName: 'hal', isPlaceholder: true } },
+      ]);
+      const api = await caller();
+      await expect(api.addPlaceholder({ groupId: 'g1', name: 'Hal' })).rejects.toMatchObject({ code: 'CONFLICT' });
+      expect(mockDb.groupMember.updateMany).not.toHaveBeenCalled();
+      expect(mockDb.user.create).not.toHaveBeenCalled();
+    });
+
+    test('addPlaceholder adds someone new when the removed one was merged meanwhile', async () => {
+      mockDb.groupMember.updateMany.mockResolvedValue({ count: 0 });
+      mockDb.user.create.mockResolvedValue({ id: 'p10', name: 'Hal' });
+      const api = await caller();
+      await expect(api.addPlaceholder({ groupId: 'g1', name: 'Hal' })).resolves.toEqual({
+        id: 'p10',
+        name: 'Hal',
+        isPlaceholder: true,
+        restored: false,
+      });
+      expect(mockDb.user.create).toHaveBeenCalled();
+    });
+
+    test('renamePlaceholder refuses it', async () => {
+      mockDb.user.findUnique
+        .mockResolvedValueOnce({ suspendedAt: null })
+        .mockResolvedValueOnce({ id: 'p1', isPlaceholder: true });
+      const api = await caller();
+      await expect(
+        api.renamePlaceholder({ groupId: 'g1', placeholderUserId: 'p1', name: 'HAL' }),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+      expect(mockDb.user.update).not.toHaveBeenCalled();
+    });
   });
 
   test('renamePlaceholder refuses a name another member already has', async () => {
@@ -521,6 +603,10 @@ describe('invites', () => {
     await expect(api.joinByInvite({ token: 't1' })).resolves.toEqual({ groupId: 'g1', alreadyMember: true });
     expect(mockDb.groupInvite.updateMany).toHaveBeenCalled();
     expect(mockDb.groupMember.create).not.toHaveBeenCalled();
+    // Not one removed from the group since the check above (#284)
+    expect(mockDb.groupMember.deleteMany).toHaveBeenCalledWith({
+      where: { userId: 'p1', groupId: 'g1', removedAt: null },
+    });
     expect(mockDb.expense.updateMany).toHaveBeenCalledWith({
       where: { paidById: 'p1', groupId: 'g1' },
       data: { paidById: 'bob' },
@@ -555,6 +641,9 @@ describe('invites', () => {
     const api = await caller('bob');
     await expect(api.joinByInvite({ token: 't1' })).resolves.toEqual({ groupId: 'g1', alreadyMember: false });
     expect(mockDb.groupMember.create).toHaveBeenCalledWith({ data: { userId: 'bob', groupId: 'g1' } });
+    expect(mockDb.groupMember.deleteMany).toHaveBeenCalledWith({
+      where: { userId: 'p1', groupId: 'g1', removedAt: null },
+    });
     expect(mockDb.expense.updateMany).toHaveBeenCalledWith({
       where: { paidById: 'p1', groupId: 'g1' },
       data: { paidById: 'bob' },
@@ -577,9 +666,29 @@ describe('invites', () => {
 // #260: removing a placeholder moved their shares onto each expense's payer,
 // their expenses onto the acting admin, and deleted their settlements, so
 // whatever they owed or were owed vanished from everyone else's balance.
+// #284: one at a zero balance is marked removed instead, history and all.
 describe('removing a placeholder', () => {
-  function setUp({ shares = 0, expenses = 0, settlements = 0 } = {}) {
-    mockMemberships({ owner: member('owner', 'OWNER'), p1: member('p1', 'MEMBER') });
+  // Alice (p1) paid $10.00 split with the owner, so the owner owes Alice $5.00
+  const ownerOwesAlice = [
+    {
+      paidById: 'p1',
+      amount: 1000,
+      baseCurrencyAmount: null,
+      shares: [
+        { userId: 'owner', amount: 500 },
+        { userId: 'p1', amount: 500 },
+      ],
+    },
+  ];
+  const ownerPaidAlice = [{ fromId: 'owner', toId: 'p1', amount: 500, baseCurrencyAmount: null }];
+
+  function setUp({
+    shares = 0,
+    expenses = 0,
+    settlements = 0,
+    target = member('p1', 'MEMBER') as object,
+  }: { shares?: number; expenses?: number; settlements?: number; target?: object } = {}) {
+    mockMemberships({ owner: member('owner', 'OWNER'), p1: target });
     // The caller lookup, then the target's user row
     mockDb.user.findUnique
       .mockResolvedValueOnce({ suspendedAt: null })
@@ -587,6 +696,9 @@ describe('removing a placeholder', () => {
     mockDb.expenseShare.count.mockResolvedValue(shares);
     mockDb.expense.count.mockResolvedValue(expenses);
     mockDb.settlement.count.mockResolvedValue(settlements);
+    mockDb.expense.findMany.mockResolvedValue([]);
+    mockDb.settlement.findMany.mockResolvedValue([]);
+    mockDb.groupMember.updateMany.mockResolvedValue({ count: 1 });
     // Read by the old cleanup, which looked up the shares to move
     mockDb.expenseShare.findMany.mockResolvedValue([]);
   }
@@ -598,24 +710,87 @@ describe('removing a placeholder', () => {
     expect(mockDb.expense.updateMany).not.toHaveBeenCalled();
     expect(mockDb.settlement.deleteMany).not.toHaveBeenCalled();
     expect(mockDb.groupMember.delete).not.toHaveBeenCalled();
+    expect(mockDb.groupMember.updateMany).not.toHaveBeenCalled();
+    expect(mockDb.receiptItemAssignment.deleteMany).not.toHaveBeenCalled();
     expect(mockDb.user.delete).not.toHaveBeenCalled();
   }
 
-  // Even at a zero balance: moving their part onto others shifts who owes
-  // whom, and a removed member's balance can come back with nobody able to
-  // settle it.
+  // Their balance would drop out of view with nobody to settle it
+  test('is refused while the placeholder owes or is owed money', async () => {
+    setUp({ shares: 1, expenses: 1 });
+    mockDb.expense.findMany.mockResolvedValue(ownerOwesAlice);
+    const api = await caller();
+    await expect(api.removeMember({ groupId: 'g1', userId: 'p1' })).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: "Alice still owes or is owed money in this group, so they can't be removed. Settle up first.",
+    });
+    expectNothingChanged();
+  });
+
+  // Moving their part onto others shifts who owes whom, so it all stays theirs
   test.each([
     ['has a share in an expense', { shares: 1 }],
     ['paid an expense', { expenses: 1 }],
     ['is in a settlement', { settlements: 1 }],
-  ])('is refused when the placeholder %s', async (_, history) => {
+  ])('marks a settled-up placeholder who %s removed, keeping their history', async (_, history) => {
     setUp(history);
+    mockDb.expense.findMany.mockResolvedValue(ownerOwesAlice);
+    mockDb.settlement.findMany.mockResolvedValue(ownerPaidAlice);
     const api = await caller();
-    await expect(api.removeMember({ groupId: 'g1', userId: 'p1' })).rejects.toMatchObject({
-      code: 'PRECONDITION_FAILED',
-      message:
-        "Alice is in expenses or payments in this group, so they can't be removed. Take them out of those first.",
+    await expect(api.removeMember({ groupId: 'g1', userId: 'p1' })).resolves.toEqual({ success: true });
+
+    // Only if they weren't merged or removed meanwhile
+    expect(mockDb.groupMember.updateMany).toHaveBeenCalledWith({
+      where: { id: 'gm-p1', removedAt: null },
+      data: { removedAt: expect.any(Date) },
     });
+    expect(mockDb.user.delete).not.toHaveBeenCalled();
+    expect(mockDb.groupMember.delete).not.toHaveBeenCalled();
+    expect(mockDb.expenseShare.update).not.toHaveBeenCalled();
+    expect(mockDb.expense.updateMany).not.toHaveBeenCalled();
+    expect(mockDb.settlement.deleteMany).not.toHaveBeenCalled();
+    // A receipt saved for later can't be finished with them in it. Ones already made into
+    // expenses keep their items' people, which a merge hands over.
+    const pending = { groupId: 'g1', expense: { is: null } };
+    expect(mockDb.receiptItemAssignment.deleteMany).toHaveBeenCalledWith({
+      where: { userId: 'p1', receiptItem: { receipt: pending } },
+    });
+    expect(mockDb.receipt.updateMany).toHaveBeenCalledWith({
+      where: { paidById: 'p1', ...pending },
+      data: { paidById: null },
+    });
+    expect(mockDb.activityLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          type: 'MEMBER_LEFT',
+          metadata: { removedUserId: 'p1', wasPlaceholder: true },
+        }),
+      }),
+    );
+  });
+
+  // Balance changes take the group's row lock too, so this one is final
+  test('reads the balance under the group member lock', async () => {
+    setUp({ shares: 1 });
+    const api = await caller();
+    await api.removeMember({ groupId: 'g1', userId: 'p1' });
+    expect(mockDb.expense.findMany.mock.invocationCallOrder[0]!).toBeGreaterThan(
+      mockDb.$queryRaw.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  test('finds nobody to remove once they were merged meanwhile', async () => {
+    setUp({ shares: 1 });
+    mockDb.groupMember.updateMany.mockResolvedValue({ count: 0 });
+    const api = await caller();
+    await expect(api.removeMember({ groupId: 'g1', userId: 'p1' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(mockDb.activityLog.create).not.toHaveBeenCalled();
+  });
+
+  test('finds nobody to remove when they were removed already', async () => {
+    setUp({ shares: 1, target: member('p1', 'MEMBER', { removedAt: new Date() }) });
+    const api = await caller();
+    await expect(api.removeMember({ groupId: 'g1', userId: 'p1' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
     expectNothingChanged();
   });
 
@@ -625,6 +800,7 @@ describe('removing a placeholder', () => {
     await expect(api.removeMember({ groupId: 'g1', userId: 'p1' })).resolves.toEqual({ success: true });
     expect(mockDb.expense.updateMany).not.toHaveBeenCalled();
     expect(mockDb.settlement.deleteMany).not.toHaveBeenCalled();
+    expect(mockDb.groupMember.updateMany).not.toHaveBeenCalled();
     // Their activity-log entries stay (the user link is cleared by the database)
     expect(mockDb.activityLog.deleteMany).not.toHaveBeenCalled();
     expect(mockDb.receiptItemAssignment.deleteMany).toHaveBeenCalledWith({ where: { userId: 'p1' } });

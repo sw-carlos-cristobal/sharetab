@@ -8,7 +8,8 @@ vi.mock('@/server/auth', () => ({ auth: vi.fn() }));
 const mockDb = {
   user: { findUnique: vi.fn() },
   group: { findUnique: vi.fn() },
-  groupMember: { findUnique: vi.fn(), count: vi.fn() },
+  groupMember: { findUnique: vi.fn(), findMany: vi.fn(), count: vi.fn() },
+  expense: { findMany: vi.fn() },
   settlement: { findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn(), deleteMany: vi.fn() },
   activityLog: { create: vi.fn() },
   $transaction: vi.fn(),
@@ -40,6 +41,8 @@ beforeEach(() => {
   mockDb.$queryRaw.mockResolvedValue([{ archivedAt: null }]);
   mockDb.settlement.findUnique.mockResolvedValue(payment);
   mockDb.settlement.deleteMany.mockResolvedValue({ count: 1 });
+  // Nobody in a payment was removed from the group unless a test says so (#284)
+  mockDb.groupMember.findMany.mockResolvedValue([]);
   mockDb.$transaction.mockImplementation(async (arg: unknown) =>
     typeof arg === 'function' ? arg(mockDb) : Promise.all(arg as Promise<unknown>[]),
   );
@@ -193,5 +196,80 @@ describe('a group archived while a payment was on its way (#289)', () => {
     expect(mockDb.groupMember.count.mock.invocationCallOrder[0]).toBeLessThan(
       mockDb.settlement.create.mock.invocationCallOrder[0]!,
     );
+  });
+});
+
+// #284: a placeholder removed from the group at a zero balance can still be settled
+// with when an old expense changes their balance, but a payment can't make them a
+// new debt: they're no longer in the group to take part in anything else.
+describe('a payment with someone removed from the group', () => {
+  // Hal (removed) paid $10.00 split with Alice, so Alice owes Hal $5.00
+  const aliceOwesHal = [
+    {
+      paidById: 'hal',
+      amount: 1000,
+      baseCurrencyAmount: null,
+      shares: [
+        { userId: 'alice', amount: 500 },
+        { userId: 'hal', amount: 500 },
+      ],
+    },
+  ];
+
+  beforeEach(() => {
+    mockDb.group.findUnique.mockResolvedValue({ archivedAt: null, currency: 'USD' });
+    mockDb.$queryRaw.mockResolvedValue([{ archivedAt: null }]);
+    mockDb.groupMember.count.mockResolvedValue(2);
+    mockDb.groupMember.findMany.mockResolvedValue([{ userId: 'hal' }]);
+    mockDb.expense.findMany.mockResolvedValue(aliceOwesHal);
+    mockDb.settlement.findMany.mockResolvedValue([]);
+    mockDb.settlement.create.mockResolvedValue({ id: 's2' });
+  });
+
+  test('can settle what they are owed', async () => {
+    asRole('MEMBER', 'alice');
+    const api = await caller('alice');
+    await api.create({ groupId: 'g1', toId: 'hal', amount: 500 });
+    expect(mockDb.settlement.create).toHaveBeenCalled();
+  });
+
+  test('can settle what they owe', async () => {
+    mockDb.expense.findMany.mockResolvedValue([
+      { ...aliceOwesHal[0], paidById: 'alice' }, // Alice paid, so Hal owes Alice $5.00
+    ]);
+    asRole('OWNER', 'alice');
+    const api = await caller('alice');
+    await api.create({ groupId: 'g1', fromId: 'hal', toId: 'alice', amount: 500 });
+    expect(mockDb.settlement.create).toHaveBeenCalled();
+  });
+
+  test.each([
+    ['paying them more than they are owed', { toId: 'hal', amount: 501 }],
+    ['a payment from them while they are owed money', { fromId: 'hal', toId: 'alice', amount: 100 }],
+  ])('refuses %s', async (_, payment) => {
+    asRole('OWNER', 'alice');
+    const api = await caller('alice');
+    await expect(api.create({ groupId: 'g1', ...payment })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'A payment with someone removed from this group can only settle what they still owe or are owed.',
+    });
+    expect(mockDb.settlement.create).not.toHaveBeenCalled();
+  });
+
+  test('reads their balance inside the transaction, after the lock', async () => {
+    asRole('MEMBER', 'alice');
+    const api = await caller('alice');
+    await api.create({ groupId: 'g1', toId: 'hal', amount: 500 });
+    const [locked] = mockDb.$queryRaw.mock.invocationCallOrder;
+    expect(mockDb.expense.findMany.mock.invocationCallOrder[0]).toBeGreaterThan(locked!);
+  });
+
+  test("doesn't read balances when nobody in the payment was removed", async () => {
+    mockDb.groupMember.findMany.mockResolvedValue([]);
+    asRole('MEMBER', 'alice');
+    const api = await caller('alice');
+    await api.create({ groupId: 'g1', toId: 'bob', amount: 99999 });
+    expect(mockDb.expense.findMany).not.toHaveBeenCalled();
+    expect(mockDb.settlement.create).toHaveBeenCalled();
   });
 });

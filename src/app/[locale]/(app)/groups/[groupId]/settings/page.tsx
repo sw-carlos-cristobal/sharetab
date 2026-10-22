@@ -170,9 +170,11 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
   });
 
   const addPlaceholder = trpc.groups.addPlaceholder.useMutation({
-    onSuccess: () => {
+    onSuccess: ({ name, restored }) => {
       setPlaceholderName('');
       utils.groups.get.invalidate({ groupId });
+      // Their name brought back someone removed earlier, with their history (#284)
+      if (restored) toast.success(t('settings.placeholderRestored', { name: name ?? '' }));
     },
   });
 

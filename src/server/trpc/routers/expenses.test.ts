@@ -10,7 +10,7 @@ const mockDb = {
   group: { findUnique: vi.fn() },
   groupMember: { findUnique: vi.fn(), findFirst: vi.fn(), count: vi.fn() },
   expense: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
-  expenseShare: { deleteMany: vi.fn(), createMany: vi.fn() },
+  expenseShare: { findMany: vi.fn(), deleteMany: vi.fn(), createMany: vi.fn() },
   activityLog: { create: vi.fn() },
   $transaction: vi.fn(),
   $queryRaw: vi.fn(),
@@ -91,6 +91,7 @@ describe('a group archived while a change was on its way (#289)', () => {
     mockDb.expense.findUnique.mockResolvedValue(ownExpense);
     mockDb.groupMember.findFirst.mockResolvedValue({ userId: 'u1' });
     mockDb.groupMember.count.mockResolvedValue(1);
+    mockDb.expenseShare.findMany.mockResolvedValue([]);
     mockDb.$transaction.mockImplementation(async (fn: (tx: typeof mockDb) => unknown) => fn(mockDb));
   });
 
@@ -169,5 +170,77 @@ describe('a group archived while a change was on its way (#289)', () => {
     expect(mockDb.groupMember.count.mock.invocationCallOrder[0]).toBeLessThan(
       mockDb.expenseShare.deleteMany.mock.invocationCallOrder[0]!,
     );
+  });
+});
+
+// #284: a placeholder removed from the group stays in the expenses they were in, so
+// editing one keeps their part theirs. But only in the part they had: making them the
+// payer of an expense they had a share in would put them in something new.
+describe('editing an expense a removed placeholder is in', () => {
+  const rawSql = () => mockDb.$queryRaw.mock.calls.map(([strings]) => (strings as string[]).join('?'));
+  const halPaid = {
+    id: 'e1',
+    groupId: 'g1',
+    paidById: 'hal',
+    addedById: 'u1',
+    amount: 1000,
+    currency: 'USD',
+    exchangeRate: 1,
+    baseCurrencyAmount: null,
+    expenseDate: new Date('2026-10-01T00:00:00Z'),
+  };
+  const update = { groupId: 'g1', expenseId: 'e1', amount: 1000 };
+
+  beforeEach(() => {
+    mockDb.group.findUnique.mockResolvedValue({ archivedAt: null, currency: 'USD' });
+    mockDb.$queryRaw.mockImplementation(async (strings: string[]) =>
+      strings.join('?').includes('FROM "Expense"') ? [{ paidById: 'hal' }] : [{ archivedAt: null }],
+    );
+    // As the edit started; the row read under the lock says who's in it now
+    mockDb.expense.findUnique.mockResolvedValue({ ...halPaid, paidById: 'u1' });
+    mockDb.expenseShare.findMany.mockResolvedValue([{ userId: 'hal' }, { userId: 'u1' }]);
+    mockDb.groupMember.findFirst.mockResolvedValue({ userId: 'hal' });
+    // Everyone the check names is found
+    mockDb.groupMember.count.mockImplementation(
+      async ({ where }: { where: { userId: { in: string[] } } }) => where.userId.in.length,
+    );
+    mockDb.expense.update.mockResolvedValue({ id: 'e1' });
+    mockDb.$transaction.mockImplementation(async (fn: (tx: typeof mockDb) => unknown) => fn(mockDb));
+  });
+
+  // Two edits at once would each check against what the other is replacing
+  test('locks the expense row after the group, then reads who is in it', async () => {
+    const api = await caller();
+    await api.update({ ...update, paidById: 'hal', shares: [{ userId: 'u1', amount: 1000 }] });
+
+    expect(rawSql()).toEqual([
+      expect.stringMatching(/FROM "Group" WHERE "id" = \? FOR SHARE/),
+      expect.stringMatching(/FROM "Expense" WHERE "id" = \? FOR NO KEY UPDATE/),
+    ]);
+    const lockedExpense = mockDb.$queryRaw.mock.invocationCallOrder[1]!;
+    expect(mockDb.expenseShare.findMany.mock.invocationCallOrder[0]).toBeGreaterThan(lockedExpense);
+    expect(mockDb.groupMember.findFirst.mock.invocationCallOrder[0]).toBeGreaterThan(lockedExpense);
+  });
+
+  test('keeps a removed payer as the payer', async () => {
+    const api = await caller();
+    await api.update({ ...update, paidById: 'hal', shares: [{ userId: 'u1', amount: 1000 }] });
+    expect(mockDb.groupMember.findFirst).toHaveBeenCalledWith({ where: { groupId: 'g1', userId: 'hal' } });
+  });
+
+  test('a new payer must be a current member', async () => {
+    const api = await caller();
+    await api.update({ ...update, paidById: 'u2', shares: [{ userId: 'u1', amount: 1000 }] });
+    expect(mockDb.groupMember.findFirst).toHaveBeenCalledWith({
+      where: { groupId: 'g1', userId: 'u2', removedAt: null },
+    });
+  });
+
+  test('a share may be a current member, or someone removed who had one', async () => {
+    const api = await caller();
+    await api.update({ ...update, shares: [{ userId: 'hal', amount: 1000 }] });
+    expect(mockDb.groupMember.count).toHaveBeenCalledWith({
+      where: { groupId: 'g1', userId: { in: ['hal'] }, OR: [{ removedAt: null }, { userId: { in: ['hal', 'u1'] } }] },
+    });
   });
 });

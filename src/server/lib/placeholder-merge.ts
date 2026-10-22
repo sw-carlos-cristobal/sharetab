@@ -28,12 +28,17 @@ export function combineShares(
  * no group has them. Run inside the caller's transaction. Returns false, moving
  * nothing, when the placeholder is no longer in the group (merged or removed
  * by a transaction that got there first).
+ *
+ * A placeholder removed from the group at a zero balance (#284) can still be
+ * merged, unless `requireCurrent`: a claim link is for a placeholder who is
+ * still in the group.
  */
 export async function mergePlaceholderIntoUser(
   tx: Prisma.TransactionClient,
   placeholderUserId: string,
   realUserId: string,
   groupId: string,
+  { requireCurrent = false }: { requireCurrent?: boolean } = {},
 ): Promise<boolean> {
   if (placeholderUserId === realUserId) {
     throw new AppError('BAD_REQUEST', 'mergeIntoItself');
@@ -72,7 +77,9 @@ export async function mergePlaceholderIntoUser(
 
   // Removing the membership first locks it: a second merge of the same
   // placeholder waits here, then finds nothing to remove and stops.
-  const removed = await tx.groupMember.deleteMany({ where: { userId: placeholderUserId, groupId } });
+  const removed = await tx.groupMember.deleteMany({
+    where: { userId: placeholderUserId, groupId, ...(requireCurrent ? { removedAt: null } : {}) },
+  });
   if (removed.count === 0) {
     return false;
   }

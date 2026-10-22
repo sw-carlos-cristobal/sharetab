@@ -331,8 +331,8 @@ test.describe('Placeholder Members', () => {
 
   // #260: removing a placeholder used to move their shares and payments onto
   // other people and delete their settlements, writing off what they owed or
-  // were owed without saying so.
-  test('removing a placeholder who is in an expense is refused', async () => {
+  // were owed without saying so. #284: one who owes or is owed money stays.
+  test('removing a placeholder who still owes money is refused', async () => {
     const { owner, groupId, memberIds, dispose } = await createTestGroup(
       users.alice.email,
       users.alice.password,
@@ -357,7 +357,7 @@ test.describe('Placeholder Members', () => {
     const err = await trpcError(await trpcMutation(owner, 'groups.removeMember', { groupId, userId: ginaId }));
     expect(err?.data?.code).toBe('PRECONDITION_FAILED');
     expect(err?.message).toBe(
-      "Gina is in expenses or payments in this group, so they can't be removed. Take them out of those first.",
+      "Gina still owes or is owed money in this group, so they can't be removed. Settle up first.",
     );
 
     const group = await trpcResult(await trpcQuery(owner, 'groups.get', { groupId }));
@@ -368,53 +368,271 @@ test.describe('Placeholder Members', () => {
     await dispose();
   });
 
-  test('removing a settled-up placeholder is refused and changes no balance', async () => {
-    const { owner, groupId, memberIds, dispose } = await createTestGroup(
-      users.alice.email,
-      users.alice.password,
-      [{ email: users.bob.email, password: users.bob.password }],
-      'Remove Settled Placeholder',
-    );
-    const aliceId = memberIds[users.alice.email]!;
-    const bobId = memberIds[users.bob.email]!;
-    const phRes = await trpcMutation(owner, 'groups.addPlaceholder', { groupId, name: 'Hal' });
-    const halId = (await phRes.json()).result?.data?.json?.id;
-    // Hal owes Bob $5.00 and Alice owes Hal $5.00, so Hal's balance is zero.
-    await trpcMutation(owner, 'expenses.create', {
-      groupId,
-      title: 'Bob paid for Hal',
-      amount: 1000,
-      paidById: bobId,
-      splitMode: 'EQUAL',
-      shares: [
-        { userId: bobId, amount: 500 },
-        { userId: halId, amount: 500 },
-      ],
+  // #284: a placeholder at a zero balance can go, and their history stays theirs
+  test.describe('a settled-up placeholder who is in expenses', () => {
+    type Member = { user: { id: string } };
+    const ids = (members: Member[]) => members.map((m) => m.user.id);
+    // A mutation's result, failing with the server's error when there is none
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async function ok(res: { json: () => Promise<any> }): Promise<any> {
+      const body = await res.json();
+      if (!body.result) throw new Error(`Expected a result, got ${JSON.stringify(body.error?.json ?? body)}`);
+      return body.result.data.json;
+    }
+
+    // Hal owes Bob $5.00 and Alice owes Hal $5.00, so Hal's balance is zero
+    async function groupWithSettledHal(name: string) {
+      const group = await createTestGroup(
+        users.alice.email,
+        users.alice.password,
+        [{ email: users.bob.email, password: users.bob.password }],
+        name,
+      );
+      const { owner, groupId, memberIds } = group;
+      const aliceId = memberIds[users.alice.email]!;
+      const bobId = memberIds[users.bob.email]!;
+      const halId: string = (await ok(await trpcMutation(owner, 'groups.addPlaceholder', { groupId, name: 'Hal' }))).id;
+      const bobPaid = await ok(
+        await trpcMutation(owner, 'expenses.create', {
+          groupId,
+          title: 'Bob paid for Hal',
+          amount: 1000,
+          paidById: bobId,
+          splitMode: 'EQUAL',
+          shares: [
+            { userId: bobId, amount: 500 },
+            { userId: halId, amount: 500 },
+          ],
+        }),
+      );
+      const halPaid = await ok(
+        await trpcMutation(owner, 'expenses.create', {
+          groupId,
+          title: 'Hal paid for Alice',
+          amount: 1000,
+          paidById: halId,
+          splitMode: 'EQUAL',
+          shares: [
+            { userId: halId, amount: 500 },
+            { userId: aliceId, amount: 500 },
+          ],
+        }),
+      );
+      const net = async (userId: string) => {
+        const { balances } = await trpcResult(await trpcQuery(owner, 'balances.getGroupBalances', { groupId }));
+        return balances.find((b: { userId: string }) => b.userId === userId)?.net ?? 0;
+      };
+      return { ...group, aliceId, bobId, halId, bobPaidId: bobPaid.id as string, halPaidId: halPaid.id as string, net };
+    }
+
+    test('is removed from the member list, keeping their history and every balance', async () => {
+      const { owner, groupId, aliceId, bobId, halId, net, dispose } = await groupWithSettledHal('Remove Settled Hal');
+
+      const res = await trpcMutation(owner, 'groups.removeMember', { groupId, userId: halId });
+      expect((await ok(res)).success).toBe(true);
+
+      const group = await trpcResult(await trpcQuery(owner, 'groups.get', { groupId }));
+      expect(ids(group.members)).not.toContain(halId);
+      expect(ids(group.removedMembers)).toEqual([halId]);
+      expect(group.removedMembers[0].user.placeholderName).toBe('Hal');
+      expect(await net(bobId)).toBe(500);
+      expect(await net(aliceId)).toBe(-500);
+      expect(await net(halId)).toBe(0);
+      const { expenses } = await trpcResult(await trpcQuery(owner, 'expenses.list', { groupId }));
+      expect(expenses).toHaveLength(2);
+
+      // Removing them again finds nobody to remove
+      const again = await trpcError(await trpcMutation(owner, 'groups.removeMember', { groupId, userId: halId }));
+      expect(again?.data?.code).toBe('NOT_FOUND');
+
+      await dispose();
     });
-    await trpcMutation(owner, 'expenses.create', {
-      groupId,
-      title: 'Hal paid for Alice',
-      amount: 1000,
-      paidById: halId,
-      splitMode: 'EQUAL',
-      shares: [
-        { userId: halId, amount: 500 },
-        { userId: aliceId, amount: 500 },
-      ],
+
+    test('a balance that comes back after removal can be settled with them', async () => {
+      const { owner, groupId, bobId, halId, halPaidId, net, dispose } = await groupWithSettledHal('Settle Removed Hal');
+      await ok(await trpcMutation(owner, 'groups.removeMember', { groupId, userId: halId }));
+
+      // Without the expense Hal paid, Hal owes Bob $5.00 again
+      await ok(await trpcMutation(owner, 'expenses.delete', { groupId, expenseId: halPaidId }));
+      expect(await net(halId)).toBe(-500);
+
+      // A payment can settle that, but not make Hal a new debt
+      const overpaid = await trpcError(
+        await trpcMutation(owner, 'settlements.create', {
+          groupId,
+          fromId: halId,
+          toId: bobId,
+          amount: 600,
+          currency: 'USD',
+        }),
+      );
+      expect(overpaid?.data?.code).toBe('BAD_REQUEST');
+      expect(overpaid?.message).toBe(
+        'A payment with someone removed from this group can only settle what they still owe or are owed.',
+      );
+
+      await ok(
+        await trpcMutation(owner, 'settlements.create', {
+          groupId,
+          fromId: halId,
+          toId: bobId,
+          amount: 500,
+          currency: 'USD',
+        }),
+      );
+      expect(await net(halId)).toBe(0);
+      expect(await net(bobId)).toBe(0);
+      const another = await trpcError(
+        await trpcMutation(owner, 'settlements.create', { groupId, toId: halId, amount: 100, currency: 'USD' }),
+      );
+      expect(another?.data?.code).toBe('BAD_REQUEST');
+
+      await dispose();
     });
 
-    const err = await trpcError(await trpcMutation(owner, 'groups.removeMember', { groupId, userId: halId }));
-    expect(err?.data?.code).toBe('PRECONDITION_FAILED');
+    test('stays in the expenses they were in, but is not put in new ones', async () => {
+      const { owner, groupId, aliceId, bobId, halId, bobPaidId, net, dispose } =
+        await groupWithSettledHal('Removed Hal In Expenses');
+      await ok(await trpcMutation(owner, 'groups.removeMember', { groupId, userId: halId }));
 
-    // Moving Hal's shares onto the payers used to zero both of these.
-    const { balances } = await trpcResult(await trpcQuery(owner, 'balances.getGroupBalances', { groupId }));
-    const net = (userId: string) => balances.find((b: { userId: string }) => b.userId === userId)?.net;
-    expect(net(bobId)).toBe(500);
-    expect(net(aliceId)).toBe(-500);
-    const group = await trpcResult(await trpcQuery(owner, 'groups.get', { groupId }));
-    expect(group.members.some((m: { user: { id: string } }) => m.user.id === halId)).toBe(true);
+      const created = await trpcError(
+        await trpcMutation(owner, 'expenses.create', {
+          groupId,
+          title: 'Hal again',
+          amount: 1000,
+          paidById: aliceId,
+          splitMode: 'EQUAL',
+          shares: [
+            { userId: aliceId, amount: 500 },
+            { userId: halId, amount: 500 },
+          ],
+        }),
+      );
+      expect(created?.data?.code).toBe('BAD_REQUEST');
+      const paid = await trpcError(
+        await trpcMutation(owner, 'expenses.create', {
+          groupId,
+          title: 'Hal paid again',
+          amount: 1000,
+          paidById: halId,
+          splitMode: 'EQUAL',
+          shares: [{ userId: aliceId, amount: 1000 }],
+        }),
+      );
+      expect(paid?.data?.code).toBe('BAD_REQUEST');
 
-    await dispose();
+      // Editing an expense Hal is in keeps his share there
+      await ok(
+        await trpcMutation(owner, 'expenses.update', {
+          groupId,
+          expenseId: bobPaidId,
+          amount: 2000,
+          splitMode: 'EQUAL',
+          shares: [
+            { userId: bobId, amount: 1000 },
+            { userId: halId, amount: 1000 },
+          ],
+        }),
+      );
+      expect(await net(halId)).toBe(-500);
+      // ...but only in the part he had: he had a share, not the payment
+      const payer = await trpcError(
+        await trpcMutation(owner, 'expenses.update', { groupId, expenseId: bobPaidId, paidById: halId }),
+      );
+      expect(payer?.data?.code).toBe('BAD_REQUEST');
+
+      await dispose();
+    });
+
+    test('is not added to an expense they were not in', async () => {
+      const { owner, groupId, aliceId, bobId, halId, dispose } = await groupWithSettledHal('Removed Hal Not Added');
+      const other = await ok(
+        await trpcMutation(owner, 'expenses.create', {
+          groupId,
+          title: 'Just Alice and Bob',
+          amount: 1000,
+          paidById: aliceId,
+          splitMode: 'EQUAL',
+          shares: [
+            { userId: aliceId, amount: 500 },
+            { userId: bobId, amount: 500 },
+          ],
+        }),
+      );
+      await ok(await trpcMutation(owner, 'groups.removeMember', { groupId, userId: halId }));
+
+      const err = await trpcError(
+        await trpcMutation(owner, 'expenses.update', {
+          groupId,
+          expenseId: other.id,
+          amount: 1500,
+          splitMode: 'EQUAL',
+          shares: [
+            { userId: aliceId, amount: 500 },
+            { userId: bobId, amount: 500 },
+            { userId: halId, amount: 500 },
+          ],
+        }),
+      );
+      expect(err?.data?.code).toBe('BAD_REQUEST');
+      const payer = await trpcError(
+        await trpcMutation(owner, 'expenses.update', { groupId, expenseId: other.id, paidById: halId }),
+      );
+      expect(payer?.data?.code).toBe('BAD_REQUEST');
+
+      await dispose();
+    });
+
+    test('comes back, history and all, when their name is added again', async () => {
+      const { owner, groupId, halId, dispose } = await groupWithSettledHal('Restore Removed Hal');
+      await ok(await trpcMutation(owner, 'groups.removeMember', { groupId, userId: halId }));
+
+      // Another placeholder can't take Hal's name while Hal is removed
+      const ivy = await ok(await trpcMutation(owner, 'groups.addPlaceholder', { groupId, name: 'Ivy' }));
+      const renamed = await trpcError(
+        await trpcMutation(owner, 'groups.renamePlaceholder', { groupId, placeholderUserId: ivy.id, name: 'hal' }),
+      );
+      expect(renamed?.data?.code).toBe('CONFLICT');
+
+      const added = await ok(await trpcMutation(owner, 'groups.addPlaceholder', { groupId, name: ' hal ' }));
+      expect(added.id).toBe(halId);
+      expect(added.restored).toBe(true);
+      const group = await trpcResult(await trpcQuery(owner, 'groups.get', { groupId }));
+      expect(ids(group.members)).toContain(halId);
+      expect(group.removedMembers).toEqual([]);
+
+      await dispose();
+    });
+
+    test('a claim link made for them stops working, and they can still be merged', async () => {
+      const { owner, groupId, aliceId, halId, net, dispose } = await groupWithSettledHal('Removed Hal Links');
+      const invite = await ok(await trpcMutation(owner, 'groups.createInvite', { groupId, placeholderUserId: halId }));
+      await ok(await trpcMutation(owner, 'groups.removeMember', { groupId, userId: halId }));
+
+      const charlie = await authedContext(users.charlie.email, users.charlie.password);
+      expect(await trpcResult(await trpcQuery(charlie, 'groups.getInvite', { token: invite.token }))).toBeNull();
+      const joined = await trpcError(await trpcMutation(charlie, 'groups.joinByInvite', { token: invite.token }));
+      expect(joined?.data?.code).toBe('NOT_FOUND');
+      await charlie.dispose();
+      const linked = await trpcError(
+        await trpcMutation(owner, 'groups.createInvite', { groupId, placeholderUserId: halId }),
+      );
+      expect(linked?.data?.code).toBe('BAD_REQUEST');
+
+      // Merging hands Alice Hal's expenses: Alice paid $5.00 of hers through Hal
+      await ok(
+        await trpcMutation(owner, 'groups.mergePlaceholder', {
+          groupId,
+          placeholderUserId: halId,
+          realUserId: aliceId,
+        }),
+      );
+      const group = await trpcResult(await trpcQuery(owner, 'groups.get', { groupId }));
+      expect(group.removedMembers).toEqual([]);
+      expect(await net(aliceId)).toBe(-500);
+
+      await dispose();
+    });
   });
 
   test('removing a placeholder who was never in an expense removes them', async () => {

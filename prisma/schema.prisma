@@ -113,6 +113,12 @@ model GroupMember {
   group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   joinedAt DateTime @default(now())
+  // Set when a placeholder who is in the group's expenses or payments is removed
+  // at a zero balance (#284): they're no longer a member, but their history stays
+  // theirs, so their name still shows and a balance that comes back can be
+  // settled with them. Only a placeholder's membership is ever marked; a real
+  // user who leaves loses the row.
+  removedAt DateTime?
 
   @@unique([userId, groupId])
   @@index([groupId])
