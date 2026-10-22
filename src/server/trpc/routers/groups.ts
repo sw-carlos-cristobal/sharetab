@@ -46,7 +46,7 @@ export const groupsRouter = createTRPCRouter({
   list: protectedProcedure.query(async ({ ctx }) => {
     const groups = await ctx.db.group.findMany({
       where: {
-        members: { some: { userId: ctx.user.id } },
+        members: { some: { userId: ctx.user.id, removedAt: null } },
         archivedAt: null,
       },
       take: 200,
@@ -69,7 +69,7 @@ export const groupsRouter = createTRPCRouter({
   listArchived: protectedProcedure.query(async ({ ctx }) => {
     const groups = await ctx.db.group.findMany({
       where: {
-        members: { some: { userId: ctx.user.id } },
+        members: { some: { userId: ctx.user.id, removedAt: null } },
         archivedAt: { not: null },
       },
       take: 200,

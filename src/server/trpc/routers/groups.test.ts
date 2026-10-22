@@ -7,7 +7,14 @@ vi.mock('@/server/auth', () => ({ auth: vi.fn() }));
 
 const mockDb = {
   user: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(), deleteMany: vi.fn() },
-  group: { create: vi.fn(), update: vi.fn(), updateMany: vi.fn(), findUnique: vi.fn(), delete: vi.fn() },
+  group: {
+    create: vi.fn(),
+    update: vi.fn(),
+    updateMany: vi.fn(),
+    findUnique: vi.fn(),
+    findMany: vi.fn(),
+    delete: vi.fn(),
+  },
   groupMember: {
     findUnique: vi.fn(),
     findMany: vi.fn(),
@@ -104,6 +111,20 @@ test("a removed placeholder's membership doesn't open the group", async () => {
   const api = await caller();
   await expect(api.get({ groupId: 'g1' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
 });
+
+// Codex on #322: the list matched the caller's membership row even once removed, so an
+// admin impersonating a removed placeholder saw a group tile that wouldn't open
+test.each(['list', 'listArchived'] as const)(
+  "%s leaves out a group the caller's membership was removed from",
+  async (proc) => {
+    mockDb.group.findMany.mockResolvedValue([]);
+    const api = await caller();
+    await api[proc]();
+    expect(mockDb.group.findMany.mock.calls[0]![0].where.members).toEqual({
+      some: { userId: 'owner', removedAt: null },
+    });
+  },
+);
 
 describe('group and placeholder names are trimmed', () => {
   test('create refuses a group name that is only whitespace', async () => {

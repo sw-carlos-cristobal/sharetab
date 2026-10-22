@@ -90,3 +90,17 @@ describe('dashboard balances include archived groups', () => {
     ]);
   });
 });
+
+// Codex on #322: a removed placeholder's membership row (#284) isn't membership
+test.each(['getOverallDebts', 'getDashboard'] as const)(
+  "%s leaves out a group the caller's membership was removed from",
+  async (proc) => {
+    mockDb.user.findUnique.mockResolvedValue({ suspendedAt: null });
+    mockDb.group.findMany.mockResolvedValue([]);
+    const api = await caller();
+    await api[proc]();
+    expect(mockDb.group.findMany.mock.calls.at(-1)![0].where).toEqual({
+      members: { some: { userId: 'me', removedAt: null } },
+    });
+  },
+);
