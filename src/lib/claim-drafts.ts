@@ -111,7 +111,7 @@ export type SaveOutcome = 'saved' | 'refused' | 'unknown';
  * - saved: the sent changes are stored, so only the changes made since remain. If no reload
  *   landed, the claims shown catch up at the next poll;
  * - unknown (the page gave up): the save is parked, still shown under the changes made since,
- *   and sent again with its own key before anything newer for that person (#241). None of its
+ *   and sent again with its own key before the page's next save (#241). None of its
  *   changes become unsaved changes: saved again under a new key, one that was stored and then
  *   changed back by another device would undo that device's change (#238);
  * - refused and reloaded: nothing was stored (or it no longer matters), so the sent changes come

@@ -126,7 +126,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   // once it lands); if it's refused, restoreEdits puts the sent changes back under the new ones
   const [savingEdits, setSavingEdits] = useState<Map<string, ClaimEdits>>(new Map());
   // Saves the page gave up on, by person id (#241): still shown under the person's changes, and
-  // sent again with their own save key before the next save for that person
+  // sent again with their own save key before the page's next save, for anyone
   const [parkedSaves, setParkedSaves] = useState<Map<string, ParkedSave<ClaimRequest>>>(new Map());
   // Counts the times unsaved changes were discarded (this device became someone else, or no one),
   // so a save in flight across that doesn't bring its changes back afterwards
@@ -743,13 +743,15 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
       sent: edits,
       parked: false,
     };
-    // A save parked for this person goes first, with its own key (#241): sent after the changes,
-    // it would be applied over them if it was never stored
-    const parked = parkedSaves.get(activeId);
-    const [first, ...rest]: SaveStage[] = [
-      ...(parked ? [{ ...parked, parked: true }] : []),
-      ...(changes ? [changes] : []),
-    ];
+    if (!changes && !parkedSaves.has(activeId)) return;
+    // Every save this page parked (#241) goes first, each with its own key. Sent after this
+    // person's changes, theirs would be applied over them if it was never stored; and the server
+    // keeps only the last few save keys of the person saving, whoever the saves are for, so
+    // newer saves from this page could make it forget a parked save it stored.
+    const parked = [...parkedSaves]
+      .filter(([personId]) => indexById.has(personId))
+      .map(([, save]): SaveStage => ({ ...save, parked: true }));
+    const [first, ...rest]: SaveStage[] = [...parked, ...(changes ? [changes] : [])];
     if (!first) return;
     // The changes move into the save in flight; taps from now on are new changes on top of it
     if (edits) {
@@ -775,6 +777,8 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
       editsReset.current === resetsBefore &&
       isListed(activeId) &&
       (saverId === null || isListed(saverId));
+    // The same, for one save: until the person it's for is removed too
+    const goingFor = (personId: string) => () => going() && isListed(personId);
     // One attempt, through the plain client rather than a mutation hook, so it can be abandoned
     // after SAVE_ATTEMPT_TIMEOUT_MS or when the save stops (sending it again is safe), and so it
     // fails at once when offline instead of pausing (settleSave waits for the server instead)
@@ -818,13 +822,13 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
             send: (retry) => send(save.request, retry || save.parked),
             reload,
             wait: (attempt) => sleep(saveRetryDelay(attempt), stop),
-            going,
+            going: goingFor(save.request.personId),
           });
           // Stored: its changes are on the server, which the reload shows
           if (save.parked && settled.attempt.outcome === 'saved' && editsReset.current === resetsBefore) {
             setParkedSaves((prev) => {
               const next = new Map(prev);
-              next.delete(activeId);
+              next.delete(save.request.personId);
               return next;
             });
           }
@@ -833,32 +837,34 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
         going,
       );
       if (editsReset.current !== resetsBefore) return;
-      const savedNow = savedClaimsOf(activeId);
-      // Changes a parked save held back count as made since it
-      const notSent = unsent.reduce<ClaimEdits>((older, later) => stackEdits(older, later.sent), new Map());
+      // Whose save it ended on: this person's changes, or a parked save (theirs or someone else's)
+      const personId = stage.request.personId;
+      const savedNow = savedClaimsOf(personId);
       setClaimEdits((prev) => {
         const next = new Map(prev);
-        const kept = editsAfterSave({
-          outcome: attempt.outcome,
-          reloaded,
-          savedNow,
-          sent: stage.sent,
-          since: stackEdits(notSent, prev.get(activeId)),
-        });
-        if (kept.size > 0) next.set(activeId, kept);
-        else next.delete(activeId);
+        const put = (id: string, edits: Map<number, boolean>) => {
+          if (edits.size > 0) next.set(id, edits);
+          else next.delete(id);
+        };
+        // Changes held back by a parked save that didn't go through come back as they were, under
+        // the taps made since
+        if (changes && unsent.includes(changes)) put(activeId, stackEdits(changes.sent, prev.get(activeId)));
+        put(
+          personId,
+          editsAfterSave({ outcome: attempt.outcome, reloaded, savedNow, sent: stage.sent, since: next.get(personId) }),
+        );
         return next;
       });
       // Still unsettled: parked, to be sent again with its own key before anything newer (#241)
       setParkedSaves((prev) => {
         const next = new Map(prev);
-        if (attempt.outcome === 'unknown') next.set(activeId, { request: stage.request, sent: stage.sent });
-        else next.delete(activeId);
+        if (attempt.outcome === 'unknown') next.set(personId, { request: stage.request, sent: stage.sent });
+        else next.delete(personId);
         return next;
       });
       // Said once the outcome is settled (no toast per attempt while it's sent again), and not
       // for a save abandoned because the page closed or the person was removed
-      if (!mounted.current || (attempt.outcome === 'unknown' && !going())) return;
+      if (!mounted.current || (attempt.outcome === 'unknown' && !goingFor(personId)())) return;
       if (attempt.outcome !== 'saved') {
         toast.error(attempt.message ?? tc('errors.generic'));
       } else if (attempt.conflicts.length > 0) {

@@ -95,6 +95,47 @@ async function watchForUnsavedChanges(page: Page) {
 const sawUnsavedChanges = (page: Page) =>
   page.evaluate(() => (window as unknown as { sawUnsavedChanges: boolean }).sawUnsavedChanges);
 
+/**
+ * Ann claims the pie for Cat and saves. The first attempt is stored, and then Cat's phone
+ * unclaims the pie. No attempt gets an answer, so the page gives up (#241) without learning that
+ * the save was stored. Installs the page's clock, which the waits between attempts (45 to 90
+ * seconds in all) are moved past.
+ */
+async function parkCatsPie(page: Page, merchantName: string) {
+  await page.clock.install();
+  const { ctx, shareToken, catSaves } = await annClaimingForCat(page, merchantName);
+  const saveKeys = recordSaveKeys(page);
+
+  let attempts = 0;
+  await page.route(
+    (url) => url.pathname.includes('guest.claimItems'),
+    async (route) => {
+      attempts += 1;
+      if (attempts === 1) {
+        await route.fetch();
+        await catSaves([]);
+      }
+      await route.abort('connectionreset').catch(() => {});
+    },
+    { times: SAVE_ATTEMPTS },
+  );
+
+  await page.getByTestId('claim-item-2').click();
+  await page.getByTestId('save-claims-btn').click();
+  await expect
+    .poll(
+      async () => {
+        await page.clock.fastForward(16_000);
+        return saveKeys.length;
+      },
+      { timeout: 45_000 },
+    )
+    .toBe(SAVE_ATTEMPTS);
+  await expect(page.getByTestId('save-claims-btn')).toBeEnabled();
+  expect(await claimsOf(ctx, shareToken, 'Cat')).toEqual([]);
+  return { ctx, shareToken, saveKeys };
+}
+
 test.describe('Claim page — two devices edit the same person (#226)', () => {
   test('claiming an item for someone keeps the items their own device saved meanwhile', async ({ page }) => {
     const { ctx, shareToken, catSaves } = await annClaimingForCat(page, 'Two Devices Diner');
@@ -281,42 +322,7 @@ test.describe('Claim page — two devices edit the same person (#226)', () => {
   test("a save the page gave up on is sent again with its own key at the next Save, so it can't undo another device's change (#241)", async ({
     page,
   }) => {
-    // The waits between the save's attempts add up to 45 to 90 seconds: the test moves the
-    // page's clock past each one instead
-    await page.clock.install();
-    const { ctx, shareToken, catSaves } = await annClaimingForCat(page, 'Parked Save Diner');
-    const saveKeys = recordSaveKeys(page);
-
-    // The first attempt is stored, and then Cat's phone unclaims the pie. No attempt gets an
-    // answer, so the page gives up without learning that the save was stored.
-    let attempts = 0;
-    await page.route(
-      (url) => url.pathname.includes('guest.claimItems'),
-      async (route) => {
-        attempts += 1;
-        if (attempts === 1) {
-          await route.fetch();
-          await catSaves([]);
-        }
-        await route.abort('connectionreset').catch(() => {});
-      },
-      { times: SAVE_ATTEMPTS },
-    );
-
-    // Ann claims the pie for Cat and saves
-    await page.getByTestId('claim-item-2').click();
-    await page.getByTestId('save-claims-btn').click();
-    await expect
-      .poll(
-        async () => {
-          await page.clock.fastForward(16_000);
-          return saveKeys.length;
-        },
-        { timeout: 45_000 },
-      )
-      .toBe(SAVE_ATTEMPTS);
-    await expect(page.getByTestId('save-claims-btn')).toBeEnabled();
-    expect(await claimsOf(ctx, shareToken, 'Cat')).toEqual([]);
+    const { ctx, shareToken, saveKeys } = await parkCatsPie(page, 'Parked Save Diner');
 
     // Ann claims the tea and saves again. The page first sends the save it gave up on, with its
     // own key: the server answers it as stored without applying it again, so the pie stays
@@ -329,6 +335,31 @@ test.describe('Claim page — two devices edit the same person (#226)', () => {
     expect(saveKeys).toHaveLength(SAVE_ATTEMPTS + 2);
     expect(new Set(saveKeys.slice(0, SAVE_ATTEMPTS + 1))).toEqual(new Set([saveKeys[0]]));
     expect(saveKeys.at(-1)).not.toBe(saveKeys[0]);
+
+    await ctx.dispose();
+  });
+
+  test('a save the page gave up on is sent again before a save for someone else, so their saves keep its key (#241)', async ({
+    page,
+  }) => {
+    const { ctx, shareToken, saveKeys } = await parkCatsPie(page, 'Parked Save Bar');
+
+    // Ann switches to herself, claims the cake and saves. The server keeps only the last few save
+    // keys of the person saving, and Ann's saves for anyone count, so the page first sends the
+    // save it gave up on for Cat, with its own key.
+    await page.getByTestId('switch-person-0').click();
+    await page.getByTestId('claim-item-1').click();
+    await save(page);
+    await expect.poll(() => claimsOf(ctx, shareToken, 'Ann'), { timeout: 15000 }).toEqual(['Cake']);
+    expect(await claimsOf(ctx, shareToken, 'Cat')).toEqual([]);
+    expect(saveKeys).toHaveLength(SAVE_ATTEMPTS + 2);
+    expect(new Set(saveKeys.slice(0, SAVE_ATTEMPTS + 1))).toEqual(new Set([saveKeys[0]]));
+    expect(saveKeys.at(-1)).not.toBe(saveKeys[0]);
+
+    // Back on Cat, the pie shows as Cat's phone left it, with nothing to save
+    await page.getByTestId('switch-person-1').click();
+    await expect(page.getByTestId('claim-item-2')).toHaveAttribute('aria-pressed', 'false', { timeout: 15000 });
+    await expect(page.getByText('Unsaved changes')).toHaveCount(0);
 
     await ctx.dispose();
   });

@@ -109,19 +109,20 @@ export async function settleSave<Attempt extends { outcome: SaveOutcome }>(io: {
 /**
  * A save the claim page gave up on (#241): sent SAVE_ATTEMPTS times without an answer that says
  * whether it was stored. The page keeps its request, save key included, and its changes stay
- * shown under the person's unsaved changes (pendingEdits). The next Save for that person sends
- * it again before anything newer (saveInOrder): the server answers it as stored if an attempt
- * stored it, without applying it again over what other devices saved since, and otherwise
- * stores it then.
+ * shown under the person's unsaved changes (pendingEdits). The page's next Save, for anyone,
+ * sends it again before anything newer (saveInOrder): the server answers it as stored if an
+ * attempt stored it, without applying it again over what other devices saved since, and
+ * otherwise stores it then. Before anything newer for anyone, because the server keeps only the
+ * last few save keys of the person saving, whoever the saves are for.
  */
 export type ParkedSave<Request> = { request: Request; sent: ClaimEdits };
 
 /**
- * Sends a person's saves one after another, each until it's settled (`settle`, which is
- * settleSave): a save parked for them first, then their changes. The next one is sent only
- * once the one before it was stored, while the page is still saving: a parked save still
- * unsettled must not be sent after newer changes, since if it was never stored the server would
- * apply it then, over them. Returns the last save settled, and the ones not sent.
+ * Sends saves one after another, each until it's settled (`settle`, which is settleSave): the
+ * saves the page parked first, then the person's changes. The next one is sent only once the one
+ * before it was stored, while the page is still saving: a parked save still unsettled must not
+ * be sent after newer changes, since if it was never stored the server would apply it then, over
+ * them. Returns the last save settled, and the ones not sent.
  */
 export async function saveInOrder<Stage, Attempt extends { outcome: SaveOutcome }>(
   stages: readonly [Stage, ...Stage[]],
