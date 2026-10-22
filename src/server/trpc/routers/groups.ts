@@ -394,6 +394,11 @@ export const groupsRouter = createTRPCRouter({
         userId_groupId: { userId: ctx.user.id, groupId: invite.groupId },
       },
     });
+    // Only a placeholder removed from the group has a removed row (#284), and only an admin
+    // impersonating one gets here with it: they can't join again by link
+    if (existing?.removedAt) {
+      throw new AppError('NOT_FOUND', 'inviteInvalid');
+    }
     // A retry of this person's own redemption, whose answer was lost, finds
     // the invite already used by them.
     if (existing && invite.usedById === ctx.user.id) {

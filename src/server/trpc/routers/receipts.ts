@@ -25,7 +25,8 @@ async function verifyReceiptAccess(
 ) {
   const receipt = await db.receipt.findUnique({
     where: { id: receiptId },
-    include: { group: { include: { members: true } }, ...include },
+    // A placeholder removed from the group keeps their row (#284), which isn't membership
+    include: { group: { include: { members: { where: { removedAt: null } } } }, ...include },
   });
   if (!receipt) throw new AppError('NOT_FOUND');
   if (receipt.group) {
@@ -64,7 +65,7 @@ export const receiptsRouter = createTRPCRouter({
             },
           },
         });
-        if (!membership) {
+        if (!membership || membership.removedAt) {
           throw new AppError('FORBIDDEN', 'notGroupMember');
         }
       }

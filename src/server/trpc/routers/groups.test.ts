@@ -597,6 +597,23 @@ describe('invites', () => {
   });
 
   // The person joined through a plain link first, then the admin sent them the claim link.
+  // Codex on #322: only an admin impersonating a removed placeholder has such a row (#284)
+  test("joinByInvite doesn't take a removed membership as being in the group", async () => {
+    mockDb.groupInvite.findUnique.mockResolvedValue({
+      id: 'i1',
+      groupId: 'g1',
+      usedAt: null,
+      usedById: null,
+      expiresAt: inAWeek(),
+      placeholderUserId: null,
+    });
+    mockDb.groupMember.findUnique.mockResolvedValue({ ...member('owner', 'MEMBER'), removedAt: new Date() });
+    const api = await caller();
+    await expect(api.joinByInvite({ token: 't1' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(mockDb.groupMember.create).not.toHaveBeenCalled();
+    expect(mockDb.groupInvite.updateMany).not.toHaveBeenCalled();
+  });
+
   test('joinByInvite with a claim link hands the placeholder to someone already in the group', async () => {
     mockDb.groupInvite.findUnique.mockResolvedValue({
       id: 'i1',

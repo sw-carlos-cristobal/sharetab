@@ -314,6 +314,32 @@ describe('saving a receipt for later while it is deleted from the pending list (
 
 // Codex on #319: processing a receipt for a group also sets its group, so one queued behind a
 // delete from the pending list must not put the receipt back in the group
+// Codex on #322: a placeholder removed from a group keeps their row (#284), and an admin can
+// impersonate a placeholder, so the receipt checks must not take that row as membership
+describe('a caller whose membership was removed (#284)', () => {
+  test("can open none of the group's receipts", async () => {
+    mockDb.receipt.findUnique.mockResolvedValue({ id: 'r1', groupId: 'g1', group: { members: [] } });
+    const api = await caller();
+    await expect(api.processReceipt({ receiptId: 'r1' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(mockDb.receipt.findUnique.mock.calls[0]![0].include.group).toEqual({
+      include: { members: { where: { removedAt: null } } },
+    });
+  });
+
+  test("can't scan a receipt into the group", async () => {
+    mockDb.receipt.findUnique.mockResolvedValue({ id: 'r1', groupId: null, uploadedById: 'u1', group: null });
+    mockDb.groupMember.findUnique.mockResolvedValue({
+      role: 'MEMBER',
+      userId: 'u1',
+      groupId: 'g1',
+      removedAt: new Date(),
+    });
+    const api = await caller();
+    await expect(api.processReceipt({ receiptId: 'r1', groupId: 'g1' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(mockDb.receipt.updateMany).not.toHaveBeenCalled();
+  });
+});
+
 describe('processing a receipt while it is deleted from the pending list (#318)', () => {
   const inGroup = {
     id: 'r1',
