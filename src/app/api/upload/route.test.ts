@@ -1,5 +1,7 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
+import en from '../../../../messages/en/errors.json';
+import de from '../../../../messages/de/errors.json';
 
 const { auth, writeFile, mkdir } = vi.hoisted(() => ({
   auth: vi.fn(),
@@ -22,13 +24,17 @@ vi.mock('@/server/lib/logger', () => ({
 // A tiny buffer that passes the JPEG magic-byte check (FF D8 FF, >= 12 bytes).
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46, 0, 1, 1, 0]);
 
-function uploadRequest(ip: string) {
+function uploadRequest(
+  ip: string,
+  headers: Record<string, string> = {},
+  file = new File([JPEG], 'receipt.jpg', { type: 'image/jpeg' }),
+) {
   const form = new FormData();
-  form.append('file', new File([JPEG], 'receipt.jpg', { type: 'image/jpeg' }));
+  form.append('file', file);
   return new NextRequest('http://localhost/api/upload?guest=true', {
     method: 'POST',
     body: form,
-    headers: { 'x-real-ip': ip },
+    headers: { 'x-real-ip': ip, ...headers },
   });
 }
 
@@ -109,5 +115,37 @@ describe('POST /api/upload?guest=true', () => {
     expect(res.status).toBe(200);
     expect(writeFile).toHaveBeenCalledOnce();
     expect(auth).not.toHaveBeenCalled();
+  });
+});
+
+// #266: the upload's errors were English in every locale
+describe('POST /api/upload errors', () => {
+  test('come back in the language the page sends, and in English when it sends none', async () => {
+    guestUploadsSetting('false');
+    const { POST } = await import('./route');
+
+    const german = await POST(uploadRequest('203.0.113.6', { 'x-locale': 'de' }));
+    expect(german.status).toBe(403);
+    expect(await german.json()).toEqual({ error: de.guestUploadsDisabled });
+
+    const english = await POST(uploadRequest('203.0.113.7'));
+    expect(await english.json()).toEqual({ error: en.guestUploadsDisabled });
+  });
+
+  test('fill in their details', async () => {
+    guestUploadsSetting(null);
+    const { POST } = await import('./route');
+
+    const res = await POST(
+      uploadRequest(
+        '203.0.113.8',
+        { 'x-locale': 'de' },
+        new File(['%PDF'], 'receipt.pdf', { type: 'application/pdf' }),
+      ),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      error: de.invalidFileType.replace('{types}', 'image/jpeg, image/png, image/webp, image/heic'),
+    });
   });
 });

@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Link, useRouter } from '@/i18n/navigation';
 import { trpc } from '@/lib/trpc';
+import { localeHeaders } from '@/lib/locale-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -136,6 +137,7 @@ function ScanReceiptContent({ params }: { params: Promise<{ groupId: string }> }
       const res = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
+        headers: localeHeaders(),
       });
 
       if (!res.ok) {

@@ -46,6 +46,7 @@
     "date": "Fecha",
     "category": "Categoría",
     "split": "Reparto",
+    "splitByItem": "Por artículo",
     "unknown": "Desconocido",
     "edit": "Editar gasto",
     "delete": "Eliminar",

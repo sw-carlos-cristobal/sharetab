@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { httpBatchLink, httpLink, splitLink } from '@trpc/client';
 import superjson from 'superjson';
 import { trpc } from '@/lib/trpc';
+import { localeHeaders } from '@/lib/locale-header';
 import { SessionProvider } from 'next-auth/react';
 import { ThemeProvider } from 'next-themes';
 
@@ -22,8 +23,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
         // request is aborted only when every call in it is; see src/lib/claim-save.ts)
         splitLink({
           condition: (op) => op.path === 'guest.claimItems',
-          true: httpLink({ url: `${getBaseUrl()}/api/trpc`, transformer: superjson }),
-          false: httpBatchLink({ url: `${getBaseUrl()}/api/trpc`, transformer: superjson }),
+          // The page's language, so errors come back in it (#266)
+          true: httpLink({ url: `${getBaseUrl()}/api/trpc`, transformer: superjson, headers: localeHeaders }),
+          false: httpBatchLink({ url: `${getBaseUrl()}/api/trpc`, transformer: superjson, headers: localeHeaders }),
         }),
       ],
     }),

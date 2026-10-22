@@ -1,12 +1,9 @@
 import { z } from 'zod';
-import { TRPCError } from '@trpc/server';
+import { AppError } from '@/server/lib/app-error';
 import { createTRPCRouter, groupMemberProcedure } from '../init';
 import { getExchangeRate, convertCents } from '../../lib/exchange-rates';
 import { MAX_MONEY_CENTS } from '@/lib/money';
 import { lockActiveGroup } from '../../lib/group-balances';
-
-const ARCHIVED_CREATE = 'Cannot create settlements in an archived group';
-const ARCHIVED_DELETE = 'Cannot delete payments from an archived group';
 
 export const settlementsRouter = createTRPCRouter({
   list: groupMemberProcedure
@@ -65,23 +62,17 @@ export const settlementsRouter = createTRPCRouter({
         select: { archivedAt: true, currency: true },
       });
       if (group?.archivedAt) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: ARCHIVED_CREATE });
+        throw new AppError('BAD_REQUEST', 'archivedCreateSettlement');
       }
 
       // Cannot settle with yourself
       if (effectiveFromId === input.toId) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'Cannot settle a debt with yourself',
-        });
+        throw new AppError('BAD_REQUEST', 'settleWithYourself');
       }
 
       // Security: non-admin members can only create settlements from themselves
       if (ctx.membership.role === 'MEMBER' && input.fromId && input.fromId !== ctx.user.id) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'You can only record payments from yourself',
-        });
+        throw new AppError('FORBIDDEN', 'paymentsFromYourselfOnly');
       }
 
       // Currency conversion: compute base currency amount if currencies differ
@@ -97,17 +88,14 @@ export const settlementsRouter = createTRPCRouter({
         }
 
         if (exchangeRate === null) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'Could not fetch exchange rate. Please provide a manual rate or try again.',
-          });
+          throw new AppError('BAD_REQUEST', 'exchangeRateUnavailable');
         }
 
         baseCurrencyAmount = convertCents(input.amount, exchangeRate);
       }
 
       const settlement = await ctx.db.$transaction(async (tx) => {
-        await lockActiveGroup(tx, input.groupId, ARCHIVED_CREATE);
+        await lockActiveGroup(tx, input.groupId, 'archivedCreateSettlement');
 
         // Validate both fromId and toId are members of the group (after the lock,
         // so someone leaving meanwhile is either gone or waits for this, #279)
@@ -118,10 +106,7 @@ export const settlementsRouter = createTRPCRouter({
           },
         });
         if (memberCount < 2) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'Both the payer and recipient must be members of this group',
-          });
+          throw new AppError('BAD_REQUEST', 'settlementPartiesNotMembers');
         }
 
         const created = await tx.settlement.create({
@@ -161,14 +146,14 @@ export const settlementsRouter = createTRPCRouter({
         select: { archivedAt: true },
       });
       if (group?.archivedAt) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: ARCHIVED_DELETE });
+        throw new AppError('BAD_REQUEST', 'archivedDeletePayment');
       }
 
       const settlement = await ctx.db.settlement.findUnique({
         where: { id: input.settlementId },
       });
       if (!settlement || settlement.groupId !== input.groupId) {
-        throw new TRPCError({ code: 'NOT_FOUND' });
+        throw new AppError('NOT_FOUND');
       }
 
       // A member can only record a payment from themselves, so the payer is
@@ -176,20 +161,17 @@ export const settlementsRouter = createTRPCRouter({
       // recipient can't delete it: that would let them deny being paid.
       const isOwnerOrAdmin = ctx.membership.role === 'OWNER' || ctx.membership.role === 'ADMIN';
       if (!isOwnerOrAdmin && settlement.fromId !== ctx.user.id) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'Only the payer or a group owner/admin can delete this payment',
-        });
+        throw new AppError('FORBIDDEN', 'onlyPayerDeletesPayment');
       }
 
       await ctx.db.$transaction(async (tx) => {
-        await lockActiveGroup(tx, input.groupId, ARCHIVED_DELETE);
+        await lockActiveGroup(tx, input.groupId, 'archivedDeletePayment');
         // deleteMany so a payment someone else deleted in the meantime is NOT_FOUND, not a Prisma error
         const { count } = await tx.settlement.deleteMany({
           where: { id: input.settlementId, groupId: input.groupId },
         });
         if (count === 0) {
-          throw new TRPCError({ code: 'NOT_FOUND' });
+          throw new AppError('NOT_FOUND');
         }
 
         await tx.activityLog.create({

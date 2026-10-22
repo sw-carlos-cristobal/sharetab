@@ -65,9 +65,8 @@ export default function SharedSplitPage({ params }: { params: Promise<{ token: s
         <div className="space-y-2">
           <h2 className="text-xl font-bold">{t('notFound')}</h2>
           <p className="text-muted-foreground">
-            {/* Exact match on the server's expiry message (guest.getSplit) —
-                substring matching could misclassify unrelated errors */}
-            {split.error.message === 'This split has expired' ? t('expiredMessage') : t('invalidMessage')}
+            {/* The server's key for an expired split (guest.getSplit); its message is in the page's language */}
+            {split.error.data?.messageKey === 'splitExpired' ? t('expiredMessage') : t('invalidMessage')}
           </p>
         </div>
         <Button nativeButton={false} render={<Link href="/split" />}>

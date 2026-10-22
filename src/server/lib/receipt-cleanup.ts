@@ -1,5 +1,5 @@
 import { unlink } from 'fs/promises';
-import { TRPCError } from '@trpc/server';
+import { AppError } from './app-error';
 import { Prisma } from '@/generated/prisma/client';
 import { logger } from './logger';
 import { resolveUploadPath } from './upload-dir';
@@ -87,7 +87,7 @@ export async function lockReceiptForSplit(
   if (!receipt) return undefined;
   if (receipt.isGuest) return receiptId;
   if (userId !== undefined && (await canOpenReceipt(tx, receipt, userId))) return receiptId;
-  throw new TRPCError({ code: 'NOT_FOUND', message: 'Receipt not found' });
+  throw new AppError('NOT_FOUND', 'receiptNotFound');
 }
 
 // The access the group's pages give (`verifyReceiptAccess` in the receipts router): a group's

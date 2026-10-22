@@ -45,6 +45,7 @@
     "addedBy": "添加者",
     "date": "日期",
     "split": "分账",
+    "splitByItem": "按项目",
     "edit": "编辑支出",
     "delete": "删除",
     "deleteTitle": "删除这笔费用？",

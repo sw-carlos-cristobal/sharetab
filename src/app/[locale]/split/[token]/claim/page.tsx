@@ -852,7 +852,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
         <div className="space-y-2">
           <h2 className="text-xl font-bold">{t('sessionNotFound')}</h2>
           <p className="text-muted-foreground">
-            {session.error.message.includes('expired') ? t('sessionExpired') : t('sessionInvalid')}
+            {session.error.data?.messageKey === 'sessionExpired' ? t('sessionExpired') : t('sessionInvalid')}
           </p>
         </div>
         <Button nativeButton={false} render={<Link href="/split" />}>

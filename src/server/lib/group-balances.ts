@@ -1,4 +1,4 @@
-import { TRPCError } from '@trpc/server';
+import { AppError, type ErrorKey } from './app-error';
 import type { Prisma } from '@/generated/prisma/client';
 import { computeBalances, type MemberBalance } from './balance-calculator';
 
@@ -29,7 +29,7 @@ export async function loadGroupBalances(db: Prisma.TransactionClient, groupId: s
 /**
  * Lock a group's row for a transaction that changes its balances (an expense
  * or a payment added, edited or deleted), refusing an archived group with
- * `message`. Call it first in the transaction (#289).
+ * the error `message` names. Call it first in the transaction (#289).
  *
  * groups.archive sets archivedAt before it reads the balances, and that
  * update waits for every transaction holding this lock, so the balances it
@@ -41,15 +41,15 @@ export async function loadGroupBalances(db: Prisma.TransactionClient, groupId: s
  * same transaction: a member leaving takes lockGroupMembers, so a leave in
  * progress has either finished (and they're gone) or waits for this write.
  */
-export async function lockActiveGroup(tx: Prisma.TransactionClient, groupId: string, message: string): Promise<void> {
+export async function lockActiveGroup(tx: Prisma.TransactionClient, groupId: string, message: ErrorKey): Promise<void> {
   // Prisma has no row-lock API
   const [group] = await tx.$queryRaw<{ archivedAt: Date | null }[]>`
     SELECT "archivedAt" FROM "Group" WHERE "id" = ${groupId} FOR SHARE`;
   if (!group) {
-    throw new TRPCError({ code: 'NOT_FOUND' });
+    throw new AppError('NOT_FOUND');
   }
   if (group.archivedAt) {
-    throw new TRPCError({ code: 'BAD_REQUEST', message });
+    throw new AppError('BAD_REQUEST', message);
   }
 }
 

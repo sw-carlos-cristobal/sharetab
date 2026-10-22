@@ -46,6 +46,7 @@
     "date": "Date",
     "category": "Category",
     "split": "Split",
+    "splitByItem": "By item",
     "unknown": "Unknown",
     "edit": "Edit Expense",
     "delete": "Delete",

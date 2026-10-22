@@ -43,6 +43,13 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ groupI
   }
 
   const e = expense.data;
+  const splitModeLabels = {
+    EQUAL: t('new.splitEqual'),
+    EXACT: t('new.splitExact'),
+    PERCENTAGE: t('new.splitPercentage'),
+    SHARES: t('new.splitShares'),
+    ITEM: t('detail.splitByItem'),
+  } satisfies Record<typeof e.splitMode, string>;
   const groupCurrency = group.data?.currency ?? 'USD';
   const isCurrencyConverted = e.baseCurrencyAmount != null && e.currency.toUpperCase() !== groupCurrency.toUpperCase();
 
@@ -72,7 +79,7 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ groupI
                 </span>
               )}
             </div>
-            <Badge variant="secondary">{e.splitMode}</Badge>
+            <Badge variant="secondary">{splitModeLabels[e.splitMode]}</Badge>
           </CardTitle>
           {isCurrencyConverted && (
             <p className="text-xs text-muted-foreground">

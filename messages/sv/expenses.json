@@ -45,6 +45,7 @@
     "addedBy": "Tillagd av",
     "date": "Datum",
     "split": "Uppdelning",
+    "splitByItem": "Per artikel",
     "edit": "Redigera utgift",
     "delete": "Radera",
     "deleteTitle": "Ta bort den här utgiften?",

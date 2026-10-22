@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { TRPCClientError } from '@trpc/client';
 import { Link, useRouter } from '@/i18n/navigation';
 import { trpc } from '@/lib/trpc';
+import { localeHeaders } from '@/lib/locale-header';
 import { formatCents, centsToDecimal, parseToCents } from '@/lib/money';
 import { calculateSplitTotals } from '@/lib/split-calculator';
 import { canStoreClaimIdentity, setStoredClaimIdentity } from '@/lib/guest-session';
@@ -163,6 +164,7 @@ export default function GuestSplitPage() {
       const res = await fetch('/api/upload?guest=true', {
         method: 'POST',
         body: formData,
+        headers: localeHeaders(),
       });
 
       if (res.status === 403) throw new GuestUploadsDisabledError();

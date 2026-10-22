@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { Prisma } from '@/generated/prisma/client';
-import { TRPCError } from '@trpc/server';
+import { AppError } from '@/server/lib/app-error';
 import { createTRPCRouter, protectedProcedure, groupMemberProcedure } from '../init';
 import { stripUndefined } from '../../lib/strip-undefined';
 import { loadGroupBalances, lockGroupMembers } from '../../lib/group-balances';
@@ -37,7 +37,7 @@ async function assertPlaceholderNameFree(
       [m.user.placeholderName, m.user.name].some((n) => n != null && normalizeGuestName(n) === wanted),
   );
   if (taken) {
-    throw new TRPCError({ code: 'CONFLICT', message: 'Someone in this group already has that name' });
+    throw new AppError('CONFLICT', 'placeholderNameTaken');
   }
 }
 
@@ -108,7 +108,7 @@ export const groupsRouter = createTRPCRouter({
       },
     });
     if (!group) {
-      throw new TRPCError({ code: 'NOT_FOUND', message: 'Group not found' });
+      throw new AppError('NOT_FOUND', 'groupNotFound');
     }
     return group;
   }),
@@ -160,7 +160,7 @@ export const groupsRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       if (ctx.membership.role === 'MEMBER') {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Only admins and owners can update groups' });
+        throw new AppError('FORBIDDEN', 'onlyAdminsUpdateGroup');
       }
       const { groupId, ...data } = input;
 
@@ -175,11 +175,7 @@ export const groupsRouter = createTRPCRouter({
             ctx.db.settlement.count({ where: { groupId }, take: 1 }),
           ]);
           if (expenseCount > 0 || settlementCount > 0) {
-            throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message:
-                'Cannot change group currency after expenses or settlements have been recorded. Create a new group with the desired currency instead.',
-            });
+            throw new AppError('BAD_REQUEST', 'currencyLocked');
           }
         }
       }
@@ -192,7 +188,7 @@ export const groupsRouter = createTRPCRouter({
     }),
 
   delete: groupMemberProcedure.input(z.object({ groupId: z.string() })).mutation(async ({ ctx, input }) => {
-    const notOwner = new TRPCError({ code: 'FORBIDDEN', message: 'Only the owner can delete a group' });
+    const notOwner = new AppError('FORBIDDEN', 'onlyOwnerDeletesGroup');
     if (ctx.membership.role !== 'OWNER') {
       throw notOwner;
     }
@@ -216,7 +212,7 @@ export const groupsRouter = createTRPCRouter({
 
   archive: groupMemberProcedure.input(z.object({ groupId: z.string() })).mutation(async ({ ctx, input }) => {
     if (ctx.membership.role === 'MEMBER') {
-      throw new TRPCError({ code: 'FORBIDDEN', message: 'Only admins and owners can archive groups' });
+      throw new AppError('FORBIDDEN', 'onlyAdminsArchiveGroup');
     }
     return ctx.db.$transaction(async (tx) => {
       // Archive first: the row lock this takes waits for every balance change
@@ -228,7 +224,7 @@ export const groupsRouter = createTRPCRouter({
       });
       const group = await tx.group.findUnique({ where: { id: input.groupId } });
       if (!group) {
-        throw new TRPCError({ code: 'NOT_FOUND' });
+        throw new AppError('NOT_FOUND');
       }
       if (count === 0) {
         // Archived already
@@ -247,12 +243,10 @@ export const groupsRouter = createTRPCRouter({
           select: { userId: true },
         });
         const memberIds = new Set(members.map((m) => m.userId));
-        throw new TRPCError({
-          code: 'PRECONDITION_FAILED',
-          message: unsettled.some((b) => !memberIds.has(b.userId))
-            ? "Someone who is no longer in this group still owes or is owed money, so it can't be archived. Invite them back to settle up, or edit the expenses they're in."
-            : 'This group still has unsettled balances. Settle up before archiving it.',
-        });
+        throw new AppError(
+          'PRECONDITION_FAILED',
+          unsettled.some((b) => !memberIds.has(b.userId)) ? 'archiveFormerMemberUnsettled' : 'archiveUnsettled',
+        );
       }
       await tx.activityLog.create({
         data: {
@@ -268,7 +262,7 @@ export const groupsRouter = createTRPCRouter({
 
   unarchive: groupMemberProcedure.input(z.object({ groupId: z.string() })).mutation(async ({ ctx, input }) => {
     if (ctx.membership.role === 'MEMBER') {
-      throw new TRPCError({ code: 'FORBIDDEN', message: 'Only admins and owners can unarchive groups' });
+      throw new AppError('FORBIDDEN', 'onlyAdminsUnarchiveGroup');
     }
     const group = await ctx.db.group.update({
       where: { id: input.groupId },
@@ -299,37 +293,31 @@ export const groupsRouter = createTRPCRouter({
         // placeholder's financial history, so gate it like the other
         // placeholder operations (create/rename/merge are owner/admin-only).
         if (ctx.membership.role !== 'OWNER' && ctx.membership.role !== 'ADMIN') {
-          throw new TRPCError({
-            code: 'FORBIDDEN',
-            message: 'Only admins and owners can create placeholder-linked invites',
-          });
+          throw new AppError('FORBIDDEN', 'onlyAdminsPlaceholderInvite');
         }
         const placeholder = await ctx.db.user.findUnique({
           where: { id: input.placeholderUserId },
           select: { isPlaceholder: true, suspendedAt: true },
         });
         if (!placeholder?.isPlaceholder) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Not a placeholder user' });
+          throw new AppError('BAD_REQUEST', 'notPlaceholderUser');
         }
         // Accepting the link merges the placeholder, which refuses these two
         if (placeholder.suspendedAt) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: "A deleted account can't be merged" });
+          throw new AppError('BAD_REQUEST', 'mergeDeletedAccount');
         }
         const group = await ctx.db.group.findUnique({
           where: { id: input.groupId },
           select: { archivedAt: true },
         });
         if (group?.archivedAt) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'This group is archived. Unarchive it to merge a placeholder.',
-          });
+          throw new AppError('BAD_REQUEST', 'mergeArchivedGroup');
         }
         const membership = await ctx.db.groupMember.findUnique({
           where: { userId_groupId: { userId: input.placeholderUserId, groupId: input.groupId } },
         });
         if (!membership) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Placeholder is not a member of this group' });
+          throw new AppError('BAD_REQUEST', 'placeholderNotMember');
         }
       }
       const invite = await ctx.db.groupInvite.create({
@@ -349,7 +337,7 @@ export const groupsRouter = createTRPCRouter({
   // (joining the group). null when joinByInvite would refuse the token.
   getInvite: protectedProcedure.input(z.object({ token: inviteTokenSchema })).query(async ({ ctx, input }) => {
     if (!checkRateLimit(`invite-lookup:${ctx.user.id}`, INVITE_LOOKUP_LIMIT, INVITE_LOOKUP_WINDOW_MS).allowed) {
-      throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'Too many invite lookups. Try again in a minute.' });
+      throw new AppError('TOO_MANY_REQUESTS', 'inviteLookupRateLimited');
     }
     const invite = await ctx.db.groupInvite.findUnique({
       where: { token: input.token },
@@ -389,7 +377,7 @@ export const groupsRouter = createTRPCRouter({
       where: { token: input.token },
     });
     if (!invite) {
-      throw new TRPCError({ code: 'NOT_FOUND', message: 'Invalid or expired invite' });
+      throw new AppError('NOT_FOUND', 'inviteInvalid');
     }
 
     const existing = await ctx.db.groupMember.findUnique({
@@ -403,7 +391,7 @@ export const groupsRouter = createTRPCRouter({
       return { groupId: invite.groupId, alreadyMember: true };
     }
     if (!isRedeemable(invite)) {
-      throw new TRPCError({ code: 'NOT_FOUND', message: 'Invalid or expired invite' });
+      throw new AppError('NOT_FOUND', 'inviteInvalid');
     }
     if (existing) {
       // A link made for a placeholder hands them over to whoever accepts it,
@@ -415,16 +403,16 @@ export const groupsRouter = createTRPCRouter({
             // Done if this person's own earlier submit took them over; otherwise
             // they went to someone else, and the link is for nothing now.
             if (await isUsedBy(tx, invite.id, ctx.user.id)) return;
-            throw new TRPCError({ code: 'NOT_FOUND', message: 'Invalid or expired invite' });
+            throw new AppError('NOT_FOUND', 'inviteInvalid');
           }
           if (!(await claimInvite(tx, invite.id, ctx.user.id))) {
             // Fine if it was this person's own earlier submit; otherwise
             // someone else got there first and took the placeholder.
             if (await isUsedBy(tx, invite.id, ctx.user.id)) return;
-            throw new TRPCError({ code: 'NOT_FOUND', message: 'Invalid or expired invite' });
+            throw new AppError('NOT_FOUND', 'inviteInvalid');
           }
           if (!(await mergePlaceholderIntoUser(tx, placeholderUserId, ctx.user.id, invite.groupId))) {
-            throw new TRPCError({ code: 'CONFLICT', message: 'This placeholder was already merged or removed' });
+            throw new AppError('CONFLICT', 'placeholderGone');
           }
         });
       }
@@ -442,7 +430,7 @@ export const groupsRouter = createTRPCRouter({
       // and is for that only: once the placeholder is merged or removed, it
       // doesn't let anyone into the group.
       if (invite.placeholderUserId && !(await findPlaceholderMember(tx, invite.placeholderUserId, invite.groupId))) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Invalid or expired invite' });
+        throw new AppError('NOT_FOUND', 'inviteInvalid');
       }
       await tx.groupMember.create({
         data: { userId: ctx.user.id, groupId: invite.groupId },
@@ -458,7 +446,7 @@ export const groupsRouter = createTRPCRouter({
       if (invite.placeholderUserId) {
         // Lost to a merge that got there first since the check above
         if (!(await mergePlaceholderIntoUser(tx, invite.placeholderUserId, ctx.user.id, invite.groupId))) {
-          throw new TRPCError({ code: 'CONFLICT', message: 'This placeholder was already merged or removed' });
+          throw new AppError('CONFLICT', 'placeholderGone');
         }
       }
       return true;
@@ -469,7 +457,7 @@ export const groupsRouter = createTRPCRouter({
       if (await isUsedBy(ctx.db, invite.id, ctx.user.id)) {
         return { groupId: invite.groupId, alreadyMember: true };
       }
-      throw new TRPCError({ code: 'NOT_FOUND', message: 'Invalid or expired invite' });
+      throw new AppError('NOT_FOUND', 'inviteInvalid');
     }
 
     return { groupId: invite.groupId, alreadyMember: false };
@@ -481,7 +469,7 @@ export const groupsRouter = createTRPCRouter({
       const isSelf = input.userId === ctx.user.id;
       // Checked again under the lock below; this keeps a plain member's attempt from taking it
       if (!isSelf && ctx.membership.role === 'MEMBER') {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Cannot remove other members' });
+        throw new AppError('FORBIDDEN', 'cannotRemoveOthers');
       }
 
       await ctx.db.$transaction(async (tx) => {
@@ -497,7 +485,7 @@ export const groupsRouter = createTRPCRouter({
             select: { role: true },
           });
           if (caller?.role !== 'OWNER' && caller?.role !== 'ADMIN') {
-            throw new TRPCError({ code: 'FORBIDDEN', message: 'Cannot remove other members' });
+            throw new AppError('FORBIDDEN', 'cannotRemoveOthers');
           }
         }
 
@@ -505,18 +493,14 @@ export const groupsRouter = createTRPCRouter({
           where: { userId_groupId: { userId: input.userId, groupId: input.groupId } },
         });
         if (!targetMember) {
-          throw new TRPCError({ code: 'NOT_FOUND', message: 'Member not found' });
+          throw new AppError('NOT_FOUND', 'memberNotFound');
         }
         if (targetMember.role === 'OWNER' && !isSelf) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: 'Cannot remove the owner' });
+          throw new AppError('FORBIDDEN', 'cannotRemoveOwner');
         }
         // Nobody else could manage or delete the group (#279)
         if (targetMember.role === 'OWNER') {
-          throw new TRPCError({
-            code: 'FORBIDDEN',
-            message:
-              "The group's owner can't leave it. Transfer ownership to another member first, or delete the group if nobody needs it.",
-          });
+          throw new AppError('FORBIDDEN', 'ownerCannotLeave');
         }
 
         const targetUser = await tx.user.findUnique({
@@ -530,10 +514,7 @@ export const groupsRouter = createTRPCRouter({
         if (isSelf) {
           const balance = (await loadGroupBalances(tx, input.groupId)).find((b) => b.userId === ctx.user.id);
           if (balance && balance.net !== 0) {
-            throw new TRPCError({
-              code: 'PRECONDITION_FAILED',
-              message: 'You still owe or are owed money in this group. Settle up before you leave.',
-            });
+            throw new AppError('PRECONDITION_FAILED', 'leaveWithBalance');
           }
         }
 
@@ -549,11 +530,10 @@ export const groupsRouter = createTRPCRouter({
             tx.settlement.count({ where: { OR: [{ fromId: input.userId }, { toId: input.userId }] } }),
           ]);
           if (shares + expenses + settlements > 0) {
-            const name = targetUser.placeholderName ?? targetUser.name ?? 'This member';
-            throw new TRPCError({
-              code: 'PRECONDITION_FAILED',
-              message: `${name} is in expenses or payments in this group, so they can't be removed. Take them out of those first.`,
-            });
+            const name = targetUser.placeholderName ?? targetUser.name;
+            throw name
+              ? new AppError('PRECONDITION_FAILED', 'placeholderInUse', { name })
+              : new AppError('PRECONDITION_FAILED', 'memberInUse');
           }
 
           await tx.receiptItemAssignment.deleteMany({ where: { userId: input.userId } });
@@ -591,12 +571,12 @@ export const groupsRouter = createTRPCRouter({
   transferOwnership: groupMemberProcedure
     .input(z.object({ groupId: z.string(), newOwnerId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const notOwner = new TRPCError({ code: 'FORBIDDEN', message: 'Only the owner can transfer ownership' });
+      const notOwner = new AppError('FORBIDDEN', 'onlyOwnerTransfers');
       if (ctx.membership.role !== 'OWNER') {
         throw notOwner;
       }
       if (input.newOwnerId === ctx.user.id) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'You already own this group' });
+        throw new AppError('BAD_REQUEST', 'alreadyOwner');
       }
 
       await ctx.db.$transaction(async (tx) => {
@@ -619,17 +599,14 @@ export const groupsRouter = createTRPCRouter({
           throw notOwner;
         }
         if (!newOwner) {
-          throw new TRPCError({ code: 'NOT_FOUND', message: 'Member not found' });
+          throw new AppError('NOT_FOUND', 'memberNotFound');
         }
         // Someone who can't sign in couldn't manage the group, or hand it on
         if (newOwner.user.isPlaceholder) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Only a member with an account can own a group' });
+          throw new AppError('BAD_REQUEST', 'ownerNeedsAccount');
         }
         if (newOwner.user.suspendedAt) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: "That member's account is suspended, so they can't own the group",
-          });
+          throw new AppError('BAD_REQUEST', 'ownerSuspended');
         }
 
         await tx.groupMember.update({ where: { id: newOwner.id }, data: { role: 'OWNER' } });
@@ -656,7 +633,7 @@ export const groupsRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       if (ctx.membership.role === 'MEMBER') {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Only admins and owners can add placeholder members' });
+        throw new AppError('FORBIDDEN', 'onlyAdminsAddPlaceholder');
       }
 
       const { randomUUID } = await import('crypto');
@@ -695,17 +672,17 @@ export const groupsRouter = createTRPCRouter({
     .input(z.object({ groupId: z.string(), placeholderUserId: z.string(), name: z.string().trim().min(1).max(100) }))
     .mutation(async ({ ctx, input }) => {
       if (ctx.membership.role !== 'OWNER' && ctx.membership.role !== 'ADMIN') {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Only admins and owners can rename placeholder members' });
+        throw new AppError('FORBIDDEN', 'onlyAdminsRenamePlaceholder');
       }
       const user = await ctx.db.user.findUnique({ where: { id: input.placeholderUserId } });
       if (!user?.isPlaceholder) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'User is not a placeholder' });
+        throw new AppError('BAD_REQUEST', 'userNotPlaceholder');
       }
       const membership = await ctx.db.groupMember.findUnique({
         where: { userId_groupId: { userId: input.placeholderUserId, groupId: input.groupId } },
       });
       if (!membership) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Placeholder is not a member of this group' });
+        throw new AppError('FORBIDDEN', 'placeholderNotMember');
       }
       return ctx.db.$transaction(async (tx) => {
         await lockGroupMembers(tx, input.groupId);
@@ -727,28 +704,28 @@ export const groupsRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       if (ctx.membership.role !== 'OWNER' && ctx.membership.role !== 'ADMIN') {
-        throw new TRPCError({ code: 'FORBIDDEN' });
+        throw new AppError('FORBIDDEN');
       }
 
       const placeholder = await ctx.db.user.findUnique({
         where: { id: input.placeholderUserId },
       });
       if (!placeholder?.isPlaceholder) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Not a placeholder user' });
+        throw new AppError('BAD_REQUEST', 'notPlaceholderUser');
       }
 
       const placeholderMember = await ctx.db.groupMember.findUnique({
         where: { userId_groupId: { userId: input.placeholderUserId, groupId: input.groupId } },
       });
       if (!placeholderMember) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Placeholder is not a member of this group' });
+        throw new AppError('FORBIDDEN', 'placeholderNotMember');
       }
 
       const merged = await ctx.db.$transaction((tx) =>
         mergePlaceholderIntoUser(tx, input.placeholderUserId, input.realUserId, input.groupId),
       );
       if (!merged) {
-        throw new TRPCError({ code: 'CONFLICT', message: 'This placeholder was already merged or removed' });
+        throw new AppError('CONFLICT', 'placeholderGone');
       }
 
       return { success: true };

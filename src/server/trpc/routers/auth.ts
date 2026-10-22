@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
-import { TRPCError } from '@trpc/server';
+import { AppError } from '@/server/lib/app-error';
 import { createTRPCRouter, publicProcedure, protectedProcedure } from '../init';
 import { checkRateLimit, parsePositiveInt } from '../../lib/rate-limit';
 import { getClientIp } from '../../lib/client-ip';
@@ -9,9 +9,6 @@ import { stripUndefined } from '../../lib/strip-undefined';
 import { parseAuthConfig } from '../../lib/auth-config';
 import { findUsersByEmail } from '../../lib/user-email';
 import { Prisma } from '@/generated/prisma/client';
-
-const REGISTRATION_CLOSED = 'Registration is currently closed.';
-const EMAIL_TAKEN = 'Unable to create account. Please try a different email or sign in.';
 
 export const authRouter = createTRPCRouter({
   getSession: publicProcedure.query(({ ctx }) => {
@@ -52,7 +49,7 @@ export const authRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       if (!parseAuthConfig(process.env).passwordLogin) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: REGISTRATION_CLOSED });
+        throw new AppError('FORBIDDEN', 'registrationClosed');
       }
 
       // Rate limit: 10 registrations per hour per IP (fall back to global key)
@@ -60,10 +57,7 @@ export const authRouter = createTRPCRouter({
       const maxRegAttempts = parsePositiveInt(process.env.REGISTER_RATE_LIMIT_MAX, 10);
       const { allowed } = checkRateLimit(`register:${ip}`, maxRegAttempts, 60 * 60 * 1000);
       if (!allowed) {
-        throw new TRPCError({
-          code: 'TOO_MANY_REQUESTS',
-          message: 'Too many registration attempts. Please try again later.',
-        });
+        throw new AppError('TOO_MANY_REQUESTS', 'registerRateLimited');
       }
 
       // Check registration mode
@@ -73,28 +67,19 @@ export const authRouter = createTRPCRouter({
       const mode = modeSetting?.value ?? 'open';
 
       if (mode === 'closed') {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: REGISTRATION_CLOSED,
-        });
+        throw new AppError('FORBIDDEN', 'registrationClosed');
       }
 
       if (mode === 'invite-only') {
         if (!input.inviteCode) {
-          throw new TRPCError({
-            code: 'FORBIDDEN',
-            message: 'An invite code is required to register.',
-          });
+          throw new AppError('FORBIDDEN', 'inviteCodeRequired');
         }
 
         const invite = await ctx.db.systemInvite.findUnique({
           where: { code: input.inviteCode },
         });
         if (!invite || invite.revokedAt || invite.usedAt || (invite.expiresAt && invite.expiresAt < new Date())) {
-          throw new TRPCError({
-            code: 'FORBIDDEN',
-            message: 'Invalid or expired invite code.',
-          });
+          throw new AppError('FORBIDDEN', 'inviteCodeInvalid');
         }
       }
 
@@ -102,7 +87,7 @@ export const authRouter = createTRPCRouter({
       // every sign-in method matches users by email ignoring case.
       const existing = await findUsersByEmail(ctx.db, input.email);
       if (existing.length > 0) {
-        throw new TRPCError({ code: 'CONFLICT', message: EMAIL_TAKEN });
+        throw new AppError('CONFLICT', 'emailTaken');
       }
 
       const passwordHash = await bcrypt.hash(input.password, 12);
@@ -120,7 +105,7 @@ export const authRouter = createTRPCRouter({
             // in after the check above; the unique indexes on email and on
             // lower(email) (prisma/after-push/) reject this one.
             if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-              throw new TRPCError({ code: 'CONFLICT', message: EMAIL_TAKEN });
+              throw new AppError('CONFLICT', 'emailTaken');
             }
             throw error;
           });
@@ -136,10 +121,7 @@ export const authRouter = createTRPCRouter({
             data: { usedById: created.id, usedAt: new Date() },
           });
           if (claimed.count === 0) {
-            throw new TRPCError({
-              code: 'FORBIDDEN',
-              message: 'Invalid or expired invite code.',
-            });
+            throw new AppError('FORBIDDEN', 'inviteCodeInvalid');
           }
         }
 
@@ -161,18 +143,12 @@ export const authRouter = createTRPCRouter({
         where: { id: ctx.user.id },
       });
       if (!user?.passwordHash) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'Account uses OAuth or magic link — no password to change',
-        });
+        throw new AppError('BAD_REQUEST', 'noPasswordToChange');
       }
 
       const valid = await bcrypt.compare(input.currentPassword, user.passwordHash);
       if (!valid) {
-        throw new TRPCError({
-          code: 'UNAUTHORIZED',
-          message: 'Current password is incorrect',
-        });
+        throw new AppError('UNAUTHORIZED', 'wrongPassword');
       }
 
       const passwordHash = await bcrypt.hash(input.newPassword, 12);
@@ -198,7 +174,7 @@ export const authRouter = createTRPCRouter({
       },
     });
     if (!user) {
-      throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found' });
+      throw new AppError('NOT_FOUND', 'userNotFound');
     }
     const { passwordHash, ...profile } = user;
     return { ...profile, hasPassword: passwordHash !== null };

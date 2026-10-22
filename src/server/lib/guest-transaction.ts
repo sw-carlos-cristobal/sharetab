@@ -1,4 +1,4 @@
-import { TRPCError } from '@trpc/server';
+import { AppError } from './app-error';
 import { Prisma, type PrismaClient } from '@/generated/prisma/client';
 import { logger } from './logger';
 import { transactionConflictCode, withTransactionRetry, TRANSACTION_RETRY_ATTEMPTS } from './transaction-retry';
@@ -39,20 +39,12 @@ export async function guestTransaction<T>(
   } catch (error) {
     if (isTransactionManagerError(error)) {
       logger.warn('guest.transaction.unavailable', { code: 'P2028', message: error.message });
-      throw new TRPCError({
-        code: 'SERVICE_UNAVAILABLE',
-        message: 'ShareTab is busy right now. Please try again in a moment.',
-        cause: error,
-      });
+      throw new AppError('SERVICE_UNAVAILABLE', 'serverBusy', undefined, { cause: error });
     }
     const code = transactionConflictCode(error);
     if (code === undefined) throw error;
     logger.warn('guest.transaction.retries_exhausted', { attempts: TRANSACTION_RETRY_ATTEMPTS, code });
-    throw new TRPCError({
-      code: 'CONFLICT',
-      message: 'Someone else is updating this split right now. Please try again.',
-      cause: error,
-    });
+    throw new AppError('CONFLICT', 'splitBusy', undefined, { cause: error });
   }
 }
 

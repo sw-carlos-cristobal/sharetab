@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { TRPCError } from '@trpc/server';
+import { AppError } from '@/server/lib/app-error';
 import { createTRPCRouter, publicProcedure, protectedProcedure } from '../init';
 import {
   getAIProvidersWithFallback,
@@ -59,10 +59,7 @@ const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
   // When impersonating, use the real admin email for the check
   const effectiveEmail = ctx.impersonating ? ctx.impersonating.adminEmail : ctx.user.email;
   if (!adminEmail || effectiveEmail !== adminEmail) {
-    throw new TRPCError({
-      code: 'FORBIDDEN',
-      message: 'Admin access required',
-    });
+    throw new AppError('FORBIDDEN', 'adminRequired');
   }
   // For admin procedures, restore the real admin user context
   if (ctx.impersonating) {
@@ -308,10 +305,7 @@ export const adminRouter = createTRPCRouter({
 
   suspendUser: adminProcedure.input(z.object({ userId: z.string() })).mutation(async ({ ctx, input }) => {
     if (input.userId === ctx.user.id) {
-      throw new TRPCError({
-        code: 'BAD_REQUEST',
-        message: 'Cannot suspend your own account',
-      });
+      throw new AppError('BAD_REQUEST', 'cannotSuspendYourself');
     }
 
     const user = await ctx.db.user.findUnique({
@@ -320,14 +314,11 @@ export const adminRouter = createTRPCRouter({
     });
 
     if (!user) {
-      throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found' });
+      throw new AppError('NOT_FOUND', 'userNotFound');
     }
 
     if (user.suspendedAt) {
-      throw new TRPCError({
-        code: 'BAD_REQUEST',
-        message: 'User is already suspended',
-      });
+      throw new AppError('BAD_REQUEST', 'alreadySuspended');
     }
 
     await ctx.db.user.update({
@@ -347,21 +338,15 @@ export const adminRouter = createTRPCRouter({
     });
 
     if (!user) {
-      throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found' });
+      throw new AppError('NOT_FOUND', 'userNotFound');
     }
 
     if (!user.suspendedAt) {
-      throw new TRPCError({
-        code: 'BAD_REQUEST',
-        message: 'User is not suspended',
-      });
+      throw new AppError('BAD_REQUEST', 'notSuspended');
     }
 
     if (user.isPlaceholder) {
-      throw new TRPCError({
-        code: 'BAD_REQUEST',
-        message: 'Cannot unsuspend a placeholder or deleted account',
-      });
+      throw new AppError('BAD_REQUEST', 'cannotUnsuspend');
     }
 
     await ctx.db.user.update({
@@ -376,10 +361,7 @@ export const adminRouter = createTRPCRouter({
 
   deleteUser: adminProcedure.input(z.object({ userId: z.string() })).mutation(async ({ ctx, input }) => {
     if (input.userId === ctx.user.id) {
-      throw new TRPCError({
-        code: 'BAD_REQUEST',
-        message: 'Cannot delete your own account',
-      });
+      throw new AppError('BAD_REQUEST', 'cannotDeleteYourself');
     }
 
     const user = await ctx.db.user.findUnique({
@@ -388,10 +370,7 @@ export const adminRouter = createTRPCRouter({
     });
 
     if (!user) {
-      throw new TRPCError({
-        code: 'NOT_FOUND',
-        message: 'User not found',
-      });
+      throw new AppError('NOT_FOUND', 'userNotFound');
     }
 
     await ctx.db.$transaction(async (tx) => {
@@ -577,10 +556,7 @@ export const adminRouter = createTRPCRouter({
     });
 
     if (!group) {
-      throw new TRPCError({
-        code: 'NOT_FOUND',
-        message: 'Group not found',
-      });
+      throw new AppError('NOT_FOUND', 'groupNotFound');
     }
 
     const imagePaths = await ctx.db.$transaction(async (tx) => {
@@ -721,17 +697,11 @@ export const adminRouter = createTRPCRouter({
     });
 
     if (!invite) {
-      throw new TRPCError({
-        code: 'NOT_FOUND',
-        message: 'Invite not found',
-      });
+      throw new AppError('NOT_FOUND', 'inviteNotFound');
     }
 
     if (invite.revokedAt) {
-      throw new TRPCError({
-        code: 'BAD_REQUEST',
-        message: 'Invite is already revoked',
-      });
+      throw new AppError('BAD_REQUEST', 'inviteAlreadyRevoked');
     }
 
     await ctx.db.systemInvite.update({
@@ -851,10 +821,7 @@ export const adminRouter = createTRPCRouter({
   setGuestUploadsEnabled: adminProcedure.input(z.object({ enabled: z.boolean() })).mutation(async ({ ctx, input }) => {
     // While the env var locks it, a saved value would only take effect later, unseen.
     if (isGuestUploadsForcedOff()) {
-      throw new TRPCError({
-        code: 'PRECONDITION_FAILED',
-        message: 'Guest uploads are locked off by DISABLE_GUEST_UPLOADS',
-      });
+      throw new AppError('PRECONDITION_FAILED', 'guestUploadsLockedOff');
     }
     await saveGuestUploadsSetting(ctx.db, input.enabled);
 
@@ -868,10 +835,7 @@ export const adminRouter = createTRPCRouter({
   sendTestEmail: adminProcedure.mutation(async ({ ctx }) => {
     const host = process.env.EMAIL_SERVER_HOST;
     if (!host) {
-      throw new TRPCError({
-        code: 'PRECONDITION_FAILED',
-        message: 'Email is not configured. Set EMAIL_SERVER_HOST environment variable.',
-      });
+      throw new AppError('PRECONDITION_FAILED', 'emailNotConfigured');
     }
 
     const transport = nodemailer.createTransport({
@@ -911,9 +875,8 @@ export const adminRouter = createTRPCRouter({
 
       return { success: true, sentTo: to };
     } catch (error) {
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: `Failed to send test email: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      throw new AppError('INTERNAL_SERVER_ERROR', 'testEmailFailed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   }),
@@ -1119,10 +1082,7 @@ export const adminRouter = createTRPCRouter({
 
   startMeridianLogin: adminProcedure.mutation(async ({ ctx }) => {
     if (!isProviderConfigured('meridian')) {
-      throw new TRPCError({
-        code: 'PRECONDITION_FAILED',
-        message: 'Meridian is not configured in AI provider priority',
-      });
+      throw new AppError('PRECONDITION_FAILED', 'meridianNotConfigured');
     }
 
     try {
@@ -1137,10 +1097,9 @@ export const adminRouter = createTRPCRouter({
 
       return { url };
     } catch (err) {
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: err instanceof Error ? err.message : 'Failed to start login',
-      });
+      throw err instanceof Error
+        ? new AppError('INTERNAL_SERVER_ERROR', 'detail', { detail: err.message })
+        : new AppError('INTERNAL_SERVER_ERROR', 'loginStartFailed');
     }
   }),
 
@@ -1180,10 +1139,9 @@ export const adminRouter = createTRPCRouter({
 
         return { ...result, ...(proxyError ? { proxyError } : {}) };
       } catch (err) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: err instanceof Error ? err.message : 'Failed to submit code',
-        });
+        throw err instanceof Error
+          ? new AppError('INTERNAL_SERVER_ERROR', 'detail', { detail: err.message })
+          : new AppError('INTERNAL_SERVER_ERROR', 'loginCodeFailed');
       }
     }),
 
@@ -1197,18 +1155,14 @@ export const adminRouter = createTRPCRouter({
 
   logoutMeridian: adminProcedure.mutation(async ({ ctx }) => {
     if (!isProviderConfigured('meridian')) {
-      throw new TRPCError({
-        code: 'PRECONDITION_FAILED',
-        message: 'Meridian is not configured in AI provider priority',
-      });
+      throw new AppError('PRECONDITION_FAILED', 'meridianNotConfigured');
     }
 
     const result = logoutMeridian();
     if (!result.success) {
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: result.error ?? 'Failed to log out Meridian',
-      });
+      throw result.error
+        ? new AppError('INTERNAL_SERVER_ERROR', 'detail', { detail: result.error })
+        : new AppError('INTERNAL_SERVER_ERROR', 'meridianLogoutFailed');
     }
 
     clearProviderCache();
@@ -1263,10 +1217,7 @@ export const adminRouter = createTRPCRouter({
 
   startOpenAICodexLogin: adminProcedure.mutation(async () => {
     if (!isProviderConfigured('openai-codex')) {
-      throw new TRPCError({
-        code: 'PRECONDITION_FAILED',
-        message: 'OpenAI Codex is not configured in AI provider priority',
-      });
+      throw new AppError('PRECONDITION_FAILED', 'codexNotConfigured');
     }
     return { url: await startOpenAICodexLogin() };
   }),
@@ -1289,18 +1240,14 @@ export const adminRouter = createTRPCRouter({
 
   logoutOpenAICodex: adminProcedure.mutation(async () => {
     if (!isProviderConfigured('openai-codex')) {
-      throw new TRPCError({
-        code: 'PRECONDITION_FAILED',
-        message: 'OpenAI Codex is not configured in AI provider priority',
-      });
+      throw new AppError('PRECONDITION_FAILED', 'codexNotConfigured');
     }
 
     const result = logoutOpenAICodex();
     if (!result.success) {
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: result.error ?? 'Failed to log out OpenAI Codex',
-      });
+      throw result.error
+        ? new AppError('INTERNAL_SERVER_ERROR', 'detail', { detail: result.error })
+        : new AppError('INTERNAL_SERVER_ERROR', 'codexLogoutFailed');
     }
 
     clearProviderCache();
@@ -1324,38 +1271,41 @@ export const adminRouter = createTRPCRouter({
       try {
         provider = await createProviderByName(input.providerName);
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to create provider';
+        const error =
+          err instanceof Error
+            ? new AppError('BAD_REQUEST', 'detail', { detail: err.message })
+            : new AppError('BAD_REQUEST', 'providerCreateFailed');
         await logAdminAction(ctx.db, ctx.user.id, 'AI_PROVIDER_TESTED', null, {
           provider: input.providerName,
           durationMs: Date.now() - start,
           success: false,
-          error: message,
+          error: error.message,
         });
-        throw new TRPCError({ code: 'BAD_REQUEST', message });
+        throw error;
       }
 
       const available = await provider.isAvailable();
       if (!available) {
-        const message = `Provider "${input.providerName}" is not available`;
+        const error = new AppError('PRECONDITION_FAILED', 'providerUnavailable', { provider: input.providerName });
         await logAdminAction(ctx.db, ctx.user.id, 'AI_PROVIDER_TESTED', null, {
           provider: input.providerName,
           durationMs: Date.now() - start,
           success: false,
-          error: message,
+          error: error.message,
         });
-        throw new TRPCError({ code: 'PRECONDITION_FAILED', message });
+        throw error;
       }
 
       const imageBuffer = Buffer.from(input.imageBase64, 'base64');
       if (imageBuffer.length > 5 * 1024 * 1024) {
-        const message = 'Image exceeds 5 MB limit';
+        const error = new AppError('BAD_REQUEST', 'testImageTooLarge');
         await logAdminAction(ctx.db, ctx.user.id, 'AI_PROVIDER_TESTED', null, {
           provider: input.providerName,
           durationMs: Date.now() - start,
           success: false,
-          error: message,
+          error: error.message,
         });
-        throw new TRPCError({ code: 'BAD_REQUEST', message });
+        throw error;
       }
 
       try {
@@ -1371,23 +1321,23 @@ export const adminRouter = createTRPCRouter({
         return { result, durationMs };
       } catch (err) {
         const durationMs = Date.now() - start;
-        const message = err instanceof Error ? err.message : 'Extraction failed';
+        // SERVICE_UNAVAILABLE (503): the provider failed, not ShareTab. Not
+        // BAD_GATEWAY: Cloudflare (and proxies set to intercept errors)
+        // replaces a 502 or 504 body with its own HTML page, hiding this
+        // message.
+        const error =
+          err instanceof Error
+            ? new AppError('SERVICE_UNAVAILABLE', 'detail', { detail: err.message })
+            : new AppError('SERVICE_UNAVAILABLE', 'extractionFailed');
 
         await logAdminAction(ctx.db, ctx.user.id, 'AI_PROVIDER_TESTED', null, {
           provider: input.providerName,
           durationMs,
           success: false,
-          error: message,
+          error: error.message,
         });
 
-        // SERVICE_UNAVAILABLE (503): the provider failed, not ShareTab. Not
-        // BAD_GATEWAY: Cloudflare (and proxies set to intercept errors)
-        // replaces a 502 or 504 body with its own HTML page, hiding this
-        // message.
-        throw new TRPCError({
-          code: 'SERVICE_UNAVAILABLE',
-          message,
-        });
+        throw error;
       }
     }),
 });

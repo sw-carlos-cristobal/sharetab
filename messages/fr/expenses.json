@@ -45,6 +45,7 @@
     "addedBy": "Ajouté par",
     "date": "Date",
     "split": "Répartition",
+    "splitByItem": "Par article",
     "edit": "Modifier la dépense",
     "delete": "Supprimer",
     "deleteTitle": "Supprimer cette dépense ?",

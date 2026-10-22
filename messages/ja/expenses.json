@@ -45,6 +45,7 @@
     "addedBy": "追加者",
     "date": "日付",
     "split": "分割",
+    "splitByItem": "項目別",
     "edit": "経費を編集",
     "delete": "削除",
     "deleteTitle": "この支出を削除しますか？",

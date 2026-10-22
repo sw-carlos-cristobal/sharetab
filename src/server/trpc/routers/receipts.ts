@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { TRPCError } from '@trpc/server';
+import { AppError } from '@/server/lib/app-error';
 import { Prisma } from '@/generated/prisma/client';
 import type { PrismaClient } from '@/generated/prisma/client';
 import { createTRPCRouter, protectedProcedure, groupMemberProcedure } from '../init';
@@ -10,8 +10,6 @@ import { getExchangeRate, convertCents } from '../../lib/exchange-rates';
 import { stripUndefined } from '../../lib/strip-undefined';
 import { lockActiveGroup } from '../../lib/group-balances';
 import { deleteUnusedSplitReceipts, removeReceiptFiles } from '../../lib/receipt-cleanup';
-
-const ARCHIVED_CREATE_EXPENSE = 'Cannot create expenses in archived groups';
 
 /**
  * Verify that a receipt exists and the user has access to it (via group membership).
@@ -29,14 +27,14 @@ async function verifyReceiptAccess(
     where: { id: receiptId },
     include: { group: { include: { members: true } }, ...include },
   });
-  if (!receipt) throw new TRPCError({ code: 'NOT_FOUND' });
+  if (!receipt) throw new AppError('NOT_FOUND');
   if (receipt.group) {
     const isMember = receipt.group.members.some((m: { userId: string }) => m.userId === userId);
-    if (!isMember) throw new TRPCError({ code: 'FORBIDDEN' });
+    if (!isMember) throw new AppError('FORBIDDEN');
   } else {
     // Ungrouped receipt: only the uploader can access it
     if (receipt.uploadedById !== userId) {
-      throw new TRPCError({ code: 'FORBIDDEN' });
+      throw new AppError('FORBIDDEN');
     }
   }
   return receipt;
@@ -54,7 +52,7 @@ export const receiptsRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const receipt = await verifyReceiptAccess(ctx.db, input.receiptId, ctx.user.id);
       if (!receipt) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Receipt not found' });
+        throw new AppError('NOT_FOUND', 'receiptNotFound');
       }
 
       if (input.groupId) {
@@ -67,7 +65,7 @@ export const receiptsRouter = createTRPCRouter({
           },
         });
         if (!membership) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: 'Not a member of this group' });
+          throw new AppError('FORBIDDEN', 'notGroupMember');
         }
       }
 
@@ -97,13 +95,10 @@ export const receiptsRouter = createTRPCRouter({
       });
       if (claimed.count === 0) {
         const now = await ctx.db.receipt.findUnique({ where: { id: input.receiptId }, select: { groupId: true } });
-        throw new TRPCError({
-          code: 'CONFLICT',
-          message:
-            now?.groupId === receipt.groupId
-              ? 'Receipt is already being processed'
-              : 'Receipt was removed from this group',
-        });
+        throw new AppError(
+          'CONFLICT',
+          now?.groupId === receipt.groupId ? 'receiptBeingProcessed' : 'receiptRemovedFromGroup',
+        );
       }
 
       try {
@@ -131,10 +126,7 @@ export const receiptsRouter = createTRPCRouter({
 
         // Details are logged and stored in rawResponse; don't echo raw
         // provider/internal errors to the client.
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Receipt processing failed. Please try again.',
-        });
+        throw new AppError('INTERNAL_SERVER_ERROR', 'receiptProcessingFailed');
       }
     }),
 
@@ -192,7 +184,7 @@ export const receiptsRouter = createTRPCRouter({
       const item = await ctx.db.receiptItem.findUnique({
         where: { id: input.itemId },
       });
-      if (!item) throw new TRPCError({ code: 'NOT_FOUND' });
+      if (!item) throw new AppError('NOT_FOUND');
       await verifyReceiptAccess(ctx.db, item.receiptId, ctx.user.id);
 
       const { itemId, ...data } = input;
@@ -236,7 +228,7 @@ export const receiptsRouter = createTRPCRouter({
     const item = await ctx.db.receiptItem.findUnique({
       where: { id: input.itemId },
     });
-    if (!item) throw new TRPCError({ code: 'NOT_FOUND' });
+    if (!item) throw new AppError('NOT_FOUND');
     await verifyReceiptAccess(ctx.db, item.receiptId, ctx.user.id);
 
     await ctx.db.receiptItemAssignment.deleteMany({
@@ -257,14 +249,11 @@ export const receiptsRouter = createTRPCRouter({
       const item = await ctx.db.receiptItem.findUnique({
         where: { id: input.itemId },
       });
-      if (!item) throw new TRPCError({ code: 'NOT_FOUND' });
+      if (!item) throw new AppError('NOT_FOUND');
       await verifyReceiptAccess(ctx.db, item.receiptId, ctx.user.id);
 
       if (input.splitQuantity >= item.quantity) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'Split quantity must be less than total quantity',
-        });
+        throw new AppError('BAD_REQUEST', 'splitQuantityOverTotal');
       }
 
       return ctx.db.$transaction(async (tx) => {
@@ -273,18 +262,12 @@ export const receiptsRouter = createTRPCRouter({
         });
 
         if (input.splitQuantity >= current.quantity) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'Split quantity must be less than total quantity',
-          });
+          throw new AppError('BAD_REQUEST', 'splitQuantityOverTotal');
         }
 
         const maxNewTotal = current.totalPrice - 1;
         if (maxNewTotal <= 0) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'Item price too low to split',
-          });
+          throw new AppError('BAD_REQUEST', 'itemPriceTooLowToSplit');
         }
 
         const newTotalPrice = Math.min(current.unitPrice * input.splitQuantity, maxNewTotal);
@@ -292,10 +275,7 @@ export const receiptsRouter = createTRPCRouter({
         const remainingTotalPrice = current.totalPrice - newTotalPrice;
 
         if (newTotalPrice <= 0 || remainingTotalPrice <= 0) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'Split would result in invalid price distribution',
-          });
+          throw new AppError('BAD_REQUEST', 'splitPriceInvalid');
         }
 
         await tx.receiptItem.updateMany({
@@ -367,10 +347,7 @@ export const receiptsRouter = createTRPCRouter({
       data: { status: 'PROCESSING' },
     });
     if (claimed.count === 0) {
-      throw new TRPCError({
-        code: 'CONFLICT',
-        message: 'Receipt is already being processed',
-      });
+      throw new AppError('CONFLICT', 'receiptBeingProcessed');
     }
 
     try {
@@ -390,10 +367,7 @@ export const receiptsRouter = createTRPCRouter({
           } as unknown as Prisma.InputJsonValue,
         },
       });
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Reprocessing failed',
-      });
+      throw new AppError('INTERNAL_SERVER_ERROR', 'reprocessingFailed');
     }
   }),
 
@@ -418,7 +392,7 @@ export const receiptsRouter = createTRPCRouter({
       // lockActiveGroup in the transaction is the check that holds (#289)
       const group = await ctx.db.group.findUnique({ where: { id: input.groupId } });
       if (group?.archivedAt) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: ARCHIVED_CREATE_EXPENSE });
+        throw new AppError('BAD_REQUEST', 'archivedCreateExpense');
       }
 
       const receipt = await ctx.db.receipt.findUnique({
@@ -426,19 +400,19 @@ export const receiptsRouter = createTRPCRouter({
         include: { items: true },
       });
       if (!receipt || receipt.status !== 'COMPLETED') {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Receipt not ready' });
+        throw new AppError('BAD_REQUEST', 'receiptNotReady');
       }
 
       // Verify the caller has access to this receipt
       if (receipt.groupId) {
         // If already assigned to a group, it must match the target group
         if (receipt.groupId !== input.groupId) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: 'Receipt belongs to a different group' });
+          throw new AppError('FORBIDDEN', 'receiptInOtherGroup');
         }
       } else {
         // Ungrouped receipt: only the uploader can use it
         if (receipt.uploadedById !== ctx.user.id) {
-          throw new TRPCError({ code: 'FORBIDDEN' });
+          throw new AppError('FORBIDDEN');
         }
       }
 
@@ -451,7 +425,7 @@ export const receiptsRouter = createTRPCRouter({
       const itemMap = new Map(receipt.items.map((item) => [item.id, item]));
       for (const a of input.assignments) {
         if (!itemMap.has(a.receiptItemId)) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Item does not belong to this receipt' });
+          throw new AppError('BAD_REQUEST', 'itemNotOnReceipt');
         }
       }
 
@@ -522,17 +496,14 @@ export const receiptsRouter = createTRPCRouter({
         const receiptDate = extractedData.date?.slice(0, 10);
         exchangeRate = await getExchangeRate(receiptCurrency, groupCurrency, receiptDate);
         if (exchangeRate === null) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'Could not fetch exchange rate for receipt currency. Please try again.',
-          });
+          throw new AppError('BAD_REQUEST', 'receiptExchangeRateUnavailable');
         }
         baseCurrencyAmount = convertCents(totalAmount, exchangeRate);
       }
 
       // All writes in a single transaction for atomicity
       const expense = await ctx.db.$transaction(async (tx) => {
-        await lockActiveGroup(tx, input.groupId, ARCHIVED_CREATE_EXPENSE);
+        await lockActiveGroup(tx, input.groupId, 'archivedCreateExpense');
 
         // Deleting the receipt from the pending list takes it off the group, and keeps it while
         // a claim session uses it (#318). Under its lock, that either waits for this expense
@@ -540,7 +511,7 @@ export const receiptsRouter = createTRPCRouter({
         const [current] = await tx.$queryRaw<{ groupId: string | null }[]>`
           SELECT "groupId" FROM "Receipt" WHERE "id" = ${input.receiptId} FOR SHARE`;
         if (!current || current.groupId !== receipt.groupId) {
-          throw new TRPCError({ code: 'CONFLICT', message: 'Receipt was removed from this group' });
+          throw new AppError('CONFLICT', 'receiptRemovedFromGroup');
         }
 
         // Verify paidBy and all assignees are members of this group (after the lock,
@@ -551,12 +522,12 @@ export const receiptsRouter = createTRPCRouter({
         });
         const memberIds = new Set(groupMembers.map((m) => m.userId));
         if (!memberIds.has(input.paidById)) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Payer is not a member of this group' });
+          throw new AppError('BAD_REQUEST', 'payerNotMember');
         }
         for (const a of input.assignments) {
           for (const uid of a.userIds) {
             if (!memberIds.has(uid)) {
-              throw new TRPCError({ code: 'BAD_REQUEST', message: 'Assignee is not a member of this group' });
+              throw new AppError('BAD_REQUEST', 'assigneeNotMember');
             }
           }
         }
@@ -634,14 +605,14 @@ export const receiptsRouter = createTRPCRouter({
         await tx.$queryRaw`SELECT 1 FROM "Receipt" WHERE "id" = ${input.receiptId} FOR NO KEY UPDATE`;
         const receipt = await verifyReceiptAccess(tx, input.receiptId, ctx.user.id);
         if (receipt.status !== 'COMPLETED') {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Receipt must be processed first' });
+          throw new AppError('BAD_REQUEST', 'receiptNotProcessed');
         }
         // Check it's not already linked to an expense
         const existing = await tx.expense.findUnique({
           where: { receiptId: input.receiptId },
         });
         if (existing) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Receipt already has an expense' });
+          throw new AppError('BAD_REQUEST', 'receiptAlreadyHasExpense');
         }
 
         const userIdsToValidate = new Set<string>();
@@ -665,10 +636,7 @@ export const receiptsRouter = createTRPCRouter({
           const validMemberIds = new Set(validMembers.map((member) => member.userId));
           for (const userId of userIdsToValidate) {
             if (!validMemberIds.has(userId)) {
-              throw new TRPCError({
-                code: 'BAD_REQUEST',
-                message: `User ${userId} is not a member of this group`,
-              });
+              throw new AppError('BAD_REQUEST', 'userNotGroupMember', { userId });
             }
           }
         }
@@ -694,7 +662,7 @@ export const receiptsRouter = createTRPCRouter({
             const validIds = new Set(validItems.map((i) => i.id));
             for (const id of itemIds) {
               if (!validIds.has(id)) {
-                throw new TRPCError({ code: 'BAD_REQUEST', message: `Item ${id} does not belong to this receipt` });
+                throw new AppError('BAD_REQUEST', 'itemIdNotOnReceipt', { id });
               }
             }
           }
@@ -764,13 +732,13 @@ export const receiptsRouter = createTRPCRouter({
       where: { id: input.receiptId },
     });
     if (!receipt) {
-      throw new TRPCError({ code: 'NOT_FOUND' });
+      throw new AppError('NOT_FOUND');
     }
     // Only the uploader or the person who saved it can delete it
     const isUploader = receipt.uploadedById === ctx.user.id;
     const isSaver = receipt.savedById && receipt.savedById === ctx.user.id;
     if (!isUploader && !isSaver) {
-      throw new TRPCError({ code: 'FORBIDDEN' });
+      throw new AppError('FORBIDDEN');
     }
 
     // It leaves the group's pending list either way. A claim session made from it (the group
@@ -780,12 +748,12 @@ export const receiptsRouter = createTRPCRouter({
     const imagePaths = await ctx.db.$transaction(async (tx) => {
       const locked = await tx.$queryRaw<unknown[]>`SELECT 1 FROM "Receipt" WHERE "id" = ${input.receiptId} FOR UPDATE`;
       if (locked.length === 0) {
-        throw new TRPCError({ code: 'NOT_FOUND' });
+        throw new AppError('NOT_FOUND');
       }
       // Can't delete if already linked to expense
       const expense = await tx.expense.findUnique({ where: { receiptId: input.receiptId } });
       if (expense) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Receipt has an expense' });
+        throw new AppError('BAD_REQUEST', 'receiptHasExpense');
       }
       await tx.receipt.update({ where: { id: input.receiptId }, data: { groupId: null } });
       return deleteUnusedSplitReceipts(tx, [input.receiptId]);

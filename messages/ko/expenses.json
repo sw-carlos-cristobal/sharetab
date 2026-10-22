@@ -45,6 +45,7 @@
     "addedBy": "추가자",
     "date": "날짜",
     "split": "분할",
+    "splitByItem": "항목별",
     "edit": "비용 편집",
     "delete": "삭제",
     "deleteTitle": "이 비용을 삭제하시겠습니까?",

@@ -1,15 +1,11 @@
 import { z } from 'zod';
-import { TRPCError } from '@trpc/server';
+import { AppError } from '@/server/lib/app-error';
 import { createTRPCRouter, groupMemberProcedure } from '../init';
 import { SplitMode } from '@/generated/prisma/client';
 import { getExchangeRate, convertCents } from '../../lib/exchange-rates';
 import { MAX_MONEY_CENTS } from '@/lib/money';
 import { stripUndefined } from '../../lib/strip-undefined';
 import { lockActiveGroup } from '../../lib/group-balances';
-
-const ARCHIVED_CREATE = 'Cannot add expenses to an archived group';
-const ARCHIVED_UPDATE = 'Cannot modify expenses in an archived group';
-const ARCHIVED_DELETE = 'Cannot delete expenses from an archived group';
 
 const expenseShareSchema = z.object({
   userId: z.string(),
@@ -73,7 +69,7 @@ export const expensesRouter = createTRPCRouter({
         },
       });
       if (!expense || expense.groupId !== input.groupId) {
-        throw new TRPCError({ code: 'NOT_FOUND' });
+        throw new AppError('NOT_FOUND');
       }
       return expense;
     }),
@@ -108,16 +104,13 @@ export const expensesRouter = createTRPCRouter({
         select: { archivedAt: true, currency: true },
       });
       if (group?.archivedAt) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: ARCHIVED_CREATE });
+        throw new AppError('BAD_REQUEST', 'archivedAddExpense');
       }
 
       // Validate shares sum equals total (in expense's original currency)
       const sharesSum = input.shares.reduce((sum, s) => sum + s.amount, 0);
       if (sharesSum !== input.amount) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: `Shares sum (${sharesSum}) does not equal expense amount (${input.amount})`,
-        });
+        throw new AppError('BAD_REQUEST', 'sharesSumMismatch', { sum: sharesSum, amount: input.amount });
       }
 
       // Currency conversion: compute base currency amount if currencies differ
@@ -138,17 +131,14 @@ export const expensesRouter = createTRPCRouter({
         }
 
         if (exchangeRate === null) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'Could not fetch exchange rate. Please provide a manual rate or try again.',
-          });
+          throw new AppError('BAD_REQUEST', 'exchangeRateUnavailable');
         }
 
         baseCurrencyAmount = convertCents(input.amount, exchangeRate);
       }
 
       const expense = await ctx.db.$transaction(async (tx) => {
-        await lockActiveGroup(tx, input.groupId, ARCHIVED_CREATE);
+        await lockActiveGroup(tx, input.groupId, 'archivedAddExpense');
 
         // Validate paidById is a member of the group (after the lock, so someone
         // leaving meanwhile is either gone or waits for this, #279)
@@ -156,7 +146,7 @@ export const expensesRouter = createTRPCRouter({
           where: { groupId: input.groupId, userId: input.paidById },
         });
         if (!paidByMember) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Paid-by user is not a member of this group' });
+          throw new AppError('BAD_REQUEST', 'paidByNotMember');
         }
 
         // Validate all share userIds are group members
@@ -165,10 +155,7 @@ export const expensesRouter = createTRPCRouter({
           where: { groupId: input.groupId, userId: { in: shareUserIds } },
         });
         if (memberCount !== new Set(shareUserIds).size) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'One or more share users are not members of this group',
-          });
+          throw new AppError('BAD_REQUEST', 'shareUsersNotMembers');
         }
 
         const created = await tx.expense.create({
@@ -251,23 +238,20 @@ export const expensesRouter = createTRPCRouter({
         select: { archivedAt: true, currency: true },
       });
       if (groupCheck?.archivedAt) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: ARCHIVED_UPDATE });
+        throw new AppError('BAD_REQUEST', 'archivedEditExpense');
       }
 
       const existing = await ctx.db.expense.findUnique({
         where: { id: input.expenseId },
       });
       if (!existing || existing.groupId !== input.groupId) {
-        throw new TRPCError({ code: 'NOT_FOUND' });
+        throw new AppError('NOT_FOUND');
       }
 
       const isOwnerOrAdmin = ctx.membership.role === 'OWNER' || ctx.membership.role === 'ADMIN';
       const isCreatorOrPayer = existing.paidById === ctx.user.id || existing.addedById === ctx.user.id;
       if (!isOwnerOrAdmin && !isCreatorOrPayer) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'Only the expense creator, payer, or group owner/admin can modify this expense',
-        });
+        throw new AppError('FORBIDDEN', 'onlyCreatorEditsExpense');
       }
 
       const { groupId, expenseId, shares, currency: inputCurrency, exchangeRate: inputExchangeRate, ...data } = input;
@@ -276,10 +260,7 @@ export const expensesRouter = createTRPCRouter({
         const expectedAmount = data.amount ?? existing.amount;
         const sharesSum = shares.reduce((sum, s) => sum + s.amount, 0);
         if (sharesSum !== expectedAmount) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: `Shares sum (${sharesSum}) does not equal expense amount (${expectedAmount})`,
-          });
+          throw new AppError('BAD_REQUEST', 'sharesSumMismatch', { sum: sharesSum, amount: expectedAmount });
         }
       }
 
@@ -298,10 +279,7 @@ export const expensesRouter = createTRPCRouter({
           const dateStr = (data.expenseDate ?? existing.expenseDate.toISOString()).slice(0, 10);
           const fetched = await getExchangeRate(effectiveCurrency, groupCurrency, dateStr);
           if (fetched === null) {
-            throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message: 'Could not fetch exchange rate. Please provide a manual rate or try again.',
-            });
+            throw new AppError('BAD_REQUEST', 'exchangeRateUnavailable');
           }
           newExchangeRate = fetched;
         }
@@ -313,7 +291,7 @@ export const expensesRouter = createTRPCRouter({
       }
 
       const expense = await ctx.db.$transaction(async (tx) => {
-        await lockActiveGroup(tx, groupId, ARCHIVED_UPDATE);
+        await lockActiveGroup(tx, groupId, 'archivedEditExpense');
 
         // Validate a new payer and the shares' people are members (after the lock,
         // so someone leaving meanwhile is either gone or waits for this, #279)
@@ -322,7 +300,7 @@ export const expensesRouter = createTRPCRouter({
             where: { groupId, userId: input.paidById },
           });
           if (!paidByMember) {
-            throw new TRPCError({ code: 'BAD_REQUEST', message: 'Paid-by user is not a member of this group' });
+            throw new AppError('BAD_REQUEST', 'paidByNotMember');
           }
         }
         if (shares) {
@@ -331,10 +309,7 @@ export const expensesRouter = createTRPCRouter({
             where: { groupId, userId: { in: shareUserIds } },
           });
           if (memberCount !== new Set(shareUserIds).size) {
-            throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message: 'One or more share users are not members of this group',
-            });
+            throw new AppError('BAD_REQUEST', 'shareUsersNotMembers');
           }
         }
 
@@ -386,27 +361,24 @@ export const expensesRouter = createTRPCRouter({
         select: { archivedAt: true },
       });
       if (groupCheck?.archivedAt) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: ARCHIVED_DELETE });
+        throw new AppError('BAD_REQUEST', 'archivedDeleteExpense');
       }
 
       const expense = await ctx.db.expense.findUnique({
         where: { id: input.expenseId },
       });
       if (!expense || expense.groupId !== input.groupId) {
-        throw new TRPCError({ code: 'NOT_FOUND' });
+        throw new AppError('NOT_FOUND');
       }
 
       const isOwnerOrAdmin = ctx.membership.role === 'OWNER' || ctx.membership.role === 'ADMIN';
       const isCreatorOrPayer = expense.paidById === ctx.user.id || expense.addedById === ctx.user.id;
       if (!isOwnerOrAdmin && !isCreatorOrPayer) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'Only the expense creator, payer, or group owner/admin can delete this expense',
-        });
+        throw new AppError('FORBIDDEN', 'onlyCreatorDeletesExpense');
       }
 
       await ctx.db.$transaction(async (tx) => {
-        await lockActiveGroup(tx, input.groupId, ARCHIVED_DELETE);
+        await lockActiveGroup(tx, input.groupId, 'archivedDeleteExpense');
         await tx.expense.delete({ where: { id: input.expenseId } });
 
         await tx.activityLog.create({

@@ -1,4 +1,6 @@
 import { NextRequest } from 'next/server';
+import { errorText, type ErrorKey, type ErrorValues } from '@/server/lib/app-error';
+import { LOCALE_HEADER, localeFromHeader } from '@/lib/locale-header';
 import { auth } from '@/server/auth';
 import { db } from '@/server/db';
 import { logger } from '@/server/lib/logger';
@@ -129,6 +131,12 @@ function consumeGuestUploadBudget(ip: string): boolean {
   return true;
 }
 
+// The page sends its language (#266)
+function errorResponse(req: NextRequest, status: number, key: ErrorKey, values?: ErrorValues) {
+  const locale = localeFromHeader(req.headers.get(LOCALE_HEADER));
+  return Response.json({ error: errorText(key, locale, values) }, { status });
+}
+
 export async function POST(req: NextRequest) {
   const isGuest = req.nextUrl.searchParams.get('guest') === 'true';
   let userId: string | undefined;
@@ -140,20 +148,20 @@ export async function POST(req: NextRequest) {
     // Quick Split path and keep access; the session is only resolved when the
     // switch is off.
     if (!(await canUseGuestUploads(db, async () => (await auth())?.user?.id))) {
-      return Response.json({ error: 'Guest receipt uploads are disabled' }, { status: 403 });
+      return errorResponse(req, 403, 'guestUploadsDisabled');
     }
 
     // Guest upload: rate limit by IP. Peek only — budget is consumed after
     // the upload passes validation so invalid requests can't burn it.
     guestIp = getClientIp(req.headers);
     if (!hasGuestUploadBudget(guestIp)) {
-      return Response.json({ error: 'Too many uploads. Please try again later.' }, { status: 429 });
+      return errorResponse(req, 429, 'uploadsRateLimited');
     }
   } else {
     // Authenticated upload
     const session = await auth();
     if (!session?.user?.id) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+      return errorResponse(req, 401, 'signInRequired');
     }
     userId = session.user.id;
   }
@@ -162,15 +170,15 @@ export async function POST(req: NextRequest) {
   const file = formData.get('file') as File | null;
 
   if (!file) {
-    return Response.json({ error: 'No file provided' }, { status: 400 });
+    return errorResponse(req, 400, 'noFileProvided');
   }
 
   if (!ALLOWED_TYPES.includes(file.type)) {
-    return Response.json({ error: `Invalid file type. Allowed: ${ALLOWED_TYPES.join(', ')}` }, { status: 400 });
+    return errorResponse(req, 400, 'invalidFileType', { types: ALLOWED_TYPES.join(', ') });
   }
 
   if (file.size > MAX_SIZE) {
-    return Response.json({ error: `File too large. Max: ${MAX_SIZE_MB}MB` }, { status: 400 });
+    return errorResponse(req, 400, 'fileTooLarge', { max: MAX_SIZE_MB });
   }
 
   const uploadDir = getUploadDir();
@@ -192,12 +200,12 @@ export async function POST(req: NextRequest) {
   // Validate magic bytes to prevent client MIME type spoofing
   const detectedMime = detectMimeType(buffer);
   if (!detectedMime || !ALLOWED_TYPES.includes(detectedMime)) {
-    return Response.json({ error: 'File content does not match an allowed image type' }, { status: 400 });
+    return errorResponse(req, 400, 'fileContentMismatch');
   }
 
   // All validation passed — now consume guest budget (per-IP, then global)
   if (guestIp !== null && !consumeGuestUploadBudget(guestIp)) {
-    return Response.json({ error: 'Too many uploads. Please try again later.' }, { status: 429 });
+    return errorResponse(req, 429, 'uploadsRateLimited');
   }
 
   await writeFile(filepath, buffer);
@@ -227,7 +235,7 @@ export async function POST(req: NextRequest) {
       error: error instanceof Error ? error.message : 'Unknown',
       filepath,
     });
-    return Response.json({ error: 'Failed to create receipt record' }, { status: 500 });
+    return errorResponse(req, 500, 'receiptRecordFailed');
   }
 
   logger.info('upload.receipt', {

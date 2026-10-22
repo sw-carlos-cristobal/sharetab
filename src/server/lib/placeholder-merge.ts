@@ -1,4 +1,4 @@
-import { TRPCError } from '@trpc/server';
+import { AppError } from './app-error';
 import type { Prisma, SplitMode } from '@/generated/prisma/client';
 
 type ShareFields = { amount: number; shares: number; percentage: number | null };
@@ -36,7 +36,7 @@ export async function mergePlaceholderIntoUser(
   groupId: string,
 ): Promise<boolean> {
   if (placeholderUserId === realUserId) {
-    throw new TRPCError({ code: 'BAD_REQUEST', message: "A placeholder can't be merged into itself" });
+    throw new AppError('BAD_REQUEST', 'mergeIntoItself');
   }
   // Hard guard: this reassigns financial history and may delete the user row,
   // so it must never run against a real (non-placeholder) account.
@@ -46,18 +46,15 @@ export async function mergePlaceholderIntoUser(
     tx.group.findUnique({ where: { id: groupId }, select: { archivedAt: true } }),
   ]);
   if (!placeholder?.isPlaceholder) {
-    throw new TRPCError({ code: 'BAD_REQUEST', message: 'Not a placeholder user' });
+    throw new AppError('BAD_REQUEST', 'notPlaceholderUser');
   }
   // A deleted account is kept as a placeholder for its history, which can
   // span groups it left, so it stays as it is.
   if (placeholder.suspendedAt) {
-    throw new TRPCError({ code: 'BAD_REQUEST', message: "A deleted account can't be merged" });
+    throw new AppError('BAD_REQUEST', 'mergeDeletedAccount');
   }
   if (!target || target.isPlaceholder) {
-    throw new TRPCError({
-      code: 'BAD_REQUEST',
-      message: 'A placeholder can only be merged into a member with an account',
-    });
+    throw new AppError('BAD_REQUEST', 'mergeTargetNeedsAccount');
   }
   // History handed to someone outside the group couldn't be settled. Lock their
   // membership row (Prisma has no row-lock API): a removal waits for this
@@ -65,15 +62,12 @@ export async function mergePlaceholderIntoUser(
   const targetMembership = await tx.$queryRaw<{ id: string }[]>`
     SELECT "id" FROM "GroupMember" WHERE "userId" = ${realUserId} AND "groupId" = ${groupId} FOR SHARE`;
   if (targetMembership.length === 0) {
-    throw new TRPCError({ code: 'BAD_REQUEST', message: 'Target user is not a member of this group' });
+    throw new AppError('BAD_REQUEST', 'mergeTargetNotMember');
   }
   // An archived group refuses changes to its expenses and payments, and a
   // merge rewrites both.
   if (group?.archivedAt) {
-    throw new TRPCError({
-      code: 'BAD_REQUEST',
-      message: 'This group is archived. Unarchive it to merge a placeholder.',
-    });
+    throw new AppError('BAD_REQUEST', 'mergeArchivedGroup');
   }
 
   // Removing the membership first locks it: a second merge of the same

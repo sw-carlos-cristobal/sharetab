@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { TRPCError } from '@trpc/server';
+import { AppError } from './app-error';
 
 export const extractedDataSchema = z
   .object({
@@ -72,11 +72,7 @@ function wrapZodError(label: string, fn: () => unknown) {
   try {
     return fn();
   } catch (err) {
-    throw new TRPCError({
-      code: 'BAD_REQUEST',
-      message: `Invalid ${label} data`,
-      cause: err,
-    });
+    throw new AppError('BAD_REQUEST', 'invalidData', { label }, { cause: err });
   }
 }
 

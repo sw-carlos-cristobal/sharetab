@@ -175,8 +175,9 @@ test.describe('Edge Cases & Security', () => {
       password: 'testpass123',
     });
     const body = await res.json();
-    expect(body.error).toBeDefined();
-    expect(body.error?.json?.message).toContain('Invalid');
+    expect(body.error?.json?.data?.code).toBe('BAD_REQUEST');
+    // Input that fails validation gets a plain message, not the validator's output (#266)
+    expect(body.error?.json?.message).toBe("That request wasn't valid. Reload the page and try again.");
     await ctx.dispose();
   });
 

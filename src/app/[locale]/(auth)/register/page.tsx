@@ -32,12 +32,13 @@ function getRegistrationErrorKey(error: unknown): RegistrationErrorKey {
     return 'generic';
   }
 
-  switch (error.message) {
-    case 'An invite code is required to register.':
+  // The message is in the page's language; the key isn't (#266)
+  switch (error.data?.messageKey) {
+    case 'inviteCodeRequired':
       return 'inviteRequired';
-    case 'Invalid or expired invite code.':
+    case 'inviteCodeInvalid':
       return 'inviteInvalid';
-    case 'Registration is currently closed.':
+    case 'registrationClosed':
       return 'closed';
     default:
       return 'generic';

@@ -1,4 +1,4 @@
-import { initTRPC, TRPCError } from '@trpc/server';
+import { initTRPC } from '@trpc/server';
 import superjson from 'superjson';
 import { z } from 'zod';
 import { cookies } from 'next/headers';
@@ -6,6 +6,9 @@ import { auth } from '../auth';
 import { db } from '../db';
 import { logger } from '../lib/logger';
 import { verifyAndParse } from '../lib/signed-cookie';
+import { AppError, errorShape } from '../lib/app-error';
+import { LOCALE_HEADER, localeFromHeader } from '@/lib/locale-header';
+import { defaultLocale } from '@/i18n/routing';
 
 const IMPERSONATE_COOKIE = 'sharetab-impersonate';
 
@@ -47,13 +50,15 @@ export const createTRPCContext = async (opts?: { req?: Request }) => {
     // Ignore malformed cookie
   }
 
-  return { session, db, headers, impersonating };
+  return { session, db, headers, impersonating, locale: localeFromHeader(headers.get(LOCALE_HEADER)) };
 };
 
 export type TRPCContext = Awaited<ReturnType<typeof createTRPCContext>>;
 
 const t = initTRPC.context<TRPCContext>().create({
   transformer: superjson,
+  // Errors reach the person in the language of the page that called (#266)
+  errorFormatter: ({ shape, error, ctx }) => errorShape(shape, error, ctx?.locale ?? defaultLocale),
 });
 
 // Procedures that poll frequently and would spam the log buffer
@@ -93,7 +98,7 @@ export const publicProcedure = t.procedure.use(loggingMiddleware);
 
 export const protectedProcedure = t.procedure.use(loggingMiddleware).use(async ({ ctx, next }) => {
   if (!ctx.session?.user?.id) {
-    throw new TRPCError({ code: 'UNAUTHORIZED' });
+    throw new AppError('UNAUTHORIZED');
   }
 
   const user = await ctx.db.user.findUnique({
@@ -102,14 +107,11 @@ export const protectedProcedure = t.procedure.use(loggingMiddleware).use(async (
   });
 
   if (!user) {
-    throw new TRPCError({ code: 'UNAUTHORIZED' });
+    throw new AppError('UNAUTHORIZED');
   }
 
   if (user.suspendedAt) {
-    throw new TRPCError({
-      code: 'FORBIDDEN',
-      message: 'Your account has been suspended. Please contact an administrator.',
-    });
+    throw new AppError('FORBIDDEN', 'accountSuspended');
   }
 
   return next({
@@ -132,7 +134,7 @@ export const groupMemberProcedure = protectedProcedure
       },
     });
     if (!membership) {
-      throw new TRPCError({ code: 'FORBIDDEN', message: 'Not a member of this group' });
+      throw new AppError('FORBIDDEN', 'notGroupMember');
     }
     return next({ ctx: { ...ctx, membership } });
   });
