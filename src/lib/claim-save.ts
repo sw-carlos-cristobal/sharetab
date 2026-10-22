@@ -1,4 +1,4 @@
-import type { SaveOutcome } from './claim-drafts';
+import type { ClaimEdits, SaveOutcome } from './claim-drafts';
 import { CLAIM_POLL_RETRY_MS } from './guest-session';
 
 /**
@@ -7,8 +7,8 @@ import { CLAIM_POLL_RETRY_MS } from './guest-session';
  * stops waiting for a reload to land. A save is sent again only once the server answers a reload
  * of the session, so an outage, however long, doesn't use up attempts: they run out only while
  * reads work and this save still gets no settled answer (the backoff between them adds up to 45
- * to 90 seconds, plus up to SAVE_ATTEMPT_TIMEOUT_MS for each attempt that hangs). Past that,
- * editsAfterSave keeps what it can't settle.
+ * to 90 seconds, plus up to SAVE_ATTEMPT_TIMEOUT_MS for each attempt that hangs). Past that, the
+ * page parks the save (ParkedSave).
  */
 export const SAVE_ATTEMPTS = 10;
 
@@ -104,6 +104,40 @@ export async function settleSave<Attempt extends { outcome: SaveOutcome }>(io: {
     reload = await io.reload();
   }
   return { attempt, reloaded: reload === 'loaded' };
+}
+
+/**
+ * A save the claim page gave up on (#241): sent SAVE_ATTEMPTS times without an answer that says
+ * whether it was stored. The page keeps its request, save key included, and its changes stay
+ * shown under the person's unsaved changes (pendingEdits). The next Save for that person sends
+ * it again before anything newer (saveInOrder): the server answers it as stored if an attempt
+ * stored it, without applying it again over what other devices saved since, and otherwise
+ * stores it then.
+ */
+export type ParkedSave<Request> = { request: Request; sent: ClaimEdits };
+
+/**
+ * Sends a person's saves one after another, each until it's settled (`settle`, which is
+ * settleSave): a save parked for them first, then their changes. The next one is sent only
+ * once the one before it was stored, while the page is still saving: a parked save still
+ * unsettled must not be sent after newer changes, since if it was never stored the server would
+ * apply it then, over them. Returns the last save settled, and the ones not sent.
+ */
+export async function saveInOrder<Stage, Attempt extends { outcome: SaveOutcome }>(
+  stages: readonly [Stage, ...Stage[]],
+  settle: (stage: Stage) => Promise<{ attempt: Attempt; reloaded: boolean }>,
+  going: () => boolean,
+): Promise<{ stage: Stage; attempt: Attempt; reloaded: boolean; unsent: Stage[] }> {
+  const [first, ...rest] = stages;
+  let stage = first;
+  for (;;) {
+    const { attempt, reloaded } = await settle(stage);
+    const next = rest.shift();
+    if (next === undefined || attempt.outcome !== 'saved' || !going()) {
+      return { stage, attempt, reloaded, unsent: next === undefined ? [] : [next, ...rest] };
+    }
+    stage = next;
+  }
 }
 
 /** Resolves after `ms`, or as soon as `signal` aborts (at once if it already has). */

@@ -1,4 +1,5 @@
 import { test, expect, request, type Page } from '@playwright/test';
+import { SAVE_ATTEMPTS } from '../src/lib/claim-save';
 import { joinGuestSession, personIdByName, trpcMutation, trpcQuery, trpcResult } from './helpers';
 
 const BASE = process.env.BASE_URL || 'http://localhost:3001';
@@ -273,6 +274,61 @@ test.describe('Claim page — two devices edit the same person (#226)', () => {
     // It learned the save was stored by sending it again with the same key
     expect(saveKeys).toHaveLength(2);
     expect(saveKeys[1]).toBe(saveKeys[0]);
+
+    await ctx.dispose();
+  });
+
+  test("a save the page gave up on is sent again with its own key at the next Save, so it can't undo another device's change (#241)", async ({
+    page,
+  }) => {
+    // The waits between the save's attempts add up to 45 to 90 seconds: the test moves the
+    // page's clock past each one instead
+    await page.clock.install();
+    const { ctx, shareToken, catSaves } = await annClaimingForCat(page, 'Parked Save Diner');
+    const saveKeys = recordSaveKeys(page);
+
+    // The first attempt is stored, and then Cat's phone unclaims the pie. No attempt gets an
+    // answer, so the page gives up without learning that the save was stored.
+    let attempts = 0;
+    await page.route(
+      (url) => url.pathname.includes('guest.claimItems'),
+      async (route) => {
+        attempts += 1;
+        if (attempts === 1) {
+          await route.fetch();
+          await catSaves([]);
+        }
+        await route.abort('connectionreset').catch(() => {});
+      },
+      { times: SAVE_ATTEMPTS },
+    );
+
+    // Ann claims the pie for Cat and saves
+    await page.getByTestId('claim-item-2').click();
+    await page.getByTestId('save-claims-btn').click();
+    await expect
+      .poll(
+        async () => {
+          await page.clock.fastForward(16_000);
+          return saveKeys.length;
+        },
+        { timeout: 45_000 },
+      )
+      .toBe(SAVE_ATTEMPTS);
+    await expect(page.getByTestId('save-claims-btn')).toBeEnabled();
+    expect(await claimsOf(ctx, shareToken, 'Cat')).toEqual([]);
+
+    // Ann claims the tea and saves again. The page first sends the save it gave up on, with its
+    // own key: the server answers it as stored without applying it again, so the pie stays
+    // unclaimed as Cat's phone left it.
+    await page.getByTestId('claim-item-0').click();
+    await save(page);
+    await expect.poll(() => claimsOf(ctx, shareToken, 'Cat'), { timeout: 15000 }).toEqual(['Tea']);
+    await expect(page.getByTestId('claim-item-2')).toHaveAttribute('aria-pressed', 'false', { timeout: 15000 });
+    await expect(page.getByText('Unsaved changes')).toHaveCount(0);
+    expect(saveKeys).toHaveLength(SAVE_ATTEMPTS + 2);
+    expect(new Set(saveKeys.slice(0, SAVE_ATTEMPTS + 1))).toEqual(new Set([saveKeys[0]]));
+    expect(saveKeys.at(-1)).not.toBe(saveKeys[0]);
 
     await ctx.dispose();
   });

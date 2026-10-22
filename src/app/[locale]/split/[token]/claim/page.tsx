@@ -29,6 +29,8 @@ import {
   editsAfterSave,
   editsToSave,
   hasEdits,
+  pendingEdits,
+  stackEdits,
   toggleEdit,
   withEdits,
   type ClaimEdits,
@@ -38,9 +40,11 @@ import {
   SAVE_ATTEMPT_TIMEOUT_MS,
   abortAfter,
   failedSaveOutcome,
+  saveInOrder,
   saveRetryDelay,
   settleSave,
   sleep,
+  type ParkedSave,
   type SaveReload,
 } from '@/lib/claim-save';
 import { calculateClaimTotals, groupSizeWeights } from '@/lib/split-calculator';
@@ -71,6 +75,18 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 // How one claim save attempt ended: the answer's conflicts when stored, the server's message
 // when refused
 type SaveAttempt = { outcome: SaveOutcome; conflicts: { claimedBy: string[] }[]; message?: string };
+
+// What a claim save sends to guest.claimItems
+type ClaimRequest = {
+  token: string;
+  personId: string;
+  personToken: string;
+  saveKey: string;
+  addItemIndices: number[];
+  removeItemIndices: number[];
+};
+// One save a Save sends: a parked one, or the person's changes
+type SaveStage = ParkedSave<ClaimRequest> & { parked: boolean };
 
 // Take a personal link's token out of the address bar and this tab's history entry (the
 // browser's global history keeps the URL that was opened). Only called after the page has
@@ -109,6 +125,9 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   // and taps meanwhile are new changes on top of them (judged against the claims as they'll be
   // once it lands); if it's refused, restoreEdits puts the sent changes back under the new ones
   const [savingEdits, setSavingEdits] = useState<Map<string, ClaimEdits>>(new Map());
+  // Saves the page gave up on, by person id (#241): still shown under the person's changes, and
+  // sent again with their own save key before the next save for that person
+  const [parkedSaves, setParkedSaves] = useState<Map<string, ParkedSave<ClaimRequest>>>(new Map());
   // Counts the times unsaved changes were discarded (this device became someone else, or no one),
   // so a save in flight across that doesn't bring its changes back afterwards
   const editsReset = useRef(0);
@@ -130,6 +149,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     stopSaves.current = new AbortController();
     setClaimEdits(new Map());
     setSavingEdits(new Map());
+    setParkedSaves(new Map());
   }
   const [saving, setSaving] = useState(false);
   const [showImage, setShowImage] = useState(false);
@@ -221,11 +241,13 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
         forgetIdentity(mine.personToken);
       } else if (removedId !== undefined) {
         // Everyone else keeps their id, so there is nothing to renumber
-        setClaimEdits((prev) => {
+        const withoutThem = <T,>(prev: Map<string, T>) => {
           const next = new Map(prev);
           next.delete(removedId);
           return next;
-        });
+        };
+        setClaimEdits(withoutThem);
+        setParkedSaves(withoutThem);
         // Show the people list without them now, not at the next poll
         void session.refetch();
       }
@@ -523,32 +545,40 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
 
   // Unsaved edits by index in the session as loaded, for comparing with its saved claims
   const localEdits = useMemo(() => draftsByIndex(claimEdits, session.data?.people ?? []), [claimEdits, session.data]);
-  // Saved claims with any save in flight applied: what unsaved edits are shown over and judged by
-  const savingByIndex = useMemo(
-    () => draftsByIndex(savingEdits, session.data?.people ?? []),
-    [savingEdits, session.data],
+  // Saved claims with any parked save and save in flight applied: what unsaved edits are shown
+  // over and judged by
+  const pendingByIndex = useMemo(
+    () => draftsByIndex(pendingEdits(parkedSaves, savingEdits), session.data?.people ?? []),
+    [parkedSaves, savingEdits, session.data],
   );
   const baseClaimsMap = useMemo(() => {
     const map = new Map(serverClaimsMap);
-    for (const [pi, edits] of savingByIndex)
+    for (const [pi, edits] of pendingByIndex)
       map.set(pi, withEdits(serverClaimsMap.get(pi) ?? new Set<number>(), edits));
     return map;
-  }, [serverClaimsMap, savingByIndex]);
+  }, [serverClaimsMap, pendingByIndex]);
+  // Whether anyone in the split has a parked save
+  const anyParked = useMemo(
+    () => draftsByIndex(parkedSaves, session.data?.people ?? []).size > 0,
+    [parkedSaves, session.data],
+  );
 
+  // A parked save counts: Save sends it again
   const hasUnsavedChanges = useMemo(() => {
-    if (personIndex === null) return false;
+    if (personIndex === null || activeId === null) return false;
+    if (parkedSaves.has(activeId)) return true;
     return hasEdits(baseClaimsMap.get(personIndex) ?? new Set<number>(), localEdits.get(personIndex));
-  }, [localEdits, baseClaimsMap, personIndex]);
+  }, [localEdits, baseClaimsMap, personIndex, activeId, parkedSaves]);
 
   // Check if ANY person has unsaved local edits (not just the currently selected one). A save in
-  // flight counts too: until it lands, finalizing could lock in the claims from before it
+  // flight or parked counts too: until it lands, finalizing could lock in the claims from before it
   const hasAnyUnsavedChanges = useMemo(() => {
-    if (savingByIndex.size > 0) return true;
+    if (pendingByIndex.size > 0) return true;
     for (const [pIdx, edits] of localEdits) {
       if (hasEdits(baseClaimsMap.get(pIdx) ?? new Set<number>(), edits)) return true;
     }
     return false;
-  }, [savingByIndex, localEdits, baseClaimsMap]);
+  }, [pendingByIndex, localEdits, baseClaimsMap]);
 
   // All items have at least one saved claimant
   const allItemsClaimed = useMemo(() => {
@@ -581,14 +611,14 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     // Group sizes weight the items people share
     const weightsParam = groupSizeWeights(session.data.people);
 
-    if (localEdits.size > 0 || savingByIndex.size > 0) {
+    if (localEdits.size > 0 || pendingByIndex.size > 0) {
       // Build assignment map from server state
       const assignmentMap = new Map<number, Set<number>>();
       for (const a of serverAssignments) {
         assignmentMap.set(a.itemIndex, new Set(a.personIndices));
       }
       // Override with local claims for each person that has local state
-      for (const pi of new Set([...localEdits.keys(), ...savingByIndex.keys()])) {
+      for (const pi of new Set([...localEdits.keys(), ...pendingByIndex.keys()])) {
         const items = withEdits(baseClaimsMap.get(pi) ?? new Set<number>(), localEdits.get(pi));
         // Remove this person from all items
         for (const [, persons] of assignmentMap) {
@@ -627,7 +657,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
       peopleCount: session.data.people.length,
       ...weightsParam,
     });
-  }, [session.data, baseClaimsMap, localEdits, savingByIndex]);
+  }, [session.data, baseClaimsMap, localEdits, pendingByIndex]);
 
   // --- Handlers ---
   function handleJoin() {
@@ -704,14 +734,32 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     // Not while a split is in flight: it shifts the item indexes the changes are keyed by
     if (personIndex === null || activeId === null || !personToken || splitClaimItem.isPending) return;
     const edits = localEdits.get(personIndex);
-    if (!edits) return;
+    // By id: if someone listed earlier was removed since the session last loaded, an index would
+    // now point at someone else. Only the items changed here are sent, so claims another device
+    // saved for this person on other items are kept (#226). One save key for every attempt, so
+    // the server stores the save once however often it's sent (#238).
+    const changes: SaveStage | undefined = edits && {
+      request: { token, personId: activeId, personToken, saveKey: newRequestKey(), ...editsToSave(edits) },
+      sent: edits,
+      parked: false,
+    };
+    // A save parked for this person goes first, with its own key (#241): sent after the changes,
+    // it would be applied over them if it was never stored
+    const parked = parkedSaves.get(activeId);
+    const [first, ...rest]: SaveStage[] = [
+      ...(parked ? [{ ...parked, parked: true }] : []),
+      ...(changes ? [changes] : []),
+    ];
+    if (!first) return;
     // The changes move into the save in flight; taps from now on are new changes on top of it
-    setSavingEdits((prev) => new Map(prev).set(activeId, edits));
-    setClaimEdits((prev) => {
-      const next = new Map(prev);
-      next.delete(activeId);
-      return next;
-    });
+    if (edits) {
+      setSavingEdits((prev) => new Map(prev).set(activeId, edits));
+      setClaimEdits((prev) => {
+        const next = new Map(prev);
+        next.delete(activeId);
+        return next;
+      });
+    }
     // Saving until the save is settled (sent, sent again while unanswered, and reloaded), so Save
     // isn't enabled again in between
     setSaving(true);
@@ -727,15 +775,10 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
       editsReset.current === resetsBefore &&
       isListed(activeId) &&
       (saverId === null || isListed(saverId));
-    // By id: if someone listed earlier was removed since the session last loaded, an index would
-    // now point at someone else. Only the items changed here are sent, so claims another device
-    // saved for this person on other items are kept (#226). One save key for every attempt, so
-    // the server stores the save once however often it's sent (#238).
-    const request = { token, personId: activeId, personToken, saveKey: newRequestKey(), ...editsToSave(edits) };
     // One attempt, through the plain client rather than a mutation hook, so it can be abandoned
     // after SAVE_ATTEMPT_TIMEOUT_MS or when the save stops (sending it again is safe), and so it
     // fails at once when offline instead of pausing (settleSave waits for the server instead)
-    const send = async (retry: boolean): Promise<SaveAttempt> => {
+    const send = async (request: ClaimRequest, retry: boolean): Promise<SaveAttempt> => {
       const limit = abortAfter(SAVE_ATTEMPT_TIMEOUT_MS, stop);
       try {
         const { conflicts } = await utils.client.guest.claimItems.mutate(request, { signal: limit.signal });
@@ -767,24 +810,49 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
       // An attempt that got no answer may have been stored, so it's sent again until an answer
       // says (settleSave). Otherwise its changes would stay as unsaved edits after it was stored,
       // and could undo a later change from another device at the next save (#238).
-      const { attempt, reloaded } = await settleSave({
-        send,
-        reload,
-        wait: (attempt) => sleep(saveRetryDelay(attempt), stop),
+      const { stage, attempt, reloaded, unsent } = await saveInOrder(
+        [first, ...rest],
+        async (save) => {
+          const settled = await settleSave({
+            // Every send of a parked save is a retry: an earlier attempt of it may have stored it
+            send: (retry) => send(save.request, retry || save.parked),
+            reload,
+            wait: (attempt) => sleep(saveRetryDelay(attempt), stop),
+            going,
+          });
+          // Stored: its changes are on the server, which the reload shows
+          if (save.parked && settled.attempt.outcome === 'saved' && editsReset.current === resetsBefore) {
+            setParkedSaves((prev) => {
+              const next = new Map(prev);
+              next.delete(activeId);
+              return next;
+            });
+          }
+          return settled;
+        },
         going,
-      });
+      );
       if (editsReset.current !== resetsBefore) return;
       const savedNow = savedClaimsOf(activeId);
+      // Changes a parked save held back count as made since it
+      const notSent = unsent.reduce<ClaimEdits>((older, later) => stackEdits(older, later.sent), new Map());
       setClaimEdits((prev) => {
         const next = new Map(prev);
         const kept = editsAfterSave({
           outcome: attempt.outcome,
           reloaded,
           savedNow,
-          sent: edits,
-          since: prev.get(activeId),
+          sent: stage.sent,
+          since: stackEdits(notSent, prev.get(activeId)),
         });
         if (kept.size > 0) next.set(activeId, kept);
+        else next.delete(activeId);
+        return next;
+      });
+      // Still unsettled: parked, to be sent again with its own key before anything newer (#241)
+      setParkedSaves((prev) => {
+        const next = new Map(prev);
+        if (attempt.outcome === 'unknown') next.set(activeId, { request: stage.request, sent: stage.sent });
         else next.delete(activeId);
         return next;
       });
@@ -1553,12 +1621,13 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
                                 type="button"
                                 size="sm"
                                 className="h-7 text-xs"
-                                // Not while a save is in flight: splitting shifts the item indexes its
-                                // changes are keyed by
-                                disabled={splitClaimItem.isPending || saving || !validQty}
+                                // Not while a save is in flight or parked: splitting shifts the item
+                                // indexes its changes are keyed by, and a parked save is sent again as it
+                                // was
+                                disabled={splitClaimItem.isPending || saving || anyParked || !validQty}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  if (!validQty || !personToken || saving) return;
+                                  if (!validQty || !personToken || saving || anyParked) return;
                                   splitClaimItem.mutate({
                                     token,
                                     personToken,

@@ -108,10 +108,11 @@ function addsAndRemovesApart(added: number[] | undefined, removed: number[] | un
 const ADD_OR_REMOVE = { message: 'An item cannot be both added and removed' };
 
 // How many save keys claimItems remembers per person, newest last. A claim page has one save out
-// at a time and stops sending it again after SAVE_ATTEMPTS (src/lib/claim-save.ts); a key it's
-// still sending drops out only if other tabs or devices holding the same person token (another
-// tab of the browser, a personal link) make this many saves meanwhile. Kept by count, not age, to
-// bound the people JSON, which every poll reads.
+// at a time; after SAVE_ATTEMPTS sends it parks it and sends it again before the next save for
+// that person (src/lib/claim-save.ts, #241). A key it's still sending, or has parked, drops out
+// only if other tabs or devices holding the same person token (another tab of the browser, a
+// personal link) make this many saves meanwhile. Kept by count, not age, to bound the people
+// JSON, which every poll reads.
 const SAVE_KEYS_KEPT = 10;
 
 /**

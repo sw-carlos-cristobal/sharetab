@@ -4,6 +4,7 @@ import {
   editsAfterSave,
   editsToSave,
   hasEdits,
+  pendingEdits,
   restoreEdits,
   stackEdits,
   toggleEdit,
@@ -231,25 +232,32 @@ describe('editsAfterSave', () => {
     expect(hasEdits(new Set([2]), kept)).toBe(true);
   });
 
-  test('gave up with no answer: sent changes the reload already shows are dropped, the rest kept (#238)', () => {
-    // Claimed items 1 and 3; the reload shows 1 stored (the save landed, or another device did
-    // the same), 3 not. Item 1 isn't kept, so another device unclaiming it later wins.
+  test('gave up with no answer: none of the sent changes become unsaved changes, the save is parked (#241)', () => {
+    // Claimed items 1 and 3; the reload shows neither (3 never stored, or 1 stored and then
+    // unclaimed by another device: the page can't tell). Neither is kept as a change, so neither
+    // can be saved again under a new key and undo another device's later change.
     const kept = editsAfterSave({
       outcome: 'unknown',
       reloaded: true,
-      savedNow: new Set([1]),
+      savedNow: new Set(),
       sent: new Map([
         [1, true],
         [3, true],
       ]),
       since: undefined,
     });
-    expect(kept).toEqual(new Map([[3, true]]));
+    expect(kept).toEqual(new Map());
   });
 
-  test('gave up with no answer and no reload: every change is kept', () => {
-    const kept = editsAfterSave({ outcome: 'unknown', reloaded: false, savedNow: new Set([2]), sent, since });
-    expect(kept).toEqual(new Map([[2, false]]));
+  test('gave up with no answer and no reload: only the changes made since are kept (#241)', () => {
+    const kept = editsAfterSave({
+      outcome: 'unknown',
+      reloaded: false,
+      savedNow: new Set(),
+      sent: new Map([[1, true]]),
+      since,
+    });
+    expect(kept).toEqual(since);
   });
 
   test('refused but not reloaded: every change is kept, since the claims the page has may be stale', () => {
@@ -271,5 +279,42 @@ describe('editsAfterSave', () => {
       since,
     });
     expect(kept).toEqual(since);
+  });
+});
+
+describe('pendingEdits (#241)', () => {
+  test("shows a person's save in flight over the save parked for them", () => {
+    const parked = new Map([
+      [
+        'ann',
+        {
+          sent: new Map([
+            [1, true],
+            [2, true],
+          ]),
+        },
+      ],
+    ]);
+    const saving = new Map([
+      ['ann', new Map([[2, false]])],
+      ['cat', new Map([[0, true]])],
+    ]);
+    expect(pendingEdits(parked, saving)).toEqual(
+      new Map([
+        [
+          'ann',
+          new Map([
+            [1, true],
+            [2, false],
+          ]),
+        ],
+        ['cat', new Map([[0, true]])],
+      ]),
+    );
+  });
+
+  test('a parked save on its own', () => {
+    const parked = new Map([['ann', { sent: new Map([[1, true]]) }]]);
+    expect(pendingEdits(parked, new Map())).toEqual(new Map([['ann', new Map([[1, true]])]]));
   });
 });

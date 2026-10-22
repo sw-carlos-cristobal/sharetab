@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import type { SaveOutcome } from './claim-drafts';
-import { SAVE_ATTEMPTS, abortAfter, failedSaveOutcome, saveRetryDelay, settleSave, sleep } from './claim-save';
+import {
+  SAVE_ATTEMPTS,
+  abortAfter,
+  failedSaveOutcome,
+  saveInOrder,
+  saveRetryDelay,
+  settleSave,
+  sleep,
+} from './claim-save';
 import { CLAIM_POLL_RETRY_MS } from './guest-session';
 
 describe('failedSaveOutcome (#238)', () => {
@@ -258,5 +266,56 @@ describe('sleep and abortAfter', () => {
     released.release();
     vi.advanceTimersByTime(1000);
     expect(released.signal.aborted).toBe(false);
+  });
+});
+
+describe('saveInOrder (#241)', () => {
+  // Settles each stage as scripted, and records the stages sent
+  function run(outcomes: SaveOutcome[], stages: [string, ...string[]], going = () => true) {
+    const sent: string[] = [];
+    const result = saveInOrder(
+      stages,
+      async (stage) => {
+        sent.push(stage);
+        return { attempt: { outcome: outcomes.shift() ?? ('unknown' as const) }, reloaded: true };
+      },
+      going,
+    );
+    return { sent, result };
+  }
+
+  test('a parked save that turns out stored: the changes are sent after it', async () => {
+    const { sent, result } = run(['saved', 'saved'], ['parked', 'changes']);
+    expect(await result).toEqual({ stage: 'changes', attempt: { outcome: 'saved' }, reloaded: true, unsent: [] });
+    expect(sent).toEqual(['parked', 'changes']);
+  });
+
+  test('a parked save still unsettled: the changes are not sent, so it is never sent after them', async () => {
+    const { sent, result } = run(['unknown'], ['parked', 'changes']);
+    expect(await result).toEqual({
+      stage: 'parked',
+      attempt: { outcome: 'unknown' },
+      reloaded: true,
+      unsent: ['changes'],
+    });
+    expect(sent).toEqual(['parked']);
+  });
+
+  test('a parked save refused: the changes are not sent', async () => {
+    const { sent, result } = run(['refused'], ['parked', 'changes']);
+    expect(await result).toMatchObject({ stage: 'parked', attempt: { outcome: 'refused' }, unsent: ['changes'] });
+    expect(sent).toEqual(['parked']);
+  });
+
+  test('stops after a stored save once the page stops saving', async () => {
+    const { sent, result } = run(['saved'], ['parked', 'changes'], () => false);
+    expect(await result).toMatchObject({ stage: 'parked', attempt: { outcome: 'saved' }, unsent: ['changes'] });
+    expect(sent).toEqual(['parked']);
+  });
+
+  test('a single save is sent on its own', async () => {
+    const { sent, result } = run(['saved'], ['changes']);
+    expect(await result).toMatchObject({ stage: 'changes', unsent: [] });
+    expect(sent).toEqual(['changes']);
   });
 });

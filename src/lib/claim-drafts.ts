@@ -100,7 +100,7 @@ export function stackEdits(older: ClaimEdits, newer: ClaimEdits | undefined): Ma
  * nothing was stored, or for a retry, what an earlier attempt stored no longer matters), or
  * unknown (no answer, e.g. a dropped connection or a proxy's error page, or a server error: the
  * server may have stored it). The claim page sends an unknown save again with the same save key
- * until it learns which, and gives up after SAVE_ATTEMPTS (see claim-save.ts).
+ * until it learns which, and after SAVE_ATTEMPTS parks it (see claim-save.ts).
  */
 export type SaveOutcome = 'saved' | 'refused' | 'unknown';
 
@@ -110,16 +110,14 @@ export type SaveOutcome = 'saved' | 'refused' | 'unknown';
  * applied, so they are kept as they are except after a refusal, see below):
  * - saved: the sent changes are stored, so only the changes made since remain. If no reload
  *   landed, the claims shown catch up at the next poll;
+ * - unknown (the page gave up): the save is parked, still shown under the changes made since,
+ *   and sent again with its own key before anything newer for that person (#241). None of its
+ *   changes become unsaved changes: saved again under a new key, one that was stored and then
+ *   changed back by another device would undo that device's change (#238);
  * - refused and reloaded: nothing was stored (or it no longer matters), so the sent changes come
  *   back under the newer ones, and any of either that the reload already shows are dropped
  *   (restoreEdits);
- * - unknown (the page gave up) and reloaded: the sent changes the reload already shows are
- *   dropped (stored, or matched by another device), so they can't come back later to undo
- *   another device's change (#238); the rest stay, under the changes made since (stackEdits).
- *   The reload can't tell a change never stored from one stored and then changed back by another
- *   device before the reload (or one stored by an attempt that commits after it), so those can
- *   still leave a stale edit;
- * - refused or unknown without a reload: every change is kept as it is (stackEdits).
+ * - refused without a reload: every change is kept as it is (stackEdits).
  */
 export function editsAfterSave(save: {
   outcome: SaveOutcome;
@@ -128,9 +126,23 @@ export function editsAfterSave(save: {
   sent: ClaimEdits;
   since: ClaimEdits | undefined;
 }): Map<number, boolean> {
-  if (save.outcome === 'saved') return new Map(save.since);
+  if (save.outcome !== 'refused') return new Map(save.since);
   if (!save.reloaded) return stackEdits(save.sent, save.since);
-  if (save.outcome === 'refused') return restoreEdits(save.savedNow, save.sent, save.since);
-  const notShown = [...save.sent].filter(([item, claimed]) => claimed !== save.savedNow.has(item));
-  return stackEdits(new Map(notShown), save.since);
+  return restoreEdits(save.savedNow, save.sent, save.since);
+}
+
+/**
+ * The changes a person has sent that the page doesn't yet know were stored, by person id: a save
+ * parked for them (#241), with a save in flight over it. What their unsaved changes are shown
+ * over and judged by.
+ */
+export function pendingEdits(
+  parked: ReadonlyMap<string, { sent: ClaimEdits }>,
+  saving: ReadonlyMap<string, ClaimEdits>,
+): Map<string, ClaimEdits> {
+  const pending = new Map<string, ClaimEdits>();
+  for (const personId of new Set([...parked.keys(), ...saving.keys()])) {
+    pending.set(personId, stackEdits(parked.get(personId)?.sent ?? new Map(), saving.get(personId)));
+  }
+  return pending;
 }
