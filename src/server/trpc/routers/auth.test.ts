@@ -13,6 +13,7 @@ const mockDb = {
   systemSetting: { findUnique: vi.fn() },
   systemInvite: { findUnique: vi.fn() },
   user: { findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn() },
+  passwordResetToken: { deleteMany: vi.fn() },
   $transaction: vi.fn(),
   $queryRaw: vi.fn(),
 };
@@ -24,9 +25,13 @@ const passwordReset = {
   emailPasswordResetLink: vi.fn(),
   resetPasswordWithToken: vi.fn(),
 };
-// Tested in their own file
-vi.mock('@/server/lib/password-reset', () => passwordReset);
+// The real passwordTransaction runs on mockDb's $transaction
+vi.mock('@/server/lib/password-reset', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/server/lib/password-reset')>()),
+  ...passwordReset,
+}));
 
+import bcrypt from 'bcryptjs';
 import { logger } from '@/server/lib/logger';
 import { checkRateLimit } from '@/server/lib/rate-limit';
 
@@ -57,6 +62,7 @@ beforeEach(() => {
     'GOOGLE_CLIENT_ID',
     'GOOGLE_CLIENT_SECRET',
     'PASSWORD_RESET_RATE_LIMIT_MAX',
+    'AUTH_RATE_LIMIT_MAX',
   ]) {
     vi.stubEnv(key, '');
   }
@@ -324,6 +330,208 @@ describe('auth.getProfile', () => {
   });
 });
 
+describe('auth.changePassword', () => {
+  const tx = { user: { updateMany: vi.fn() }, passwordResetToken: { deleteMany: vi.fn() } };
+  const owner = { id: 'user-1', email: 'Owner@Example.com', locale: 'sv', suspendedAt: null, passwordHash: 'old-hash' };
+
+  beforeEach(() => {
+    mockDb.user.findUnique.mockResolvedValue(owner);
+    vi.mocked(bcrypt.compare).mockResolvedValue(true as never);
+    mockDb.$transaction.mockImplementation(async (fn: (client: typeof tx) => unknown) => fn(tx));
+    tx.user.updateMany.mockResolvedValue({ count: 1 });
+  });
+
+  test('sets the password and ends the reset link, in one transaction', async () => {
+    const api = await caller({ user: { id: 'user-1' } });
+
+    await api.changePassword({ currentPassword: 'password123', newPassword: 'new-password' });
+
+    expect(bcrypt.compare).toHaveBeenCalledWith('password123', 'old-hash');
+    expect(bcrypt.hash).toHaveBeenCalledWith('new-password', 12);
+    expect(mockDb.$transaction).toHaveBeenCalledTimes(1);
+    expect(tx.user.updateMany).toHaveBeenCalledWith({
+      // Only while the password is still the one just checked
+      where: { id: 'user-1', passwordHash: 'old-hash' },
+      data: { passwordHash: 'hashed' },
+    });
+    expect(tx.passwordResetToken.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+    expect(tx.user.updateMany.mock.invocationCallOrder[0]).toBeLessThan(
+      tx.passwordResetToken.deleteMany.mock.invocationCallOrder[0]!,
+    );
+    expect(mockDb.user.update).not.toHaveBeenCalled();
+  });
+
+  test('a full connection pool or a timed-out transaction is reported as busy', async () => {
+    mockDb.$transaction.mockRejectedValue(Object.assign(new Error('Unable to start a transaction'), { code: 'P2028' }));
+    const api = await caller({ user: { id: 'user-1' } });
+    await expect(
+      api.changePassword({ currentPassword: 'password123', newPassword: 'new-password' }),
+    ).rejects.toMatchObject({ code: 'SERVICE_UNAVAILABLE', messageKey: 'serverBusy' });
+  });
+
+  test('wrong current passwords are limited for 15 minutes', async () => {
+    mockDb.user.findUnique.mockResolvedValue({ ...owner, id: 'window', email: 'window@example.com' });
+    vi.mocked(bcrypt.compare).mockResolvedValue(false as never);
+    vi.useFakeTimers();
+    try {
+      const api = await caller({ user: { id: 'window' } });
+      for (let i = 0; i < 5; i++) {
+        await api.changePassword({ currentPassword: `guess-${i}`, newPassword: 'new-password' }).catch(() => {});
+      }
+      vi.advanceTimersByTime(15 * 60 * 1000);
+      await expect(
+        api.changePassword({ currentPassword: 'guess-5', newPassword: 'new-password' }),
+      ).rejects.toMatchObject({ code: 'TOO_MANY_REQUESTS' });
+      vi.advanceTimersByTime(1);
+      await expect(
+        api.changePassword({ currentPassword: 'guess-6', newPassword: 'new-password' }),
+      ).rejects.toMatchObject({ messageKey: 'wrongPassword' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('AUTH_RATE_LIMIT_MAX sets the Settings limit, as it does the login form’s', async () => {
+    stubEnv({ AUTH_RATE_LIMIT_MAX: '2' });
+    mockDb.user.findUnique.mockResolvedValue({ ...owner, id: 'two-guesses', email: 'two@example.com' });
+    vi.mocked(bcrypt.compare).mockResolvedValue(false as never);
+    const api = await caller({ user: { id: 'two-guesses' } });
+    for (let i = 0; i < 2; i++) {
+      await expect(
+        api.changePassword({ currentPassword: `guess-${i}`, newPassword: 'new-password' }),
+      ).rejects.toMatchObject({ messageKey: 'wrongPassword' });
+    }
+    await expect(api.changePassword({ currentPassword: 'guess-2', newPassword: 'new-password' })).rejects.toMatchObject(
+      { code: 'TOO_MANY_REQUESTS' },
+    );
+  });
+
+  test('refuses a wrong current password, changing nothing', async () => {
+    vi.mocked(bcrypt.compare).mockResolvedValue(false as never);
+    const api = await caller({ user: { id: 'user-1' } });
+    await expect(
+      api.changePassword({ currentPassword: 'wrong-pass', newPassword: 'new-password' }),
+    ).rejects.toMatchObject({ code: 'UNAUTHORIZED', messageKey: 'wrongPassword' });
+    expect(bcrypt.hash).not.toHaveBeenCalled();
+    expect(mockDb.$transaction).not.toHaveBeenCalled();
+  });
+
+  test('is refused while password login is off, checking nothing', async () => {
+    stubEnv({ ...OIDC_ENV, DISABLE_PASSWORD_LOGIN: 'true' });
+    const api = await caller({ user: { id: 'user-1' } });
+    await expect(
+      api.changePassword({ currentPassword: 'password123', newPassword: 'new-password' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN', messageKey: 'passwordLoginDisabled' });
+    expect(bcrypt.compare).not.toHaveBeenCalled();
+    expect(mockDb.$transaction).not.toHaveBeenCalled();
+  });
+
+  test('refuses an account that has no password', async () => {
+    mockDb.user.findUnique.mockResolvedValue({ ...owner, passwordHash: null });
+    const api = await caller({ user: { id: 'user-1' } });
+    await expect(
+      api.changePassword({ currentPassword: 'password123', newPassword: 'new-password' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST', messageKey: 'noPasswordToChange' });
+    expect(mockDb.$transaction).not.toHaveBeenCalled();
+  });
+
+  test('limits wrong current passwords, on a counter of its own', async () => {
+    mockDb.user.findUnique.mockResolvedValue({ ...owner, id: 'guesser', email: 'guesser@example.com' });
+    vi.mocked(bcrypt.compare).mockResolvedValue(false as never);
+    // A full login bucket for the address doesn't block a change: anyone can fill that one
+    const { loginRateLimitKey } = await import('@/server/lib/password-login');
+    for (let i = 0; i < 5; i++) checkRateLimit(loginRateLimitKey('guesser@example.com'), 5, 15 * 60 * 1000);
+    const api = await caller({ user: { id: 'user-1' } });
+
+    for (let i = 0; i < 5; i++) {
+      await expect(
+        api.changePassword({ currentPassword: `guess-${i}`, newPassword: 'new-password' }),
+      ).rejects.toMatchObject({ messageKey: 'wrongPassword' });
+    }
+    await expect(api.changePassword({ currentPassword: 'guess-6', newPassword: 'new-password' })).rejects.toMatchObject(
+      { code: 'TOO_MANY_REQUESTS', messageKey: 'tooManyRequestsLater' },
+    );
+    expect(bcrypt.compare).toHaveBeenCalledTimes(5);
+  });
+
+  test('counts a guess before checking it, so guesses sent at once are limited too', async () => {
+    mockDb.user.findUnique.mockResolvedValue({ ...owner, id: 'burst', email: 'burst@example.com' });
+    // Each check gives way to the others, as bcrypt does while it hashes
+    vi.mocked(bcrypt.compare).mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve(false), 1)) as never,
+    );
+    const api = await caller({ user: { id: 'burst' } });
+
+    const results = await Promise.allSettled(
+      Array.from({ length: 10 }, (_, i) =>
+        api.changePassword({ currentPassword: `guess-${i}`, newPassword: 'new-password' }),
+      ),
+    );
+
+    expect(bcrypt.compare).toHaveBeenCalledTimes(5);
+    const codes = results.map((result) =>
+      result.status === 'rejected' ? (result.reason as { code: string }).code : 'ok',
+    );
+    expect(codes.filter((code) => code === 'UNAUTHORIZED')).toHaveLength(5);
+    expect(codes.filter((code) => code === 'TOO_MANY_REQUESTS')).toHaveLength(5);
+  });
+
+  test('a right password clears the count, so earlier wrong guesses are forgotten', async () => {
+    mockDb.user.findUnique.mockResolvedValue({ ...owner, id: 'mistyper', email: 'mistyper@example.com' });
+    const api = await caller({ user: { id: 'mistyper' } });
+    vi.mocked(bcrypt.compare).mockResolvedValue(false as never);
+    for (let i = 0; i < 4; i++) {
+      await api.changePassword({ currentPassword: `typo-${i}`, newPassword: 'new-password' }).catch(() => {});
+    }
+    vi.mocked(bcrypt.compare).mockResolvedValue(true as never);
+    await api.changePassword({ currentPassword: 'password123', newPassword: 'new-password' });
+
+    // The four typos are forgotten: five more wrong guesses are checked before the limit
+    vi.mocked(bcrypt.compare).mockClear();
+    vi.mocked(bcrypt.compare).mockResolvedValue(false as never);
+    for (let i = 0; i < 5; i++) {
+      await expect(
+        api.changePassword({ currentPassword: `again-${i}`, newPassword: 'new-password' }),
+      ).rejects.toMatchObject({ messageKey: 'wrongPassword' });
+    }
+    expect(bcrypt.compare).toHaveBeenCalledTimes(5);
+  });
+
+  test('takes a new password of 8 to 100 characters, as registration does', async () => {
+    const api = await caller({ user: { id: 'user-1' } });
+    await api.changePassword({ currentPassword: 'password123', newPassword: '8-chars!' });
+    await api.changePassword({ currentPassword: 'password123', newPassword: 'x'.repeat(100) });
+    mockDb.$transaction.mockClear();
+    for (const newPassword of ['7-chars', 'x'.repeat(101)]) {
+      await expect(api.changePassword({ currentPassword: 'password123', newPassword })).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+      });
+    }
+    expect(mockDb.$transaction).not.toHaveBeenCalled();
+  });
+
+  test('a password reset that got in meanwhile wins, and the change is refused', async () => {
+    tx.user.updateMany.mockResolvedValue({ count: 0 });
+    const api = await caller({ user: { id: 'user-1' } });
+
+    await expect(
+      api.changePassword({ currentPassword: 'password123', newPassword: 'new-password' }),
+    ).rejects.toMatchObject({ code: 'CONFLICT', messageKey: 'passwordChangedElsewhere' });
+    expect(tx.passwordResetToken.deleteMany).not.toHaveBeenCalled();
+  });
+
+  test('lifts the sign-in limit for the account, so this device can sign in again with the new password', async () => {
+    const { loginRateLimitKey } = await import('@/server/lib/password-login');
+    const key = loginRateLimitKey('owner@example.com');
+    for (let i = 0; i < 5; i++) checkRateLimit(key, 5, 15 * 60 * 1000);
+    const api = await caller({ user: { id: 'user-1' } });
+
+    await api.changePassword({ currentPassword: 'password123', newPassword: 'new-password' });
+
+    expect(checkRateLimit(key, 5, 15 * 60 * 1000).allowed).toBe(true);
+  });
+});
+
 describe('auth.register password length', () => {
   test('takes a password of 8 to 100 characters, as the other password forms do', async () => {
     const api = await caller();
@@ -479,6 +687,16 @@ describe('auth.resetPassword', () => {
     await api.resetPassword({ token: TOKEN, password: 'new-password' });
 
     expect(checkRateLimit(key, 5, 15 * 60 * 1000).allowed).toBe(true);
+  });
+
+  test('also clears wrong current passwords counted in Settings', async () => {
+    for (let i = 0; i < 5; i++) checkRateLimit('password-change:bob', 5, 15 * 60 * 1000);
+    passwordReset.resetPasswordWithToken.mockResolvedValue(resetUser);
+    const api = await caller();
+
+    await api.resetPassword({ token: TOKEN, password: 'new-password' });
+
+    expect(checkRateLimit('password-change:bob', 5, 15 * 60 * 1000).allowed).toBe(true);
   });
 
   test('takes a token of 1 to 200 characters', async () => {

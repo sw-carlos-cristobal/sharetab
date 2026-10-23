@@ -10,8 +10,14 @@ import { parseAuthConfig } from '../../lib/auth-config';
 import { readRegistrationMode } from '../../lib/registration-mode';
 import { findUsersByEmail } from '../../lib/user-email';
 import { logger } from '../../lib/logger';
-import { emailPasswordResetLink, resetPasswordWithToken } from '../../lib/password-reset';
-import { loginRateLimitKey, requirePasswordLogin } from '../../lib/password-login';
+import { emailPasswordResetLink, passwordTransaction, resetPasswordWithToken } from '../../lib/password-reset';
+import {
+  LOGIN_WINDOW_MS,
+  loginAttemptsPerEmail,
+  loginRateLimitKey,
+  passwordChangeGuessKey,
+  requirePasswordLogin,
+} from '../../lib/password-login';
 import { describeMailError } from '../../lib/mailer';
 import { Prisma } from '@/generated/prisma/client';
 
@@ -165,6 +171,7 @@ export const authRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      requirePasswordLogin();
       const user = await ctx.db.user.findUnique({
         where: { id: ctx.user.id },
       });
@@ -172,17 +179,39 @@ export const authRouter = createTRPCRouter({
         throw new AppError('BAD_REQUEST', 'noPasswordToChange');
       }
 
+      // Current passwords are limited like attempts at the login form, so a session someone else
+      // holds can't guess the password here faster than there: each is counted before it's
+      // checked, so guesses sent at once are held too, and a right one clears the count. A counter
+      // of its own: one shared with the login form would let anyone who knows the address block
+      // this change
+      const guessKey = passwordChangeGuessKey(user.id);
+      if (!checkRateLimit(guessKey, loginAttemptsPerEmail(), LOGIN_WINDOW_MS).allowed) {
+        throw new AppError('TOO_MANY_REQUESTS', 'tooManyRequestsLater');
+      }
       const valid = await bcrypt.compare(input.currentPassword, user.passwordHash);
       if (!valid) {
         throw new AppError('UNAUTHORIZED', 'wrongPassword');
       }
+      clearRateLimit(guessKey);
 
       const passwordHash = await bcrypt.hash(input.newPassword, 12);
-      await ctx.db.user.update({
-        where: { id: ctx.user.id },
-        data: { passwordHash },
+      await passwordTransaction(ctx.db, async (tx) => {
+        // Only while the password is still the one just checked: a reset link used meanwhile
+        // wins, and this change is refused. Writes the user row before the token row, the lock
+        // order resetPasswordWithToken uses
+        const { count } = await tx.user.updateMany({
+          where: { id: ctx.user.id, passwordHash: user.passwordHash },
+          data: { passwordHash },
+        });
+        if (count === 0) {
+          throw new AppError('CONFLICT', 'passwordChangedElsewhere');
+        }
+        // A reset link sent before the change would otherwise still undo it
+        await tx.passwordResetToken.deleteMany({ where: { userId: ctx.user.id } });
       });
 
+      // The current password was just proven: failed sign-ins before don't keep the new one out
+      clearRateLimit(loginRateLimitKey(user.email));
       return { success: true };
     }),
 
@@ -221,9 +250,10 @@ export const authRouter = createTRPCRouter({
         throw new AppError('BAD_REQUEST', 'resetLinkInvalid');
       }
 
-      // The link proved who they are, so failed sign-ins from before the reset don't keep the new
-      // password out
+      // The link proved who they are, so failed sign-ins and Settings guesses from before the
+      // reset don't keep the new password out
       clearRateLimit(loginRateLimitKey(user.email));
+      clearRateLimit(passwordChangeGuessKey(user.userId));
       logger.info('auth.password_reset', { userId: user.userId });
       return { ok: true };
     }),

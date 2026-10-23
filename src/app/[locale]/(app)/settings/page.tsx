@@ -152,6 +152,7 @@ export default function SettingsPage() {
                 <Input
                   id="currentPassword"
                   type="password"
+                  autoComplete="current-password"
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
                   required
@@ -163,10 +164,12 @@ export default function SettingsPage() {
                 <Input
                   id="newPassword"
                   type="password"
+                  autoComplete="new-password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   required
                   minLength={8}
+                  maxLength={100}
                 />
               </div>
               <div className="space-y-2">
@@ -174,10 +177,12 @@ export default function SettingsPage() {
                 <Input
                   id="confirmPassword"
                   type="password"
+                  autoComplete="new-password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
                   minLength={8}
+                  maxLength={100}
                 />
                 {confirmPassword && newPassword !== confirmPassword && (
                   <p className="text-sm text-red-600">{t('password.mismatch')}</p>

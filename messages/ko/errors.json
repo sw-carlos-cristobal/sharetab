@@ -18,6 +18,7 @@
   "emailTaken": "계정을 만들 수 없습니다. 다른 이메일을 사용하거나 로그인하세요.",
   "noPasswordToChange": "이 계정은 OAuth 또는 매직 링크를 사용하므로 변경할 비밀번호가 없습니다",
   "wrongPassword": "현재 비밀번호가 올바르지 않습니다",
+  "passwordChangedElsewhere": "비밀번호가 방금 다른 방법(예: 재설정 링크)으로 변경되었습니다. 새 비밀번호로 로그인하세요.",
   "passwordLoginDisabled": "이 서버에서는 비밀번호 로그인이 꺼져 있습니다.",
   "passwordResetUnavailable": "이 서버는 이메일을 보낼 수 없어 재설정 링크를 이메일로 보내 드릴 수 없습니다. ShareTab 관리자에게 링크를 요청하세요.",
   "passwordResetRateLimited": "비밀번호 재설정 요청이 너무 많습니다. 나중에 다시 시도해 주세요.",

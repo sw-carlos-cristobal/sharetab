@@ -18,6 +18,7 @@
   "emailTaken": "Unable to create account. Please try a different email or sign in.",
   "noPasswordToChange": "Account uses OAuth or magic link — no password to change",
   "wrongPassword": "Current password is incorrect",
+  "passwordChangedElsewhere": "Your password was just changed another way, such as with a reset link. Sign in with the new password.",
   "passwordLoginDisabled": "Password sign-in is turned off on this server.",
   "passwordResetUnavailable": "This server can't send email, so it can't email you a reset link. Ask your ShareTab administrator for one.",
   "passwordResetRateLimited": "Too many password reset requests. Please try again later.",
