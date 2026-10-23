@@ -5,11 +5,11 @@
  *
  * A link carries a random 256-bit token (src/lib/password-reset-link.ts); only its SHA-256 hash
  * is stored, so a database leak gives no working links. A user has at most one link (one
- * PasswordResetToken row per user): issuing a new one replaces it. Using it, suspending or
- * deleting the user deletes it.
+ * PasswordResetToken row per user): issuing a new one replaces it. Using it, changing the
+ * password in Settings, suspending or deleting the user deletes it.
  *
- * Lock order: the user row, then their token row, as in `admin.deleteUser`/`suspendUser` (which
- * write the user, then delete the token).
+ * Lock order: the user row, then their token row, as in `auth.changePassword` and
+ * `admin.deleteUser`/`suspendUser` (which write the user, then delete the token).
  */
 
 import { createHash, randomBytes } from 'crypto';
