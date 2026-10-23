@@ -49,7 +49,8 @@ export async function guestTransaction<T>(
 }
 
 /**
- * Prisma's transaction manager error (P2028), see guestTransaction; password resets map it too.
+ * Prisma's transaction manager error (P2028), see guestTransaction; password writes map it too
+ * (`passwordTransaction`, password-reset.ts).
  * The runtime throws it as an Error subclass carrying the code, and it may also arrive as a
  * PrismaClientKnownRequestError, so match on the code.
  */

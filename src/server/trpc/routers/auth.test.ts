@@ -44,7 +44,7 @@ const OIDC_ENV = {
 };
 
 async function caller(
-  session: { user: { id: string }; passwordStamp?: number } | null = null,
+  session: { user: { id: string } } | null = null,
   headers = new Headers(),
   impersonating: { adminId: string } | null = null,
 ) {
@@ -288,49 +288,6 @@ describe('password login enabled', () => {
     const api = await caller();
     await api.register({ name: 'Ada', email: 'ada@example.com', password: 'password123' });
     expect(tx.user.create).toHaveBeenCalled();
-  });
-});
-
-describe('signed-in procedures check the session’s password version again (#397)', () => {
-  const changedAt = new Date('2026-10-01T00:00:00Z');
-  const profileRow = { id: 'user-1', name: 'Alice', email: 'alice@example.com', passwordHash: null };
-
-  test('a session signed in under the current password goes through', async () => {
-    mockDb.user.findUnique.mockResolvedValue({ ...profileRow, suspendedAt: null, passwordChangedAt: changedAt });
-    const api = await caller({ user: { id: 'user-1' }, passwordStamp: changedAt.getTime() });
-    await expect(api.getProfile()).resolves.toMatchObject({ email: 'alice@example.com' });
-  });
-
-  test('a session signed in under an earlier password is refused, even when the jwt callback kept it', async () => {
-    // The jwt callback keeps a session whose own read failed; this read is the one that decides
-    mockDb.user.findUnique.mockResolvedValue({ ...profileRow, suspendedAt: null, passwordChangedAt: changedAt });
-    const api = await caller({ user: { id: 'user-1' }, passwordStamp: changedAt.getTime() - 1000 });
-    await expect(api.getProfile()).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
-  });
-
-  test('a session from before versions were recorded counts as version 0', async () => {
-    mockDb.user.findUnique.mockResolvedValue({ ...profileRow, suspendedAt: null, passwordChangedAt: null });
-    await expect((await caller({ user: { id: 'user-1' } })).getProfile()).resolves.toBeDefined();
-    mockDb.user.findUnique.mockResolvedValue({ ...profileRow, suspendedAt: null, passwordChangedAt: changedAt });
-    await expect((await caller({ user: { id: 'user-1' } })).getProfile()).rejects.toMatchObject({
-      code: 'UNAUTHORIZED',
-    });
-  });
-
-  test("while an admin impersonates, the admin's own password version is the one checked", async () => {
-    const adminChangedAt = new Date('2026-09-01T00:00:00Z');
-    mockDb.user.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
-      where.id === 'admin-1'
-        ? { suspendedAt: null, passwordChangedAt: adminChangedAt }
-        : { ...profileRow, suspendedAt: null, passwordChangedAt: changedAt },
-    );
-    const asAdmin = { user: { id: 'user-1' }, passwordStamp: adminChangedAt.getTime() };
-    await expect((await caller(asAdmin, new Headers(), { adminId: 'admin-1' })).getProfile()).resolves.toBeDefined();
-
-    const stale = { user: { id: 'user-1' }, passwordStamp: changedAt.getTime() };
-    await expect((await caller(stale, new Headers(), { adminId: 'admin-1' })).getProfile()).rejects.toMatchObject({
-      code: 'UNAUTHORIZED',
-    });
   });
 });
 

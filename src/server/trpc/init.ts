@@ -7,7 +7,6 @@ import { db } from '../db';
 import { logger } from '../lib/logger';
 import { verifyAndParse } from '../lib/signed-cookie';
 import { AppError, errorShape } from '../lib/app-error';
-import { passwordStamp } from '../lib/password-stamp';
 import { LOCALE_HEADER, localeFromHeader } from '@/lib/locale-header';
 import { defaultLocale } from '@/i18n/routing';
 
@@ -104,20 +103,10 @@ export const protectedProcedure = t.procedure.use(loggingMiddleware).use(async (
 
   const user = await ctx.db.user.findUnique({
     where: { id: ctx.session.user.id },
-    select: { suspendedAt: true, passwordChangedAt: true },
+    select: { suspendedAt: true },
   });
 
   if (!user) {
-    throw new AppError('UNAUTHORIZED');
-  }
-
-  // The session's password version, checked again (#397): the jwt callback (auth.ts) ends a
-  // session signed in under an earlier password, but keeps it when its own read fails, so this
-  // read decides. While an admin impersonates, the session and its version are the admin's
-  const signedIn = ctx.impersonating
-    ? await ctx.db.user.findUnique({ where: { id: ctx.impersonating.adminId }, select: { passwordChangedAt: true } })
-    : user;
-  if (!signedIn || passwordStamp(signedIn.passwordChangedAt) !== (ctx.session.passwordStamp ?? 0)) {
     throw new AppError('UNAUTHORIZED');
   }
 

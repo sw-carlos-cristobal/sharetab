@@ -90,8 +90,8 @@ export default function ForgotPasswordPage() {
         {request.isSuccess && <CardDescription className="mt-1">{t('sentTitle')}</CardDescription>}
       </CardHeader>
       <CardContent className="space-y-6 pt-4">
-        {/* Always on the page, so screen readers announce the answer that replaces the form; what's
-            inside carries no role of its own, which would announce it twice */}
+        {/* Always on the page, so screen readers announce the answer that replaces the form; the
+            answers inside carry no role of their own, which would announce them twice */}
         <div aria-live="polite">{body}</div>
         <p className="text-center">
           <Link href="/login" className="text-sm font-medium text-primary hover:underline">

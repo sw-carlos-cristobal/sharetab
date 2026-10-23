@@ -154,11 +154,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (user.name !== undefined) token.name = user.name;
         if (user.locale !== undefined) token.locale = user.locale;
         // The password version this sign-in was checked against: password login passes the one
-        // it read with the hash it verified, the other providers the user row they signed in to.
-        // A provider that passes none takes the current one from the refresh below
-        if (user.passwordChangedAt !== undefined) token.passwordStamp = passwordStamp(user.passwordChangedAt);
+        // it read with the hash it verified, the other providers the user row they signed in to
+        token.passwordStamp = passwordStamp(user.passwordChangedAt);
       }
-      const signingIn = Boolean(user?.id);
       // Always refresh profile fields from DB to pick up profile changes.
       if (token.id) {
         try {
@@ -171,20 +169,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           // Null makes auth() report no session and the session endpoint clear the cookie.
           // Sessions from before the version was recorded count as 0: they end once the
           // password changes.
-          if (fresh && signingIn && token.passwordStamp === undefined) {
-            token.passwordStamp = passwordStamp(fresh.passwordChangedAt);
-          }
-          const stamp = typeof token.passwordStamp === 'number' ? token.passwordStamp : 0;
-          if (fresh && passwordStamp(fresh.passwordChangedAt) !== stamp) {
+          if (fresh && passwordStamp(fresh.passwordChangedAt) !== (token.passwordStamp ?? 0)) {
             return null;
           }
           if (fresh?.name) token.name = fresh.name;
           if (fresh?.locale) token.locale = fresh.locale;
         } catch (error) {
-          // Keep the session with the fields it has: ending it here would sign
-          // everyone out whenever the database blips. The password version isn't
-          // checked then, so protectedProcedure (trpc/init.ts) checks it again.
+          // The password version can't be checked, so the session counts as ended (#397):
+          // every caller of auth() refuses it for this request. Only the session endpoint
+          // clears the cookie, so a browser that checks its session while the database is
+          // down signs in again afterwards. The OIDC and Google policies still see who is
+          // signed in: sessionCookieUserId reads the cookie itself.
           logger.warn('auth.session_refresh_failed', { error: error instanceof Error ? error.name : 'unknown' });
+          return null;
         }
       }
       return token;
@@ -197,7 +194,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           session.user.locale = token.locale;
         }
       }
-      session.passwordStamp = typeof token.passwordStamp === 'number' ? token.passwordStamp : 0;
       return session;
     },
   },

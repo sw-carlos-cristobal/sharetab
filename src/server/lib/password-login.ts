@@ -1,5 +1,7 @@
 /**
- * Email/password sign-in: the Credentials provider's `authorize` step.
+ * Email/password sign-in: the Credentials provider's `authorize` step, the per-address login limit
+ * (whose count and window Settings password guesses reuse under a key of their own), and the
+ * check that refuses the password routes while password sign-in is off.
  */
 
 import bcrypt from 'bcryptjs';

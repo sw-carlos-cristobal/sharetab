@@ -56,6 +56,13 @@ describe('sessionCookieSubject', () => {
     expect(await sessionCookieSubject(request(await sessionCookie(SECURE, 'auth-secret')))).toBe('u7');
   });
 
+  test('a configured URL that can’t be parsed falls back to the forwarded protocol', async () => {
+    vi.stubEnv('AUTH_SECRET', 'auth-secret');
+    vi.stubEnv('AUTH_URL', 'not a url');
+    const secure = await sessionCookie(SECURE, 'auth-secret');
+    expect(await sessionCookieSubject(request(secure, { 'x-forwarded-proto': 'https' }))).toBe('u7');
+  });
+
   test('without a configured URL it goes by the forwarded protocol, as Next.js does', async () => {
     vi.stubEnv('AUTH_SECRET', 'auth-secret');
     const secure = await sessionCookie(SECURE, 'auth-secret');

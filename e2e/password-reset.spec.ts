@@ -239,6 +239,8 @@ test.describe('Password reset', () => {
       await expect(userSection).toBeVisible({ timeout: 30000 });
       await userSection.getByPlaceholder('Search by name or email...').fill(email);
       const row = userSection.locator('tr', { hasText: email }).first();
+      // By its test id too: the test with password sign-in off looks for it by that
+      await expect(row.getByTestId('reset-password-link')).toBeVisible();
       await row.getByRole('button', { name: /^Create a password reset link for / }).click();
       // Asked first, naming the account: the link replaces any they have
       const confirm = page.getByRole('alertdialog');
@@ -292,8 +294,9 @@ test.describe('Password reset', () => {
     await page.goto('/en/admin');
     const userSection = page.locator('section', { has: page.getByRole('heading', { name: 'User Management' }) });
     await expect(userSection.getByRole('button', { name: /^Impersonate / }).first()).toBeVisible({ timeout: 30000 });
+    // The stubbed options have arrived, so the missing button is their doing, not a load still running
+    await expect.poll(() => stubbed.count).toBeGreaterThan(0);
     await expect(userSection.getByTestId('reset-password-link')).toHaveCount(0);
-    expect(stubbed.count).toBeGreaterThan(0);
   });
 
   test('a link sent many times at once works once', async () => {

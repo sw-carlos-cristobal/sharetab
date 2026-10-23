@@ -55,10 +55,11 @@ test.describe('Password Change — Settings Page', () => {
     const oldPassword = 'testpass123';
     const newPassword = 'newpass456';
 
-    await register(page, 'PW Change User', email, oldPassword);
-    // Another device signed in before the change (#397)
-    const otherDevice = await authedContext(email, oldPassword);
+    let otherDevice: Awaited<ReturnType<typeof authedContext>> | undefined;
     try {
+      await register(page, 'PW Change User', email, oldPassword);
+      // Another device signed in before the change (#397)
+      otherDevice = await authedContext(email, oldPassword);
       expect((await trpcResult(await trpcQuery(otherDevice, 'auth.getProfile')))?.email).toBe(email);
       await page.goto('/en/settings');
 
@@ -89,15 +90,15 @@ test.describe('Password Change — Settings Page', () => {
       // With email configured, the account is told its password changed
       await expectOnePasswordChangedEmail(email);
     } finally {
-      await otherDevice.dispose();
+      await otherDevice?.dispose();
       await removeTestUser(email);
     }
   });
 
   test('says to sign in again when signing back in after the change fails (#397)', async ({ page }) => {
     const email = uniqueEmail('pwagain');
-    await register(page, 'PW Again User', email, 'testpass123');
     try {
+      await register(page, 'PW Again User', email, 'testpass123');
       await page.goto('/en/settings');
       // As if the new password were refused: the change itself goes through
       await page.route('**/api/auth/callback/credentials**', (route) =>
@@ -125,14 +126,15 @@ test.describe('Password Change — Settings Page', () => {
     browser,
   }) => {
     const email = uniqueEmail('pwimpersonated');
-    const signUp = await browser.newContext({ baseURL: process.env.BASE_URL || 'http://localhost:3001' });
+    let admin: Awaited<ReturnType<typeof authedContext>> | undefined;
     try {
-      await register(await signUp.newPage(), 'PW Impersonated', email, 'testpass123');
-    } finally {
-      await signUp.close();
-    }
-    const admin = await authedContext(users.alice.email, users.alice.password);
-    try {
+      const signUp = await browser.newContext({ baseURL: process.env.BASE_URL || 'http://localhost:3001' });
+      try {
+        await register(await signUp.newPage(), 'PW Impersonated', email, 'testpass123');
+      } finally {
+        await signUp.close();
+      }
+      admin = await authedContext(users.alice.email, users.alice.password);
       const listed = await trpcResult(await trpcQuery(admin, 'admin.listUsers', { search: email, limit: 1 }));
       const userId = listed.users[0].id;
 
@@ -156,8 +158,15 @@ test.describe('Password Change — Settings Page', () => {
       } finally {
         await page.request.delete('/api/admin/impersonate');
       }
+      // The user's password is the new one
+      const asUser = await authedContext(email, 'newpass456');
+      try {
+        expect((await trpcResult(await trpcQuery(asUser, 'auth.getProfile')))?.email).toBe(email);
+      } finally {
+        await asUser.dispose();
+      }
     } finally {
-      await admin.dispose();
+      await admin?.dispose();
       await removeTestUser(email);
     }
   });

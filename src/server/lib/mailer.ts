@@ -55,8 +55,15 @@ export function describeMailError(error: unknown) {
  * which the sender of a reset request controls.
  */
 export function publicBaseUrl(): string {
-  const configured = process.env.AUTH_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000';
-  // The origin only: Auth.js also takes AUTH_URL with its /api/auth path, and ShareTab's pages
-  // have no base path. A URL that can't be parsed throws, before anything is sent
-  return new URL(configured).origin;
+  const configured = (process.env.AUTH_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000').replace(/\/+$/, '');
+  // The origin of an http(s) URL: Auth.js also takes AUTH_URL with its /api/auth path, and
+  // ShareTab's pages have no base path. Anything else comes back as it is, for the reset email to
+  // refuse (the origin of a URL without a scheme is the string "null")
+  try {
+    const url = new URL(configured);
+    if (url.protocol === 'http:' || url.protocol === 'https:') return url.origin;
+  } catch {
+    // Returned as it is
+  }
+  return configured;
 }

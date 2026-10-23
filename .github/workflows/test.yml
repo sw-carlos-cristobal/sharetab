@@ -145,4 +145,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: playwright-report
-          path: test-results/
+          # playwright.config.ts's outputDir, and the mail the password tests read
+          path: |
+            tmp-screenshots/
+            ${{ runner.temp }}/mock-smtp-outbox/

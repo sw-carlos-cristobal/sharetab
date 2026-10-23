@@ -40,9 +40,9 @@ export const ADMIN_RESET_LINK_TTL_MS = 24 * 60 * 60 * 1000;
 export const RESET_EMAILS_PER_ACCOUNT = 5;
 const RESET_EMAIL_WINDOW_MS = 60 * 60 * 1000;
 
-// maxWait: getting a pool connection under load; timeout: the user row lock wait plus a cost-12
-// bcrypt hash
-const RESET_TRANSACTION_OPTIONS = { maxWait: 5_000, timeout: 15_000 };
+// passwordTransaction's options. maxWait: getting a pool connection under load; timeout: the user
+// row lock wait plus a cost-12 bcrypt hash
+const PASSWORD_TRANSACTION_OPTIONS = { maxWait: 5_000, timeout: 15_000 };
 
 /** Whether this account can use ShareTab: not suspended, and not a placeholder or deleted user. */
 export function canResetPassword(user: { isPlaceholder: boolean; suspendedAt: Date | null }): boolean {
@@ -98,7 +98,8 @@ export async function issuePasswordResetToken(db: PrismaClient, userId: string, 
 }
 
 /**
- * A transaction that writes a user's password or reset link, with room for a bcrypt hash. A full
+ * A transaction that writes a user's password or reset link, with time for a bcrypt hash inside
+ * it (using a link hashes after claiming it). A full
  * connection pool or a transaction that runs out of time (P2028) is reported as busy
  * (SERVICE_UNAVAILABLE `serverBusy`), not as an unexpected error; nothing it did is kept.
  */
@@ -107,7 +108,7 @@ export async function passwordTransaction<T>(
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
 ): Promise<T> {
   try {
-    return await db.$transaction(fn, RESET_TRANSACTION_OPTIONS);
+    return await db.$transaction(fn, PASSWORD_TRANSACTION_OPTIONS);
   } catch (error) {
     if (isTransactionManagerError(error)) {
       logger.warn('auth.password_transaction_busy', { code: 'P2028', message: error.message });
@@ -169,9 +170,12 @@ export async function emailPasswordResetLink(db: PrismaClient, email: string, no
   if (!user || !canResetPassword(user)) return;
 
   // Checked before the budget is spent or the user's current link is replaced: a URL that
-  // can't be parsed fails here
+  // can't be parsed, or isn't http(s), fails here
   const baseUrl = publicBaseUrl();
   const { hostname, protocol } = new URL(baseUrl);
+  if (protocol !== 'http:' && protocol !== 'https:') {
+    throw new Error('AUTH_URL or NEXTAUTH_URL is not an http(s) URL');
+  }
   if (hostname === 'localhost') {
     // NEXTAUTH_URL left at its default: the link won't open anywhere but on the server itself
     logger.warn('auth.password_reset_link_localhost', { baseUrl });

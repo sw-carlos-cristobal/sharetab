@@ -430,11 +430,16 @@ describe('jwt callback', () => {
     ).toBeNull();
   });
 
-  test('a provider that passes no password version gets the current one, and stays signed in', async () => {
+  test('a sign-in whose user carries no password version counts as version 0', async () => {
+    // Every provider passes the user row it signed in to; one that didn't would sign its users out
+    // at once once their password had changed, not keep them signed in unchecked
     const config = await loadAuth();
+    db.user.findUnique.mockResolvedValue({ name: 'Ada', locale: 'en', passwordChangedAt: null });
+    expect(await config.callbacks.jwt({ token: {}, user: { id: 'u1', name: 'Ada' } })).toMatchObject({
+      passwordStamp: 0,
+    });
     db.user.findUnique.mockResolvedValue({ name: 'Ada', locale: 'en', passwordChangedAt: new Date(2_000) });
-    const token = await config.callbacks.jwt({ token: {}, user: { id: 'u1', name: 'Ada' } });
-    expect(token).toMatchObject({ id: 'u1', passwordStamp: 2_000 });
+    expect(await config.callbacks.jwt({ token: {}, user: { id: 'u1', name: 'Ada' } })).toBeNull();
   });
 
   test('ends a session stamped with a version the database no longer has, newer or older', async () => {
@@ -457,14 +462,12 @@ describe('jwt callback', () => {
     expect(await config.callbacks.jwt({ token: { id: 'u1' } })).toBeNull();
   });
 
-  test('keeps the session when the refresh fails, so auth() still reports who is signed in', async () => {
+  test('treats the session as ended when its password version can’t be read', async () => {
+    // Every caller of auth() then refuses it, where keeping it would let an ended session through
+    // whenever this one read fails; the Google and OIDC policies read the cookie themselves
     const config = await loadAuth();
     db.user.findUnique.mockRejectedValue(new Error('pool timeout'));
-    expect(await config.callbacks.jwt({ token: { id: 'u1', name: 'Old', locale: 'en' } })).toEqual({
-      id: 'u1',
-      name: 'Old',
-      locale: 'en',
-    });
+    expect(await config.callbacks.jwt({ token: { id: 'u1', name: 'Old', locale: 'en', passwordStamp: 0 } })).toBeNull();
     expect(logger.warn).toHaveBeenCalledWith('auth.session_refresh_failed', { error: 'Error' });
   });
 });

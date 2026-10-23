@@ -69,6 +69,14 @@ describe('publicBaseUrl', () => {
     expect(publicBaseUrl()).toBe('https://tabs.example.com');
   });
 
+  test('returns a value that isn’t an http(s) URL as it is, for the reset email to refuse', () => {
+    // new URL('sharetab.lan:3000').origin is the string "null"
+    vi.stubEnv('AUTH_URL', 'sharetab.lan:3000');
+    expect(publicBaseUrl()).toBe('sharetab.lan:3000');
+    vi.stubEnv('AUTH_URL', 'not a url/');
+    expect(publicBaseUrl()).toBe('not a url');
+  });
+
   test('takes AUTH_URL, then NEXTAUTH_URL, without a trailing slash', () => {
     vi.stubEnv('AUTH_URL', '');
     vi.stubEnv('NEXTAUTH_URL', 'https://tabs.example.com/');

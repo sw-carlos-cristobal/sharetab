@@ -28,6 +28,7 @@ import {
   hashResetToken,
   issuePasswordResetToken,
   newResetToken,
+  passwordTransaction,
   resetPasswordWithToken,
 } from './password-reset';
 import { readResetToken } from '@/lib/password-reset-link';
@@ -171,6 +172,33 @@ describe('issuePasswordResetToken', () => {
     expect(await issuePasswordResetToken(db, 'token-owner', RESET_LINK_TTL_MS, NOW)).not.toBeNull();
     const { sql } = lockStatement();
     expect(sql).not.toContain('passwordHash');
+  });
+});
+
+describe('passwordTransaction', () => {
+  test('runs with room for a bcrypt hash, and reports a full pool as busy, with the cause and a log line', async () => {
+    const fn = vi.fn();
+    mockDb.$transaction.mockImplementation(async (callback: unknown) => (callback === fn ? 'done' : undefined));
+    expect(await passwordTransaction(db, fn)).toBe('done');
+    expect(mockDb.$transaction).toHaveBeenCalledWith(fn, { maxWait: 5_000, timeout: 15_000 });
+
+    const busy = Object.assign(new Error('Unable to start a transaction in the given time'), { code: 'P2028' });
+    mockDb.$transaction.mockRejectedValue(busy);
+    await expect(passwordTransaction(db, fn)).rejects.toMatchObject({
+      code: 'SERVICE_UNAVAILABLE',
+      messageKey: 'serverBusy',
+      cause: busy,
+    });
+    expect(logger.warn).toHaveBeenCalledWith('auth.password_transaction_busy', {
+      code: 'P2028',
+      message: busy.message,
+    });
+  });
+
+  test('passes any other error on as it is', async () => {
+    const conflict = Object.assign(new Error('changed meanwhile'), { code: 'CONFLICT' });
+    mockDb.$transaction.mockRejectedValue(conflict);
+    await expect(passwordTransaction(db, vi.fn())).rejects.toBe(conflict);
   });
 });
 
@@ -370,6 +398,14 @@ describe('emailPasswordResetLink', () => {
 
     vi.stubEnv('NEXTAUTH_URL', 'https://sharetab.example.com');
     expect(await emailsLeft()).toBe(RESET_EMAILS_PER_ACCOUNT);
+  });
+
+  test('a public URL without an http(s) scheme fails before the old link is replaced', async () => {
+    vi.stubEnv('NEXTAUTH_URL', 'sharetab.lan:3000');
+    findUserByEmail.mockResolvedValue(freshUser());
+    await expect(emailPasswordResetLink(db, 'bob@example.com', NOW)).rejects.toThrow('http');
+    expect(mockDb.$transaction).not.toHaveBeenCalled();
+    expect(sendMail).not.toHaveBeenCalled();
   });
 
   test('warns when the link would travel over plain HTTP', async () => {

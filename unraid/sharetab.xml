@@ -449,6 +449,15 @@
     Required="false"
     Mask="false">10</Config>
   <Config
+    Name="Password Reset Rate Limit"
+    Target="PASSWORD_RESET_RATE_LIMIT_MAX"
+    Default=""
+    Description="Per client IP: password reset requests per hour and reset link submissions per 15 minutes; one value sets both. Leave blank for the defaults (20 and 30)."
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false"></Config>
+  <Config
     Name="Guest Upload Global Limit"
     Target="GUEST_UPLOAD_GLOBAL_LIMIT"
     Default="100"

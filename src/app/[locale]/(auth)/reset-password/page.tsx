@@ -35,7 +35,9 @@ export default function ResetPasswordPage() {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const reset = trpc.auth.resetPassword.useMutation({
-    onSuccess: () => {
+    onSuccess: (_data, { token: sentToken }) => {
+      // Only for the link still in the address bar: another one pasted in meanwhile isn't done
+      if (readResetToken(window.location.hash) !== sentToken) return;
       // Not left filled in for another link pasted into this tab, someone else's maybe
       setPassword('');
       setConfirm('');
@@ -135,8 +137,8 @@ export default function ResetPasswordPage() {
         {!done && token && !linkRefused && <CardDescription className="mt-1">{t('description')}</CardDescription>}
       </CardHeader>
       <CardContent className="pt-4">
-        {/* Always on the page, so screen readers announce the outcome that replaces the form; what's
-            inside carries no role of its own, which would announce it twice */}
+        {/* Always on the page, so screen readers announce the outcome that replaces the form; the
+            answers inside carry no role of their own, which would announce them twice */}
         <div aria-live="polite">{body}</div>
       </CardContent>
     </Card>
