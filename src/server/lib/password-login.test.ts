@@ -16,7 +16,7 @@ vi.mock('bcryptjs', () => ({
   default: { compare: vi.fn().mockResolvedValue(true) },
 }));
 
-const { authorizePasswordLogin } = await import('./password-login');
+const { authorizePasswordLogin, loginRateLimitKey } = await import('./password-login');
 const { checkRateLimit } = await import('@/server/lib/rate-limit');
 const { logger } = await import('@/server/lib/logger');
 
@@ -27,6 +27,7 @@ const BOB = {
   image: null,
   locale: 'en',
   passwordHash: 'hash',
+  passwordChangedAt: new Date('2026-10-01T00:00:00Z') as Date | null,
 };
 
 function usersFound(rows: (typeof BOB)[]) {
@@ -43,13 +44,30 @@ describe('authorizePasswordLogin', () => {
     usersFound([BOB]);
     await expect(
       authorizePasswordLogin({ email: 'bob@EXAMPLE.com', password: 'password123' }, new Headers()),
-    ).resolves.toEqual({ id: 'bob', name: 'Bob', email: 'Bob@example.com', image: null, locale: 'en' });
+    ).resolves.toStrictEqual({
+      id: 'bob',
+      name: 'Bob',
+      email: 'Bob@example.com',
+      image: null,
+      locale: 'en',
+      // The password version read with the hash it verified: the session is stamped with it (#397)
+      passwordChangedAt: new Date('2026-10-01T00:00:00Z'),
+    });
+  });
+
+  test('passes a password that never changed as version null', async () => {
+    usersFound([{ ...BOB, passwordChangedAt: null }]);
+    await expect(
+      authorizePasswordLogin({ email: 'bob@example.com', password: 'password123' }, new Headers()),
+    ).resolves.toMatchObject({ passwordChangedAt: null });
   });
 
   test('case variants share one per-email rate-limit bucket', async () => {
     usersFound([BOB]);
     await authorizePasswordLogin({ email: 'BOB@example.com', password: 'password123' }, new Headers());
     expect(checkRateLimit).toHaveBeenCalledWith('login:bob@example.com', expect.any(Number), expect.any(Number));
+    // The key a password reset clears
+    expect(loginRateLimitKey('Bob@Example.com')).toBe('login:bob@example.com');
   });
 
   test('returns null and logs when several accounts match ignoring case', async () => {

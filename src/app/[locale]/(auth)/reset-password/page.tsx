@@ -32,7 +32,12 @@ export default function ResetPasswordPage() {
   const [confirm, setConfirm] = useState('');
   const reset = trpc.auth.resetPassword.useMutation();
   const mismatch = confirm !== '' && password !== confirm;
-  const linkRefused = reset.error?.data?.messageKey === 'resetLinkInvalid';
+  // An outcome belongs to the link it was sent with: another link pasted into this tab only
+  // changes the hash, and starts clean
+  const sentWithThisLink = reset.variables?.token === token;
+  const done = reset.isSuccess && sentWithThisLink;
+  const errorForThisLink = sentWithThisLink ? reset.error : null;
+  const linkRefused = errorForThisLink?.data?.messageKey === 'resetLinkInvalid';
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -41,7 +46,7 @@ export default function ResetPasswordPage() {
   }
 
   let body: React.ReactNode;
-  if (reset.isSuccess) {
+  if (done) {
     body = (
       <div role="status" data-testid="reset-password-done" className="space-y-4 text-center">
         <p className="text-sm text-muted-foreground">{t('success')}</p>
@@ -64,9 +69,9 @@ export default function ResetPasswordPage() {
   } else {
     body = (
       <form onSubmit={handleSubmit} className="space-y-4">
-        {reset.error && (
+        {errorForThisLink && (
           <div role="alert" className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-            {reset.error.message}
+            {errorForThisLink.message}
           </div>
         )}
         <div className="space-y-2">
@@ -115,12 +120,8 @@ export default function ResetPasswordPage() {
         <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 ring-1 ring-primary/20">
           <KeyRound className="h-7 w-7 text-primary" />
         </div>
-        <CardTitle className="text-2xl font-semibold tracking-tight">
-          {reset.isSuccess ? t('successTitle') : t('title')}
-        </CardTitle>
-        {!reset.isSuccess && token && !linkRefused && (
-          <CardDescription className="mt-1">{t('description')}</CardDescription>
-        )}
+        <CardTitle className="text-2xl font-semibold tracking-tight">{done ? t('successTitle') : t('title')}</CardTitle>
+        {!done && token && !linkRefused && <CardDescription className="mt-1">{t('description')}</CardDescription>}
       </CardHeader>
       <CardContent className="pt-4">{body}</CardContent>
     </Card>

@@ -15,11 +15,13 @@
   "password": {
     "title": "Cambiar contraseña",
     "current": "Contraseña actual",
+    "forgot": "¿Olvidaste tu contraseña actual?",
     "new": "Nueva contraseña",
     "confirm": "Confirmar nueva contraseña",
     "mismatch": "Las contraseñas no coinciden",
     "submit": "Cambiar contraseña",
     "submitting": "Cambiando...",
-    "success": "¡Contraseña cambiada!"
+    "success": "¡Contraseña cambiada! Se cerró la sesión en tus otros dispositivos.",
+    "signInAgain": "Se cambió tu contraseña, pero este dispositivo no pudo volver a iniciar sesión con ella. Inicia sesión con tu contraseña nueva."
   }
 }

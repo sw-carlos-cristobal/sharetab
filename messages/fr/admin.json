@@ -54,11 +54,8 @@
     "deleteUser": "Supprimer {name}",
     "resetLinkTitle": "Lien de réinitialisation du mot de passe",
     "resetLinkDescription": "Envoyez vous-même ce lien à <strong>{name}</strong>. Il ne fonctionne qu’une fois, jusqu’au {expires}, et remplace tout lien de réinitialisation précédent.",
-    "resetLinkLabel": "Lien de réinitialisation du mot de passe",
     "resetLinkCopy": "Copier le lien",
-    "resetLinkCopied": "Lien copié",
-    "resetLinkCopyFailed": "Impossible de copier le lien. Sélectionnez-le et copiez-le vous-même.",
-    "close": "Fermer"
+    "resetLinkCopied": "Lien copié"
   },
   "groups": {
     "title": "Aperçu des groupes",

@@ -54,11 +54,8 @@
     "deleteUser": "{name} 삭제",
     "resetLinkTitle": "비밀번호 재설정 링크",
     "resetLinkDescription": "이 링크를 <strong>{name}</strong>님에게 직접 보내세요. 한 번만 사용할 수 있고 {expires}까지 유효하며, 이전 재설정 링크는 모두 무효가 됩니다.",
-    "resetLinkLabel": "비밀번호 재설정 링크",
     "resetLinkCopy": "링크 복사",
-    "resetLinkCopied": "링크를 복사했습니다",
-    "resetLinkCopyFailed": "링크를 복사하지 못했습니다. 링크를 선택해 직접 복사하세요.",
-    "close": "닫기"
+    "resetLinkCopied": "링크를 복사했습니다"
   },
   "groups": {
     "title": "그룹 개요",

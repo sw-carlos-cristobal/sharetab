@@ -12,10 +12,11 @@ import { Label } from '@/components/ui/label';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 
 // "Forgot password?" (#397): emails a reset link when the server can send email. Without email,
-// only an admin can make one (admin dashboard, User Management).
+// the user asks an admin for one (admin dashboard, User Management).
 export default function ForgotPasswordPage() {
   const t = useTranslations('auth.forgotPassword');
   const tVerify = useTranslations('auth.verifyRequest');
+  const tCommon = useTranslations('common');
   const loginOptions = trpc.auth.getLoginOptions.useQuery();
   const [email, setEmail] = useState('');
   const request = trpc.auth.requestPasswordReset.useMutation();
@@ -28,22 +29,33 @@ export default function ForgotPasswordPage() {
   let body: React.ReactNode;
   if (loginOptions.isPending) {
     body = <LoadingSpinner className="py-8" />;
-  } else if (loginOptions.data && !loginOptions.data.passwordLogin) {
-    body = <p className="text-sm text-muted-foreground">{t('passwordLoginOff')}</p>;
-  } else if (!loginOptions.data?.passwordReset) {
-    // Also when the options couldn't be loaded: asking the admin works either way
-    body = (
-      <p data-testid="forgot-password-ask-admin" className="text-sm text-muted-foreground">
-        {t('askAdmin')}
-      </p>
-    );
   } else if (request.isSuccess) {
-    // The same for every address, with or without an account
+    // The same for every address, with or without an account. Ahead of the options, so a failed
+    // background refetch of them doesn't take the answer off the screen
     body = (
       <div role="status" data-testid="forgot-password-sent" className="space-y-3 text-sm text-muted-foreground">
         <p>{t('sent', { email: request.variables.email })}</p>
         <p>{tVerify('spamHint')}</p>
       </div>
+    );
+  } else if (loginOptions.isError) {
+    // Whether this server can send email is unknown, so don't claim either way
+    body = (
+      <p role="alert" className="text-sm text-destructive">
+        {tCommon('errors.generic')}
+      </p>
+    );
+  } else if (!loginOptions.data.passwordLogin) {
+    body = (
+      <p data-testid="forgot-password-login-off" className="text-sm text-muted-foreground">
+        {t('passwordLoginOff')}
+      </p>
+    );
+  } else if (!loginOptions.data.passwordReset) {
+    body = (
+      <p data-testid="forgot-password-ask-admin" className="text-sm text-muted-foreground">
+        {t('askAdmin')}
+      </p>
     );
   } else {
     body = (

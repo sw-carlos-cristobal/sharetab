@@ -2,21 +2,29 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 // The Auth.js wiring in auth.ts: which providers it registers, how its signIn
 // callback hands OIDC and Google sign-ins to their policies (tested in their
-// own files), which sign-ins it logs, and the jwt callback's profile refresh.
-const { nextAuth, authMock, google, logger, checkGoogleSignIn, checkOidcSignIn, db } = vi.hoisted(() => ({
-  nextAuth: vi.fn(),
-  authMock: vi.fn(),
-  google: vi.fn((options: unknown) => ({ id: 'google', options })),
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
-  checkGoogleSignIn: vi.fn(),
-  checkOidcSignIn: vi.fn(),
-  db: { user: { findUnique: vi.fn() } },
-}));
+// own files), which sign-ins it logs, the jwt callback's profile refresh and password version
+// check (#397), and the session-cookie fallback the policies get.
+const { nextAuth, authMock, google, nodemailer, getToken, logger, checkGoogleSignIn, checkOidcSignIn, db } = vi.hoisted(
+  () => ({
+    nextAuth: vi.fn(),
+    authMock: vi.fn(),
+    google: vi.fn((options: unknown) => ({ id: 'google', options })),
+    nodemailer: vi.fn((options: unknown) => ({ id: 'nodemailer', options })),
+    getToken: vi.fn(),
+    logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+    checkGoogleSignIn: vi.fn(),
+    checkOidcSignIn: vi.fn(),
+    db: { user: { findUnique: vi.fn() } },
+  }),
+);
 vi.mock('next-auth', () => ({ default: nextAuth }));
 vi.mock('@auth/prisma-adapter', () => ({ PrismaAdapter: vi.fn(() => ({})) }));
 vi.mock('next-auth/providers/credentials', () => ({ default: vi.fn(() => ({ id: 'credentials' })) }));
 vi.mock('next-auth/providers/google', () => ({ default: google }));
-vi.mock('next-auth/providers/nodemailer', () => ({ default: vi.fn(() => ({ id: 'nodemailer' })) }));
+vi.mock('next-auth/providers/nodemailer', () => ({ default: nodemailer }));
+vi.mock('next-auth/jwt', () => ({ getToken }));
+const requestHeaders = vi.hoisted(() => ({ value: new Headers() }));
+vi.mock('next/headers', () => ({ headers: vi.fn(async () => requestHeaders.value) }));
 vi.mock('bcryptjs', () => ({ default: { compare: vi.fn() } }));
 vi.mock('./db', () => ({ db }));
 vi.mock('./lib/logger', () => ({ logger }));
@@ -42,7 +50,7 @@ interface CapturedConfig {
     jwt: (params: {
       token: Record<string, unknown>;
       user?: Record<string, unknown>;
-    }) => Promise<Record<string, unknown>>;
+    }) => Promise<Record<string, unknown> | null>;
   };
   events: { signIn: (message: Record<string, unknown>) => void };
 }
@@ -62,10 +70,18 @@ const AUTH_ENV = [
   'EMAIL_SERVER_HOST',
   'DISABLE_PASSWORD_LOGIN',
   'ADMIN_EMAIL',
+  'AUTH_SECRET',
+  'NEXTAUTH_SECRET',
+  'AUTH_SECRET_1',
+  'AUTH_SECRET_2',
+  'AUTH_SECRET_3',
+  'AUTH_URL',
+  'NEXTAUTH_URL',
 ];
 
 async function loadAuth(env: Record<string, string> = {}): Promise<CapturedConfig> {
-  for (const key of AUTH_ENV) vi.stubEnv(key, '');
+  // Unset, not empty: Auth.js treats an empty AUTH_URL or AUTH_SECRET as set
+  for (const key of AUTH_ENV) vi.stubEnv(key, undefined);
   for (const [key, value] of Object.entries(env)) vi.stubEnv(key, value);
   vi.resetModules();
   let config: CapturedConfig | undefined;
@@ -89,6 +105,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   // clearAllMocks keeps implementations, so a test's rejection can't reach the next one.
   authMock.mockResolvedValue(null);
+  getToken.mockResolvedValue(null);
+  requestHeaders.value = new Headers();
   checkGoogleSignIn.mockResolvedValue(true);
   checkOidcSignIn.mockResolvedValue(true);
 });
@@ -199,6 +217,85 @@ describe('signIn callback', () => {
       expect(checkOidcSignIn).not.toHaveBeenCalled();
     },
   );
+
+  describe('a session the jwt callback ended (#397): the cookie is read as Auth.js reads it', () => {
+    type TokenParams = { req: { headers: Headers }; secret: string[]; secureCookie: boolean };
+    // A cookie only getToken can read: auth() reports nobody for an ended session
+    function staleCookie(name: string, sub = 'u7') {
+      getToken.mockImplementation(async ({ req, secureCookie }: TokenParams) => {
+        const cookieName = secureCookie ? '__Secure-authjs.session-token' : 'authjs.session-token';
+        return req.headers.get('cookie')?.includes(`${cookieName}=`) && cookieName === name ? { sub } : null;
+      });
+    }
+
+    test.each(['google', 'oidc'] as const)('the %s policy still sees its user', async (provider) => {
+      const config = await loadAuth({
+        ...GOOGLE_ENV,
+        ...OIDC_ENV,
+        AUTH_SECRET: 'test-secret',
+        NEXTAUTH_URL: 'http://sharetab.lan:3000',
+      });
+      requestHeaders.value = new Headers({ cookie: 'authjs.session-token=stale' });
+      staleCookie('authjs.session-token');
+
+      await config.callbacks.signIn(provider === 'google' ? googleSignIn : oidcSignIn);
+
+      const check = provider === 'google' ? checkGoogleSignIn : checkOidcSignIn;
+      expect(check).toHaveBeenCalledWith(db, expect.objectContaining({ sessionUserId: 'u7' }));
+      expect(getToken).toHaveBeenCalledWith(expect.objectContaining({ secret: ['test-secret'], secureCookie: false }));
+    });
+
+    test('over https it reads only the secure cookie, the one Auth.js uses there', async () => {
+      const config = await loadAuth({
+        ...GOOGLE_ENV,
+        AUTH_SECRET: 'test-secret',
+        NEXTAUTH_URL: 'https://tabs.example.com',
+      });
+      // A plain cookie left from before the move to https isn't a session Auth.js would see
+      requestHeaders.value = new Headers({ cookie: 'authjs.session-token=left-over' });
+      staleCookie('authjs.session-token');
+
+      await config.callbacks.signIn(googleSignIn);
+
+      expect(checkGoogleSignIn).toHaveBeenCalledWith(db, expect.objectContaining({ sessionUserId: null }));
+      expect(getToken).toHaveBeenCalledTimes(1);
+      expect(getToken).toHaveBeenCalledWith(expect.objectContaining({ secureCookie: true }));
+    });
+
+    test('with no URL configured it goes by the forwarded protocol', async () => {
+      const config = await loadAuth({ ...GOOGLE_ENV, AUTH_SECRET: 'test-secret' });
+      requestHeaders.value = new Headers({
+        cookie: '__Secure-authjs.session-token=stale',
+        'x-forwarded-proto': 'https',
+      });
+      staleCookie('__Secure-authjs.session-token');
+
+      await config.callbacks.signIn(googleSignIn);
+
+      expect(checkGoogleSignIn).toHaveBeenCalledWith(db, expect.objectContaining({ sessionUserId: 'u7' }));
+    });
+
+    test('reads only the cookie, never an Authorization header, as Auth.js does', async () => {
+      const config = await loadAuth({ ...GOOGLE_ENV, AUTH_SECRET: 'test-secret' });
+      requestHeaders.value = new Headers({ cookie: 'other=1', authorization: 'Bearer some-token' });
+
+      await config.callbacks.signIn(googleSignIn);
+
+      const { req } = getToken.mock.calls[0]![0] as TokenParams;
+      expect(req.headers.get('authorization')).toBeNull();
+      expect(req.headers.get('cookie')).toBe('other=1');
+    });
+
+    test('uses the secrets Auth.js uses: AUTH_SECRET, else NEXTAUTH_SECRET, else AUTH_SECRET_3..1', async () => {
+      let config = await loadAuth({ ...GOOGLE_ENV, NEXTAUTH_SECRET: 'legacy-secret' });
+      await config.callbacks.signIn(googleSignIn);
+      expect(getToken).toHaveBeenLastCalledWith(expect.objectContaining({ secret: ['legacy-secret'] }));
+
+      config = await loadAuth({ ...GOOGLE_ENV, AUTH_SECRET_1: 'one', AUTH_SECRET_3: 'three' });
+      await config.callbacks.signIn(googleSignIn);
+      expect(getToken).toHaveBeenLastCalledWith(expect.objectContaining({ secret: ['three', 'one'] }));
+    });
+  });
 
   test('passes a null email to the Google policy when Auth.js has none', async () => {
     const config = await loadAuth(GOOGLE_ENV);
@@ -325,6 +422,19 @@ describe('signIn event', () => {
   });
 });
 
+describe('magic link provider', () => {
+  test('sends with the shared SMTP settings and sender', async () => {
+    await loadAuth({
+      EMAIL_SERVER_HOST: 'smtp.example.com',
+      EMAIL_SERVER_PORT: '465',
+      EMAIL_FROM: 'Tabs <t@example.com>',
+    });
+    const { smtpOptions, mailFrom } = await import('./lib/mailer');
+    expect(nodemailer).toHaveBeenCalledWith({ server: smtpOptions(), from: mailFrom() });
+    expect(smtpOptions()).toMatchObject({ host: 'smtp.example.com', port: 465, secure: true });
+  });
+});
+
 describe('jwt callback', () => {
   test("refreshes the signed-in user's name and locale from the database", async () => {
     const config = await loadAuth();
@@ -334,17 +444,70 @@ describe('jwt callback', () => {
       name: 'New Name',
       locale: 'de',
     });
-    expect(db.user.findUnique).toHaveBeenCalledWith({ where: { id: 'u1' }, select: { name: true, locale: true } });
+    expect(db.user.findUnique).toHaveBeenCalledWith({
+      where: { id: 'u1' },
+      select: { name: true, locale: true, passwordChangedAt: true },
+    });
   });
 
-  test("puts the user's id, name and locale on the token at sign-in", async () => {
+  test("puts the user's id, name, locale and password version on the token at sign-in", async () => {
     const config = await loadAuth();
-    db.user.findUnique.mockResolvedValue(null);
-    expect(await config.callbacks.jwt({ token: {}, user: { id: 'u1', name: 'Ada', locale: 'de' } })).toMatchObject({
-      id: 'u1',
-      name: 'Ada',
-      locale: 'de',
+    db.user.findUnique.mockResolvedValue({ name: 'Ada', locale: 'de', passwordChangedAt: new Date(2_000) });
+    const token = await config.callbacks.jwt({
+      token: {},
+      user: { id: 'u1', name: 'Ada', locale: 'de', passwordChangedAt: new Date(2_000) },
     });
+    expect(token).toMatchObject({ id: 'u1', name: 'Ada', locale: 'de', passwordStamp: 2_000 });
+  });
+
+  test('a user whose password never changed gets version 0', async () => {
+    const config = await loadAuth();
+    db.user.findUnique.mockResolvedValue({ name: 'Ada', locale: 'de', passwordChangedAt: null });
+    expect(
+      await config.callbacks.jwt({ token: {}, user: { id: 'u1', name: 'Ada', locale: 'de', passwordChangedAt: null } }),
+    ).toMatchObject({ passwordStamp: 0 });
+  });
+
+  test('ends a session signed in under an earlier password (#397)', async () => {
+    const config = await loadAuth();
+    db.user.findUnique.mockResolvedValue({ name: 'Ada', locale: 'en', passwordChangedAt: new Date(2_000) });
+    expect(await config.callbacks.jwt({ token: { id: 'u1', passwordStamp: 1_000 } })).toBeNull();
+  });
+
+  test('ends a sign-in whose password was replaced while it was being checked', async () => {
+    // Password login read the user before a reset committed; the refresh reads the new version
+    const config = await loadAuth();
+    db.user.findUnique.mockResolvedValue({ name: 'Ada', locale: 'en', passwordChangedAt: new Date(2_000) });
+    expect(
+      await config.callbacks.jwt({ token: {}, user: { id: 'u1', name: 'Ada', passwordChangedAt: null } }),
+    ).toBeNull();
+  });
+
+  test('a provider that passes no password version gets the current one, and stays signed in', async () => {
+    const config = await loadAuth();
+    db.user.findUnique.mockResolvedValue({ name: 'Ada', locale: 'en', passwordChangedAt: new Date(2_000) });
+    const token = await config.callbacks.jwt({ token: {}, user: { id: 'u1', name: 'Ada' } });
+    expect(token).toMatchObject({ id: 'u1', passwordStamp: 2_000 });
+  });
+
+  test('ends a session stamped with a version the database no longer has, newer or older', async () => {
+    const config = await loadAuth();
+    db.user.findUnique.mockResolvedValue({ name: 'Ada', locale: 'en', passwordChangedAt: new Date(2_000) });
+    expect(await config.callbacks.jwt({ token: { id: 'u1', passwordStamp: 3_000 } })).toBeNull();
+  });
+
+  test('keeps a session signed in under the current password', async () => {
+    const config = await loadAuth();
+    db.user.findUnique.mockResolvedValue({ name: 'Ada', locale: 'en', passwordChangedAt: new Date(2_000) });
+    expect(await config.callbacks.jwt({ token: { id: 'u1', passwordStamp: 2_000 } })).toMatchObject({ id: 'u1' });
+  });
+
+  test('a session from before password versions were recorded ends only once the password changes', async () => {
+    const config = await loadAuth();
+    db.user.findUnique.mockResolvedValue({ name: 'Ada', locale: 'en', passwordChangedAt: null });
+    expect(await config.callbacks.jwt({ token: { id: 'u1' } })).toMatchObject({ id: 'u1' });
+    db.user.findUnique.mockResolvedValue({ name: 'Ada', locale: 'en', passwordChangedAt: new Date(2_000) });
+    expect(await config.callbacks.jwt({ token: { id: 'u1' } })).toBeNull();
   });
 
   test('keeps the session when the refresh fails, so auth() still reports who is signed in', async () => {

@@ -1,6 +1,7 @@
 /**
- * The password reset email (#397), in the account's language. Its text lives in
- * messages/{locale}/emails.json, a server-only namespace like errors.json.
+ * The password emails (#397): the reset link, and the notice that a password was changed, in the
+ * account's language. Their text lives in messages/{locale}/emails.json, a server-only namespace
+ * like errors.json.
  */
 
 import { createTranslator, type AbstractIntlMessages } from 'next-intl';
@@ -27,7 +28,17 @@ const catalogs: Record<Locale, AbstractIntlMessages> = {
   ko,
 };
 
-type PasswordResetKey = keyof typeof en.passwordReset;
+type Emails = typeof en;
+
+/** One email's strings in a language, with `{email}` filled in */
+function emailText<N extends keyof Emails>(locale: Locale, namespace: N, email: string) {
+  // Typed loosely: the keys are checked by keyof Emails[N], and the catalogs aren't the app's Messages
+  const translate = createTranslator({ locale, messages: catalogs[locale], namespace }) as unknown as (
+    key: keyof Emails[N],
+    values?: Record<string, string>,
+  ) => string;
+  return (key: keyof Emails[N]) => translate(key, { email });
+}
 
 function escapeHtml(value: string): string {
   return value
@@ -38,26 +49,33 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;');
 }
 
-export function passwordResetEmail(locale: Locale, { email, url }: { email: string; url: string }) {
-  // Typed loosely: the keys are checked by PasswordResetKey, and the catalogs aren't the app's Messages
-  const translate = createTranslator({ locale, messages: catalogs[locale], namespace: 'passwordReset' }) as unknown as (
-    key: PasswordResetKey,
-    values?: Record<string, string>,
-  ) => string;
-  const t = (key: PasswordResetKey) => translate(key, { email });
-
-  const text = [t('intro'), '', `${t('action')}: ${url}`, '', t('expiry'), t('ignore')].join('\n');
-  const html = `
+/** The shared layout: a heading, paragraphs, a button, and smaller notes */
+function emailHtml(heading: string, paragraphs: string[], button: { label: string; url: string }, notes: string[]) {
+  return `
     <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
-      <h2 style="color: #10b981;">${escapeHtml(t('heading'))}</h2>
-      <p>${escapeHtml(t('intro'))}</p>
+      <h2 style="color: #10b981;">${escapeHtml(heading)}</h2>
+      ${paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join('\n      ')}
       <p>
-        <a href="${escapeHtml(url)}" style="display: inline-block; padding: 8px 16px; background: #10b981; color: white; text-decoration: none; border-radius: 6px;">
-          ${escapeHtml(t('action'))}
+        <a href="${escapeHtml(button.url)}" style="display: inline-block; padding: 8px 16px; background: #10b981; color: white; text-decoration: none; border-radius: 6px;">
+          ${escapeHtml(button.label)}
         </a>
       </p>
-      <p style="color: #666; font-size: 14px;">${escapeHtml(t('expiry'))}<br/>${escapeHtml(t('ignore'))}</p>
+      <p style="color: #666; font-size: 14px;">${notes.map(escapeHtml).join('<br/>')}</p>
     </div>
   `;
+}
+
+export function passwordResetEmail(locale: Locale, { email, url }: { email: string; url: string }) {
+  const t = emailText(locale, 'passwordReset', email);
+  const text = [t('intro'), '', `${t('action')}: ${url}`, '', t('expiry'), t('ignore')].join('\n');
+  const html = emailHtml(t('heading'), [t('intro')], { label: t('action'), url }, [t('expiry'), t('ignore')]);
+  return { subject: t('subject'), text, html };
+}
+
+/** Sent after a reset or a change in Settings, so the owner notices one they didn't make */
+export function passwordChangedEmail(locale: Locale, { email, resetUrl }: { email: string; resetUrl: string }) {
+  const t = emailText(locale, 'passwordChanged', email);
+  const text = [t('intro'), '', t('notYou'), `${t('action')}: ${resetUrl}`].join('\n');
+  const html = emailHtml(t('heading'), [t('intro'), t('notYou')], { label: t('action'), url: resetUrl }, []);
   return { subject: t('subject'), text, html };
 }

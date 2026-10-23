@@ -54,11 +54,8 @@
     "deleteUser": "Excluir {name}",
     "resetLinkTitle": "Link de redefinição de senha",
     "resetLinkDescription": "Envie você mesmo este link para <strong>{name}</strong>. Ele funciona uma vez, até {expires}, e substitui qualquer link de redefinição anterior.",
-    "resetLinkLabel": "Link de redefinição de senha",
     "resetLinkCopy": "Copiar link",
-    "resetLinkCopied": "Link copiado",
-    "resetLinkCopyFailed": "Não foi possível copiar o link. Selecione-o e copie você mesmo.",
-    "close": "Fechar"
+    "resetLinkCopied": "Link copiado"
   },
   "groups": {
     "title": "Visão geral dos grupos",

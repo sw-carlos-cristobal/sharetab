@@ -15,11 +15,13 @@
   "password": {
     "title": "Change Password",
     "current": "Current password",
+    "forgot": "Forgot your current password?",
     "new": "New password",
     "confirm": "Confirm new password",
     "mismatch": "Passwords do not match",
     "submit": "Change password",
     "submitting": "Changing...",
-    "success": "Password changed!"
+    "success": "Password changed! Your other devices were signed out.",
+    "signInAgain": "Your password was changed, but this device couldn't sign in again with it. Sign in with your new password."
   }
 }

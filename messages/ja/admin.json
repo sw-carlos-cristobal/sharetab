@@ -54,11 +54,8 @@
     "deleteUser": "{name}を削除",
     "resetLinkTitle": "パスワード再設定リンク",
     "resetLinkDescription": "このリンクを <strong>{name}</strong> さんに直接送ってください。1回だけ使用でき、{expires} まで有効です。以前の再設定リンクは無効になります。",
-    "resetLinkLabel": "パスワード再設定リンク",
     "resetLinkCopy": "リンクをコピー",
-    "resetLinkCopied": "リンクをコピーしました",
-    "resetLinkCopyFailed": "リンクをコピーできませんでした。リンクを選択して手動でコピーしてください。",
-    "close": "閉じる"
+    "resetLinkCopied": "リンクをコピーしました"
   },
   "groups": {
     "title": "グループ概要",

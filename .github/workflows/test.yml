@@ -126,6 +126,7 @@ jobs:
           AUTH_IP_RATE_LIMIT_MAX: "10000"
           REGISTER_RATE_LIMIT_MAX: "1000"
           GUEST_RATE_LIMIT_MAX: "1000"
+          PASSWORD_RESET_RATE_LIMIT_MAX: "1000"
           ADMIN_EMAIL: alice@example.com
           AI_PROVIDER_PRIORITY: mock
           EMAIL_SERVER_HOST: localhost

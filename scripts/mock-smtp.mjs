@@ -1,6 +1,6 @@
 /**
- * Minimal SMTP server that accepts all mail and discards it.
- * Used in CI for magic link auth tests.
+ * Minimal SMTP server that accepts all mail and delivers none of it.
+ * Used in CI for the magic link and password reset tests.
  *
  * With MOCK_SMTP_OUTBOX set to a directory, each message is also written there as
  * <time>-<n>.eml (its recipients first, then the raw message), so e2e tests can follow the
@@ -17,7 +17,7 @@ const outbox = process.env.MOCK_SMTP_OUTBOX;
 if (outbox) mkdirSync(outbox, { recursive: true });
 let saved = 0;
 
-const server = createServer((socket) => {
+function handleConnection(socket) {
   socket.write('220 mock-smtp ready\r\n');
 
   let inData = false;
@@ -25,8 +25,10 @@ const server = createServer((socket) => {
   let recipients = [];
   let message = [];
 
+  // Decodes across chunks, so a character split between two isn't mangled
+  socket.setEncoding('utf8');
   socket.on('data', (chunk) => {
-    buffer += chunk.toString();
+    buffer += chunk;
     const lines = buffer.split('\r\n');
     buffer = lines.pop() || '';
 
@@ -35,8 +37,14 @@ const server = createServer((socket) => {
         if (line === '.') {
           inData = false;
           if (outbox) {
-            const name = `${Date.now()}-${saved++}.eml`;
-            writeFileSync(join(outbox, name), [...recipients.map((r) => `X-Rcpt-To: ${r}`), ...message].join('\r\n'));
+            // Padded, so the names sort in the order the messages arrived
+            const name = `${Date.now()}-${String(saved++).padStart(6, '0')}.eml`;
+            try {
+              writeFileSync(join(outbox, name), [...recipients.map((r) => `X-Rcpt-To: ${r}`), ...message].join('\r\n'));
+            } catch (error) {
+              // Keep serving: the magic link tests only need the mail accepted
+              console.error(`mock-smtp: could not save ${name}: ${error.message}`);
+            }
           }
           recipients = [];
           message = [];
@@ -83,8 +91,17 @@ const server = createServer((socket) => {
   });
 
   socket.on('error', () => {});
-});
+}
 
-server.listen(port, () => {
-  console.log(`Mock SMTP server listening on port ${port}`);
-});
+// Loopback only, since anyone who can connect can write to the outbox. Both address families,
+// since "localhost" may resolve to either; a host without IPv6 has only the first
+for (const host of ['127.0.0.1', '::1']) {
+  const server = createServer(handleConnection);
+  server.on('error', (error) => {
+    if (host === '127.0.0.1') throw error;
+    console.warn(`mock-smtp: not listening on ${host}: ${error.message}`);
+  });
+  server.listen(port, host, () => {
+    console.log(`Mock SMTP server listening on ${host} port ${port}`);
+  });
+}

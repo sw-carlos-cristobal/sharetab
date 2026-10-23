@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { trpc } from '@/lib/trpc';
 import { Button } from '@/components/ui/button';
@@ -29,6 +29,7 @@ import {
   ArrowDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { copyToClipboard } from '@/lib/clipboard';
 import { resetPasswordPath } from '@/lib/password-reset-link';
 
 type UserSortBy = 'name' | 'email' | 'groupCount' | 'createdAt';
@@ -56,6 +57,7 @@ function SortIcon({
 
 export function UserManagementSection({ currentUserEmail }: { currentUserEmail?: string | null }) {
   const t = useTranslations('admin');
+  const tCommon = useTranslations('common');
   const locale = useLocale();
   const utils = trpc.useUtils();
 
@@ -112,29 +114,31 @@ export function UserManagementSection({ currentUserEmail }: { currentUserEmail?:
     },
     onError: (e) => toast.error(e.message),
   });
-  // A reset link the admin hands over themselves (#397), built from this page's address like
-  // split links are, so it works however the admin reached ShareTab
+  // A reset link the admin hands over themselves (#397). Built from this page's address, like
+  // split links, not NEXTAUTH_URL: it opens for whoever can reach the address the admin is using.
+  // Kept while the dialog animates closed, so its text doesn't blank out
   const [resetLink, setResetLink] = useState<{ name: string; url: string; expiresAt: Date } | null>(null);
+  const [resetLinkOpen, setResetLinkOpen] = useState(false);
+  const resetLinkName = useRef('');
   const createResetLink = trpc.admin.createPasswordResetLink.useMutation({
-    onSuccess: (data, variables) => {
+    onSuccess: (data) => {
       utils.admin.getAuditLog.invalidate();
-      const user = allUsers.find((u) => u.id === variables.userId);
       setResetLink({
-        name: user?.name ?? user?.email ?? '',
+        name: resetLinkName.current,
         url: `${window.location.origin}${resetPasswordPath(data.locale, data.token)}`,
         expiresAt: new Date(data.expiresAt),
       });
+      setResetLinkOpen(true);
     },
     onError: (e) => toast.error(e.message),
   });
 
   async function copyResetLink(url: string) {
-    try {
-      await navigator.clipboard.writeText(url);
+    if (await copyToClipboard(url)) {
       toast.success(t('users.resetLinkCopied'));
-    } catch {
-      // No clipboard on plain HTTP: the link is selected in its field to copy by hand
-      toast.error(t('users.resetLinkCopyFailed'));
+    } else {
+      // The link stays in its field, selected when focused, to copy by hand
+      toast.error(tCommon('actions.copyFailed'));
     }
   }
 
@@ -346,7 +350,11 @@ export function UserManagementSection({ currentUserEmail }: { currentUserEmail?:
                                   aria-label={t('users.resetPassword', { name: user.name ?? user.email })}
                                   title={t('users.resetPassword', { name: user.name ?? user.email })}
                                   data-testid="reset-password-link"
-                                  onClick={() => createResetLink.mutate({ userId: user.id })}
+                                  onClick={() => {
+                                    // Taken now: the list may change before the request answers
+                                    resetLinkName.current = user.name ?? user.email;
+                                    createResetLink.mutate({ userId: user.id });
+                                  }}
                                   disabled={createResetLink.isPending}
                                 >
                                   <KeyRound className="h-4 w-4 text-blue-600" />
@@ -419,8 +427,8 @@ export function UserManagementSection({ currentUserEmail }: { currentUserEmail?:
         </DialogContent>
       </Dialog>
 
-      <Dialog open={resetLink !== null} onOpenChange={(open) => !open && setResetLink(null)}>
-        <DialogContent>
+      <Dialog open={resetLinkOpen} onOpenChange={setResetLinkOpen}>
+        <DialogContent showCloseButton={false}>
           <DialogHeader>
             <DialogTitle>{t('users.resetLinkTitle')}</DialogTitle>
             <DialogDescription>
@@ -435,15 +443,15 @@ export function UserManagementSection({ currentUserEmail }: { currentUserEmail?:
           </DialogHeader>
           <Input
             readOnly
-            aria-label={t('users.resetLinkLabel')}
+            aria-label={t('users.resetLinkTitle')}
             data-testid="reset-password-link-url"
             value={resetLink?.url ?? ''}
             onFocus={(e) => e.currentTarget.select()}
             className="font-mono text-xs"
           />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setResetLink(null)}>
-              {t('users.close')}
+            <Button variant="outline" onClick={() => setResetLinkOpen(false)}>
+              {tCommon('actions.close')}
             </Button>
             <Button onClick={() => resetLink && copyResetLink(resetLink.url)}>
               <Copy className="mr-2 h-4 w-4" />

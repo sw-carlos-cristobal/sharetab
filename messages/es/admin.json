@@ -54,11 +54,8 @@
     "deleteUser": "Eliminar {name}",
     "resetLinkTitle": "Enlace para restablecer la contraseña",
     "resetLinkDescription": "Envía tú mismo este enlace a <strong>{name}</strong>. Funciona una vez, hasta el {expires}, y sustituye cualquier enlace de restablecimiento que tuviera.",
-    "resetLinkLabel": "Enlace para restablecer la contraseña",
     "resetLinkCopy": "Copiar enlace",
-    "resetLinkCopied": "Enlace copiado",
-    "resetLinkCopyFailed": "No se pudo copiar el enlace. Selecciónalo y cópialo tú mismo.",
-    "close": "Cerrar"
+    "resetLinkCopied": "Enlace copiado"
   },
   "groups": {
     "title": "Vista general de grupos",

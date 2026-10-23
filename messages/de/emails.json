@@ -6,5 +6,12 @@
     "action": "Neues Passwort festlegen",
     "expiry": "Der Link funktioniert einmal und läuft in 1 Stunde ab.",
     "ignore": "Wenn Sie das nicht angefordert haben, ignorieren Sie diese E-Mail. Ihr Passwort bleibt unverändert."
+  },
+  "passwordChanged": {
+    "subject": "Ihr ShareTab-Passwort wurde geändert",
+    "heading": "Ihr Passwort wurde geändert",
+    "intro": "Das Passwort für das ShareTab-Konto {email} wurde gerade geändert, und alle Geräte, die vor der Änderung angemeldet waren, wurden abgemeldet.",
+    "notYou": "Wenn Sie das nicht waren, setzen Sie Ihr Passwort jetzt zurück und informieren Sie Ihren ShareTab-Administrator.",
+    "action": "Passwort zurücksetzen"
   }
 }

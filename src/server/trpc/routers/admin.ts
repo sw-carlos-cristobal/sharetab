@@ -326,9 +326,13 @@ export const adminRouter = createTRPCRouter({
       throw new AppError('BAD_REQUEST', 'alreadySuspended');
     }
 
-    await ctx.db.user.update({
-      where: { id: input.userId },
-      data: { suspendedAt: new Date() },
+    await ctx.db.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: input.userId },
+        data: { suspendedAt: new Date() },
+      });
+      // Otherwise an unexpired reset link would work again once the user is unsuspended
+      await tx.passwordResetToken.deleteMany({ where: { userId: input.userId } });
     });
 
     await logAdminAction(ctx.db, ctx.user.id, 'USER_SUSPENDED', input.userId, { email: user.email });
@@ -457,10 +461,18 @@ export const adminRouter = createTRPCRouter({
       throw new AppError('BAD_REQUEST', 'passwordResetNotAllowed');
     }
 
-    const { token, expiresAt } = await issuePasswordResetToken(ctx.db, user.id, ADMIN_RESET_LINK_TTL_MS);
+    // Checked again under the user row's lock: suspended or deleted meanwhile gives no link
+    const issued = await issuePasswordResetToken(ctx.db, user.id, ADMIN_RESET_LINK_TTL_MS);
+    if (!issued) {
+      throw new AppError('BAD_REQUEST', 'passwordResetNotAllowed');
+    }
     await logAdminAction(ctx.db, ctx.user.id, 'PASSWORD_RESET_LINK_CREATED', user.id, { email: user.email });
 
-    return { token, locale: isSupportedLocale(user.locale) ? user.locale : defaultLocale, expiresAt };
+    return {
+      token: issued.token,
+      locale: isSupportedLocale(user.locale) ? user.locale : defaultLocale,
+      expiresAt: issued.expiresAt,
+    };
   }),
 
   listGroups: adminProcedure

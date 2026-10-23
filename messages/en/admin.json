@@ -54,11 +54,8 @@
     "deleteUser": "Delete {name}",
     "resetLinkTitle": "Password reset link",
     "resetLinkDescription": "Send this link to <strong>{name}</strong> yourself. It works once, until {expires}, and replaces any reset link they had.",
-    "resetLinkLabel": "Password reset link",
     "resetLinkCopy": "Copy link",
-    "resetLinkCopied": "Link copied",
-    "resetLinkCopyFailed": "Could not copy the link. Select it and copy it yourself.",
-    "close": "Close"
+    "resetLinkCopied": "Link copied"
   },
   "groups": {
     "title": "Group Overview",

@@ -10,7 +10,7 @@ ShareTab uses [next-intl](https://next-intl.dev) for internationalization. Trans
 messages/
   en/              # English (source language)
     common.json    # Navigation, buttons, shared labels
-    auth.json      # Login, register pages
+    auth.json      # Login, register, forgot and reset password pages
     dashboard.json # Dashboard
     groups.json    # Groups
     expenses.json  # Expenses
@@ -18,6 +18,8 @@ messages/
     admin.json     # Admin panel
     split.json     # Guest bill splitting and claim sessions
     splits.json    # My Splits (a signed-in user's guest splits)
+    errors.json    # Server error messages (server-only)
+    emails.json    # The password reset and password changed emails (server-only)
   es/              # Spanish
     ...
 ```

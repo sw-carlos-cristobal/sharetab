@@ -10,6 +10,21 @@ import { checkRateLimit, parsePositiveInt } from './rate-limit';
 import { getClientIp, FALLBACK_IP } from './client-ip';
 import { AmbiguousEmailError, findUserByEmail } from './user-email';
 
+/**
+ * The per-address login rate-limit key, also cleared by a password reset. Lowercased like the
+ * user lookup, so case variants share a bucket.
+ */
+export function loginRateLimitKey(email: string): string {
+  return `login:${email.toLowerCase()}`;
+}
+
+/** Password attempts per address in LOGIN_WINDOW_MS (configurable for CI/testing). Settings shares it. */
+export function loginAttemptsPerEmail(): number {
+  return parsePositiveInt(process.env.AUTH_RATE_LIMIT_MAX, 5);
+}
+
+export const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
@@ -39,10 +54,8 @@ export async function authorizePasswordLogin(credentials: unknown, headers: Head
     }
   }
 
-  // Rate limit login attempts per email (configurable for CI/testing).
-  // Lowercased like the lookup below, so case variants share a bucket.
-  const maxLoginAttempts = parsePositiveInt(process.env.AUTH_RATE_LIMIT_MAX, 5);
-  const { allowed } = checkRateLimit(`login:${parsed.data.email.toLowerCase()}`, maxLoginAttempts, 15 * 60 * 1000);
+  // Rate limit login attempts per email
+  const { allowed } = checkRateLimit(loginRateLimitKey(parsed.data.email), loginAttemptsPerEmail(), LOGIN_WINDOW_MS);
   if (!allowed) {
     logger.warn('auth.rate_limited', { email: parsed.data.email });
     return null;
@@ -65,5 +78,13 @@ export async function authorizePasswordLogin(credentials: unknown, headers: Head
   }
 
   logger.info('auth.login', { userId: user.id, email: user.email });
-  return { id: user.id, name: user.name, email: user.email, image: user.image, locale: user.locale };
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    image: user.image,
+    locale: user.locale,
+    // Read with the hash just verified: a reset that commits meanwhile ends this session (auth.ts)
+    passwordChangedAt: user.passwordChangedAt,
+  };
 }

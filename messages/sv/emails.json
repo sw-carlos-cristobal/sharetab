@@ -6,5 +6,12 @@
     "action": "Välj ett nytt lösenord",
     "expiry": "Länken fungerar en gång och slutar gälla om 1 timme.",
     "ignore": "Om det inte var du kan du ignorera det här mejlet. Ditt lösenord förblir detsamma."
+  },
+  "passwordChanged": {
+    "subject": "Ditt lösenord för ShareTab har ändrats",
+    "heading": "Ditt lösenord har ändrats",
+    "intro": "Lösenordet för ShareTab-kontot {email} har just ändrats, och alla enheter som var inloggade före ändringen har loggats ut.",
+    "notYou": "Om det inte var du, återställ ditt lösenord nu och meddela din ShareTab-administratör.",
+    "action": "Återställ lösenordet"
   }
 }

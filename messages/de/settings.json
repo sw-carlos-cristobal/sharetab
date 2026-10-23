@@ -15,11 +15,13 @@
   "password": {
     "title": "Passwort ändern",
     "current": "Aktuelles Passwort",
+    "forgot": "Aktuelles Passwort vergessen?",
     "new": "Neues Passwort",
     "confirm": "Neues Passwort bestätigen",
     "mismatch": "Passwörter stimmen nicht überein",
     "submit": "Passwort ändern",
     "submitting": "Ändern...",
-    "success": "Passwort geändert!"
+    "success": "Passwort geändert! Ihre anderen Geräte wurden abgemeldet.",
+    "signInAgain": "Ihr Passwort wurde geändert, aber dieses Gerät konnte sich damit nicht erneut anmelden. Melden Sie sich mit Ihrem neuen Passwort an."
   }
 }

@@ -1,5 +1,5 @@
 import { db } from '@/server/db';
-import { createMailTransport, mailFrom } from './mailer';
+import { createMailTransport, mailFrom, publicBaseUrl } from './mailer';
 import { isProviderConfigured } from '@/server/ai/registry';
 import { checkOpenAICodexHealth } from './openai-codex-login';
 import { getStoredMeridianTokenExpiry, refreshIfNeeded as refreshMeridianToken } from './meridian-login';
@@ -242,7 +242,7 @@ export async function sendAuthExpiryEmail(
 
   const transport = createMailTransport();
   const from = mailFrom();
-  const dashboardUrl = `${process.env.NEXTAUTH_URL ?? 'http://localhost:3000'}/admin`;
+  const dashboardUrl = `${publicBaseUrl()}/admin`;
   const providerLabel = provider === 'openai-codex' ? 'ChatGPT OAuth (OpenAI Codex)' : 'Claude AI';
 
   const loginSection = loginUrl ? `<p><strong>Login URL:</strong><br/><a href="${loginUrl}">${loginUrl}</a></p>` : '';

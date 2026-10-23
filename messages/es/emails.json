@@ -6,5 +6,12 @@
     "action": "Elegir una contraseña nueva",
     "expiry": "El enlace funciona una sola vez y caduca en 1 hora.",
     "ignore": "Si no lo pediste tú, ignora este correo. Tu contraseña no cambiará."
+  },
+  "passwordChanged": {
+    "subject": "Se cambió tu contraseña de ShareTab",
+    "heading": "Se cambió tu contraseña",
+    "intro": "Se acaba de cambiar la contraseña de la cuenta de ShareTab {email}, y se cerró la sesión en todos los dispositivos que la tenían abierta antes del cambio.",
+    "notYou": "Si no fuiste tú, restablece tu contraseña ahora y avisa a tu administrador de ShareTab.",
+    "action": "Restablecer la contraseña"
   }
 }

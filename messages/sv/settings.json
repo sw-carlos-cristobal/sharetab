@@ -15,11 +15,13 @@
   "password": {
     "title": "Ändra lösenord",
     "current": "Aktuellt lösenord",
+    "forgot": "Har du glömt ditt nuvarande lösenord?",
     "new": "Nytt lösenord",
     "confirm": "Bekräfta nytt lösenord",
     "mismatch": "Lösenord stämmer inte överens",
     "submit": "Byt lösenord",
     "submitting": "Ändrar...",
-    "success": "Lösenord ändrat!"
+    "success": "Lösenordet har ändrats! Dina andra enheter har loggats ut.",
+    "signInAgain": "Ditt lösenord har ändrats, men den här enheten kunde inte logga in igen med det. Logga in med ditt nya lösenord."
   }
 }

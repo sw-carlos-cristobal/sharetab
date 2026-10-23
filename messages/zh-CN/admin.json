@@ -54,11 +54,8 @@
     "deleteUser": "删除 {name}",
     "resetLinkTitle": "密码重置链接",
     "resetLinkDescription": "请您亲自将此链接发送给 <strong>{name}</strong>。它只能使用一次，有效期至 {expires}，并会取代其之前的所有重置链接。",
-    "resetLinkLabel": "密码重置链接",
     "resetLinkCopy": "复制链接",
-    "resetLinkCopied": "链接已复制",
-    "resetLinkCopyFailed": "无法复制链接。请选中链接后手动复制。",
-    "close": "关闭"
+    "resetLinkCopied": "链接已复制"
   },
   "groups": {
     "title": "群组概览",

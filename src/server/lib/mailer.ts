@@ -1,7 +1,7 @@
 /**
  * Outgoing email: the SMTP settings (`EMAIL_SERVER_*`, `EMAIL_FROM`) shared by the magic-link
- * provider, password reset emails, the admin test email and the auth-expiry alerts, and the
- * public URL that links in those emails point at.
+ * provider, the password emails, the admin test email and the auth-expiry alerts; the public URL
+ * for links in the emails ShareTab builds; and what to log when a send fails.
  */
 
 import nodemailer from 'nodemailer';
@@ -14,9 +14,10 @@ export function smtpOptions() {
     host: process.env.EMAIL_SERVER_HOST,
     port,
     secure: port === 465,
+    // Empty counts as unset (docker-compose passes them empty): any key makes nodemailer log in
     auth: {
-      ...(process.env.EMAIL_SERVER_USER !== undefined ? { user: process.env.EMAIL_SERVER_USER } : {}),
-      ...(process.env.EMAIL_SERVER_PASSWORD !== undefined ? { pass: process.env.EMAIL_SERVER_PASSWORD } : {}),
+      ...(process.env.EMAIL_SERVER_USER ? { user: process.env.EMAIL_SERVER_USER } : {}),
+      ...(process.env.EMAIL_SERVER_PASSWORD ? { pass: process.env.EMAIL_SERVER_PASSWORD } : {}),
     },
   } satisfies SMTPTransportOptions;
 }
@@ -26,13 +27,31 @@ export function createMailTransport() {
 }
 
 export function mailFrom(): string {
-  return process.env.EMAIL_FROM ?? 'ShareTab <noreply@sharetab.local>';
+  // || not ??: docker-compose and the Unraid template pass EMAIL_FROM empty when it isn't set
+  return process.env.EMAIL_FROM || 'ShareTab <noreply@sharetab.local>';
 }
 
 /**
- * The instance's public URL, for links in emails. Taken from configuration like Auth.js does
- * (`AUTH_URL`, then `NEXTAUTH_URL`), never from the request's Host header, which the sender of
- * a reset request controls.
+ * What to log about a failed send: the error's name and nodemailer's code, SMTP response code
+ * and command (e.g. EAUTH, 535, AUTH PLAIN, all fixed values), never its message or the server's
+ * response, which can carry the address.
+ */
+export function describeMailError(error: unknown) {
+  if (!(error instanceof Error)) return { error: 'unknown' };
+  const { code, responseCode, command } = error as { code?: unknown; responseCode?: unknown; command?: unknown };
+  return {
+    error: error.name,
+    ...(typeof code === 'string' ? { code } : {}),
+    ...(typeof responseCode === 'number' ? { responseCode } : {}),
+    ...(typeof command === 'string' ? { command } : {}),
+  };
+}
+
+/**
+ * The instance's public URL, for the links in password and auth-expiry emails (Auth.js builds
+ * magic links itself). Taken from configuration, `AUTH_URL` then `NEXTAUTH_URL` as Auth.js
+ * prefers them (an empty value counts as unset here), never from the request's Host header,
+ * which the sender of a reset request controls.
  */
 export function publicBaseUrl(): string {
   const configured = process.env.AUTH_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000';

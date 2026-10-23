@@ -54,11 +54,8 @@
     "deleteUser": "{name} löschen",
     "resetLinkTitle": "Link zum Zurücksetzen des Passworts",
     "resetLinkDescription": "Senden Sie diesen Link selbst an <strong>{name}</strong>. Er funktioniert einmal, bis {expires}, und ersetzt alle früheren Links zum Zurücksetzen.",
-    "resetLinkLabel": "Link zum Zurücksetzen des Passworts",
     "resetLinkCopy": "Link kopieren",
-    "resetLinkCopied": "Link kopiert",
-    "resetLinkCopyFailed": "Der Link konnte nicht kopiert werden. Markieren und kopieren Sie ihn selbst.",
-    "close": "Schließen"
+    "resetLinkCopied": "Link kopiert"
   },
   "groups": {
     "title": "Gruppenübersicht",

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { AppError } from '@/server/lib/app-error';
 import { createTRPCRouter, publicProcedure, protectedProcedure } from '../init';
-import { checkRateLimit, clearRateLimit, parsePositiveInt } from '../../lib/rate-limit';
+import { checkRateLimit, clearRateLimit, parsePositiveInt, peekRateLimit } from '../../lib/rate-limit';
 import { FALLBACK_IP, getClientIp } from '../../lib/client-ip';
 import { locales } from '@/i18n/routing';
 import { stripUndefined } from '../../lib/strip-undefined';
@@ -10,17 +10,42 @@ import { parseAuthConfig } from '../../lib/auth-config';
 import { readRegistrationMode } from '../../lib/registration-mode';
 import { findUsersByEmail } from '../../lib/user-email';
 import { logger } from '../../lib/logger';
-import { emailPasswordResetLink, findValidResetToken, resetPasswordWithToken } from '../../lib/password-reset';
+import { emailPasswordChanged, emailPasswordResetLink, resetPasswordWithToken } from '../../lib/password-reset';
+import { LOGIN_WINDOW_MS, loginAttemptsPerEmail, loginRateLimitKey } from '../../lib/password-login';
+import { describeMailError } from '../../lib/mailer';
 import { Prisma } from '@/generated/prisma/client';
 
+// Per client address, across email addresses (the per-account limit on emails is in
+// password-reset.ts). Configurable like the other per-IP limits, for test runs that share one IP
+const resetRequestsPerIp = () => parsePositiveInt(process.env.PASSWORD_RESET_RATE_LIMIT_MAX, 20);
 const RESET_REQUEST_WINDOW_MS = 60 * 60 * 1000;
-// Per address: enough for someone retrying a lost email, too few to flood an inbox
-const RESET_REQUESTS_PER_EMAIL = 5;
-// Per client address, across email addresses
-const RESET_REQUESTS_PER_IP = 20;
+// Links submitted per client address. A token can't be guessed; this bounds the database work
+// (and a held connection while a valid link is used) one client can cause
+const resetSubmitsPerIp = () => parsePositiveInt(process.env.PASSWORD_RESET_RATE_LIMIT_MAX, 30);
+const RESET_SUBMIT_WINDOW_MS = 15 * 60 * 1000;
 
-// Same rules as registration
+// Every password ShareTab sets: registration, Settings, reset links
 const newPasswordSchema = z.string().min(8).max(100);
+
+/** Tells the account its password changed, when email is configured; doesn't wait for the send. */
+function notifyPasswordChanged(user: { email: string; locale: string }) {
+  if (!parseAuthConfig(process.env).magicLink) return;
+  void emailPasswordChanged(user).catch((error: unknown) => {
+    logger.warn('auth.password_changed_email_failed', describeMailError(error));
+  });
+}
+
+/**
+ * Per-IP limit for the reset routes, skipped when no header names the client, as for password
+ * login. That's rare under `next start`, which fills in x-forwarded-for; behind a proxy that
+ * forwards no client address, every client shares one bucket (src/server/lib/client-ip.ts).
+ */
+function checkClientLimit(headers: Headers, key: string, max: number, windowMs: number) {
+  const ip = getClientIp(headers);
+  if (ip !== FALLBACK_IP && !checkRateLimit(`${key}:${ip}`, max, windowMs).allowed) {
+    throw new AppError('TOO_MANY_REQUESTS', 'passwordResetRateLimited');
+  }
+}
 
 export const authRouter = createTRPCRouter({
   getSession: publicProcedure.query(({ ctx }) => {
@@ -55,7 +80,7 @@ export const authRouter = createTRPCRouter({
       z.object({
         name: z.string().trim().min(1).max(100),
         email: z.string().email(),
-        password: z.string().min(8).max(100),
+        password: newPasswordSchema,
         inviteCode: z.string().optional(),
       }),
     )
@@ -144,7 +169,7 @@ export const authRouter = createTRPCRouter({
     .input(
       z.object({
         currentPassword: z.string().min(1),
-        newPassword: z.string().min(8).max(100),
+        newPassword: newPasswordSchema,
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -155,25 +180,47 @@ export const authRouter = createTRPCRouter({
         throw new AppError('BAD_REQUEST', 'noPasswordToChange');
       }
 
+      // Wrong current passwords are limited like attempts at the login form, so a session someone
+      // else holds can't guess the password here faster than there. A counter of its own: one
+      // shared with the login form would let anyone who knows the address block this change
+      const guessKey = `password-change:${user.id}`;
+      if (!peekRateLimit(guessKey, loginAttemptsPerEmail()).allowed) {
+        throw new AppError('TOO_MANY_REQUESTS');
+      }
       const valid = await bcrypt.compare(input.currentPassword, user.passwordHash);
       if (!valid) {
+        checkRateLimit(guessKey, loginAttemptsPerEmail(), LOGIN_WINDOW_MS);
         throw new AppError('UNAUTHORIZED', 'wrongPassword');
       }
 
       const passwordHash = await bcrypt.hash(input.newPassword, 12);
-      await ctx.db.user.update({
-        where: { id: ctx.user.id },
-        data: { passwordHash },
+      await ctx.db.$transaction(async (tx) => {
+        // Only while the password is still the one just checked: a reset link used meanwhile
+        // wins, and this change is refused. Writes the user row before the token row, the lock
+        // order resetPasswordWithToken uses. passwordChangedAt ends every session signed in
+        // under the old password, this one included (auth.ts); the Settings page signs in again
+        const { count } = await tx.user.updateMany({
+          where: { id: ctx.user.id, passwordHash: user.passwordHash },
+          data: { passwordHash, passwordChangedAt: new Date() },
+        });
+        if (count === 0) {
+          throw new AppError('CONFLICT');
+        }
+        // A reset link sent before the change would otherwise still undo it
+        await tx.passwordResetToken.deleteMany({ where: { userId: ctx.user.id } });
       });
-      // A reset link sent before the change would otherwise still undo it
-      await ctx.db.passwordResetToken.deleteMany({ where: { userId: ctx.user.id } });
 
+      // The current password was just proven: failed sign-ins before don't keep the new one out
+      // (the Settings page signs in again with it)
+      clearRateLimit(loginRateLimitKey(user.email));
+      notifyPasswordChanged(user);
       return { success: true };
     }),
 
   // "Forgot password?" (#397). The answer is the same whether or not the address has an
-  // account: the lookup and the email happen after it, so neither its content nor its timing
-  // tells. A failed email is only logged.
+  // account: the lookup and the email aren't waited for, so neither its content nor its timing
+  // tells. A failed email is only logged, and an account's email budget (password-reset.ts)
+  // running out is silent.
   requestPasswordReset: publicProcedure
     .input(z.object({ email: z.string().trim().email().max(254) }))
     .mutation(({ ctx, input }) => {
@@ -185,26 +232,13 @@ export const authRouter = createTRPCRouter({
         throw new AppError('PRECONDITION_FAILED', 'passwordResetUnavailable');
       }
 
-      // Per client address first, so a refused request doesn't also use up the address's
-      // budget. Skipped when no header names the client, as for password login: one shared
-      // bucket would let one client block everyone's resets.
-      const ip = getClientIp(ctx.headers);
-      if (ip !== FALLBACK_IP) {
-        const { allowed } = checkRateLimit(`password-reset-ip:${ip}`, RESET_REQUESTS_PER_IP, RESET_REQUEST_WINDOW_MS);
-        if (!allowed) throw new AppError('TOO_MANY_REQUESTS', 'passwordResetRateLimited');
-      }
-      // Counted for every address, with or without an account, so being limited doesn't tell either
-      const { allowed } = checkRateLimit(
-        `password-reset:${input.email.toLowerCase()}`,
-        RESET_REQUESTS_PER_EMAIL,
-        RESET_REQUEST_WINDOW_MS,
-      );
-      if (!allowed) throw new AppError('TOO_MANY_REQUESTS', 'passwordResetRateLimited');
+      // The same for every address, so being limited doesn't tell whether it has an account
+      checkClientLimit(ctx.headers, 'password-reset-ip', resetRequestsPerIp(), RESET_REQUEST_WINDOW_MS);
 
       // The server is a long-running Node process (standalone or `next start`), so the work
       // carries on after the answer is sent.
       void emailPasswordResetLink(ctx.db, input.email).catch((error: unknown) => {
-        logger.warn('auth.password_reset_email_failed', { error: error instanceof Error ? error.name : 'unknown' });
+        logger.warn('auth.password_reset_email_failed', describeMailError(error));
       });
       return { ok: true };
     }),
@@ -216,20 +250,18 @@ export const authRouter = createTRPCRouter({
       if (!parseAuthConfig(process.env).passwordLogin) {
         throw new AppError('FORBIDDEN', 'passwordLoginDisabled');
       }
-      // Checked before hashing, so a bad link costs no bcrypt work
-      if (!(await findValidResetToken(ctx.db, input.token))) {
-        throw new AppError('BAD_REQUEST', 'resetLinkInvalid');
-      }
-      const passwordHash = await bcrypt.hash(input.password, 12);
-      const user = await resetPasswordWithToken(ctx.db, input.token, passwordHash);
+      checkClientLimit(ctx.headers, 'password-reset-submit-ip', resetSubmitsPerIp(), RESET_SUBMIT_WINDOW_MS);
+      // Hashes the password only once the link is claimed, so a bad or reused link costs no bcrypt
+      const user = await resetPasswordWithToken(ctx.db, input.token, input.password);
       if (!user) {
         throw new AppError('BAD_REQUEST', 'resetLinkInvalid');
       }
 
       // The link proved who they are, so failed sign-ins from before the reset don't keep the
-      // new password out (password login's per-address bucket, keyed like it)
-      clearRateLimit(`login:${user.email.toLowerCase()}`);
+      // new password out
+      clearRateLimit(loginRateLimitKey(user.email));
       logger.info('auth.password_reset', { userId: user.userId });
+      notifyPasswordChanged(user);
       return { ok: true };
     }),
 

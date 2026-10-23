@@ -1,5 +1,3 @@
-import { readdirSync, readFileSync } from 'fs';
-import { join } from 'path';
 import { test, expect, type Browser, type Page } from '@playwright/test';
 import {
   users,
@@ -9,13 +7,14 @@ import {
   trpcMutation,
   trpcQuery,
   trpcResult,
+  trpcError,
   deleteTestUser,
 } from './helpers';
+import { outbox, mailTo, readResetLink, passwordChangedEmails } from './mock-smtp-outbox';
 
 // #397: a forgotten password can be reset, by an emailed link (with SMTP) or a link an admin makes
 const hasEmailConfig = !!process.env.EMAIL_SERVER_HOST;
-// Where scripts/mock-smtp.mjs writes the mail it accepts (CI sets it)
-const outbox = process.env.MOCK_SMTP_OUTBOX;
+const BASE = process.env.BASE_URL || 'http://localhost:3001';
 
 const OLD_PASSWORD = 'password123';
 const NEW_PASSWORD = 'reset-pass-456';
@@ -51,8 +50,11 @@ async function signsIn(email: string, password: string) {
 }
 
 /** Opens a reset link in a fresh browser (signed out) and sets the new password. */
-async function setPasswordWithLink(browser: Browser, url: string, password: string) {
-  const context = await browser.newContext();
+async function setPasswordWithLink(browser: Browser, link: string, password: string) {
+  // On this test run's server, whatever host the link was built with (NEXTAUTH_URL)
+  const { pathname, hash } = new URL(link);
+  const url = `${pathname}${hash}`;
+  const context = await browser.newContext({ baseURL: BASE });
   const page = await context.newPage();
   try {
     await page.goto(url);
@@ -73,23 +75,26 @@ async function setPasswordWithLink(browser: Browser, url: string, password: stri
   }
 }
 
-/** The newest reset link mock-smtp received for this address. */
-function readResetLink(email: string): string | null {
-  const files = readdirSync(outbox!)
-    .filter((f) => f.endsWith('.eml'))
-    .sort()
-    .reverse();
-  for (const file of files) {
-    const raw = readFileSync(join(outbox!, file), 'utf-8');
-    if (!raw.includes(`X-Rcpt-To: ${email}`)) continue;
-    // Undo quoted-printable: soft line breaks, then =XX escapes
-    const decoded = raw
-      .replace(/=\r?\n/g, '')
-      .replace(/=([0-9A-F]{2})/g, (_, hex: string) => String.fromCharCode(parseInt(hex, 16)));
-    const link = decoded.match(/https?:\/\/[^\s"<]+\/reset-password#token=[A-Za-z0-9_-]{43}/);
-    if (link) return link[0];
-  }
-  return null;
+/**
+ * Makes the pages see these sign-in options, as on a server configured that way. Returns how many
+ * responses it changed, so a test can tell the stub matched (on a server already set up that way
+ * it would pass without it).
+ */
+async function withLoginOptions(page: Page, options: { passwordLogin: boolean; passwordReset: boolean }) {
+  const stubbed = { count: 0 };
+  await page.route('**/api/trpc/**', async (route) => {
+    const url = new URL(route.request().url());
+    const procedures = url.pathname.replace(/^.*\/api\/trpc\//, '').split(',');
+    const index = procedures.indexOf('auth.getLoginOptions');
+    if (index === -1) return route.continue();
+    const response = await route.fetch();
+    const body = await response.json();
+    Object.assign(body[index].result.data.json, options);
+    stubbed.count += 1;
+    // Not `response`: its headers carry the unpatched body's length and encoding
+    await route.fulfill({ status: response.status(), json: body });
+  });
+  return stubbed;
 }
 
 async function openForgotPassword(page: Page) {
@@ -115,36 +120,69 @@ test.describe('Password reset', () => {
   });
 
   test('without email, "Forgot password?" says to ask the administrator', async ({ page }) => {
-    test.skip(hasEmailConfig, 'Email is configured — this covers instances without SMTP');
+    const stubbed = await withLoginOptions(page, { passwordLogin: true, passwordReset: false });
     await openForgotPassword(page);
     await expect(page.getByTestId('forgot-password-ask-admin')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Send reset link' })).toHaveCount(0);
+    expect(stubbed.count).toBeGreaterThan(0);
+  });
+
+  test('with password sign-in off, there is no password to reset', async ({ page }) => {
+    const stubbed = await withLoginOptions(page, { passwordLogin: false, passwordReset: false });
+    await page.goto('/en/forgot-password');
+    await expect(page.getByTestId('forgot-password-login-off')).toBeVisible();
+    expect(stubbed.count).toBeGreaterThan(0);
+  });
+
+  test('switching language on the reset page keeps the link', async ({ page }) => {
+    const token = 'y'.repeat(43);
+    await page.goto(`/en/reset-password#token=${token}`);
+    await expect(page.getByLabel('New password', { exact: true })).toBeVisible();
+
+    await page.getByTestId('language-switcher').first().click();
+    await page.getByRole('menuitem', { name: '🇪🇸 Español' }).click();
+
+    await expect(page).toHaveURL(new RegExp(`/es/reset-password#token=${token}$`));
+    await expect(page.getByTestId('reset-password-invalid')).toHaveCount(0);
+    await expect(page.locator('#newPassword')).toBeVisible();
   });
 
   test('a request for an unknown address looks the same as for a known one', async ({ page }) => {
+    // CI runs a mock SMTP server: a missing setting there must fail, not skip
+    if (process.env.CI) expect(hasEmailConfig, 'EMAIL_SERVER_HOST').toBe(true);
     test.skip(!hasEmailConfig, 'Email server not configured — set EMAIL_SERVER_HOST to enable');
     const knownEmail = uniqueEmail('pwknown');
+    const unknownEmail = uniqueEmail('nobody');
     await registerUser(knownEmail);
     try {
-      await openForgotPassword(page);
-      await page.getByLabel('Email').fill(knownEmail);
-      await page.getByRole('button', { name: 'Send reset link' }).click();
-      const known = page.getByTestId('forgot-password-sent');
-      await expect(known).toBeVisible();
-      const knownText = (await known.innerText()).replace(knownEmail, '<email>');
-
-      const unknownEmail = uniqueEmail('nobody');
+      // The unknown address first: once the known address's mail has arrived, any mail the
+      // earlier request would have sent has had its chance too
       await openForgotPassword(page);
       await page.getByLabel('Email').fill(unknownEmail);
       await page.getByRole('button', { name: 'Send reset link' }).click();
       const unknown = page.getByTestId('forgot-password-sent');
       await expect(unknown).toBeVisible();
-      expect((await unknown.innerText()).replace(unknownEmail, '<email>')).toBe(knownText);
+      const unknownText = (await unknown.innerText()).replace(unknownEmail, '<email>');
+
+      await openForgotPassword(page);
+      await page.getByLabel('Email').fill(knownEmail);
+      await page.getByRole('button', { name: 'Send reset link' }).click();
+      const known = page.getByTestId('forgot-password-sent');
+      await expect(known).toBeVisible();
+      expect((await known.innerText()).replace(knownEmail, '<email>')).toBe(unknownText);
+
+      // Only the known address got mail
+      if (outbox) {
+        await expect.poll(() => readResetLink(knownEmail), { timeout: 15000 }).not.toBeNull();
+        expect(mailTo(unknownEmail)).toHaveLength(0);
+      }
     } finally {
       await removeUser(knownEmail);
     }
   });
 
   test('a user who forgot their password resets it from the emailed link and signs in', async ({ page, browser }) => {
+    if (process.env.CI) expect(hasEmailConfig && !!outbox, 'EMAIL_SERVER_HOST and MOCK_SMTP_OUTBOX').toBe(true);
     test.skip(!hasEmailConfig || !outbox, 'Needs EMAIL_SERVER_HOST and scripts/mock-smtp.mjs with MOCK_SMTP_OUTBOX');
     const email = uniqueEmail('pwreset');
     await registerUser(email);
@@ -161,6 +199,8 @@ test.describe('Password reset', () => {
       await setPasswordWithLink(browser, link!, NEW_PASSWORD);
       expect(await signsIn(email, NEW_PASSWORD)).toBe(true);
       expect(await signsIn(email, OLD_PASSWORD)).toBe(false);
+      // And the account is told its password changed
+      await expect.poll(() => passwordChangedEmails(email), { timeout: 15000 }).toBe(1);
     } finally {
       await removeUser(email);
     }
@@ -169,7 +209,11 @@ test.describe('Password reset', () => {
   test('an admin makes a reset link for a locked-out user, who sets a password with it', async ({ page, browser }) => {
     const email = uniqueEmail('pwadmin');
     await registerUser(email);
+    // A session signed in before the reset, e.g. someone else's: the reset ends it
+    const earlierSession = await authedContext(email, OLD_PASSWORD);
     try {
+      expect((await trpcResult(await trpcQuery(earlierSession, 'auth.getProfile')))?.email).toBe(email);
+
       await login(page, users.alice.email, users.alice.password);
       await page.goto('/en/admin');
       const userSection = page.locator('section', { has: page.getByRole('heading', { name: 'User Management' }) });
@@ -187,11 +231,20 @@ test.describe('Password reset', () => {
       await setPasswordWithLink(browser, link, NEW_PASSWORD);
       expect(await signsIn(email, NEW_PASSWORD)).toBe(true);
       expect(await signsIn(email, OLD_PASSWORD)).toBe(false);
+      // Ended: refused as signed out, not some other failure
+      const ended = await trpcQuery(earlierSession, 'auth.getProfile');
+      expect((await trpcError(ended))?.data?.code).toBe('UNAUTHORIZED');
+      // With email configured, the account is told its password changed
+      if (hasEmailConfig && outbox) {
+        await expect.poll(() => passwordChangedEmails(email), { timeout: 15000 }).toBe(1);
+      }
 
       // Recorded in the audit log, with the user it was for
       const admin = await authedContext(users.alice.email, users.alice.password);
       try {
-        const log = await trpcResult(await trpcQuery(admin, 'admin.getAuditLog', { limit: 20 }));
+        const log = await trpcResult(
+          await trpcQuery(admin, 'admin.getAuditLog', { limit: 20, action: 'PASSWORD_RESET_LINK_CREATED' }),
+        );
         const entry = log?.items?.find(
           (item: { action: string; metadata: { email?: string } | null }) =>
             item.action === 'PASSWORD_RESET_LINK_CREATED' && item.metadata?.email === email,
@@ -201,6 +254,7 @@ test.describe('Password reset', () => {
         await admin.dispose();
       }
     } finally {
+      await earlierSession.dispose();
       await removeUser(email);
     }
   });

@@ -15,11 +15,13 @@
   "password": {
     "title": "Alterar senha",
     "current": "Senha atual",
+    "forgot": "Esqueceu sua senha atual?",
     "new": "Nova senha",
     "confirm": "Confirmar nova senha",
     "mismatch": "As senhas não coincidem",
     "submit": "Alterar senha",
     "submitting": "Alterando...",
-    "success": "Senha alterada!"
+    "success": "Senha alterada! Seus outros dispositivos foram desconectados.",
+    "signInAgain": "Sua senha foi alterada, mas este dispositivo não conseguiu entrar de novo com ela. Entre com a nova senha."
   }
 }

@@ -1,34 +1,51 @@
 /**
  * Password reset links (#397). "Forgot password?" emails one (when email is configured), and an
- * admin can make one to hand over themselves (`admin.createPasswordResetLink`), the only way back
- * in for a locked-out user on an instance without email.
+ * admin can make one to hand over themselves (`admin.createPasswordResetLink`), which is how a
+ * password user gets back in on an instance without email.
  *
  * A link carries a random 256-bit token (src/lib/password-reset-link.ts); only its SHA-256 hash
- * is stored, so a database leak gives no working links. Each user has at most one live link:
- * issuing a new one replaces the earlier ones. Using a link deletes all of the user's links, as
- * does changing the password in Settings. A link stops working once its user is suspended or
- * deleted.
+ * is stored, so a database leak gives no working links. A user has at most one link (one
+ * PasswordResetToken row per user): issuing a new one replaces it. Using it, changing the
+ * password in Settings, suspending or deleting the user deletes it. Setting the password records
+ * a new `passwordChangedAt`, which ends every session signed in under the old one (the jwt
+ * callback in auth.ts).
+ *
+ * Lock order: the user row, then their token row, as in `auth.changePassword` and
+ * `admin.deleteUser`/`suspendUser` (which write the user, then delete the token).
  */
 
 import { createHash, randomBytes } from 'crypto';
-import type { PrismaClient } from '@/generated/prisma/client';
-import { defaultLocale } from '@/i18n/routing';
+import bcrypt from 'bcryptjs';
+import type { Prisma, PrismaClient } from '@/generated/prisma/client';
+import { defaultLocale, type Locale } from '@/i18n/routing';
 import { isSupportedLocale } from '@/lib/locale-paths';
 import { resetPasswordPath } from '@/lib/password-reset-link';
+import { AppError } from './app-error';
+import { isTransactionManagerError } from './guest-transaction';
 import { logger } from './logger';
 import { createMailTransport, mailFrom, publicBaseUrl } from './mailer';
-import { passwordResetEmail } from './password-reset-email';
+import { passwordChangedEmail, passwordResetEmail } from './password-reset-email';
+import { checkRateLimit, refundRateLimit } from './rate-limit';
 import { AmbiguousEmailError, findUserByEmail } from './user-email';
 
 /** How long an emailed link works. */
 export const RESET_LINK_TTL_MS = 60 * 60 * 1000;
 /** How long a link an admin makes works: they hand it over themselves, which can take a while. */
 export const ADMIN_RESET_LINK_TTL_MS = 24 * 60 * 60 * 1000;
+/**
+ * Reset emails one account gets an hour, however many addresses (letter cases) or clients ask:
+ * enough for a lost email, too few to flood an inbox. Keyed by the account, so client-chosen
+ * keys can't evict it, and over it a request still gets the usual answer.
+ */
+export const RESET_EMAILS_PER_ACCOUNT = 5;
+const RESET_EMAIL_WINDOW_MS = 60 * 60 * 1000;
 
-type ResetUser = { isPlaceholder: boolean; suspendedAt: Date | null };
+// maxWait: getting a pool connection under load; timeout: the user row lock wait plus a cost-12
+// bcrypt hash
+const RESET_TRANSACTION_OPTIONS = { maxWait: 5_000, timeout: 15_000 };
 
-/** Whether this account can sign in at all: not suspended, and not a placeholder or deleted user. */
-export function canResetPassword(user: ResetUser): boolean {
+/** Whether this account can use ShareTab: not suspended, and not a placeholder or deleted user. */
+export function canResetPassword(user: { isPlaceholder: boolean; suspendedAt: Date | null }): boolean {
   return !user.isPlaceholder && user.suspendedAt === null;
 }
 
@@ -40,67 +57,93 @@ export function hashResetToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
-/** Makes a reset link's token for a user, replacing any earlier ones. */
+function localeOf(user: { locale: string }): Locale {
+  return isSupportedLocale(user.locale) ? user.locale : defaultLocale;
+}
+
+/**
+ * Locks the user's row and returns it if they can still use ShareTab (canResetPassword). Prisma
+ * has no row-lock API; the row returned is the one current once the lock is held, so a suspend or
+ * delete that committed meanwhile is seen.
+ */
+async function lockUserForReset(tx: Prisma.TransactionClient, userId: string) {
+  const [user] = await tx.$queryRaw<
+    { id: string; email: string; locale: string; isPlaceholder: boolean; suspendedAt: Date | null }[]
+  >`
+    SELECT "id", "email", "locale", "isPlaceholder", "suspendedAt" FROM "User"
+    WHERE "id" = ${userId}
+    FOR NO KEY UPDATE`;
+  return user && canResetPassword(user) ? user : null;
+}
+
+/**
+ * Makes a reset link's token for a user, replacing their earlier one in the same write. Null if
+ * they can't use ShareTab (suspended, a placeholder or deleted), checked under the user row's lock so
+ * a suspend can't slip in between.
+ */
 export async function issuePasswordResetToken(db: PrismaClient, userId: string, ttlMs: number, now = new Date()) {
   const token = newResetToken();
+  const tokenHash = hashResetToken(token);
   const expiresAt = new Date(now.getTime() + ttlMs);
-  await db.$transaction(async (tx) => {
-    await tx.passwordResetToken.deleteMany({ where: { userId } });
-    await tx.passwordResetToken.create({ data: { userId, tokenHash: hashResetToken(token), expiresAt } });
-  });
-  return { token, expiresAt };
-}
-
-const tokenSelect = {
-  id: true,
-  expiresAt: true,
-  user: { select: { id: true, email: true, isPlaceholder: true, suspendedAt: true } },
-} as const;
-
-type TokenRow = { expiresAt: Date; user: ResetUser } | null;
-
-function isUsable(row: TokenRow, now: Date): row is NonNullable<TokenRow> {
-  return row !== null && row.expiresAt > now && canResetPassword(row.user);
-}
-
-/**
- * The user a reset link would set the password for, or null if it wouldn't work. A cheap check
- * before the password is hashed, so a bad link costs no bcrypt work.
- */
-export async function findValidResetToken(db: PrismaClient, token: string, now = new Date()) {
-  const row = await db.passwordResetToken.findUnique({
-    where: { tokenHash: hashResetToken(token) },
-    select: tokenSelect,
-  });
-  return isUsable(row, now) ? { userId: row.user.id } : null;
-}
-
-/**
- * Sets a user's password with a reset link's token, which it uses up along with the user's other
- * links. Null, setting nothing, if the link is unknown, expired, already used (also by a request
- * at the same moment: only one of them deletes the row), or its user can't sign in.
- */
-export async function resetPasswordWithToken(db: PrismaClient, token: string, passwordHash: string, now = new Date()) {
-  return db.$transaction(async (tx) => {
-    const row = await tx.passwordResetToken.findUnique({
-      where: { tokenHash: hashResetToken(token) },
-      select: tokenSelect,
+  const issued = await db.$transaction(async (tx) => {
+    if (!(await lockUserForReset(tx, userId))) return false;
+    await tx.passwordResetToken.upsert({
+      where: { userId },
+      create: { userId, tokenHash, expiresAt },
+      update: { tokenHash, expiresAt, createdAt: now },
     });
-    if (!isUsable(row, now)) return null;
-
-    const { count } = await tx.passwordResetToken.deleteMany({ where: { id: row.id } });
-    if (count === 0) return null;
-
-    await tx.user.update({ where: { id: row.user.id }, data: { passwordHash } });
-    await tx.passwordResetToken.deleteMany({ where: { userId: row.user.id } });
-    return { userId: row.user.id, email: row.user.email };
+    return true;
   });
+  return issued ? { token, expiresAt } : null;
 }
 
 /**
- * Emails a reset link to the account with this address, if there is one that can sign in;
- * otherwise does nothing. `auth.requestPasswordReset` runs it without waiting, so its answer
- * doesn't depend on whether the address has an account.
+ * Sets a user's password with a reset link's token, using the link up. Null, setting nothing, if
+ * the link is unknown, expired, already used, or its user can't use ShareTab.
+ *
+ * An unknown or expired link is turned away before any transaction. Otherwise the password is
+ * hashed only after the link is claimed, inside the transaction: requests with the same link
+ * wait for the user's row lock, then find the link gone, so sending one link many times at once
+ * costs one bcrypt. A full connection pool or a transaction that runs out of time is reported as
+ * busy (SERVICE_UNAVAILABLE), not as a bad link; the link is then still unused.
+ */
+export async function resetPasswordWithToken(db: PrismaClient, token: string, password: string, now = new Date()) {
+  const tokenHash = hashResetToken(token);
+  const row = await db.passwordResetToken.findUnique({
+    where: { tokenHash },
+    select: { userId: true, expiresAt: true },
+  });
+  if (!row || row.expiresAt <= now) return null;
+
+  try {
+    return await db.$transaction(async (tx) => {
+      const user = await lockUserForReset(tx, row.userId);
+      if (!user) return null;
+
+      // By hash: a link issued meanwhile reuses the row with a new hash, and this one is then dead
+      const { count } = await tx.passwordResetToken.deleteMany({ where: { tokenHash, expiresAt: { gt: now } } });
+      if (count === 0) return null;
+
+      // Cost as at registration
+      const passwordHash = await bcrypt.hash(password, 12);
+      // Stamped now, after the lock wait and the hash: the new password version (auth.ts)
+      await tx.user.update({ where: { id: user.id }, data: { passwordHash, passwordChangedAt: new Date() } });
+      return { userId: user.id, email: user.email, locale: localeOf(user) };
+    }, RESET_TRANSACTION_OPTIONS);
+  } catch (error) {
+    if (isTransactionManagerError(error)) {
+      logger.warn('auth.password_reset_busy', { code: 'P2028', message: error.message });
+      throw new AppError('SERVICE_UNAVAILABLE', 'serverBusy', undefined, { cause: error });
+    }
+    throw error;
+  }
+}
+
+/**
+ * Emails a reset link to the account with this address, if there is one that can use ShareTab and
+ * hasn't had RESET_EMAILS_PER_ACCOUNT of them this hour; otherwise does nothing.
+ * `auth.requestPasswordReset` doesn't wait for it, so its answer doesn't depend on whether the
+ * address has an account.
  */
 export async function emailPasswordResetLink(db: PrismaClient, email: string, now = new Date()) {
   let user;
@@ -113,13 +156,54 @@ export async function emailPasswordResetLink(db: PrismaClient, email: string, no
   }
   if (!user || !canResetPassword(user)) return;
 
-  const { token } = await issuePasswordResetToken(db, user.id, RESET_LINK_TTL_MS, now);
-  const locale = isSupportedLocale(user.locale) ? user.locale : defaultLocale;
-  const url = `${publicBaseUrl()}${resetPasswordPath(locale, token)}`;
+  // Checked before the budget is spent or the user's current link is replaced: a URL that
+  // can't be parsed fails here
+  const baseUrl = publicBaseUrl();
+  const { hostname, protocol } = new URL(baseUrl);
+  if (hostname === 'localhost') {
+    // NEXTAUTH_URL left at its default: the link won't open anywhere but on the server itself
+    logger.warn('auth.password_reset_link_localhost', { baseUrl });
+  } else if (protocol === 'http:') {
+    // Fine on a home network, but the link can be read on the way
+    logger.warn('auth.password_reset_link_insecure', { baseUrl });
+  }
+
+  const budgetKey = `password-reset-email:${user.id}`;
+  if (!checkRateLimit(budgetKey, RESET_EMAILS_PER_ACCOUNT, RESET_EMAIL_WINDOW_MS).allowed) {
+    logger.info('auth.password_reset_throttled', { userId: user.id });
+    return;
+  }
+
+  const issued = await issuePasswordResetToken(db, user.id, RESET_LINK_TTL_MS, now);
+  if (!issued) {
+    refundRateLimit(budgetKey);
+    return;
+  }
+  const locale = localeOf(user);
+  try {
+    await createMailTransport().sendMail({
+      from: mailFrom(),
+      to: user.email,
+      ...passwordResetEmail(locale, { email: user.email, url: `${baseUrl}${resetPasswordPath(locale, issued.token)}` }),
+    });
+  } catch (error) {
+    // Nothing reached the user, so it doesn't count against their emails
+    refundRateLimit(budgetKey);
+    throw error;
+  }
+  logger.info('auth.password_reset_sent', { userId: user.id });
+}
+
+/**
+ * Tells an account its password was just changed (a reset or Settings), so its owner notices a
+ * change they didn't make. Callers send it only when email is configured, and don't wait for it
+ * (`notifyPasswordChanged` in the auth router).
+ */
+export async function emailPasswordChanged(user: { email: string; locale: string }) {
+  const locale = localeOf(user);
   await createMailTransport().sendMail({
     from: mailFrom(),
     to: user.email,
-    ...passwordResetEmail(locale, { email: user.email, url }),
+    ...passwordChangedEmail(locale, { email: user.email, resetUrl: `${publicBaseUrl()}/${locale}/forgot-password` }),
   });
-  logger.info('auth.password_reset_sent', { userId: user.id });
 }

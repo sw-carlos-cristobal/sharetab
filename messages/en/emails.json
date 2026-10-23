@@ -6,5 +6,12 @@
     "action": "Choose a new password",
     "expiry": "The link works once and expires in 1 hour.",
     "ignore": "If you didn't ask for this, ignore this email. Your password stays the same."
+  },
+  "passwordChanged": {
+    "subject": "Your ShareTab password was changed",
+    "heading": "Your password was changed",
+    "intro": "The password for the ShareTab account {email} was just changed, and every device signed in to it before the change was signed out.",
+    "notYou": "If you didn't do this, reset your password now and tell your ShareTab administrator.",
+    "action": "Reset your password"
   }
 }

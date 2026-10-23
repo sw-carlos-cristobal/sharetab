@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
-import { useSession } from 'next-auth/react';
+import { useRef, useState } from 'react';
+import { signIn, useSession } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
-import { useRouter } from '@/i18n/navigation';
+import { Link, useRouter } from '@/i18n/navigation';
 import { trpc } from '@/lib/trpc';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -75,6 +75,7 @@ function ProfileForm({
 
 export default function SettingsPage() {
   const t = useTranslations('settings');
+  const tLogin = useTranslations('auth.login');
   const { data: session } = useSession();
 
   const profile = trpc.auth.getProfile.useQuery();
@@ -89,18 +90,46 @@ export default function SettingsPage() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [signInAgainFailed, setSignInAgainFailed] = useState(false);
+  const impersonation = trpc.admin.getImpersonationStatus.useQuery();
+  // Who this device signs in again as after the change: decided when it's sent, while this
+  // session is still good. null: an admin impersonating, whose own session the change doesn't
+  // touch; undefined: not known, so the page says to sign in again
+  const signInAgainAs = useRef<string | null | undefined>(undefined);
 
   const changePassword = trpc.auth.changePassword.useMutation({
-    onSuccess: () => {
+    onSuccess: async (_data, variables) => {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
+      setSignInAgainFailed(false);
+      // The change ends every session signed in under the old password, this one too (#397):
+      // sign in again with the new one so this device stays signed in
+      const email = signInAgainAs.current;
+      if (email === null) return;
+      if (!email) {
+        setSignInAgainFailed(true);
+        return;
+      }
+      try {
+        const result = await signIn('credentials', { email, password: variables.newPassword, redirect: false });
+        if (!result || result.error) setSignInAgainFailed(true);
+      } catch {
+        // The password did change; only the sign-in failed
+        setSignInAgainFailed(true);
+      }
     },
   });
 
   function handleChangePassword(e: React.FormEvent) {
     e.preventDefault();
     if (newPassword !== confirmPassword) return;
+    const email = profile.data?.email;
+    const sessionEmail = session?.user?.email;
+    const impersonating =
+      impersonation.data?.isImpersonating === true ||
+      (!!email && !!sessionEmail && email.toLowerCase() !== sessionEmail.toLowerCase());
+    signInAgainAs.current = impersonating ? null : email;
     changePassword.mutate({ currentPassword, newPassword });
   }
 
@@ -140,7 +169,15 @@ export default function SettingsPage() {
           <CardContent>
             <form onSubmit={handleChangePassword} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="currentPassword">{t('password.current')}</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="currentPassword">{t('password.current')}</Label>
+                  <Link
+                    href="/forgot-password"
+                    className="text-xs text-primary hover:text-primary/80 transition-colors"
+                  >
+                    {t('password.forgot')}
+                  </Link>
+                </div>
                 <Input
                   id="currentPassword"
                   type="password"
@@ -183,7 +220,23 @@ export default function SettingsPage() {
               >
                 {changePassword.isPending ? t('password.submitting') : t('password.submit')}
               </Button>
-              {changePassword.isSuccess && <p className="text-sm text-green-600">{t('password.success')}</p>}
+              {changePassword.isSuccess && (
+                <p data-testid="password-changed" className="text-sm text-green-600">
+                  {t('password.success')}
+                </p>
+              )}
+              {changePassword.isSuccess && signInAgainFailed && (
+                <p
+                  role="alert"
+                  data-testid="password-sign-in-again"
+                  className="text-sm text-amber-700 dark:text-amber-400"
+                >
+                  {t('password.signInAgain')}{' '}
+                  <Link href="/login" className="font-medium underline">
+                    {tLogin('submit')}
+                  </Link>
+                </p>
+              )}
               {changePassword.error && <p className="text-sm text-red-600">{changePassword.error.message}</p>}
             </form>
           </CardContent>

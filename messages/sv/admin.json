@@ -54,11 +54,8 @@
     "deleteUser": "Ta bort {name}",
     "resetLinkTitle": "Länk för att återställa lösenordet",
     "resetLinkDescription": "Skicka själv den här länken till <strong>{name}</strong>. Den fungerar en gång, till {expires}, och ersätter alla tidigare länkar för att återställa lösenordet.",
-    "resetLinkLabel": "Länk för att återställa lösenordet",
     "resetLinkCopy": "Kopiera länk",
-    "resetLinkCopied": "Länken har kopierats",
-    "resetLinkCopyFailed": "Det gick inte att kopiera länken. Markera den och kopiera den själv.",
-    "close": "Stäng"
+    "resetLinkCopied": "Länken har kopierats"
   },
   "groups": {
     "title": "Gruppöversikt",
