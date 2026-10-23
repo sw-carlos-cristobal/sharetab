@@ -249,12 +249,12 @@
     Required="false"
     Mask="false">llava</Config>
 
-  <!-- Email (magic link sign-in, password reset) -->
+  <!-- Email (magic link sign-in, password reset and password changed emails) -->
   <Config
     Name="Email SMTP Host"
     Target="EMAIL_SERVER_HOST"
     Default=""
-    Description="SMTP server for outgoing emails. Used for magic link sign-in, password reset emails and OAuth auth expiry alerts (Meridian / ChatGPT OAuth). Leave blank to disable email sending."
+    Description="SMTP server for outgoing emails. Used for magic link sign-in, password reset and password changed emails, and OAuth auth expiry alerts (Meridian / ChatGPT OAuth). Leave blank to disable email sending."
     Type="Variable"
     Display="advanced"
     Required="false"

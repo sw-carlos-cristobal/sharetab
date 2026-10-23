@@ -71,3 +71,11 @@ export function passwordResetEmail(locale: Locale, { email, url }: { email: stri
   const html = emailHtml(t('heading'), [t('intro')], { label: t('action'), url }, [t('expiry'), t('ignore')]);
   return { subject: t('subject'), text, html };
 }
+
+/** Sent after a reset or a change in Settings, so the owner notices one they didn't make */
+export function passwordChangedEmail(locale: Locale, { email, resetUrl }: { email: string; resetUrl: string }) {
+  const t = emailText(locale, 'passwordChanged', email);
+  const text = [t('intro'), '', t('notYou'), `${t('action')}: ${resetUrl}`].join('\n');
+  const html = emailHtml(t('heading'), [t('intro'), t('notYou')], { label: t('action'), url: resetUrl }, []);
+  return { subject: t('subject'), text, html };
+}

@@ -6,5 +6,12 @@
     "action": "Escolher uma nova senha",
     "expiry": "O link funciona uma vez e expira em 1 hora.",
     "ignore": "Se não foi você, ignore este e-mail. Sua senha continua a mesma."
+  },
+  "passwordChanged": {
+    "subject": "Sua senha do ShareTab foi alterada",
+    "heading": "Sua senha foi alterada",
+    "intro": "A senha da conta do ShareTab {email} acabou de ser alterada, e todos os dispositivos conectados antes da alteração foram desconectados.",
+    "notYou": "Se não foi você, redefina sua senha agora e avise o administrador do ShareTab.",
+    "action": "Redefinir a senha"
   }
 }

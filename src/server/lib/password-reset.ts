@@ -24,7 +24,7 @@ import { AppError } from './app-error';
 import { isTransactionManagerError } from './guest-transaction';
 import { logger } from './logger';
 import { createMailTransport, mailFrom, publicBaseUrl } from './mailer';
-import { passwordResetEmail } from './password-reset-email';
+import { passwordChangedEmail, passwordResetEmail } from './password-reset-email';
 import { checkRateLimit, refundRateLimit } from './rate-limit';
 import { AmbiguousEmailError, findUserByEmail } from './user-email';
 
@@ -204,4 +204,18 @@ export async function emailPasswordResetLink(db: PrismaClient, email: string, no
     ...passwordResetEmail(locale, { email: user.email, url: `${baseUrl}${resetPasswordPath(locale, issued.token)}` }),
   });
   logger.info('auth.password_reset_sent', { userId: user.id });
+}
+
+/**
+ * Tells an account its password was just changed (a reset or Settings), so its owner notices a
+ * change they didn't make. Callers send it only when email is configured, and don't wait for it
+ * (`notifyPasswordChanged` in the auth router).
+ */
+export async function emailPasswordChanged(user: { email: string; locale: string }) {
+  const locale = localeOf(user);
+  await createMailTransport().sendMail({
+    from: mailFrom(),
+    to: user.email,
+    ...passwordChangedEmail(locale, { email: user.email, resetUrl: `${publicBaseUrl()}/${locale}/forgot-password` }),
+  });
 }

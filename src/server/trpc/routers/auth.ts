@@ -10,7 +10,12 @@ import { parseAuthConfig } from '../../lib/auth-config';
 import { readRegistrationMode } from '../../lib/registration-mode';
 import { findUsersByEmail } from '../../lib/user-email';
 import { logger } from '../../lib/logger';
-import { emailPasswordResetLink, passwordTransaction, resetPasswordWithToken } from '../../lib/password-reset';
+import {
+  emailPasswordChanged,
+  emailPasswordResetLink,
+  passwordTransaction,
+  resetPasswordWithToken,
+} from '../../lib/password-reset';
 import {
   LOGIN_WINDOW_MS,
   loginAttemptsPerEmail,
@@ -32,6 +37,14 @@ const RESET_SUBMIT_WINDOW_MS = 15 * 60 * 1000;
 
 // Every password ShareTab sets: registration, Settings, reset links
 const newPasswordSchema = z.string().min(8).max(100);
+
+/** Tells the account its password changed, when email is configured; doesn't wait for the send. */
+function notifyPasswordChanged(user: { email: string; locale: string }) {
+  if (!parseAuthConfig(process.env).magicLink) return;
+  void emailPasswordChanged(user).catch((error: unknown) => {
+    logger.warn('auth.password_changed_email_failed', describeMailError(error));
+  });
+}
 
 /**
  * Per-IP limit for the reset routes, skipped when no header names the client, as for password
@@ -214,6 +227,7 @@ export const authRouter = createTRPCRouter({
       // The current password was just proven: failed sign-ins before don't keep the new one out
       // (the Settings page signs in again with it)
       clearRateLimit(loginRateLimitKey(user.email));
+      notifyPasswordChanged(user);
       // Who the page signs in again as, with the new password: the user, whose sessions this
       // change ended. No one while an admin impersonates: the session is the admin's, and stays
       return { success: true, signInAs: ctx.impersonating ? null : user.email };
@@ -259,6 +273,7 @@ export const authRouter = createTRPCRouter({
       clearRateLimit(loginRateLimitKey(user.email));
       clearRateLimit(passwordChangeGuessKey(user.userId));
       logger.info('auth.password_reset', { userId: user.userId });
+      notifyPasswordChanged(user);
       return { ok: true };
     }),
 

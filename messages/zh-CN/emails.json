@@ -6,5 +6,12 @@
     "action": "设置新密码",
     "expiry": "该链接只能使用一次，将在 1 小时后失效。",
     "ignore": "如果这不是您本人的操作，请忽略此邮件。您的密码不会改变。"
+  },
+  "passwordChanged": {
+    "subject": "您的 ShareTab 密码已更改",
+    "heading": "您的密码已更改",
+    "intro": "ShareTab 账户 {email} 的密码刚刚被更改，更改前已登录的所有设备均已退出登录。",
+    "notYou": "如果这不是您本人的操作，请立即重置密码并告知您的 ShareTab 管理员。",
+    "action": "重置密码"
   }
 }

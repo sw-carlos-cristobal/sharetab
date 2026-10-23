@@ -11,6 +11,7 @@ import {
   trpcError,
   removeTestUser,
 } from './helpers';
+import { expectOnePasswordChangedEmail } from './mock-smtp-outbox';
 
 test.describe('Password Change — Settings Page', () => {
   test('settings page shows change password form', async ({ page }) => {
@@ -85,6 +86,9 @@ test.describe('Password Change — Settings Page', () => {
       } finally {
         await ctx.dispose();
       }
+
+      // With email configured, the account is told its password changed
+      await expectOnePasswordChangedEmail(email);
     } finally {
       await otherDevice?.dispose();
       await removeTestUser(email);

@@ -238,6 +238,7 @@ Each push to `main` also gets a GitHub release named `Build YYYY.MM.DD.N-<sha>` 
 - **Forgot password?** on the login page now opens a page that emails a reset link when email is configured, and otherwise tells people to ask the administrator; the admin dashboard's User Management makes such links (see [Forgotten passwords](#forgotten-passwords)). Set `NEXTAUTH_URL` to your public URL: emailed links are built from it.
 - Setting a new password, with a link or in Settings, ends every session signed in under the old one. Sessions from before the upgrade keep working until that user's password changes. While the database can't be read, signed-in pages and calls are refused, but nobody is signed out: the session works again once the database is back.
 - `AUTH_RATE_LIMIT_MAX` now also limits wrong current passwords in Settings, and `DISABLE_PASSWORD_LOGIN` now also turns off password changes there.
+- With email configured, a reset or a password change emails the account a "password changed" notice.
 
 ### Email settings (#397)
 
@@ -464,13 +465,13 @@ Sign in through your own identity provider (IdP): Authentik, Authelia, Keycloak,
 
 ### Email (optional)
 
-| Variable                | Description                                                                                                                                    |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `EMAIL_SERVER_HOST`     | SMTP host (e.g. `smtp.gmail.com`). Used for magic link sign-in, password reset emails and OAuth auth expiry alerts (Meridian / ChatGPT OAuth). |
-| `EMAIL_SERVER_PORT`     | SMTP port. Use `465` for implicit TLS, `587` for STARTTLS.                                                                                     |
-| `EMAIL_SERVER_USER`     | SMTP username / email address.                                                                                                                 |
-| `EMAIL_SERVER_PASSWORD` | SMTP password or app password.                                                                                                                 |
-| `EMAIL_FROM`            | From address for sent emails.                                                                                                                  |
+| Variable                | Description                                                                                                                                                          |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `EMAIL_SERVER_HOST`     | SMTP host (e.g. `smtp.gmail.com`). Used for magic link sign-in, password reset and password changed emails, and OAuth auth expiry alerts (Meridian / ChatGPT OAuth). |
+| `EMAIL_SERVER_PORT`     | SMTP port. Use `465` for implicit TLS, `587` for STARTTLS.                                                                                                           |
+| `EMAIL_SERVER_USER`     | SMTP username / email address.                                                                                                                                       |
+| `EMAIL_SERVER_PASSWORD` | SMTP password or app password.                                                                                                                                       |
+| `EMAIL_FROM`            | From address for sent emails.                                                                                                                                        |
 
 ### Forgotten passwords
 
@@ -478,7 +479,7 @@ With email configured, **Forgot password?** on the login page (and on the Settin
 
 An admin can also make a reset link, the way back in on an instance without email, where the page tells people to ask the administrator. In the admin dashboard's User Management, the key icon on a user's row (not shown for suspended users or placeholders, or while password sign-in is off) makes a link, once you confirm, to send them yourself: it works once, expires after 24 hours unless a newer link replaces it, replaces any link they had, and is recorded in the audit log. It's built from the address you opened the dashboard at, like split links, so open the dashboard at an address the user can reach. With email configured, the user asking for a reset themselves replaces it. If the admin is the one locked out and there's no email, set `ADMIN_EMAIL` to the exact email (same letter case) of another account you can sign in to and restart, make the link from that account, then set it back and restart again.
 
-Setting a new password with a link signs the account out everywhere: every session signed in under the old password ends the next time the app checks it (an open page stops loading data; reloading it goes to the sign-in page). Changing it in Settings (offered while password sign-in is on) does the same, except that the device it was changed on tries to sign in again with the new password and says so if it can't. Either one ends the user's reset link and lifts the sign-in rate limit for their address. Suspending or deleting a user ends their reset link too. Wrong current passwords in Settings count toward a limit of their own, as many in 15 minutes as `AUTH_RATE_LIMIT_MAX` allows at the login form; the right one, or a reset, clears it.
+Setting a new password with a link signs the account out everywhere: every session signed in under the old password ends the next time the app checks it (an open page stops loading data; reloading it goes to the sign-in page). Changing it in Settings (offered while password sign-in is on) does the same, except that the device it was changed on tries to sign in again with the new password and says so if it can't. Either one ends the user's reset link, lifts the sign-in rate limit for their address, and, with email configured, emails the account that its password was changed, so its owner notices a change they didn't make. Suspending or deleting a user ends their reset link too. Wrong current passwords in Settings count toward a limit of their own, as many in 15 minutes as `AUTH_RATE_LIMIT_MAX` allows at the login form; the right one, or a reset, clears it.
 
 ### Admin
 
@@ -488,17 +489,17 @@ Setting a new password with a link signs the account out everywhere: every sessi
 
 ### Other
 
-| Variable                | Default                 | Description                                                                                                                                                                                                                                                |
-| ----------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NEXTAUTH_URL`          | `http://localhost:3000` | Public URL of your instance. The links in password reset and auth-expiry emails are built from it. Split and personal links are copied from the browser's address bar, not built from this setting, so open ShareTab at its public URL before sharing one. |
-| `AUTH_TRUST_HOST`       | `false`                 | Set to `true` when running on a local network or behind a reverse proxy.                                                                                                                                                                                   |
-| `DB_USER`               | `sharetab`              | PostgreSQL username (Docker bundled DB).                                                                                                                                                                                                                   |
-| `DB_PASSWORD`           | `sharetab`              | PostgreSQL password (Docker bundled DB).                                                                                                                                                                                                                   |
-| `DB_NAME`               | `sharetab`              | PostgreSQL database name (Docker bundled DB).                                                                                                                                                                                                              |
-| `UPLOAD_DIR`            | `./uploads`             | Directory for receipt image uploads. The Docker image uses `/app/uploads`, and the Compose file fixes it there.                                                                                                                                            |
-| `MAX_UPLOAD_SIZE_MB`    | `10`                    | Maximum upload file size.                                                                                                                                                                                                                                  |
-| `DISABLE_GUEST_UPLOADS` | `false`                 | Lock guest receipt uploads and AI scans off; overrides the admin toggle.                                                                                                                                                                                   |
-| `LOG_LEVEL`             | `info`                  | Logging verbosity: `debug`, `info`, `warn`, or `error`.                                                                                                                                                                                                    |
+| Variable                | Default                 | Description                                                                                                                                                                                                                                                                  |
+| ----------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NEXTAUTH_URL`          | `http://localhost:3000` | Public URL of your instance. The links in password reset, password changed and auth-expiry emails are built from it. Split and personal links are copied from the browser's address bar, not built from this setting, so open ShareTab at its public URL before sharing one. |
+| `AUTH_TRUST_HOST`       | `false`                 | Set to `true` when running on a local network or behind a reverse proxy.                                                                                                                                                                                                     |
+| `DB_USER`               | `sharetab`              | PostgreSQL username (Docker bundled DB).                                                                                                                                                                                                                                     |
+| `DB_PASSWORD`           | `sharetab`              | PostgreSQL password (Docker bundled DB).                                                                                                                                                                                                                                     |
+| `DB_NAME`               | `sharetab`              | PostgreSQL database name (Docker bundled DB).                                                                                                                                                                                                                                |
+| `UPLOAD_DIR`            | `./uploads`             | Directory for receipt image uploads. The Docker image uses `/app/uploads`, and the Compose file fixes it there.                                                                                                                                                              |
+| `MAX_UPLOAD_SIZE_MB`    | `10`                    | Maximum upload file size.                                                                                                                                                                                                                                                    |
+| `DISABLE_GUEST_UPLOADS` | `false`                 | Lock guest receipt uploads and AI scans off; overrides the admin toggle.                                                                                                                                                                                                     |
+| `LOG_LEVEL`             | `info`                  | Logging verbosity: `debug`, `info`, `warn`, or `error`.                                                                                                                                                                                                                      |
 
 ### Rate Limiting
 
@@ -588,7 +589,7 @@ npm run test:docker
 DOCKER_HOST=ssh://user@host npm run test:docker
 ```
 
-Set `AUTH_RATE_LIMIT_MAX=9999`, `AUTH_IP_RATE_LIMIT_MAX=9999`, `REGISTER_RATE_LIMIT_MAX=9999`, `GUEST_RATE_LIMIT_MAX=9999` and `PASSWORD_RESET_RATE_LIMIT_MAX=9999` in `.env` to lift the per-email and per-IP limits during repeated test runs (the global guest caps, the fixed guest limits and the per-account reset email limit still apply). The tests that send mail need the mock SMTP server, and following the emailed reset link also needs `MOCK_SMTP_OUTBOX`; see CONTRIBUTING.md. Every local request counts against one IP, because Next.js adds an `x-forwarded-for` header to local requests.
+Set `AUTH_RATE_LIMIT_MAX=9999`, `AUTH_IP_RATE_LIMIT_MAX=9999`, `REGISTER_RATE_LIMIT_MAX=9999`, `GUEST_RATE_LIMIT_MAX=9999` and `PASSWORD_RESET_RATE_LIMIT_MAX=9999` in `.env` to lift the per-email and per-IP limits during repeated test runs (the global guest caps, the fixed guest limits and the per-account reset email limit still apply). The tests that send mail need the mock SMTP server, and following the emailed reset link or checking the password changed emails also needs `MOCK_SMTP_OUTBOX`; see CONTRIBUTING.md. Every local request counts against one IP, because Next.js adds an `x-forwarded-for` header to local requests.
 
 ### Releases
 

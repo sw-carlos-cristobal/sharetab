@@ -23,6 +23,7 @@ import {
   ADMIN_RESET_LINK_TTL_MS,
   RESET_EMAILS_PER_ACCOUNT,
   RESET_LINK_TTL_MS,
+  emailPasswordChanged,
   emailPasswordResetLink,
   hashResetToken,
   issuePasswordResetToken,
@@ -509,5 +510,25 @@ describe('emailPasswordResetLink', () => {
     ]);
     expect(logged).not.toContain(token!);
     expect(logged).not.toContain(hashResetToken(token!));
+  });
+});
+
+describe('emailPasswordChanged', () => {
+  test('tells the account its password changed, in its language, with a way to reset it', async () => {
+    await emailPasswordChanged({ email: 'bob@example.com', locale: 'ja' });
+
+    expect(sendMail).toHaveBeenCalledTimes(1);
+    const mail = sendMail.mock.calls[0]![0] as { from: string; to: string; subject: string; text: string };
+    expect(mail.to).toBe('bob@example.com');
+    expect(mail.from).toBe('ShareTab <noreply@example.com>');
+    expect(mail.subject).not.toBe('Your ShareTab password was changed');
+    expect(mail.text).toContain('https://sharetab.example.com/ja/forgot-password');
+  });
+
+  test('falls back to English for a language ShareTab no longer has', async () => {
+    await emailPasswordChanged({ email: 'bob@example.com', locale: 'xx' });
+    const mail = sendMail.mock.calls[0]![0] as { subject: string; text: string };
+    expect(mail.subject).toBe('Your ShareTab password was changed');
+    expect(mail.text).toContain('/en/forgot-password');
   });
 });

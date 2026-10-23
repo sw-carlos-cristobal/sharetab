@@ -6,5 +6,12 @@
     "action": "Choisir un nouveau mot de passe",
     "expiry": "Le lien ne fonctionne qu'une fois et expire dans 1 heure.",
     "ignore": "Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail. Votre mot de passe reste inchangé."
+  },
+  "passwordChanged": {
+    "subject": "Votre mot de passe ShareTab a été modifié",
+    "heading": "Votre mot de passe a été modifié",
+    "intro": "Le mot de passe du compte ShareTab {email} vient d’être modifié, et tous les appareils connectés avant ce changement ont été déconnectés.",
+    "notYou": "Si vous n’êtes pas à l’origine de ce changement, réinitialisez votre mot de passe maintenant et prévenez votre administrateur ShareTab.",
+    "action": "Réinitialiser le mot de passe"
   }
 }

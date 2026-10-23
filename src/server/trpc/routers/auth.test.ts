@@ -23,6 +23,7 @@ vi.mock('@/server/lib/logger', () => ({
 }));
 const passwordReset = {
   emailPasswordResetLink: vi.fn(),
+  emailPasswordChanged: vi.fn(),
   resetPasswordWithToken: vi.fn(),
 };
 // The real passwordTransaction runs on mockDb's $transaction
@@ -343,6 +344,7 @@ describe('auth.changePassword', () => {
     vi.mocked(bcrypt.compare).mockResolvedValue(true as never);
     mockDb.$transaction.mockImplementation(async (fn: (client: typeof tx) => unknown) => fn(tx));
     tx.user.updateMany.mockResolvedValue({ count: 1 });
+    passwordReset.emailPasswordChanged.mockResolvedValue(undefined);
   });
 
   test('sets the password and a new password version, and ends the reset link, in one transaction', async () => {
@@ -543,6 +545,33 @@ describe('auth.changePassword', () => {
     expect(tx.passwordResetToken.deleteMany).not.toHaveBeenCalled();
   });
 
+  test('a refused change emails nothing, even with email configured', async () => {
+    stubEnv({ EMAIL_SERVER_HOST: 'smtp.example.com' });
+    tx.user.updateMany.mockResolvedValue({ count: 0 });
+    const api = await caller({ user: { id: 'user-1' } });
+    await api.changePassword({ currentPassword: 'password123', newPassword: 'new-password' }).catch(() => {});
+    expect(passwordReset.emailPasswordChanged).not.toHaveBeenCalled();
+  });
+
+  test('a failed "password changed" email is logged without its message', async () => {
+    stubEnv({ EMAIL_SERVER_HOST: 'smtp.example.com' });
+    passwordReset.emailPasswordChanged.mockRejectedValue(
+      Object.assign(new Error('rejected owner@example.com'), { code: 'EENVELOPE', command: 'RCPT TO' }),
+    );
+    const api = await caller({ user: { id: 'user-1' } });
+
+    expect(await api.changePassword({ currentPassword: 'password123', newPassword: 'new-password' })).toMatchObject({
+      success: true,
+    });
+    await vi.waitFor(() =>
+      expect(logger.warn).toHaveBeenCalledWith('auth.password_changed_email_failed', {
+        error: 'Error',
+        code: 'EENVELOPE',
+        command: 'RCPT TO',
+      }),
+    );
+  });
+
   test('lifts the sign-in limit for the account, so this device can sign in again with the new password', async () => {
     const { loginRateLimitKey } = await import('@/server/lib/password-login');
     const key = loginRateLimitKey('owner@example.com');
@@ -552,6 +581,25 @@ describe('auth.changePassword', () => {
     await api.changePassword({ currentPassword: 'password123', newPassword: 'new-password' });
 
     expect(checkRateLimit(key, 5, 15 * 60 * 1000).allowed).toBe(true);
+  });
+
+  test('emails the account that its password changed when email is configured, without waiting', async () => {
+    stubEnv({ EMAIL_SERVER_HOST: 'smtp.example.com' });
+    passwordReset.emailPasswordChanged.mockReturnValue(new Promise(() => {}));
+    const api = await caller({ user: { id: 'user-1' } });
+
+    expect(await api.changePassword({ currentPassword: 'password123', newPassword: 'new-password' })).toMatchObject({
+      success: true,
+    });
+    expect(passwordReset.emailPasswordChanged).toHaveBeenCalledWith(
+      expect.objectContaining({ email: owner.email, locale: 'sv' }),
+    );
+  });
+
+  test('sends no email without email configured', async () => {
+    const api = await caller({ user: { id: 'user-1' } });
+    await api.changePassword({ currentPassword: 'password123', newPassword: 'new-password' });
+    expect(passwordReset.emailPasswordChanged).not.toHaveBeenCalled();
   });
 });
 
@@ -689,6 +737,10 @@ describe('auth.resetPassword', () => {
   const TOKEN = 'T'.repeat(43);
   const resetUser = { userId: 'bob', email: 'Bob@example.com', locale: 'de' };
 
+  beforeEach(() => {
+    passwordReset.emailPasswordChanged.mockResolvedValue(undefined);
+  });
+
   test('sets the new password with a valid link', async () => {
     passwordReset.resetPasswordWithToken.mockResolvedValue(resetUser);
     const api = await caller();
@@ -754,13 +806,40 @@ describe('auth.resetPassword', () => {
     }
   });
 
-  test('refuses an unknown, expired or used link', async () => {
+  test('emails the account that its password changed when email is configured', async () => {
+    stubEnv({ EMAIL_SERVER_HOST: 'smtp.example.com' });
+    passwordReset.resetPasswordWithToken.mockResolvedValue(resetUser);
+    const api = await caller();
+
+    await api.resetPassword({ token: TOKEN, password: 'new-password' });
+
+    expect(passwordReset.emailPasswordChanged).toHaveBeenCalledWith(resetUser);
+  });
+
+  test('refuses an unknown, expired or used link, sending no email', async () => {
+    stubEnv({ EMAIL_SERVER_HOST: 'smtp.example.com' });
     passwordReset.resetPasswordWithToken.mockResolvedValue(null);
     const api = await caller();
     await expect(api.resetPassword({ token: TOKEN, password: 'new-password' })).rejects.toMatchObject({
       code: 'BAD_REQUEST',
       messageKey: 'resetLinkInvalid',
     });
+    expect(passwordReset.emailPasswordChanged).not.toHaveBeenCalled();
+  });
+
+  test('a failed "password changed" email is logged, and the reset still succeeds', async () => {
+    stubEnv({ EMAIL_SERVER_HOST: 'smtp.example.com' });
+    passwordReset.resetPasswordWithToken.mockResolvedValue(resetUser);
+    passwordReset.emailPasswordChanged.mockRejectedValue(Object.assign(new Error('down'), { code: 'ECONNECTION' }));
+    const api = await caller();
+
+    expect(await api.resetPassword({ token: TOKEN, password: 'new-password' })).toEqual({ ok: true });
+    await vi.waitFor(() =>
+      expect(logger.warn).toHaveBeenCalledWith('auth.password_changed_email_failed', {
+        error: 'Error',
+        code: 'ECONNECTION',
+      }),
+    );
   });
 
   test('PASSWORD_RESET_RATE_LIMIT_MAX sets the submission limit too, and requests and submissions count apart', async () => {

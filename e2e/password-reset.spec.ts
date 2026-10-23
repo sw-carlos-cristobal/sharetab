@@ -10,7 +10,7 @@ import {
   trpcError,
   removeTestUser,
 } from './helpers';
-import { outbox, mailTo, readResetLink } from './mock-smtp-outbox';
+import { outbox, mailTo, readResetLink, expectOnePasswordChangedEmail } from './mock-smtp-outbox';
 
 // #397: a forgotten password can be reset, by an emailed link (with SMTP) or a link an admin makes
 const hasEmailConfig = !!process.env.EMAIL_SERVER_HOST;
@@ -251,6 +251,8 @@ test.describe('Password reset', () => {
       await setPasswordWithLink(browser, link!, NEW_PASSWORD);
       expect(await signsIn(email, NEW_PASSWORD)).toBe(true);
       expect(await signsIn(email, OLD_PASSWORD)).toBe(false);
+      // And the account is told its password changed
+      await expectOnePasswordChangedEmail(email);
     } finally {
       await removeTestUser(email);
     }
@@ -303,6 +305,8 @@ test.describe('Password reset', () => {
       // The browser signed in before is sent to the sign-in page
       await earlierPage.goto('/en/dashboard');
       await expect(earlierPage).toHaveURL(/\/en\/login/);
+      // With email configured, the account is told its password changed
+      await expectOnePasswordChangedEmail(email);
 
       // Recorded in the audit log, with the user it was for
       const admin = await authedContext(users.alice.email, users.alice.password);
@@ -368,6 +372,7 @@ test.describe('Password reset', () => {
       const winner = winners[0]!;
       expect(await signsIn(email, `race-pass-${winner}`)).toBe(true);
       expect(await signsIn(email, `race-pass-${(winner + 1) % 8}`)).toBe(false);
+      await expectOnePasswordChangedEmail(email);
     } finally {
       for (const client of clients) await client.dispose();
       await admin?.dispose();
