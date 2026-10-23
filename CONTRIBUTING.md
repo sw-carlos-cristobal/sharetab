@@ -103,7 +103,7 @@ TypeScript runs in strict mode with extra checks, including `exactOptionalProper
 ### Translations
 
 ```bash
-npm run lint:i18n   # every locale has exactly the keys English has, every message is valid ICU, and {count} before a word sits in a plural
+npm run lint:i18n   # every locale has exactly the keys English has, and its messages follow the rules in CONTRIBUTING-TRANSLATIONS.md
 ```
 
 CI runs it too; run it locally whenever you add or change UI text. See [CONTRIBUTING-TRANSLATIONS.md](CONTRIBUTING-TRANSLATIONS.md).
@@ -132,7 +132,7 @@ Routers live in `src/server/trpc/routers/`. Add your procedure there and wire it
 - **One concern per PR** — bug fixes, features, and refactors should be separate PRs.
 - **Describe what and why** — the PR description should explain the motivation, not just restate the diff.
 - **Add tests** — new logic should have unit tests where possible; new user flows should have e2e coverage.
-- **Pass CI** — the required `test` check runs `npm audit --omit=dev --audit-level=high`, `npm run format:check`, `npm run lint`, `npx tsc --noEmit`, `npm test`, `npm run build`, and the Playwright e2e suite. Run the first six locally before opening a PR. If you change `docker/`, the entrypoint, `prisma/` SQL, or dependencies, also run `npm run test:docker` (the Docker Fresh Install check; `DOCKER_HOST=ssh://user@host` works if you have no local Docker).
+- **Pass CI** — the required `test` check runs `npm audit --omit=dev --audit-level=high`, `npm run format:check`, `npm run lint`, `npm run lint:i18n`, `npx tsc --noEmit`, `npm test`, `npm run build`, and the Playwright e2e suite. Run the first seven locally before opening a PR. If you change `docker/`, the entrypoint, `prisma/` SQL, or dependencies, also run `npm run test:docker` (the Docker Fresh Install check; `DOCKER_HOST=ssh://user@host` works if you have no local Docker).
 - **Document upgrade steps** — if a change needs anything from operators on upgrade (a manual command, a new required variable, a behavior they must know about), add it under **Upgrading** in the README, since build releases only list commit titles.
 - **Conventional commits** — use prefixes like `feat:`, `fix:`, `chore:`, `docs:`, `refactor:` in commit messages.
 

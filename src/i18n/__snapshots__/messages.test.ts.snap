@@ -1,0 +1,439 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`count messages > read as they should for one and for two in de 1`] = `
+{
+  "admin.audit.filesDeleted": [
+    "1 Datei",
+    "2 Dateien",
+  ],
+  "admin.groups.count": [
+    "1 Gruppe",
+    "2 Gruppen",
+  ],
+  "admin.groups.expenses": [
+    "1 Ausgabe",
+    "2 Ausgaben",
+  ],
+  "admin.groups.settlements": [
+    "1 Abrechnung",
+    "2 Abrechnungen",
+  ],
+  "admin.serverLogs.entries": [
+    "1 Eintrag",
+    "2 Einträge",
+  ],
+  "admin.storage.cleanedUp": [
+    "1 Datei bereinigt (3 KB freigegeben)",
+    "2 Dateien bereinigt (3 KB freigegeben)",
+  ],
+  "admin.storage.filesOnDisk": [
+    "1 Datei auf der Festplatte",
+    "2 Dateien auf der Festplatte",
+  ],
+  "admin.storage.unusedCleanedUp": [
+    "1 Beleg gelöscht",
+    "2 Belege gelöscht",
+  ],
+  "admin.tools.cleanupStats": [
+    "Abgelaufene Gast-Aufteilungen: 1 von 1.",
+    "Abgelaufene Gast-Aufteilungen: 2 von 2.",
+  ],
+  "admin.tools.cleanupSuccess": [
+    "1 abgelaufene Aufteilung gelöscht",
+    "2 abgelaufene Aufteilungen gelöscht",
+  ],
+  "admin.users.count": [
+    "1 Benutzer",
+    "2 Benutzer",
+  ],
+  "expenses.receipt.assignAllItems": [
+    "Alle Artikel zuordnen (1 übrig)",
+    "Alle Artikel zuordnen (2 übrig)",
+  ],
+  "groups.list.showAll": [
+    "Alle Gruppen anzeigen (1)",
+    "Alle Gruppen anzeigen (2)",
+  ],
+  "split.assign.assignAllItems": [
+    "Alle Artikel zuordnen (1 übrig)",
+    "Alle Artikel zuordnen (2 übrig)",
+  ],
+  "split.claim.claimConflict": [
+    "1 Artikel auch ausgewählt von Ana",
+    "2 Artikel auch ausgewählt von Ana",
+  ],
+  "splits.items": [
+    "1 Artikel",
+    "2 Artikel",
+  ],
+  "splits.people": [
+    "1 Person",
+    "2 Personen",
+  ],
+}
+`;
+
+exports[`count messages > read as they should for one and for two in en 1`] = `
+{
+  "admin.audit.filesDeleted": [
+    "1 file",
+    "2 files",
+  ],
+  "admin.groups.count": [
+    "1 group",
+    "2 groups",
+  ],
+  "admin.groups.expenses": [
+    "1 expense",
+    "2 expenses",
+  ],
+  "admin.groups.settlements": [
+    "1 settlement",
+    "2 settlements",
+  ],
+  "admin.serverLogs.entries": [
+    "1 entry",
+    "2 entries",
+  ],
+  "admin.storage.cleanedUp": [
+    "Cleaned up 1 file (3 KB freed)",
+    "Cleaned up 2 files (3 KB freed)",
+  ],
+  "admin.storage.filesOnDisk": [
+    "1 file on disk",
+    "2 files on disk",
+  ],
+  "admin.storage.unusedCleanedUp": [
+    "Deleted 1 receipt",
+    "Deleted 2 receipts",
+  ],
+  "admin.tools.cleanupStats": [
+    "Expired guest splits: 1 of 1.",
+    "Expired guest splits: 2 of 2.",
+  ],
+  "admin.tools.cleanupSuccess": [
+    "Deleted 1 expired split",
+    "Deleted 2 expired splits",
+  ],
+  "admin.users.count": [
+    "1 user",
+    "2 users",
+  ],
+  "expenses.receipt.assignAllItems": [
+    "Assign all items (1 remaining)",
+    "Assign all items (2 remaining)",
+  ],
+  "groups.list.showAll": [
+    "Show all groups (1)",
+    "Show all groups (2)",
+  ],
+  "split.assign.assignAllItems": [
+    "Assign all items (1 left)",
+    "Assign all items (2 left)",
+  ],
+  "split.claim.claimConflict": [
+    "1 item also claimed by Ana",
+    "2 items also claimed by Ana",
+  ],
+  "splits.items": [
+    "1 item",
+    "2 items",
+  ],
+  "splits.people": [
+    "1 person",
+    "2 people",
+  ],
+}
+`;
+
+exports[`count messages > read as they should for one and for two in es 1`] = `
+{
+  "admin.audit.filesDeleted": [
+    "1 archivo",
+    "2 archivos",
+  ],
+  "admin.groups.count": [
+    "1 grupo",
+    "2 grupos",
+  ],
+  "admin.groups.expenses": [
+    "1 gasto",
+    "2 gastos",
+  ],
+  "admin.groups.settlements": [
+    "1 liquidación",
+    "2 liquidaciones",
+  ],
+  "admin.serverLogs.entries": [
+    "1 entrada",
+    "2 entradas",
+  ],
+  "admin.storage.cleanedUp": [
+    "1 archivo limpiado (3 KB liberados)",
+    "2 archivos limpiados (3 KB liberados)",
+  ],
+  "admin.storage.filesOnDisk": [
+    "1 archivo en disco",
+    "2 archivos en disco",
+  ],
+  "admin.storage.unusedCleanedUp": [
+    "1 recibo eliminado",
+    "2 recibos eliminados",
+  ],
+  "admin.tools.cleanupStats": [
+    "Divisiones de invitados expiradas: 1 de 1.",
+    "Divisiones de invitados expiradas: 2 de 2.",
+  ],
+  "admin.tools.cleanupSuccess": [
+    "1 división expirada eliminada",
+    "2 divisiones expiradas eliminadas",
+  ],
+  "admin.users.count": [
+    "1 usuario",
+    "2 usuarios",
+  ],
+  "expenses.receipt.assignAllItems": [
+    "Asignar todos los artículos (1 restante)",
+    "Asignar todos los artículos (2 restantes)",
+  ],
+  "groups.list.showAll": [
+    "Mostrar todos los grupos (1)",
+    "Mostrar todos los grupos (2)",
+  ],
+  "split.assign.assignAllItems": [
+    "Asignar todos los artículos (1 restante)",
+    "Asignar todos los artículos (2 restantes)",
+  ],
+  "split.claim.claimConflict": [
+    "1 artículo también reclamado por Ana",
+    "2 artículos también reclamados por Ana",
+  ],
+  "splits.items": [
+    "1 artículo",
+    "2 artículos",
+  ],
+  "splits.people": [
+    "1 persona",
+    "2 personas",
+  ],
+}
+`;
+
+exports[`count messages > read as they should for one and for two in fr 1`] = `
+{
+  "admin.audit.filesDeleted": [
+    "1 fichier",
+    "2 fichiers",
+  ],
+  "admin.groups.count": [
+    "1 groupe",
+    "2 groupes",
+  ],
+  "admin.groups.expenses": [
+    "1 dépense",
+    "2 dépenses",
+  ],
+  "admin.groups.settlements": [
+    "1 règlement",
+    "2 règlements",
+  ],
+  "admin.serverLogs.entries": [
+    "1 entrée",
+    "2 entrées",
+  ],
+  "admin.storage.cleanedUp": [
+    "1 fichier nettoyé (3 KB libérés)",
+    "2 fichiers nettoyés (3 KB libérés)",
+  ],
+  "admin.storage.filesOnDisk": [
+    "1 fichier sur le disque",
+    "2 fichiers sur le disque",
+  ],
+  "admin.storage.unusedCleanedUp": [
+    "1 reçu supprimé",
+    "2 reçus supprimés",
+  ],
+  "admin.tools.cleanupStats": [
+    "Partages invités expirés : 1 sur 1.",
+    "Partages invités expirés : 2 sur 2.",
+  ],
+  "admin.tools.cleanupSuccess": [
+    "1 partage expiré supprimé",
+    "2 partages expirés supprimés",
+  ],
+  "admin.users.count": [
+    "1 utilisateur",
+    "2 utilisateurs",
+  ],
+  "expenses.receipt.assignAllItems": [
+    "Attribuer tous les articles (1 restant)",
+    "Attribuer tous les articles (2 restants)",
+  ],
+  "groups.list.showAll": [
+    "Afficher tous les groupes (1)",
+    "Afficher tous les groupes (2)",
+  ],
+  "split.assign.assignAllItems": [
+    "Attribuer tous les articles (1 restant)",
+    "Attribuer tous les articles (2 restants)",
+  ],
+  "split.claim.claimConflict": [
+    "1 article également réclamé par Ana",
+    "2 articles également réclamés par Ana",
+  ],
+  "splits.items": [
+    "1 article",
+    "2 articles",
+  ],
+  "splits.people": [
+    "1 personne",
+    "2 personnes",
+  ],
+}
+`;
+
+exports[`count messages > read as they should for one and for two in pt-BR 1`] = `
+{
+  "admin.audit.filesDeleted": [
+    "1 arquivo",
+    "2 arquivos",
+  ],
+  "admin.groups.count": [
+    "1 grupo",
+    "2 grupos",
+  ],
+  "admin.groups.expenses": [
+    "1 despesa",
+    "2 despesas",
+  ],
+  "admin.groups.settlements": [
+    "1 acerto",
+    "2 acertos",
+  ],
+  "admin.serverLogs.entries": [
+    "1 entrada",
+    "2 entradas",
+  ],
+  "admin.storage.cleanedUp": [
+    "1 arquivo limpo (3 KB liberados)",
+    "2 arquivos limpos (3 KB liberados)",
+  ],
+  "admin.storage.filesOnDisk": [
+    "1 arquivo no disco",
+    "2 arquivos no disco",
+  ],
+  "admin.storage.unusedCleanedUp": [
+    "1 recibo excluído",
+    "2 recibos excluídos",
+  ],
+  "admin.tools.cleanupStats": [
+    "Divisões de convidados expiradas: 1 de 1.",
+    "Divisões de convidados expiradas: 2 de 2.",
+  ],
+  "admin.tools.cleanupSuccess": [
+    "1 divisão expirada excluída",
+    "2 divisões expiradas excluídas",
+  ],
+  "admin.users.count": [
+    "1 usuário",
+    "2 usuários",
+  ],
+  "expenses.receipt.assignAllItems": [
+    "Atribuir todos os itens (1 restante)",
+    "Atribuir todos os itens (2 restantes)",
+  ],
+  "groups.list.showAll": [
+    "Mostrar todos os grupos (1)",
+    "Mostrar todos os grupos (2)",
+  ],
+  "split.assign.assignAllItems": [
+    "Atribuir todos os itens (1 restante)",
+    "Atribuir todos os itens (2 restantes)",
+  ],
+  "split.claim.claimConflict": [
+    "1 item também selecionado por Ana",
+    "2 itens também selecionados por Ana",
+  ],
+  "splits.items": [
+    "1 item",
+    "2 itens",
+  ],
+  "splits.people": [
+    "1 pessoa",
+    "2 pessoas",
+  ],
+}
+`;
+
+exports[`count messages > read as they should for one and for two in sv 1`] = `
+{
+  "admin.audit.filesDeleted": [
+    "1 fil",
+    "2 filer",
+  ],
+  "admin.groups.count": [
+    "1 grupp",
+    "2 grupper",
+  ],
+  "admin.groups.expenses": [
+    "1 utgift",
+    "2 utgifter",
+  ],
+  "admin.groups.settlements": [
+    "1 avräkning",
+    "2 avräkningar",
+  ],
+  "admin.serverLogs.entries": [
+    "1 post",
+    "2 poster",
+  ],
+  "admin.storage.cleanedUp": [
+    "1 fil rensad (3 KB frigjort)",
+    "2 filer rensade (3 KB frigjort)",
+  ],
+  "admin.storage.filesOnDisk": [
+    "1 fil på disk",
+    "2 filer på disk",
+  ],
+  "admin.storage.unusedCleanedUp": [
+    "1 kvitto raderat",
+    "2 kvitton raderade",
+  ],
+  "admin.tools.cleanupStats": [
+    "Utgångna gästdelningar: 1 av 1.",
+    "Utgångna gästdelningar: 2 av 2.",
+  ],
+  "admin.tools.cleanupSuccess": [
+    "1 utgången delning borttagen",
+    "2 utgångna delningar borttagna",
+  ],
+  "admin.users.count": [
+    "1 användare",
+    "2 användare",
+  ],
+  "expenses.receipt.assignAllItems": [
+    "Tilldela alla artiklar (1 kvar)",
+    "Tilldela alla artiklar (2 kvar)",
+  ],
+  "groups.list.showAll": [
+    "Visa alla grupper (1)",
+    "Visa alla grupper (2)",
+  ],
+  "split.assign.assignAllItems": [
+    "Tilldela alla artiklar (1 kvar)",
+    "Tilldela alla artiklar (2 kvar)",
+  ],
+  "split.claim.claimConflict": [
+    "1 artikel också vald av Ana",
+    "2 artiklar också valda av Ana",
+  ],
+  "splits.items": [
+    "1 artikel",
+    "2 artiklar",
+  ],
+  "splits.people": [
+    "1 person",
+    "2 personer",
+  ],
+}
+`;

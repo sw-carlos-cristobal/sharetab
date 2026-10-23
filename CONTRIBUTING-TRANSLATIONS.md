@@ -18,6 +18,7 @@ messages/
     admin.json     # Admin panel
     split.json     # Guest bill splitting and claim sessions
     splits.json    # My Splits (a signed-in user's guest splits)
+    errors.json    # Server error messages
   es/              # Spanish
     ...
 ```
@@ -56,8 +57,8 @@ Edit the specific namespace file (e.g., `messages/es/groups.json`). Reference `m
 ## Rules
 
 - **Keep ICU placeholders intact.** For example: `{name}`, `{count, plural, one {# member} other {# members}}`. These are variables — translate the surrounding text only.
-- **Put a count before a word only inside a plural.** `{count} items` reads "1 items"; write `{count, plural, one {# item} other {# items}}`, with your language's forms in the branches (keep both branches even when the word doesn't change, as in German `{count, plural, one {# Artikel} other {# Artikel}}`). Japanese, Chinese and Korean have one form, so `{count}件` is fine there. The lint catches this for arguments named `count` (or ending in `Count`); check other numbers, such as `{remaining}`, yourself.
-- **Double an apostrophe that comes right before `<` or `{`.** In ICU an apostrophe there starts quoted text, so write `l''<emphasis>` for "l'" followed by emphasized text.
+- **Put a count before a word only inside a plural.** `{count} items` reads "1 items"; write `{count, plural, one {# item} other {# items}}`, with your language's forms in the branches (keep both branches even when the word doesn't change, as in German `{count, plural, one {# Artikel} other {# Artikel}}`). Japanese, Chinese and Korean have one form, so `{count}件` is fine there. The lint catches this for arguments named `count` (or ending in `Count`); check other numbers, such as `{remaining}`, yourself. A plural needs a `one` branch in every language that has that form.
+- **Double an apostrophe that comes right before `{`, `}`, `<`, `>` or `#`.** In ICU an apostrophe there starts quoted text, shown as written (`l'{name}` shows "l{name}"), so write `l''<emphasis>` for "l'" followed by emphasized text.
 - **Don't translate brand names.** "ShareTab" and "GitHub" stay as-is.
 - **Use native script** for the language name in the switcher (e.g., "Français" not "French").
 - **Match the tone** of the English source — ShareTab uses concise, friendly UI text.
@@ -68,10 +69,13 @@ First complete the dev environment setup in [CONTRIBUTING.md](CONTRIBUTING.md#de
 
 ```bash
 npm run lint:i18n       # Validate keys match English and messages follow the rules
+npx vitest run src/i18n # Check the messages that show a count (see Validation)
 npm run dev:full        # Start the app (keeps running; stop it with Ctrl+C)
 # Navigate to /YOUR_LOCALE/login to see your translations
 ```
 
 ## Validation
 
-Run `npm run lint:i18n` to check that your locale has exactly the same keys as English (no missing or extra keys), that every message is valid ICU (the app would show a broken one as its key), and that no argument named `count` or ending in `Count` is followed by a word outside a plural in a language with plural forms. CI runs it too, so run it before you open a PR.
+Run `npm run lint:i18n` to check that your locale has exactly the same keys as English (no missing or extra keys), that every message is valid ICU (the app would show a broken one as its key), that no apostrophe starts quoted text, and that counts follow the plural rules above. CI runs it too, so run it before you open a PR.
+
+`src/i18n/messages.test.ts` keeps a snapshot of each message that shows a count, for 1 and for 2, in every language with plural forms. If you change one of those messages, `npx vitest run src/i18n` fails until you update the snapshot with `npx vitest run src/i18n -u`; check that the singulars in the snapshot's diff read right.
