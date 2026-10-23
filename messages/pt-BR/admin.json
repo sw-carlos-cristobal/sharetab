@@ -43,6 +43,7 @@
     "unsuspend": "Reativar {name}",
     "suspend": "Suspender {name}",
     "impersonate": "Personificar {name}",
+    "resetPassword": "Criar um link de redefinição de senha para {name}",
     "deleteTitle": "Excluir usuário",
     "deleteDescription": "Tem certeza de que deseja excluir {name}? Esta ação não pode ser desfeita. Todos os dados serão removidos permanentemente.",
     "cancel": "Cancelar",
@@ -50,7 +51,14 @@
     "loadMore": "Carregar mais",
     "errorLoading": "Falha ao carregar usuários.",
     "searchAriaLabel": "Pesquisar usuários",
-    "deleteUser": "Excluir {name}"
+    "deleteUser": "Excluir {name}",
+    "resetLinkConfirmTitle": "Criar um link de redefinição de senha?",
+    "resetLinkConfirmDescription": "Um link para {name} ({email}) escolher uma nova senha. Ele substitui qualquer link de redefinição anterior, inclusive um enviado por e-mail, e fica registrado no log de auditoria.",
+    "resetLinkConfirm": "Criar link",
+    "resetLinkTitle": "Link de redefinição de senha",
+    "resetLinkDescription": "Envie você mesmo este link para <strong>{name}</strong>. Ele funciona uma vez, até {expires}, a menos que um link mais recente o substitua, e substitui qualquer link de redefinição anterior.",
+    "resetLinkCopy": "Copiar link",
+    "resetLinkCopied": "Link copiado"
   },
   "groups": {
     "title": "Visão geral dos grupos",
@@ -223,6 +231,7 @@
     "actionUserDeleted": "Usuário excluído",
     "actionUserSuspended": "Usuário suspenso",
     "actionUserUnsuspended": "Usuário reativado",
+    "actionPasswordResetLink": "Link de redefinição de senha",
     "actionGroupDeleted": "Grupo excluído",
     "actionOrphansCleaned": "Órfãos limpos",
     "actionImpersonation": "Personificação",

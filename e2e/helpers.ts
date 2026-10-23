@@ -249,6 +249,18 @@ export async function deleteTestUser(adminCtx: Awaited<ReturnType<typeof authedC
 }
 
 /**
+ * Delete a test-created user, signed in as the seeded admin (Alice). Silently ignores errors.
+ */
+export async function removeTestUser(email: string) {
+  const admin = await authedContext(users.alice.email, users.alice.password);
+  try {
+    await deleteTestUser(admin, email);
+  } finally {
+    await admin.dispose();
+  }
+}
+
+/**
  * Delete a test-created group via the API. Silently ignores errors.
  */
 export async function deleteTestGroup(ctx: Awaited<ReturnType<typeof authedContext>>, groupId: string) {

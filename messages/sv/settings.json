@@ -15,6 +15,7 @@
   "password": {
     "title": "Ändra lösenord",
     "current": "Aktuellt lösenord",
+    "forgot": "Har du glömt ditt nuvarande lösenord?",
     "new": "Nytt lösenord",
     "confirm": "Bekräfta nytt lösenord",
     "mismatch": "Lösenord stämmer inte överens",

@@ -130,10 +130,11 @@ ShareTab is a free, self-hosted alternative to Splitwise for tracking shared exp
 - **Dark mode** -- system-aware with manual toggle
 - **Invite links** -- share a link to add friends to your groups
 - **Magic link auth** -- passwordless email sign-in
+- **Password reset** -- "Forgot password?" emails a single-use reset link when email is configured; an admin can also make one from the admin dashboard, the way back in without email (see [Forgotten passwords](#forgotten-passwords))
 - **Single sign-on (OIDC)** -- sign in with Authentik, Authelia, Keycloak, or other OpenID Connect providers; optional auto-registration and password-login disable
 - **Google sign-in** -- optional "Sign in with Google" button; new Google accounts follow the Registration setting
 - **PWA** -- installable on mobile with app-like experience
-- **Admin dashboard** -- system health (database, version and commit, uptime), user management, group overview, storage stats, AI usage, AI provider test, Meridian and ChatGPT OAuth login, auth-expiry email alerts, activity feed, audit log, registration control, guest receipt upload toggle, Venmo toggle, announcements, server logs, user impersonation, data export, expired guest split cleanup
+- **Admin dashboard** -- system health (database, version and commit, uptime), user management (including password reset links), group overview, storage stats, AI usage, AI provider test, Meridian and ChatGPT OAuth login, auth-expiry email alerts, activity feed, audit log, registration control, guest receipt upload toggle, Venmo toggle, announcements, server logs, user impersonation, data export, expired guest split cleanup
 - **Self-hosted** -- Docker Compose deployment, designed for Unraid
 
 ## Quick Start
@@ -231,6 +232,10 @@ Each push to `main` starts an image build; each build that passes its smoke test
 | `ghcr.io/sw-carlos-cristobal/sharetab:<sha>`  | One specific commit (short SHA, e.g. `870a80e`), for pinning. A push that lands while the previous build is still running cancels that build, so not every commit has an image.                                                 |
 
 Each push to `main` also gets a GitHub release named `Build YYYY.MM.DD.N-<sha>` listing the changes since the previous build; see [Releases](../../releases). The `stable` git tag normally marks the commit `:stable` was built from ([browse it](../../tree/stable)); after a failed promotion (see [Releases](#releases)) the tag and the image can point at different commits. ShareTab no longer publishes numbered (semver) versions; the last was v0.8.0.
+
+### Password reset (#397)
+
+- **Forgot password?** on the login page now opens a page that emails a reset link when email is configured, and otherwise tells people to ask the administrator; the admin dashboard's User Management makes such links (see [Forgotten passwords](#forgotten-passwords)). Set `NEXTAUTH_URL` to your public URL: emailed links are built from it.
 
 ### Email settings (#397)
 
@@ -465,6 +470,14 @@ Sign in through your own identity provider (IdP): Authentik, Authelia, Keycloak,
 | `EMAIL_SERVER_PASSWORD` | SMTP password or app password.                                                                                                                 |
 | `EMAIL_FROM`            | From address for sent emails.                                                                                                                  |
 
+### Forgotten passwords
+
+With email configured, **Forgot password?** on the login page (and on the Settings page's password card) emails a link to choose a new password. The link works once and expires after 1 hour; asking again replaces the earlier link. The page answers the same way whether or not the address has an account, so it can't be used to find out who has one, and an account gets at most 5 of these links an hour, ones whose email couldn't be sent included (more requests get the same answer, but no new link; the count is kept in memory, so a restart resets it). The link is built from `NEXTAUTH_URL`, never from the address the request came from, so set it to your instance's public URL, with its `http://` or `https://` (an `AUTH_URL`, if you add one, wins, as it does for sign-in; a value that isn't an http(s) URL stops the emails, logged as `mail.public_url_invalid`); the log warns when a link would point at `localhost` or use plain `http`. Accounts made with a magic link, SSO or Google can use it to add a password.
+
+An admin can also make a reset link, the way back in on an instance without email, where the page tells people to ask the administrator. In the admin dashboard's User Management, the key icon on a user's row (not shown for suspended users or placeholders, or while password sign-in is off) makes a link, once you confirm, to send them yourself: it works once, expires after 24 hours unless a newer link replaces it, replaces any link they had, and is recorded in the audit log. It's built from the address you opened the dashboard at, like split links, so open the dashboard at an address the user can reach. With email configured, the user asking for a reset themselves replaces it. If the admin is the one locked out and there's no email, set `ADMIN_EMAIL` to the exact email (same letter case) of another account you can sign in to and restart, make the link from that account, then set it back and restart again.
+
+Setting a new password with a link lifts the sign-in rate limit for the user's address. Suspending or deleting a user ends their reset link.
+
 ### Admin
 
 | Variable      | Description                                                                                                                                                                            |
@@ -573,7 +586,7 @@ npm run test:docker
 DOCKER_HOST=ssh://user@host npm run test:docker
 ```
 
-Set `AUTH_RATE_LIMIT_MAX=9999`, `AUTH_IP_RATE_LIMIT_MAX=9999`, `REGISTER_RATE_LIMIT_MAX=9999`, and `GUEST_RATE_LIMIT_MAX=9999` in `.env` to lift the per-email and per-IP limits during repeated test runs (the global guest caps and the fixed guest limits still apply). Every local request counts against one IP, because Next.js adds an `x-forwarded-for` header to local requests.
+Set `AUTH_RATE_LIMIT_MAX=9999`, `AUTH_IP_RATE_LIMIT_MAX=9999`, `REGISTER_RATE_LIMIT_MAX=9999`, `GUEST_RATE_LIMIT_MAX=9999` and `PASSWORD_RESET_RATE_LIMIT_MAX=9999` in `.env` to lift the per-email and per-IP limits during repeated test runs (the global guest caps, the fixed guest limits and the per-account reset email limit still apply). The tests that send mail need the mock SMTP server, and following the emailed reset link also needs `MOCK_SMTP_OUTBOX`; see CONTRIBUTING.md. Every local request counts against one IP, because Next.js adds an `x-forwarded-for` header to local requests.
 
 ### Releases
 

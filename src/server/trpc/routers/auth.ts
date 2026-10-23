@@ -50,6 +50,8 @@ export const authRouter = createTRPCRouter({
     const config = parseAuthConfig(process.env);
     return {
       passwordLogin: config.passwordLogin,
+      // "Forgot password?" emails a reset link; without email, only an admin can make one
+      passwordReset: config.passwordLogin && config.magicLink,
       magicLink: config.magicLink,
       oidc: config.oidc ? { name: config.oidc.displayName } : null,
       google: config.google !== null,

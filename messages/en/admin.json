@@ -43,6 +43,7 @@
     "unsuspend": "Unsuspend {name}",
     "suspend": "Suspend {name}",
     "impersonate": "Impersonate {name}",
+    "resetPassword": "Create a password reset link for {name}",
     "deleteTitle": "Delete User",
     "deleteDescription": "Are you sure you want to delete {name}? This action cannot be undone. All their data will be permanently removed.",
     "cancel": "Cancel",
@@ -50,7 +51,14 @@
     "loadMore": "Load more",
     "errorLoading": "Failed to load users.",
     "searchAriaLabel": "Search users",
-    "deleteUser": "Delete {name}"
+    "deleteUser": "Delete {name}",
+    "resetLinkConfirmTitle": "Make a password reset link?",
+    "resetLinkConfirmDescription": "A link for {name} ({email}) to set a new password. It replaces any reset link they have, an emailed one included, and is recorded in the audit log.",
+    "resetLinkConfirm": "Make link",
+    "resetLinkTitle": "Password reset link",
+    "resetLinkDescription": "Send this link to <strong>{name}</strong> yourself. It works once, until {expires} unless a newer link replaces it, and replaces any reset link they had.",
+    "resetLinkCopy": "Copy link",
+    "resetLinkCopied": "Link copied"
   },
   "groups": {
     "title": "Group Overview",
@@ -223,6 +231,7 @@
     "actionUserDeleted": "User Deleted",
     "actionUserSuspended": "User Suspended",
     "actionUserUnsuspended": "User Unsuspended",
+    "actionPasswordResetLink": "Password Reset Link",
     "actionGroupDeleted": "Group Deleted",
     "actionOrphansCleaned": "Orphans Cleaned",
     "actionImpersonation": "Impersonation",

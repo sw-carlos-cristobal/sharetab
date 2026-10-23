@@ -7,7 +7,15 @@ import { isSupportedLocale, withLocalePrefix } from '@/lib/locale-paths';
 
 const intlMiddleware = createIntlMiddleware(routing);
 
-const publicPages = ['/login', '/register', '/verify-request', '/invite', '/split'];
+const publicPages = [
+  '/login',
+  '/register',
+  '/verify-request',
+  '/forgot-password',
+  '/reset-password',
+  '/invite',
+  '/split',
+];
 
 function isPublicPage(pathname: string): boolean {
   return publicPages.some((page) => pathname === page || pathname.startsWith(page + '/'));

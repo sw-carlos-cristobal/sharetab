@@ -15,6 +15,7 @@
   "password": {
     "title": "Changer le mot de passe",
     "current": "Mot de passe actuel",
+    "forgot": "Mot de passe actuel oublié ?",
     "new": "Nouveau mot de passe",
     "confirm": "Confirmer le nouveau mot de passe",
     "mismatch": "Les mots de passe ne correspondent pas",

@@ -126,12 +126,15 @@ jobs:
           AUTH_IP_RATE_LIMIT_MAX: "10000"
           REGISTER_RATE_LIMIT_MAX: "1000"
           GUEST_RATE_LIMIT_MAX: "1000"
+          PASSWORD_RESET_RATE_LIMIT_MAX: "1000"
           ADMIN_EMAIL: alice@example.com
           AI_PROVIDER_PRIORITY: mock
           EMAIL_SERVER_HOST: localhost
           EMAIL_SERVER_PORT: "2525"
+          # mock-smtp.mjs keeps each message here, so the password reset test can open its link
+          MOCK_SMTP_OUTBOX: ${{ runner.temp }}/mock-smtp-outbox
         run: |
-          # Start a dummy SMTP server for magic link tests (accepts all mail, delivers nothing)
+          # Start a dummy SMTP server for magic link and password reset tests (accepts all mail, delivers nothing)
           node scripts/mock-smtp.mjs 2525 &
           npm run start &
           npx wait-on http://localhost:3000/api/health --timeout 30000
@@ -142,4 +145,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: playwright-report
-          path: test-results/
+          # playwright.config.ts's outputDir, and the mail the password tests read
+          path: |
+            tmp-screenshots/
+            ${{ runner.temp }}/mock-smtp-outbox/

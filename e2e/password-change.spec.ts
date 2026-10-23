@@ -32,6 +32,13 @@ test.describe('Password Change — Settings Page', () => {
     await expect(page.getByText(/incorrect|wrong|invalid/i)).toBeVisible({ timeout: 5000 });
   });
 
+  test('offers a reset for a forgotten current password (#397)', async ({ page }) => {
+    await login(page, testUsers.password.email, testUsers.password.password);
+    await page.goto('/en/settings');
+    await page.getByRole('link', { name: 'Forgot your current password?' }).click();
+    await expect(page).toHaveURL(/\/en\/forgot-password$/);
+  });
+
   test('mismatched passwords shows inline warning', async ({ page }) => {
     await login(page, testUsers.password.email, testUsers.password.password);
     await page.goto('/en/settings');
@@ -82,10 +89,10 @@ test.describe('Forgot Password — Login Page', () => {
     await expect(page.getByText('Forgot password?')).toBeVisible();
   });
 
-  test('clicking forgot password switches to magic link mode', async ({ page }) => {
+  test('clicking forgot password opens the reset request page (#397)', async ({ page }) => {
     await page.goto('/en/login');
     await page.getByText('Forgot password?').click();
-    await expect(page.getByRole('button', { name: 'Send magic link' })).toBeVisible();
-    await expect(page.locator('#password')).not.toBeVisible();
+    await expect(page).toHaveURL(/\/en\/forgot-password$/);
+    await expect(page.getByText('Forgot your password?')).toBeVisible();
   });
 });

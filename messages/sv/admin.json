@@ -43,6 +43,7 @@
     "unsuspend": "Återaktivera {name}",
     "suspend": "Stäng av {name}",
     "impersonate": "Imitera {name}",
+    "resetPassword": "Skapa en länk för att återställa lösenordet för {name}",
     "deleteTitle": "Ta bort användare",
     "deleteDescription": "Är du säker på att du vill ta bort {name}? Denna åtgärd kan inte ångras. All deras data kommer att tas bort permanent.",
     "cancel": "Avbryt",
@@ -50,7 +51,14 @@
     "loadMore": "Ladda fler",
     "errorLoading": "Kunde inte ladda användare.",
     "searchAriaLabel": "Sök användare",
-    "deleteUser": "Ta bort {name}"
+    "deleteUser": "Ta bort {name}",
+    "resetLinkConfirmTitle": "Skapa en länk för att återställa lösenordet?",
+    "resetLinkConfirmDescription": "En länk där {name} ({email}) kan välja ett nytt lösenord. Den ersätter kontots tidigare länkar för att återställa lösenordet, även en som skickats med e-post, och sparas i granskningsloggen.",
+    "resetLinkConfirm": "Skapa länk",
+    "resetLinkTitle": "Länk för att återställa lösenordet",
+    "resetLinkDescription": "Skicka själv den här länken till <strong>{name}</strong>. Den fungerar en gång, till {expires} om inte en nyare länk ersätter den, och ersätter alla tidigare länkar för att återställa lösenordet.",
+    "resetLinkCopy": "Kopiera länk",
+    "resetLinkCopied": "Länken har kopierats"
   },
   "groups": {
     "title": "Gruppöversikt",
@@ -223,6 +231,7 @@
     "actionUserDeleted": "Användare borttagen",
     "actionUserSuspended": "Användare avstängd",
     "actionUserUnsuspended": "Användare återaktiverad",
+    "actionPasswordResetLink": "Länk för lösenordsåterställning",
     "actionGroupDeleted": "Grupp borttagen",
     "actionOrphansCleaned": "Föräldralösa filer rensade",
     "actionImpersonation": "Imitation",

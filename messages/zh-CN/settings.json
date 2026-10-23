@@ -15,6 +15,7 @@
   "password": {
     "title": "修改密码",
     "current": "当前密码",
+    "forgot": "忘记当前密码？",
     "new": "新密码",
     "confirm": "确认新密码",
     "mismatch": "两次输入的密码不一致",

@@ -15,6 +15,7 @@
   "password": {
     "title": "Alterar senha",
     "current": "Senha atual",
+    "forgot": "Esqueceu sua senha atual?",
     "new": "Nova senha",
     "confirm": "Confirmar nova senha",
     "mismatch": "As senhas não coincidem",

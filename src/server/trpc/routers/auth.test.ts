@@ -69,14 +69,33 @@ afterEach(() => {
 describe('auth.getLoginOptions', () => {
   test('defaults to password login only', async () => {
     const api = await caller();
-    expect(await api.getLoginOptions()).toEqual({ passwordLogin: true, magicLink: false, oidc: null, google: false });
+    expect(await api.getLoginOptions()).toEqual({
+      passwordLogin: true,
+      passwordReset: false,
+      magicLink: false,
+      oidc: null,
+      google: false,
+    });
+  });
+
+  test('offers password reset by email when email is configured', async () => {
+    stubEnv({ EMAIL_SERVER_HOST: 'smtp.example.com' });
+    const api = await caller();
+    expect(await api.getLoginOptions()).toMatchObject({ passwordLogin: true, passwordReset: true, magicLink: true });
   });
 
   test('exposes the OIDC button name but never the issuer or secret', async () => {
     stubEnv({ ...OIDC_ENV, EMAIL_SERVER_HOST: 'smtp.example.com', DISABLE_PASSWORD_LOGIN: 'true' });
     const api = await caller();
     const options = await api.getLoginOptions();
-    expect(options).toEqual({ passwordLogin: false, magicLink: true, oidc: { name: 'Authentik' }, google: false });
+    expect(options).toEqual({
+      passwordLogin: false,
+      // No passwords to reset while password login is off
+      passwordReset: false,
+      magicLink: true,
+      oidc: { name: 'Authentik' },
+      google: false,
+    });
     expect(JSON.stringify(options)).not.toContain('s3cret');
     expect(JSON.stringify(options)).not.toContain('auth.example.com');
   });
@@ -85,7 +104,7 @@ describe('auth.getLoginOptions', () => {
     stubEnv({ GOOGLE_CLIENT_ID: 'id.apps.googleusercontent.com', GOOGLE_CLIENT_SECRET: 'g-secret' });
     const api = await caller();
     const options = await api.getLoginOptions();
-    expect(options).toEqual({ passwordLogin: true, magicLink: false, oidc: null, google: true });
+    expect(options).toEqual({ passwordLogin: true, passwordReset: false, magicLink: false, oidc: null, google: true });
     expect(JSON.stringify(options)).not.toContain('g-secret');
     expect(JSON.stringify(options)).not.toContain('googleusercontent');
   });
