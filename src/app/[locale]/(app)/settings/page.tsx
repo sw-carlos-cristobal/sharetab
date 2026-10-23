@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { signIn, useSession } from 'next-auth/react';
+import { getProviders, signIn, useSession } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
 import { Link, useRouter } from '@/i18n/navigation';
 import { trpc } from '@/lib/trpc';
@@ -103,6 +103,13 @@ export default function SettingsPage() {
       // no one while an admin impersonates, whose own session the change doesn't touch
       if (signInAs === null) return;
       try {
+        // signIn leaves the page, even with redirect: false, when it can't load the providers or
+        // finds no password provider; checked first, so the page says to sign in again instead
+        const providers = await getProviders();
+        if (!providers?.credentials) {
+          setSignInAgainFailed(true);
+          return;
+        }
         const result = await signIn('credentials', {
           email: signInAs,
           password: variables.newPassword,

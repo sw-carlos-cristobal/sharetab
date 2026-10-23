@@ -452,8 +452,8 @@ export function UserManagementSection({ currentUserEmail }: { currentUserEmail?:
         onConfirm={() => resetLinkFor && makeResetLink(resetLinkFor)}
       />
 
-      {/* A click outside doesn't close it (Escape and its buttons do): the link isn't shown again,
-          and making another replaces it */}
+      {/* A click outside doesn't close it (Escape and its Close button do): the link isn't shown
+          again, and making another replaces it */}
       <Dialog open={resetLinkOpen} onOpenChange={setResetLinkOpen} disablePointerDismissal>
         <DialogContent showCloseButton={false}>
           <DialogHeader>

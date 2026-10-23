@@ -458,7 +458,7 @@ export const adminRouter = createTRPCRouter({
     if (!user) {
       throw new AppError('NOT_FOUND', 'userNotFound');
     }
-    // Saves a transaction in the usual case; checked again under the user row's lock
+    // Refused without opening a transaction; checked again under the user row's lock
     if (!canResetPassword(user)) {
       throw new AppError('BAD_REQUEST', 'passwordResetNotAllowed');
     }

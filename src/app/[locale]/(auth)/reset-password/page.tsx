@@ -36,11 +36,11 @@ export default function ResetPasswordPage() {
   const [confirm, setConfirm] = useState('');
   const reset = trpc.auth.resetPassword.useMutation({
     onSuccess: (_data, { token: sentToken }) => {
-      // Only for the link still in the address bar: another one pasted in meanwhile isn't done
-      if (readResetToken(window.location.hash) !== sentToken) return;
       // Not left filled in for another link pasted into this tab, someone else's maybe
       setPassword('');
       setConfirm('');
+      // Only for the link still in the address bar: another one pasted in meanwhile isn't done
+      if (readResetToken(window.location.hash) !== sentToken) return;
       window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${DONE_HASH}`);
       // replaceState fires no hashchange; this tells every reader of the hash, a page that
       // remounted meanwhile (a language switch) included

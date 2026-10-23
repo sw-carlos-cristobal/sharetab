@@ -85,9 +85,9 @@ async function withLoginOptions(page: Page, options: { passwordLogin: boolean; p
     const response = await route.fetch();
     const body = await response.json();
     Object.assign(body[index].result.data.json, options);
-    stubbed.count += 1;
     // Not `response`: its headers carry the unpatched body's length and encoding
     await route.fulfill({ status: response.status(), json: body });
+    stubbed.count += 1;
   });
   return stubbed;
 }
@@ -140,6 +140,45 @@ test.describe('Password reset', () => {
     await expect(page).toHaveURL(new RegExp(`/es/reset-password#token=${token}$`));
     await expect(page.getByTestId('reset-password-invalid')).toHaveCount(0);
     await expect(page.locator('#newPassword')).toBeVisible();
+  });
+
+  test('a link used while another is pasted into the tab leaves the other one ready to use', async ({ page }) => {
+    const email = uniqueEmail('pwswap');
+    const userId = await registerUser(email);
+    let admin: Awaited<ReturnType<typeof authedContext>> | undefined;
+    try {
+      admin = await authedContext(users.alice.email, users.alice.password);
+      const made = await trpcMutation(admin, 'admin.createPasswordResetLink', { userId });
+      const { token } = (await made.json()).result.data.json;
+      const otherToken = 'z'.repeat(43);
+
+      await page.goto(`/en/reset-password#token=${token}`);
+      // Held until the other link is in the address bar
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => (release = resolve));
+      await page.route('**/api/trpc/auth.resetPassword**', async (route) => {
+        await held;
+        await route.continue();
+      });
+      await page.getByLabel('New password', { exact: true }).fill(NEW_PASSWORD);
+      await page.getByLabel('Confirm new password').fill(NEW_PASSWORD);
+      await page.getByRole('button', { name: 'Set password' }).click();
+      await page.evaluate((other) => {
+        window.location.hash = `token=${other}`;
+      }, otherToken);
+      const answered = page.waitForResponse('**/api/trpc/auth.resetPassword**');
+      release();
+      expect((await answered).ok()).toBe(true);
+
+      // The first link did its job, but the page still offers the second one, with nothing filled in
+      await expect(page.getByLabel('New password', { exact: true })).toHaveValue('');
+      await expect(page).toHaveURL(new RegExp(`#token=${otherToken}$`));
+      await expect(page.getByTestId('reset-password-done')).toHaveCount(0);
+      expect(await signsIn(email, NEW_PASSWORD)).toBe(true);
+    } finally {
+      await admin?.dispose();
+      await removeTestUser(email);
+    }
   });
 
   test('a request for an unknown address looks the same as for a known one', async ({ page }) => {

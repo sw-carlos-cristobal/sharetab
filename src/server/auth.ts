@@ -13,7 +13,6 @@ import { parseAuthConfig } from './lib/auth-config';
 import { GOOGLE_PROVIDER_ID, checkGoogleSignIn, googleProviderOptions } from './lib/google-sign-in';
 import { OIDC_PROVIDER_ID, checkOidcSignIn, mapOidcProfile } from './lib/oidc-sign-in';
 import { authorizePasswordLogin } from './lib/password-login';
-import { passwordStamp } from './lib/password-stamp';
 import { sessionCookieSubject } from './lib/session-cookie';
 import { readEmailVerified } from './lib/sign-in-identity';
 import { findUserByEmail } from './lib/user-email';
@@ -84,6 +83,15 @@ if (authConfig.oidc) {
   });
 }
 
+/**
+ * A password version (#397): when the user's password last changed, in milliseconds, 0 if it never
+ * has. A session carries the version it signed in under; one whose version is no longer the user's
+ * has ended.
+ */
+function passwordStamp(changedAt: Date | null | undefined): number {
+  return changedAt?.getTime() ?? 0;
+}
+
 const LOGIN_EVENTS: Record<string, string> = {
   [OIDC_PROVIDER_ID]: 'auth.oidc_login',
   [GOOGLE_PROVIDER_ID]: 'auth.google_login',
@@ -97,8 +105,9 @@ async function sessionCookieUserId(): Promise<string | null> {
   const signedIn = (await auth())?.user?.id;
   if (signedIn) return signedIn;
   // auth() reports nobody once the jwt callback has ended the session (a password reset or
-  // change, #397), but the cookie stays until the browser next reads /api/auth/session, and
-  // Auth.js links a new identity to the cookie's user (it decodes the cookie itself)
+  // change, or a version it couldn't read, #397), but the cookie stays until the browser next
+  // reads /api/auth/session, and Auth.js links a new identity to the cookie's user (it decodes
+  // the cookie itself)
   return sessionCookieSubject(await headers());
 }
 
@@ -175,13 +184,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           if (fresh?.name) token.name = fresh.name;
           if (fresh?.locale) token.locale = fresh.locale;
         } catch (error) {
-          // The password version can't be checked, so the session counts as ended (#397):
-          // every caller of auth() refuses it for this request. Only the session endpoint
-          // clears the cookie, so a browser that checks its session while the database is
-          // down signs in again afterwards. The OIDC and Google policies still see who is
-          // signed in: sessionCookieUserId reads the cookie itself.
           logger.warn('auth.session_refresh_failed', { error: error instanceof Error ? error.name : 'unknown' });
-          return null;
+          // A sign-in keeps its session: its provider just read the version, and the next check
+          // reads it again. Otherwise the version can't be checked, so the session counts as
+          // ended (#397) and every caller of auth() refuses it for this request. Only the
+          // session endpoint clears the cookie, and SessionProvider reads it on every page load
+          // and tab focus, so while the database is down each open tab is signed out when it
+          // next loads or regains focus. The OIDC and Google policies still see who is signed
+          // in: sessionCookieUserId reads the cookie itself.
+          return user?.id ? token : null;
         }
       }
       return token;

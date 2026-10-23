@@ -169,13 +169,10 @@ export async function emailPasswordResetLink(db: PrismaClient, email: string, no
   }
   if (!user || !canResetPassword(user)) return;
 
-  // Checked before the budget is spent or the user's current link is replaced: a URL that
-  // can't be parsed, or isn't http(s), fails here
+  // Read before the budget is spent or the user's current link is replaced: a URL that isn't
+  // http(s) fails here (publicBaseUrl logs it)
   const baseUrl = publicBaseUrl();
   const { hostname, protocol } = new URL(baseUrl);
-  if (protocol !== 'http:' && protocol !== 'https:') {
-    throw new Error('AUTH_URL or NEXTAUTH_URL is not an http(s) URL');
-  }
   if (hostname === 'localhost') {
     // NEXTAUTH_URL left at its default: the link won't open anywhere but on the server itself
     logger.warn('auth.password_reset_link_localhost', { baseUrl });

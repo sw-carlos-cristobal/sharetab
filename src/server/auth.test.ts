@@ -462,6 +462,19 @@ describe('jwt callback', () => {
     expect(await config.callbacks.jwt({ token: { id: 'u1' } })).toBeNull();
   });
 
+  test('a sign-in still starts its session when the read after it fails', async () => {
+    // The provider just read the version (password login with the hash it verified); the next
+    // check reads it again
+    const config = await loadAuth();
+    db.user.findUnique.mockRejectedValue(new Error('pool timeout'));
+    expect(
+      await config.callbacks.jwt({
+        token: {},
+        user: { id: 'u1', name: 'Ada', locale: 'en', passwordChangedAt: new Date(2_000) },
+      }),
+    ).toMatchObject({ id: 'u1', passwordStamp: 2_000 });
+  });
+
   test('treats the session as ended when its password version can’t be read', async () => {
     // Every caller of auth() then refuses it, where keeping it would let an ended session through
     // whenever this one read fails; the Google and OIDC policies read the cookie themselves

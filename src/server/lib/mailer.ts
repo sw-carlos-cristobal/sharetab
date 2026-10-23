@@ -6,6 +6,7 @@
 
 import nodemailer from 'nodemailer';
 import type { SMTPTransportOptions } from 'nodemailer';
+import { logger } from './logger';
 
 // Whether email is set up at all is `parseAuthConfig(...).magicLink` (EMAIL_SERVER_HOST set)
 export function smtpOptions() {
@@ -52,18 +53,22 @@ export function describeMailError(error: unknown) {
  * The instance's public URL, for the links in password and auth-expiry emails (Auth.js builds
  * magic links itself). Taken from configuration, `AUTH_URL` then `NEXTAUTH_URL` as Auth.js
  * prefers them (an empty value counts as unset here), never from the request's Host header,
- * which the sender of a reset request controls.
+ * which the sender of a reset request controls. Throws, and logs why, when it isn't an http(s) URL.
  */
 export function publicBaseUrl(): string {
-  const configured = (process.env.AUTH_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000').replace(/\/+$/, '');
-  // The origin of an http(s) URL: Auth.js also takes AUTH_URL with its /api/auth path, and
-  // ShareTab's pages have no base path. Anything else comes back as it is, for the reset email to
-  // refuse (the origin of a URL without a scheme is the string "null")
+  const configured = process.env.AUTH_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000';
+  let url: URL | undefined;
   try {
-    const url = new URL(configured);
-    if (url.protocol === 'http:' || url.protocol === 'https:') return url.origin;
+    url = new URL(configured);
   } catch {
-    // Returned as it is
+    // Refused below
   }
-  return configured;
+  if (!url || (url.protocol !== 'http:' && url.protocol !== 'https:')) {
+    // Logged here: the callers' failure logs carry no error message
+    logger.warn('mail.public_url_invalid', { baseUrl: configured });
+    throw new Error('AUTH_URL or NEXTAUTH_URL is not an http(s) URL');
+  }
+  // The origin only: Auth.js also takes AUTH_URL with its /api/auth path, and ShareTab's pages
+  // have no base path
+  return url.origin;
 }

@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
+
+vi.mock('./logger', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+
 import { describeMailError, mailFrom, publicBaseUrl, smtpOptions } from './mailer';
+import { logger } from './logger';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -69,12 +75,14 @@ describe('publicBaseUrl', () => {
     expect(publicBaseUrl()).toBe('https://tabs.example.com');
   });
 
-  test('returns a value that isn’t an http(s) URL as it is, for the reset email to refuse', () => {
+  test('refuses a value that isn’t an http(s) URL, and logs it, since the callers’ failure logs carry no message', () => {
     // new URL('sharetab.lan:3000').origin is the string "null"
-    vi.stubEnv('AUTH_URL', 'sharetab.lan:3000');
-    expect(publicBaseUrl()).toBe('sharetab.lan:3000');
-    vi.stubEnv('AUTH_URL', 'not a url/');
-    expect(publicBaseUrl()).toBe('not a url');
+    for (const value of ['sharetab.lan:3000', 'not a url']) {
+      vi.mocked(logger.warn).mockClear();
+      vi.stubEnv('AUTH_URL', value);
+      expect(() => publicBaseUrl()).toThrow('http');
+      expect(logger.warn).toHaveBeenCalledWith('mail.public_url_invalid', { baseUrl: value });
+    }
   });
 
   test('takes AUTH_URL, then NEXTAUTH_URL, without a trailing slash', () => {

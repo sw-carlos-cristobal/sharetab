@@ -400,12 +400,16 @@ describe('emailPasswordResetLink', () => {
     expect(await emailsLeft()).toBe(RESET_EMAILS_PER_ACCOUNT);
   });
 
-  test('a public URL without an http(s) scheme fails before the old link is replaced', async () => {
+  test('a public URL without an http(s) scheme fails before the old link is replaced or the budget is spent', async () => {
     vi.stubEnv('NEXTAUTH_URL', 'sharetab.lan:3000');
     findUserByEmail.mockResolvedValue(freshUser());
     await expect(emailPasswordResetLink(db, 'bob@example.com', NOW)).rejects.toThrow('http');
+    expect(logger.warn).toHaveBeenCalledWith('mail.public_url_invalid', { baseUrl: 'sharetab.lan:3000' });
     expect(mockDb.$transaction).not.toHaveBeenCalled();
     expect(sendMail).not.toHaveBeenCalled();
+
+    vi.stubEnv('NEXTAUTH_URL', 'https://sharetab.example.com');
+    expect(await emailsLeft()).toBe(RESET_EMAILS_PER_ACCOUNT);
   });
 
   test('warns when the link would travel over plain HTTP', async () => {
