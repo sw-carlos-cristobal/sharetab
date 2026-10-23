@@ -1,0 +1,94 @@
+'use client';
+
+import { useState } from 'react';
+import { useTranslations } from 'next-intl';
+import { KeyRound } from 'lucide-react';
+import { Link } from '@/i18n/navigation';
+import { trpc } from '@/lib/trpc';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
+
+// "Forgot password?" (#397): emails a reset link when the server can send email. Without email,
+// only an admin can make one (admin dashboard, User Management).
+export default function ForgotPasswordPage() {
+  const t = useTranslations('auth.forgotPassword');
+  const tVerify = useTranslations('auth.verifyRequest');
+  const loginOptions = trpc.auth.getLoginOptions.useQuery();
+  const [email, setEmail] = useState('');
+  const request = trpc.auth.requestPasswordReset.useMutation();
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    request.mutate({ email: email.trim() });
+  }
+
+  let body: React.ReactNode;
+  if (loginOptions.isPending) {
+    body = <LoadingSpinner className="py-8" />;
+  } else if (loginOptions.data && !loginOptions.data.passwordLogin) {
+    body = <p className="text-sm text-muted-foreground">{t('passwordLoginOff')}</p>;
+  } else if (!loginOptions.data?.passwordReset) {
+    // Also when the options couldn't be loaded: asking the admin works either way
+    body = (
+      <p data-testid="forgot-password-ask-admin" className="text-sm text-muted-foreground">
+        {t('askAdmin')}
+      </p>
+    );
+  } else if (request.isSuccess) {
+    // The same for every address, with or without an account
+    body = (
+      <div role="status" data-testid="forgot-password-sent" className="space-y-3 text-sm text-muted-foreground">
+        <p>{t('sent', { email: request.variables.email })}</p>
+        <p>{tVerify('spamHint')}</p>
+      </div>
+    );
+  } else {
+    body = (
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <p className="text-sm text-muted-foreground">{t('description')}</p>
+        {request.error && (
+          <div role="alert" className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+            {request.error.message}
+          </div>
+        )}
+        <div className="space-y-2">
+          <Label htmlFor="email">{t('email')}</Label>
+          <Input
+            id="email"
+            type="email"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+        </div>
+        <Button type="submit" className="w-full rounded-full h-10 text-sm font-medium" disabled={request.isPending}>
+          {request.isPending ? t('submitting') : t('submit')}
+        </Button>
+      </form>
+    );
+  }
+
+  return (
+    <Card className="border-primary/10 shadow-lg shadow-primary/5">
+      <CardHeader className="text-center pb-2">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 ring-1 ring-primary/20">
+          <KeyRound className="h-7 w-7 text-primary" />
+        </div>
+        <CardTitle className="text-2xl font-semibold tracking-tight">{t('title')}</CardTitle>
+        {request.isSuccess && <CardDescription className="mt-1">{t('sentTitle')}</CardDescription>}
+      </CardHeader>
+      <CardContent className="space-y-6 pt-4">
+        {body}
+        <p className="text-center">
+          <Link href="/login" className="text-sm font-medium text-primary hover:underline">
+            {t('backToLogin')}
+          </Link>
+        </p>
+      </CardContent>
+    </Card>
+  );
+}

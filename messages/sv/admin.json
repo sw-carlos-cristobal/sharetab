@@ -43,6 +43,7 @@
     "unsuspend": "Återaktivera {name}",
     "suspend": "Stäng av {name}",
     "impersonate": "Imitera {name}",
+    "resetPassword": "Skapa en länk för att återställa lösenordet för {name}",
     "deleteTitle": "Ta bort användare",
     "deleteDescription": "Är du säker på att du vill ta bort {name}? Denna åtgärd kan inte ångras. All deras data kommer att tas bort permanent.",
     "cancel": "Avbryt",
@@ -50,7 +51,14 @@
     "loadMore": "Ladda fler",
     "errorLoading": "Kunde inte ladda användare.",
     "searchAriaLabel": "Sök användare",
-    "deleteUser": "Ta bort {name}"
+    "deleteUser": "Ta bort {name}",
+    "resetLinkTitle": "Länk för att återställa lösenordet",
+    "resetLinkDescription": "Skicka själv den här länken till <strong>{name}</strong>. Den fungerar en gång, till {expires}, och ersätter alla tidigare länkar för att återställa lösenordet.",
+    "resetLinkLabel": "Länk för att återställa lösenordet",
+    "resetLinkCopy": "Kopiera länk",
+    "resetLinkCopied": "Länken har kopierats",
+    "resetLinkCopyFailed": "Det gick inte att kopiera länken. Markera den och kopiera den själv.",
+    "close": "Stäng"
   },
   "groups": {
     "title": "Gruppöversikt",
@@ -223,6 +231,7 @@
     "actionUserDeleted": "Användare borttagen",
     "actionUserSuspended": "Användare avstängd",
     "actionUserUnsuspended": "Användare återaktiverad",
+    "actionPasswordResetLink": "Länk för lösenordsåterställning",
     "actionGroupDeleted": "Grupp borttagen",
     "actionOrphansCleaned": "Föräldralösa filer rensade",
     "actionImpersonation": "Imitation",

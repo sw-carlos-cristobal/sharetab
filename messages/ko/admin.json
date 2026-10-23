@@ -43,6 +43,7 @@
     "unsuspend": "{name} 정지 해제",
     "suspend": "{name} 정지",
     "impersonate": "{name}으로 가장",
+    "resetPassword": "{name}의 비밀번호 재설정 링크 만들기",
     "deleteTitle": "사용자 삭제",
     "deleteDescription": "{name}을(를) 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다. 모든 데이터가 영구적으로 삭제됩니다.",
     "cancel": "취소",
@@ -50,7 +51,14 @@
     "loadMore": "더 보기",
     "errorLoading": "사용자를 불러오지 못했습니다.",
     "searchAriaLabel": "사용자 검색",
-    "deleteUser": "{name} 삭제"
+    "deleteUser": "{name} 삭제",
+    "resetLinkTitle": "비밀번호 재설정 링크",
+    "resetLinkDescription": "이 링크를 <strong>{name}</strong>님에게 직접 보내세요. 한 번만 사용할 수 있고 {expires}까지 유효하며, 이전 재설정 링크는 모두 무효가 됩니다.",
+    "resetLinkLabel": "비밀번호 재설정 링크",
+    "resetLinkCopy": "링크 복사",
+    "resetLinkCopied": "링크를 복사했습니다",
+    "resetLinkCopyFailed": "링크를 복사하지 못했습니다. 링크를 선택해 직접 복사하세요.",
+    "close": "닫기"
   },
   "groups": {
     "title": "그룹 개요",
@@ -223,6 +231,7 @@
     "actionUserDeleted": "사용자 삭제",
     "actionUserSuspended": "사용자 정지",
     "actionUserUnsuspended": "사용자 정지 해제",
+    "actionPasswordResetLink": "비밀번호 재설정 링크",
     "actionGroupDeleted": "그룹 삭제",
     "actionOrphansCleaned": "고아 파일 정리",
     "actionImpersonation": "사용자 가장",

@@ -43,6 +43,7 @@
     "unsuspend": "Réactiver {name}",
     "suspend": "Suspendre {name}",
     "impersonate": "Se faire passer pour {name}",
+    "resetPassword": "Créer un lien de réinitialisation du mot de passe pour {name}",
     "deleteTitle": "Supprimer l'utilisateur",
     "deleteDescription": "Êtes-vous sûr de vouloir supprimer {name} ? Cette action est irréversible. Toutes leurs données seront définitivement supprimées.",
     "cancel": "Annuler",
@@ -50,7 +51,14 @@
     "loadMore": "Charger plus",
     "errorLoading": "Échec du chargement des utilisateurs.",
     "searchAriaLabel": "Rechercher des utilisateurs",
-    "deleteUser": "Supprimer {name}"
+    "deleteUser": "Supprimer {name}",
+    "resetLinkTitle": "Lien de réinitialisation du mot de passe",
+    "resetLinkDescription": "Envoyez vous-même ce lien à <strong>{name}</strong>. Il ne fonctionne qu’une fois, jusqu’au {expires}, et remplace tout lien de réinitialisation précédent.",
+    "resetLinkLabel": "Lien de réinitialisation du mot de passe",
+    "resetLinkCopy": "Copier le lien",
+    "resetLinkCopied": "Lien copié",
+    "resetLinkCopyFailed": "Impossible de copier le lien. Sélectionnez-le et copiez-le vous-même.",
+    "close": "Fermer"
   },
   "groups": {
     "title": "Aperçu des groupes",
@@ -223,6 +231,7 @@
     "actionUserDeleted": "Utilisateur supprimé",
     "actionUserSuspended": "Utilisateur suspendu",
     "actionUserUnsuspended": "Utilisateur réactivé",
+    "actionPasswordResetLink": "Lien de réinitialisation",
     "actionGroupDeleted": "Groupe supprimé",
     "actionOrphansCleaned": "Orphelins nettoyés",
     "actionImpersonation": "Usurpation d'identité",

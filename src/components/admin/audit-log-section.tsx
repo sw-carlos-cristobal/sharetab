@@ -24,6 +24,10 @@ export function AuditLogSection() {
       label: t('audit.actionUserUnsuspended'),
       color: 'bg-green-500/10 text-green-700 dark:text-green-400',
     },
+    PASSWORD_RESET_LINK_CREATED: {
+      label: t('audit.actionPasswordResetLink'),
+      color: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
+    },
     GROUP_DELETED: { label: t('audit.actionGroupDeleted'), color: 'bg-red-500/10 text-red-700 dark:text-red-400' },
     ORPHANS_CLEANED: {
       label: t('audit.actionOrphansCleaned'),

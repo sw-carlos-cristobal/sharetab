@@ -43,6 +43,7 @@
     "unsuspend": "恢复 {name}",
     "suspend": "停用 {name}",
     "impersonate": "模拟 {name}",
+    "resetPassword": "为 {name} 创建密码重置链接",
     "deleteTitle": "删除用户",
     "deleteDescription": "确定要删除 {name} 吗？此操作不可撤销。该用户的所有数据将被永久删除。",
     "cancel": "取消",
@@ -50,7 +51,14 @@
     "loadMore": "加载更多",
     "errorLoading": "加载用户失败。",
     "searchAriaLabel": "搜索用户",
-    "deleteUser": "删除 {name}"
+    "deleteUser": "删除 {name}",
+    "resetLinkTitle": "密码重置链接",
+    "resetLinkDescription": "请您亲自将此链接发送给 <strong>{name}</strong>。它只能使用一次，有效期至 {expires}，并会取代其之前的所有重置链接。",
+    "resetLinkLabel": "密码重置链接",
+    "resetLinkCopy": "复制链接",
+    "resetLinkCopied": "链接已复制",
+    "resetLinkCopyFailed": "无法复制链接。请选中链接后手动复制。",
+    "close": "关闭"
   },
   "groups": {
     "title": "群组概览",
@@ -223,6 +231,7 @@
     "actionUserDeleted": "用户删除",
     "actionUserSuspended": "用户停用",
     "actionUserUnsuspended": "用户恢复",
+    "actionPasswordResetLink": "密码重置链接",
     "actionGroupDeleted": "群组删除",
     "actionOrphansCleaned": "孤立文件清理",
     "actionImpersonation": "用户模拟",

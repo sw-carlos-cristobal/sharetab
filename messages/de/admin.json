@@ -43,6 +43,7 @@
     "unsuspend": "{name} entsperren",
     "suspend": "{name} sperren",
     "impersonate": "Als {name} anmelden",
+    "resetPassword": "Link zum Zurücksetzen des Passworts für {name} erstellen",
     "deleteTitle": "Benutzer löschen",
     "deleteDescription": "Sind Sie sicher, dass Sie {name} löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden. Alle Daten werden dauerhaft entfernt.",
     "cancel": "Abbrechen",
@@ -50,7 +51,14 @@
     "loadMore": "Mehr laden",
     "errorLoading": "Benutzer konnten nicht geladen werden.",
     "searchAriaLabel": "Benutzer suchen",
-    "deleteUser": "{name} löschen"
+    "deleteUser": "{name} löschen",
+    "resetLinkTitle": "Link zum Zurücksetzen des Passworts",
+    "resetLinkDescription": "Senden Sie diesen Link selbst an <strong>{name}</strong>. Er funktioniert einmal, bis {expires}, und ersetzt alle früheren Links zum Zurücksetzen.",
+    "resetLinkLabel": "Link zum Zurücksetzen des Passworts",
+    "resetLinkCopy": "Link kopieren",
+    "resetLinkCopied": "Link kopiert",
+    "resetLinkCopyFailed": "Der Link konnte nicht kopiert werden. Markieren und kopieren Sie ihn selbst.",
+    "close": "Schließen"
   },
   "groups": {
     "title": "Gruppenübersicht",
@@ -223,6 +231,7 @@
     "actionUserDeleted": "Benutzer gelöscht",
     "actionUserSuspended": "Benutzer gesperrt",
     "actionUserUnsuspended": "Benutzer entsperrt",
+    "actionPasswordResetLink": "Link zum Zurücksetzen",
     "actionGroupDeleted": "Gruppe gelöscht",
     "actionOrphansCleaned": "Verwaiste bereinigt",
     "actionImpersonation": "Identitätswechsel",

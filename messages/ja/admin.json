@@ -43,6 +43,7 @@
     "unsuspend": "{name}の停止を解除",
     "suspend": "{name}を停止",
     "impersonate": "{name}になりすます",
+    "resetPassword": "{name} のパスワード再設定リンクを作成",
     "deleteTitle": "ユーザーを削除",
     "deleteDescription": "{name}を削除してもよろしいですか？この操作は元に戻せません。すべてのデータが完全に削除されます。",
     "cancel": "キャンセル",
@@ -50,7 +51,14 @@
     "loadMore": "さらに読み込む",
     "errorLoading": "ユーザーの読み込みに失敗しました。",
     "searchAriaLabel": "ユーザーを検索",
-    "deleteUser": "{name}を削除"
+    "deleteUser": "{name}を削除",
+    "resetLinkTitle": "パスワード再設定リンク",
+    "resetLinkDescription": "このリンクを <strong>{name}</strong> さんに直接送ってください。1回だけ使用でき、{expires} まで有効です。以前の再設定リンクは無効になります。",
+    "resetLinkLabel": "パスワード再設定リンク",
+    "resetLinkCopy": "リンクをコピー",
+    "resetLinkCopied": "リンクをコピーしました",
+    "resetLinkCopyFailed": "リンクをコピーできませんでした。リンクを選択して手動でコピーしてください。",
+    "close": "閉じる"
   },
   "groups": {
     "title": "グループ概要",
@@ -223,6 +231,7 @@
     "actionUserDeleted": "ユーザー削除",
     "actionUserSuspended": "ユーザー停止",
     "actionUserUnsuspended": "ユーザー停止解除",
+    "actionPasswordResetLink": "パスワード再設定リンク",
     "actionGroupDeleted": "グループ削除",
     "actionOrphansCleaned": "孤立ファイル削除",
     "actionImpersonation": "なりすまし",

@@ -130,8 +130,10 @@ jobs:
           AI_PROVIDER_PRIORITY: mock
           EMAIL_SERVER_HOST: localhost
           EMAIL_SERVER_PORT: "2525"
+          # mock-smtp.mjs keeps each message here, so the password reset test can open its link
+          MOCK_SMTP_OUTBOX: ${{ runner.temp }}/mock-smtp-outbox
         run: |
-          # Start a dummy SMTP server for magic link tests (accepts all mail, delivers nothing)
+          # Start a dummy SMTP server for magic link and password reset tests (accepts all mail, delivers nothing)
           node scripts/mock-smtp.mjs 2525 &
           npm run start &
           npx wait-on http://localhost:3000/api/health --timeout 30000

@@ -82,10 +82,10 @@ test.describe('Forgot Password — Login Page', () => {
     await expect(page.getByText('Forgot password?')).toBeVisible();
   });
 
-  test('clicking forgot password switches to magic link mode', async ({ page }) => {
+  test('clicking forgot password opens the reset request page (#397)', async ({ page }) => {
     await page.goto('/en/login');
     await page.getByText('Forgot password?').click();
-    await expect(page.getByRole('button', { name: 'Send magic link' })).toBeVisible();
-    await expect(page.locator('#password')).not.toBeVisible();
+    await expect(page).toHaveURL(/\/en\/forgot-password$/);
+    await expect(page.getByText('Forgot your password?')).toBeVisible();
   });
 });

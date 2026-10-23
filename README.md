@@ -130,6 +130,7 @@ ShareTab is a free, self-hosted alternative to Splitwise for tracking shared exp
 - **Dark mode** -- system-aware with manual toggle
 - **Invite links** -- share a link to add friends to your groups
 - **Magic link auth** -- passwordless email sign-in
+- **Password reset** -- "Forgot password?" emails a single-use reset link when email is configured; without email, an admin makes one for the user from the admin dashboard (see [Forgotten passwords](#forgotten-passwords))
 - **Single sign-on (OIDC)** -- sign in with Authentik, Authelia, Keycloak, or other OpenID Connect providers; optional auto-registration and password-login disable
 - **Google sign-in** -- optional "Sign in with Google" button; new Google accounts follow the Registration setting
 - **PWA** -- installable on mobile with app-like experience
@@ -451,13 +452,21 @@ Sign in through your own identity provider (IdP): Authentik, Authelia, Keycloak,
 
 ### Magic Link Auth (optional)
 
-| Variable                | Description                                                                                                             |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `EMAIL_SERVER_HOST`     | SMTP host (e.g. `smtp.gmail.com`). Used for magic link sign-in and OAuth auth expiry alerts (Meridian / ChatGPT OAuth). |
-| `EMAIL_SERVER_PORT`     | SMTP port. Use `465` for implicit TLS, `587` for STARTTLS.                                                              |
-| `EMAIL_SERVER_USER`     | SMTP username / email address.                                                                                          |
-| `EMAIL_SERVER_PASSWORD` | SMTP password or app password.                                                                                          |
-| `EMAIL_FROM`            | From address for sent emails.                                                                                           |
+| Variable                | Description                                                                                                                                    |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `EMAIL_SERVER_HOST`     | SMTP host (e.g. `smtp.gmail.com`). Used for magic link sign-in, password reset emails and OAuth auth expiry alerts (Meridian / ChatGPT OAuth). |
+| `EMAIL_SERVER_PORT`     | SMTP port. Use `465` for implicit TLS, `587` for STARTTLS.                                                                                     |
+| `EMAIL_SERVER_USER`     | SMTP username / email address.                                                                                                                 |
+| `EMAIL_SERVER_PASSWORD` | SMTP password or app password.                                                                                                                 |
+| `EMAIL_FROM`            | From address for sent emails.                                                                                                                  |
+
+### Forgotten passwords
+
+With email configured, **Forgot password?** on the login page emails a link to choose a new password. The link works once and expires after 1 hour; asking again replaces the earlier link. The page answers the same way whether or not the address has an account, so it can't be used to find out who has one. The link points at `NEXTAUTH_URL` (or `AUTH_URL`), never at the address the request came from, so set it to your instance's public URL. Accounts made with a magic link, SSO or Google can use it to add a password.
+
+Without email, the page tells people to ask the administrator. In the admin dashboard's User Management, the key icon on a user's row makes a reset link to send them yourself: it works once, expires after 24 hours, replaces any link they had, and is recorded in the audit log. It's built from the address you opened the dashboard at, like split links.
+
+Setting a new password with a link, or changing it in Settings, ends the user's other reset links and lifts the sign-in rate limit for their address. Sessions already signed in elsewhere stay signed in until they expire.
 
 ### Admin
 
@@ -489,6 +498,8 @@ Sign in through your own identity provider (IdP): Authentik, Authelia, Keycloak,
 | `GUEST_RATE_LIMIT_MAX`      | `10`    | Per client IP per hour, applied separately to guest receipt uploads, guest splits, and claim sessions. |
 | `GUEST_UPLOAD_GLOBAL_LIMIT` | `100`   | Max guest receipt uploads per hour across all guests combined.                                         |
 | `GUEST_AI_GLOBAL_LIMIT`     | `100`   | Max guest AI receipt scans per hour across all guests combined.                                        |
+
+Password reset emails have fixed limits: 5 requests per email address per hour (counted the same whether or not the address has an account) and 20 per client IP per hour.
 
 The client IP comes from the `cf-connecting-ip`, `x-real-ip`, or `x-forwarded-for` header, in that order. When a request has none of them, Next.js fills in `x-forwarded-for` with the address of whatever connected to ShareTab. So for per-IP limits to work in production:
 

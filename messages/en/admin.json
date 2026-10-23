@@ -43,6 +43,7 @@
     "unsuspend": "Unsuspend {name}",
     "suspend": "Suspend {name}",
     "impersonate": "Impersonate {name}",
+    "resetPassword": "Create a password reset link for {name}",
     "deleteTitle": "Delete User",
     "deleteDescription": "Are you sure you want to delete {name}? This action cannot be undone. All their data will be permanently removed.",
     "cancel": "Cancel",
@@ -50,7 +51,14 @@
     "loadMore": "Load more",
     "errorLoading": "Failed to load users.",
     "searchAriaLabel": "Search users",
-    "deleteUser": "Delete {name}"
+    "deleteUser": "Delete {name}",
+    "resetLinkTitle": "Password reset link",
+    "resetLinkDescription": "Send this link to <strong>{name}</strong> yourself. It works once, until {expires}, and replaces any reset link they had.",
+    "resetLinkLabel": "Password reset link",
+    "resetLinkCopy": "Copy link",
+    "resetLinkCopied": "Link copied",
+    "resetLinkCopyFailed": "Could not copy the link. Select it and copy it yourself.",
+    "close": "Close"
   },
   "groups": {
     "title": "Group Overview",
@@ -223,6 +231,7 @@
     "actionUserDeleted": "User Deleted",
     "actionUserSuspended": "User Suspended",
     "actionUserUnsuspended": "User Unsuspended",
+    "actionPasswordResetLink": "Password Reset Link",
     "actionGroupDeleted": "Group Deleted",
     "actionOrphansCleaned": "Orphans Cleaned",
     "actionImpersonation": "Impersonation",
