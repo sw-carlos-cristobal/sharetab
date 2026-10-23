@@ -35,7 +35,7 @@ function translator(locale: Locale, namespace: string): (key: string, values?: V
 
 const tag = (chunks: string) => chunks;
 
-// #441: messages that show a count, with the values the pages pass them
+// #441: messages that show a count, with the values the pages pass them (dashboard.members has no caller today)
 const COUNT_MESSAGES: [namespace: string, key: string, values: (n: number) => Values][] = [
   ['splits', 'people', (n) => ({ count: n })],
   ['splits', 'items', (n) => ({ count: n })],

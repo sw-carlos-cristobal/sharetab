@@ -103,7 +103,7 @@ TypeScript runs in strict mode with extra checks, including `exactOptionalProper
 ### Translations
 
 ```bash
-npm run lint:i18n   # every locale has exactly the keys English has, its messages are valid ICU, and counts use plurals (CONTRIBUTING-TRANSLATIONS.md)
+npm run lint:i18n   # every locale has exactly the keys English has, its files are valid JSON and its messages valid ICU, and counts named `count` use plurals (CONTRIBUTING-TRANSLATIONS.md)
 ```
 
 CI runs it too; run it locally whenever you add or change UI text. See [CONTRIBUTING-TRANSLATIONS.md](CONTRIBUTING-TRANSLATIONS.md).

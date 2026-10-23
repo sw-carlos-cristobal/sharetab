@@ -59,7 +59,7 @@ function unpluralizedCounts(elements: MessageFormatElement[]): string[] {
 }
 
 /**
- * The count arguments in an ICU message that a word follows outside a plural on that argument,
+ * The count arguments in an ICU message that a word follows outside a cardinal plural on that argument,
  * in order. Parses the message with the parser package next-intl's formatter uses (its own copy,
  * so the versions can differ), and throws on one that isn't valid ICU.
  */
@@ -97,7 +97,7 @@ function describeParseError(error: unknown): string {
 /**
  * What lint:i18n reports for one message: that it isn't valid ICU (next-intl would show its key
  * instead), and, in a language with plural forms, each count a word follows outside a plural and
- * each plural with no form for one.
+ * each cardinal plural with no `one` form.
  */
 export function messageProblems(locale: string, message: string): string[] {
   let elements: MessageFormatElement[];

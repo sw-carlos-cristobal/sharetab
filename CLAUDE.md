@@ -166,7 +166,7 @@ npx prisma db push   # Push schema without migration (dev only)
 - User locale preference stored in `User.locale` field (Prisma schema)
 - `npm run lint:i18n` checks for missing or extra translation keys, then parses every message in every locale through `scripts/lib/message-check.ts` with `@formatjs/icu-messageformat-parser`, the parser package next-intl's formatter (`intl-messageformat`) is built on (the lint has its own copy, a devDependency, so the two versions can differ). It fails on:
   - a message that isn't valid ICU, which next-intl would show as its key
-  - in a locale with plural forms, a `count` argument (or one named `…Count`) followed by a word outside a plural on that argument (#441): `{count} items` reads "1 items", so write `{count, plural, one {# item} other {# items}}`, keeping both branches where the word doesn't change (German `Artikel`)
+  - in a locale with plural forms, a `count` argument (or one named `…Count`) followed by a word outside a cardinal plural on that argument (#441): `{count} items` reads "1 items", so write `{count, plural, one {# item} other {# items}}`, keeping both branches where the word doesn't change (German `Artikel`)
   - in a locale with a `one` form, a cardinal plural without one (with neither `one` nor `=1`, 1 shows in the `other` form); `=1` doesn't stand in for it, since French and Brazilian Portuguese use `one` for 0 too
   - a folder under `messages/` that isn't a language the runtime supports, and a namespace file that isn't valid JSON or isn't a JSON object
 

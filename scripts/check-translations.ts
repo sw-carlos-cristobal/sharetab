@@ -67,7 +67,7 @@ for (const locale of locales) {
 
 // Folders that aren't a supported language, files that aren't valid JSON objects, messages
 // next-intl can't parse, and (#441) counts that skip plural rules: a count before a word outside a
-// plural, and a plural with no form for one ("1 items")
+// cardinal plural, and a cardinal plural with no `one` form
 for (const problem of findMessageProblems(messagesDir)) {
   hasErrors = true;
   console.error(problem);

@@ -48,7 +48,7 @@ messages/
    };
    ```
 
-4. **Run `npm run lint:i18n`** to confirm your locale has exactly the keys English has, its messages are valid ICU, and counts follow the plural rules below.
+4. **Run `npm run lint:i18n`** to confirm your locale has exactly the keys English has, its files are valid JSON and its messages valid ICU, and counts named `count` follow the plural rules below.
 
 5. **Run `npx vitest run src/i18n`.** For a language with plural forms, it adds your language to `src/i18n/__snapshots__/messages.test.ts.snap`, showing the messages listed in the test's `COUNT_MESSAGES` for 0, 1 and 2. Check that the singulars read right, commit the file (CI fails without it), then **submit a PR.**
 
@@ -70,7 +70,7 @@ Edit the specific namespace file (e.g., `messages/es/groups.json`). Reference `m
 First complete the dev environment setup in [CONTRIBUTING.md](CONTRIBUTING.md#dev-environment-setup) (`npm install`, `npx prisma generate`, and `cp .env.example .env`). Then:
 
 ```bash
-npm run lint:i18n       # Validate keys match English, messages parse, and counts use plurals
+npm run lint:i18n       # Validate keys, JSON and ICU, and that counts named count use plurals
 npx vitest run src/i18n # Check the messages that show a count (see Validation)
 npm run dev:full        # Start the app (keeps running; stop it with Ctrl+C)
 # Navigate to /YOUR_LOCALE/login to see your translations
@@ -78,6 +78,6 @@ npm run dev:full        # Start the app (keeps running; stop it with Ctrl+C)
 
 ## Validation
 
-Run `npm run lint:i18n` to check that your locale has exactly the same keys as English (no missing or extra keys), that every message is valid ICU (the app would show a broken one as its key), and that counts follow the plural rules above. CI runs it too, so run it before you open a PR.
+Run `npm run lint:i18n` to check that your locale has exactly the same keys as English (no missing or extra keys), that every file is valid JSON and every message valid ICU (the app would show a broken one as its key), and that counts named `count` follow the plural rules above (other numbers, such as `{remaining}`, are yours to check). CI runs it too, so run it before you open a PR.
 
-`src/i18n/messages.test.ts` keeps a snapshot of the messages listed in its `COUNT_MESSAGES` (those with a plural, except a few it gives a reason for, plus a few that show a count another way), for 0, 1 and 2, in every language with plural forms. If you change one of those messages, `npx vitest run src/i18n` fails until you update the snapshot with `npx vitest run src/i18n -u`; check that the singulars in the snapshot's diff read right.
+`src/i18n/messages.test.ts` keeps a snapshot of the messages listed in its `COUNT_MESSAGES` (those with a plural, except any it gives a reason for, plus a few that show a count another way), for 0, 1 and 2, in every language with plural forms. If you change one of those messages, `npx vitest run src/i18n` fails until you update the snapshot with `npx vitest run src/i18n -u`; check that the singulars in the snapshot's diff read right.
