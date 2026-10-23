@@ -23,6 +23,8 @@ vi.mock('next-auth/providers/google', () => ({ default: google }));
 vi.mock('next-auth/providers/nodemailer', () => ({ default: nodemailer }));
 // Reading the cookie itself is tested against Auth.js in lib/session-cookie.test.ts
 vi.mock('./lib/session-cookie', () => ({ sessionCookieSubject }));
+const markPasswordVersionUnread = vi.hoisted(() => vi.fn());
+vi.mock('./lib/session-endpoint', () => ({ markPasswordVersionUnread }));
 const requestHeaders = vi.hoisted(() => ({ value: new Headers() }));
 vi.mock('next/headers', () => ({ headers: vi.fn(async () => requestHeaders.value) }));
 vi.mock('bcryptjs', () => ({ default: { compare: vi.fn() } }));
@@ -419,6 +421,8 @@ describe('jwt callback', () => {
     const config = await loadAuth();
     db.user.findUnique.mockResolvedValue({ name: 'Ada', locale: 'en', passwordChangedAt: new Date(2_000) });
     expect(await config.callbacks.jwt({ token: { id: 'u1', passwordStamp: 1_000 } })).toBeNull();
+    // Read and different: the session really ended, so the endpoint clears the cookie
+    expect(markPasswordVersionUnread).not.toHaveBeenCalled();
   });
 
   test('ends a sign-in whose password was replaced while it was being checked', async () => {
@@ -473,6 +477,7 @@ describe('jwt callback', () => {
         user: { id: 'u1', name: 'Ada', locale: 'en', passwordChangedAt: new Date(2_000) },
       }),
     ).toMatchObject({ id: 'u1', passwordStamp: 2_000 });
+    expect(markPasswordVersionUnread).not.toHaveBeenCalled();
   });
 
   test('treats the session as ended when its password version can’t be read', async () => {
@@ -482,5 +487,7 @@ describe('jwt callback', () => {
     db.user.findUnique.mockRejectedValue(new Error('pool timeout'));
     expect(await config.callbacks.jwt({ token: { id: 'u1', name: 'Old', locale: 'en', passwordStamp: 0 } })).toBeNull();
     expect(logger.warn).toHaveBeenCalledWith('auth.session_refresh_failed', { error: 'Error' });
+    // So the session endpoint keeps the cookie instead of clearing it (lib/session-endpoint.ts)
+    expect(markPasswordVersionUnread).toHaveBeenCalledTimes(1);
   });
 });
