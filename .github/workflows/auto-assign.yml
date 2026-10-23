@@ -9,8 +9,10 @@ permissions:
 
 jobs:
   assign:
-    # Issues can only be assigned to users; an org-owned fork or transfer skips this job
-    if: github.event.repository.owner.type == 'User'
+    # Issues can only be assigned to users; an org-owned fork or transfer skips this job.
+    # The owner's own issues are skipped too: the bot assigning them emails the owner
+    # about an issue they just filed. They can assign themselves when filing instead.
+    if: github.event.repository.owner.type == 'User' && github.event.issue.user.login != github.repository_owner
     runs-on: ubuntu-latest
     steps:
       - name: Assign new issue to repo owner
