@@ -14,6 +14,7 @@ import { GOOGLE_PROVIDER_ID, checkGoogleSignIn, googleProviderOptions } from './
 import { OIDC_PROVIDER_ID, checkOidcSignIn, mapOidcProfile } from './lib/oidc-sign-in';
 import { authorizePasswordLogin } from './lib/password-login';
 import { sessionCookieSubject } from './lib/session-cookie';
+import { markPasswordVersionUnread } from './lib/session-endpoint';
 import { readEmailVerified } from './lib/sign-in-identity';
 import { findUserByEmail } from './lib/user-email';
 
@@ -189,10 +190,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           // reads it again. Otherwise the version can't be checked, so the session counts as
           // ended (#397) and every caller of auth() refuses it for this request. Only the
           // session endpoint would clear the cookie, and there keepSessionWhileDatabaseDown
-          // (lib/session-endpoint.ts) answers 503 instead when the database is down, so the
-          // session works again once it's back. The OIDC and Google policies still see who is
-          // signed in: sessionCookieUserId reads the cookie itself.
-          return user?.id ? token : null;
+          // (lib/session-endpoint.ts) answers 503 instead when told this read failed, so the
+          // session works again once the database answers. The OIDC and Google policies still
+          // see who is signed in: sessionCookieUserId reads the cookie itself.
+          if (user?.id) return token;
+          markPasswordVersionUnread();
+          return null;
         }
       }
       return token;
