@@ -80,12 +80,18 @@ async function withLoginOptions(page: Page, options: { passwordLogin: boolean; p
     const url = new URL(route.request().url());
     const procedures = url.pathname.replace(/^.*\/api\/trpc\//, '').split(',');
     const index = procedures.indexOf('auth.getLoginOptions');
-    if (index === -1) return route.continue();
-    const response = await route.fetch();
-    const body = await response.json();
-    Object.assign(body[index].result.data.json, options);
-    // Not `response`: its headers carry the unpatched body's length and encoding
-    await route.fulfill({ status: response.status(), json: body });
+    if (index === -1) return route.continue().catch(() => {});
+    try {
+      const response = await route.fetch();
+      const body = await response.json();
+      Object.assign(body[index].result.data.json, options);
+      // Not `response`: its headers carry the unpatched body's length and encoding
+      await route.fulfill({ status: response.status(), json: body });
+    } catch {
+      // The request went away first (a refetch while the page navigates, or the test ending):
+      // nothing to stub. A request the test needs fails its own assertions instead
+      return;
+    }
     stubbed.count += 1;
   });
   return stubbed;
