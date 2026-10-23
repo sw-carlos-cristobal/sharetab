@@ -63,6 +63,16 @@ const mockDb = {
   },
   groupMember: {
     findMany: vi.fn(),
+    deleteMany: vi.fn(),
+  },
+  account: {
+    deleteMany: vi.fn(),
+  },
+  session: {
+    deleteMany: vi.fn(),
+  },
+  passwordResetToken: {
+    deleteMany: vi.fn(),
   },
   guestSplit: {
     findMany: vi.fn(),
@@ -148,6 +158,11 @@ vi.mock('@/server/lib/auth-health-poller', async (importOriginal) => ({
   checkMeridianHealth: mockCheckMeridianHealth,
   invalidateMeridianHealthCache: mockInvalidateMeridianHealthCache,
   sendAuthExpiryEmail: mockSendAuthExpiryEmail,
+}));
+const { issuePasswordResetToken } = vi.hoisted(() => ({ issuePasswordResetToken: vi.fn() }));
+vi.mock('@/server/lib/password-reset', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/server/lib/password-reset')>()),
+  issuePasswordResetToken,
 }));
 const { mockSubmitCode, mockStartLogin } = vi.hoisted(() => ({ mockSubmitCode: vi.fn(), mockStartLogin: vi.fn() }));
 vi.mock('@/server/lib/meridian-login', async (importOriginal) => ({
@@ -767,6 +782,151 @@ describe('unused receipts', () => {
     const api = await callerAs({ user: { id: 'user-1', email: 'user@example.com' } });
     await expect(api.cleanupUnusedReceipts()).rejects.toMatchObject({ code: 'FORBIDDEN' });
     expect(deleteUnusedReceipts).not.toHaveBeenCalled();
+  });
+});
+
+describe('password reset links (#397)', () => {
+  const EXPIRES = new Date('2026-10-24T12:00:00Z');
+  let target: { id: string; email: string; locale: string; isPlaceholder: boolean; suspendedAt: Date | null } | null;
+
+  beforeEach(() => {
+    vi.stubEnv('ADMIN_EMAIL', 'admin@example.com');
+    vi.stubEnv('DISABLE_PASSWORD_LOGIN', '');
+    vi.stubEnv('EMAIL_SERVER_HOST', '');
+    vi.clearAllMocks();
+    target = { id: 'bob', email: 'bob@example.com', locale: 'ja', isPlaceholder: false, suspendedAt: null };
+    // The caller's own row (protectedProcedure's suspension check), or the user the link is for
+    mockDb.user.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
+      where.id === 'admin-1' || where.id === 'user-1' ? { suspendedAt: null } : where.id === 'bob' ? target : null,
+    );
+    issuePasswordResetToken.mockResolvedValue({ token: 'the-token', expiresAt: EXPIRES });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test('makes a 24-hour link for the user, in their language, and records it without the token', async () => {
+    const api = await callerAs(adminSession);
+
+    await expect(api.createPasswordResetLink({ userId: 'bob' })).resolves.toEqual({
+      token: 'the-token',
+      locale: 'ja',
+      expiresAt: EXPIRES,
+    });
+    expect(issuePasswordResetToken).toHaveBeenCalledWith(mockDb, 'bob', 24 * 60 * 60 * 1000);
+    expect(mockDb.adminAuditLog.create).toHaveBeenCalledWith({
+      data: {
+        adminId: 'admin-1',
+        action: 'PASSWORD_RESET_LINK_CREATED',
+        targetId: 'bob',
+        metadata: { email: 'bob@example.com' },
+      },
+    });
+    expect(JSON.stringify(mockDb.adminAuditLog.create.mock.calls)).not.toContain('the-token');
+  });
+
+  test('a user whose language ShareTab no longer has gets an English link', async () => {
+    target!.locale = 'xx';
+    const api = await callerAs(adminSession);
+    await expect(api.createPasswordResetLink({ userId: 'bob' })).resolves.toMatchObject({ locale: 'en' });
+  });
+
+  test('refuses a suspended user or a placeholder, who can’t sign in', async () => {
+    const api = await callerAs(adminSession);
+    target!.suspendedAt = new Date();
+    await expect(api.createPasswordResetLink({ userId: 'bob' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      messageKey: 'passwordResetNotAllowed',
+    });
+    target = { ...target!, suspendedAt: null, isPlaceholder: true };
+    await expect(api.createPasswordResetLink({ userId: 'bob' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      messageKey: 'passwordResetNotAllowed',
+    });
+    expect(issuePasswordResetToken).not.toHaveBeenCalled();
+    expect(mockDb.adminAuditLog.create).not.toHaveBeenCalled();
+  });
+
+  test('refuses an unknown user', async () => {
+    const api = await callerAs(adminSession);
+    await expect(api.createPasswordResetLink({ userId: 'nobody' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  test('refuses while password login is off', async () => {
+    vi.stubEnv('DISABLE_PASSWORD_LOGIN', 'true');
+    vi.stubEnv('EMAIL_SERVER_HOST', 'smtp.example.com');
+    const api = await callerAs(adminSession);
+    await expect(api.createPasswordResetLink({ userId: 'bob' })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      messageKey: 'passwordLoginDisabled',
+    });
+    expect(issuePasswordResetToken).not.toHaveBeenCalled();
+  });
+
+  test('a member who is not the admin is refused', async () => {
+    const api = await callerAs({ user: { id: 'user-1', email: 'user@example.com' } });
+    await expect(api.createPasswordResetLink({ userId: 'bob' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(issuePasswordResetToken).not.toHaveBeenCalled();
+  });
+
+  test('suspending a user also deletes their reset link, so unsuspending doesn’t revive it', async () => {
+    // A transaction client of its own: the delete must be in the transaction, after the user write
+    // (the lock order resetPasswordWithToken uses)
+    const tx = { user: { update: vi.fn() }, passwordResetToken: { deleteMany: vi.fn() } };
+    mockDb.$transaction.mockImplementationOnce(async (fn: (client: typeof tx) => unknown) => fn(tx));
+    const api = await callerAs(adminSession);
+
+    await api.suspendUser({ userId: 'bob' });
+
+    expect(tx.user.update).toHaveBeenCalledWith({ where: { id: 'bob' }, data: { suspendedAt: expect.any(Date) } });
+    expect(tx.passwordResetToken.deleteMany).toHaveBeenCalledWith({ where: { userId: 'bob' } });
+    expect(tx.user.update.mock.invocationCallOrder[0]).toBeLessThan(
+      tx.passwordResetToken.deleteMany.mock.invocationCallOrder[0]!,
+    );
+    expect(mockDb.passwordResetToken.deleteMany).not.toHaveBeenCalled();
+  });
+
+  test('works without email configured: the way back in on such an instance', async () => {
+    vi.stubEnv('EMAIL_SERVER_HOST', '');
+    const api = await callerAs(adminSession);
+    await expect(api.createPasswordResetLink({ userId: 'bob' })).resolves.toMatchObject({ token: 'the-token' });
+  });
+
+  test('a user suspended while the link was being made gets none, and nothing is recorded', async () => {
+    // issuePasswordResetToken checks again under the user row's lock
+    issuePasswordResetToken.mockResolvedValue(null);
+    const api = await callerAs(adminSession);
+    await expect(api.createPasswordResetLink({ userId: 'bob' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      messageKey: 'passwordResetNotAllowed',
+    });
+    expect(mockDb.adminAuditLog.create).not.toHaveBeenCalled();
+  });
+
+  test('deleting a user also deletes their reset link, in the transaction, after the user write', async () => {
+    const tx = {
+      user: { update: vi.fn() },
+      account: { deleteMany: vi.fn() },
+      session: { deleteMany: vi.fn() },
+      passwordResetToken: { deleteMany: vi.fn() },
+      groupMember: {
+        findMany: vi.fn().mockResolvedValue([]),
+        findFirst: vi.fn(),
+        update: vi.fn(),
+        deleteMany: vi.fn(),
+      },
+    };
+    mockDb.$transaction.mockImplementationOnce(async (fn: (client: typeof tx) => unknown) => fn(tx));
+    const api = await callerAs(adminSession);
+
+    await api.deleteUser({ userId: 'bob' });
+
+    expect(tx.passwordResetToken.deleteMany).toHaveBeenCalledWith({ where: { userId: 'bob' } });
+    expect(tx.user.update.mock.invocationCallOrder[0]).toBeLessThan(
+      tx.passwordResetToken.deleteMany.mock.invocationCallOrder[0]!,
+    );
+    expect(mockDb.passwordResetToken.deleteMany).not.toHaveBeenCalled();
   });
 });
 

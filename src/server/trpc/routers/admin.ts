@@ -47,6 +47,13 @@ import {
 } from '@/server/lib/openai-codex-login';
 
 import { getBuildInfo } from '@/server/lib/build-info';
+import {
+  ADMIN_RESET_LINK_TTL_MS,
+  canResetPassword,
+  issuePasswordResetToken,
+  localeOf,
+} from '@/server/lib/password-reset';
+import { requirePasswordLogin } from '@/server/lib/password-login';
 import { REGISTRATION_MODES, readRegistrationMode } from '@/server/lib/registration-mode';
 import { isGuestUploadsForcedOff, readGuestUploadsSetting, saveGuestUploadsSetting } from '@/server/lib/guest-uploads';
 
@@ -323,9 +330,13 @@ export const adminRouter = createTRPCRouter({
       throw new AppError('BAD_REQUEST', 'alreadySuspended');
     }
 
-    await ctx.db.user.update({
-      where: { id: input.userId },
-      data: { suspendedAt: new Date() },
+    await ctx.db.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: input.userId },
+        data: { suspendedAt: new Date() },
+      });
+      // Otherwise an unexpired reset link would work again once the user is unsuspended
+      await tx.passwordResetToken.deleteMany({ where: { userId: input.userId } });
     });
 
     await logAdminAction(ctx.db, ctx.user.id, 'USER_SUSPENDED', input.userId, { email: user.email });
@@ -390,9 +401,10 @@ export const adminRouter = createTRPCRouter({
           suspendedAt: new Date(),
         },
       });
-      // Remove auth records (sessions, accounts)
+      // Remove auth records (sessions, accounts, password reset links)
       await tx.account.deleteMany({ where: { userId: input.userId } });
       await tx.session.deleteMany({ where: { userId: input.userId } });
+      await tx.passwordResetToken.deleteMany({ where: { userId: input.userId } });
       // Transfer ownership before removing memberships
       const ownedGroups = await tx.groupMember.findMany({
         where: { userId: input.userId, role: 'OWNER' },
@@ -431,6 +443,39 @@ export const adminRouter = createTRPCRouter({
     });
 
     return { deleted: true, userId: input.userId };
+  }),
+
+  // A password reset link for the admin to hand over (#397): the only way back in for a
+  // locked-out user on an instance without email. Returns the token, not a URL: the admin's
+  // page builds the link from its own address, as it does split links. Replaces the user's
+  // earlier links, emailed ones included.
+  createPasswordResetLink: adminProcedure.input(z.object({ userId: z.string() })).mutation(async ({ ctx, input }) => {
+    requirePasswordLogin();
+
+    const user = await ctx.db.user.findUnique({
+      where: { id: input.userId },
+      select: { id: true, email: true, locale: true, isPlaceholder: true, suspendedAt: true },
+    });
+    if (!user) {
+      throw new AppError('NOT_FOUND', 'userNotFound');
+    }
+    // Refused without opening a transaction; checked again under the user row's lock
+    if (!canResetPassword(user)) {
+      throw new AppError('BAD_REQUEST', 'passwordResetNotAllowed');
+    }
+
+    // Under the user row's lock: suspended or deleted meanwhile gives no link
+    const issued = await issuePasswordResetToken(ctx.db, user.id, ADMIN_RESET_LINK_TTL_MS);
+    if (!issued) {
+      throw new AppError('BAD_REQUEST', 'passwordResetNotAllowed');
+    }
+    await logAdminAction(ctx.db, ctx.user.id, 'PASSWORD_RESET_LINK_CREATED', user.id, { email: user.email });
+
+    return {
+      token: issued.token,
+      locale: localeOf(user),
+      expiresAt: issued.expiresAt,
+    };
   }),
 
   listGroups: adminProcedure

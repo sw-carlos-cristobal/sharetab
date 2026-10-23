@@ -1,0 +1,10 @@
+{
+  "passwordReset": {
+    "subject": "重置您的 ShareTab 密码",
+    "heading": "重置密码",
+    "intro": "有人请求重置 ShareTab 账户 {email} 的密码。",
+    "action": "设置新密码",
+    "expiry": "该链接只能使用一次，将在 1 小时后失效。",
+    "ignore": "如果这不是您本人的操作，请忽略此邮件。您的密码不会改变。"
+  }
+}

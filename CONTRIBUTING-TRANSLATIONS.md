@@ -18,7 +18,8 @@ messages/
     admin.json     # Admin panel
     split.json     # Guest bill splitting and claim sessions
     splits.json    # My Splits (a signed-in user's guest splits)
-    errors.json    # Server error messages
+    errors.json    # Server error messages (server-only)
+    emails.json    # The password reset email (server-only)
   es/              # Spanish
     ...
 ```
@@ -48,9 +49,11 @@ messages/
    };
    ```
 
-4. **Run `npm run lint:i18n`** to confirm your locale has exactly the keys English has, its files are valid JSON and its messages valid ICU, and counts named `count` follow the plural rules below.
+4. **Register the server-only files**: import your `errors.json` into the `catalogs` in `src/server/lib/app-error.ts`, and your `emails.json` into the `catalogs` in `src/server/lib/password-reset-email.ts`, the same way English is (the type check fails until you do).
 
-5. **Run `npx vitest run src/i18n`.** For a language with plural forms, it adds your language to `src/i18n/__snapshots__/messages.test.ts.snap`, showing the messages listed in the test's `COUNT_MESSAGES` for 0, 1 and 2. Check that the singulars read right, commit the file (CI fails without it), then **submit a PR.**
+5. **Run `npm run lint:i18n`** to confirm your locale has exactly the keys English has, its files are valid JSON and its messages valid ICU, and counts named `count` follow the plural rules below.
+
+6. **Run `npx vitest run src/i18n`.** For a language with plural forms, it adds your language to `src/i18n/__snapshots__/messages.test.ts.snap`, showing the messages listed in the test's `COUNT_MESSAGES` for 0, 1 and 2. Check that the singulars read right, commit the file (CI fails without it), then **submit a PR.**
 
 ## Updating Existing Translations
 

@@ -1,0 +1,10 @@
+{
+  "passwordReset": {
+    "subject": "Réinitialisez votre mot de passe ShareTab",
+    "heading": "Réinitialisez votre mot de passe",
+    "intro": "Quelqu'un a demandé la réinitialisation du mot de passe du compte ShareTab {email}.",
+    "action": "Choisir un nouveau mot de passe",
+    "expiry": "Le lien ne fonctionne qu'une fois et expire dans 1 heure.",
+    "ignore": "Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail. Votre mot de passe reste inchangé."
+  }
+}

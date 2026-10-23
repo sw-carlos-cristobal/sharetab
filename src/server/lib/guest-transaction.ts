@@ -49,10 +49,11 @@ export async function guestTransaction<T>(
 }
 
 /**
- * Prisma's transaction manager error (P2028). The runtime throws it as an Error subclass
- * carrying the code, and it may also arrive as a PrismaClientKnownRequestError, so match
- * on the code.
+ * Prisma's transaction manager error (P2028), see guestTransaction; password writes map it too
+ * (`passwordTransaction`, password-reset.ts).
+ * The runtime throws it as an Error subclass carrying the code, and it may also arrive as a
+ * PrismaClientKnownRequestError, so match on the code.
  */
-function isTransactionManagerError(error: unknown): error is Error {
+export function isTransactionManagerError(error: unknown): error is Error {
   return error instanceof Error && (error as { code?: unknown }).code === 'P2028';
 }

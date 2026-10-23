@@ -1,14 +1,34 @@
 /**
- * Email/password sign-in: the Credentials provider's `authorize` step.
+ * Email/password sign-in: the Credentials provider's `authorize` step, its per-address login limit
+ * key, and the check that refuses the password routes while password sign-in is off.
  */
 
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { db } from '../db';
+import { AppError } from './app-error';
+import { parseAuthConfig } from './auth-config';
 import { logger } from './logger';
 import { checkRateLimit, parsePositiveInt } from './rate-limit';
 import { getClientIp, FALLBACK_IP } from './client-ip';
 import { AmbiguousEmailError, findUserByEmail } from './user-email';
+
+/** Refuses the password routes while password sign-in is off (`DISABLE_PASSWORD_LOGIN`). */
+export function requirePasswordLogin() {
+  const config = parseAuthConfig(process.env);
+  if (!config.passwordLogin) {
+    throw new AppError('FORBIDDEN', 'passwordLoginDisabled');
+  }
+  return config;
+}
+
+/**
+ * The per-address login rate-limit key, also cleared by a password reset.
+ * Lowercased like the user lookup, so case variants share a bucket.
+ */
+export function loginRateLimitKey(email: string): string {
+  return `login:${email.toLowerCase()}`;
+}
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -39,10 +59,9 @@ export async function authorizePasswordLogin(credentials: unknown, headers: Head
     }
   }
 
-  // Rate limit login attempts per email (configurable for CI/testing).
-  // Lowercased like the lookup below, so case variants share a bucket.
+  // Rate limit login attempts per email (configurable for CI/testing)
   const maxLoginAttempts = parsePositiveInt(process.env.AUTH_RATE_LIMIT_MAX, 5);
-  const { allowed } = checkRateLimit(`login:${parsed.data.email.toLowerCase()}`, maxLoginAttempts, 15 * 60 * 1000);
+  const { allowed } = checkRateLimit(loginRateLimitKey(parsed.data.email), maxLoginAttempts, 15 * 60 * 1000);
   if (!allowed) {
     logger.warn('auth.rate_limited', { email: parsed.data.email });
     return null;

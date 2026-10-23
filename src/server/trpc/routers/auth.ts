@@ -2,14 +2,42 @@ import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { AppError } from '@/server/lib/app-error';
 import { createTRPCRouter, publicProcedure, protectedProcedure } from '../init';
-import { checkRateLimit, parsePositiveInt } from '../../lib/rate-limit';
-import { getClientIp } from '../../lib/client-ip';
+import { checkRateLimit, clearRateLimit, parsePositiveInt } from '../../lib/rate-limit';
+import { FALLBACK_IP, getClientIp } from '../../lib/client-ip';
 import { locales } from '@/i18n/routing';
 import { stripUndefined } from '../../lib/strip-undefined';
 import { parseAuthConfig } from '../../lib/auth-config';
 import { readRegistrationMode } from '../../lib/registration-mode';
 import { findUsersByEmail } from '../../lib/user-email';
+import { logger } from '../../lib/logger';
+import { emailPasswordResetLink, resetPasswordWithToken } from '../../lib/password-reset';
+import { loginRateLimitKey, requirePasswordLogin } from '../../lib/password-login';
+import { describeMailError } from '../../lib/mailer';
 import { Prisma } from '@/generated/prisma/client';
+
+// Per client address, across email addresses (the per-account limit on emails is in
+// password-reset.ts). Configurable like the other per-IP limits, for test runs that share one IP
+const resetRequestsPerIp = () => parsePositiveInt(process.env.PASSWORD_RESET_RATE_LIMIT_MAX, 20);
+const RESET_REQUEST_WINDOW_MS = 60 * 60 * 1000;
+// Links submitted per client address. A token can't be guessed; this bounds the database work
+// (and a held connection while a valid link is used) one client can cause
+const resetSubmitsPerIp = () => parsePositiveInt(process.env.PASSWORD_RESET_RATE_LIMIT_MAX, 30);
+const RESET_SUBMIT_WINDOW_MS = 15 * 60 * 1000;
+
+// Every password ShareTab sets: registration, Settings, reset links
+const newPasswordSchema = z.string().min(8).max(100);
+
+/**
+ * Per-IP limit for the reset routes, skipped when no header names the client, as for password
+ * login. That's rare under `next start`, which fills in x-forwarded-for; behind a proxy that
+ * forwards no client address, every client shares one bucket (src/server/lib/client-ip.ts).
+ */
+function checkClientLimit(headers: Headers, key: string, max: number, windowMs: number) {
+  const ip = getClientIp(headers);
+  if (ip !== FALLBACK_IP && !checkRateLimit(`${key}:${ip}`, max, windowMs).allowed) {
+    throw new AppError('TOO_MANY_REQUESTS', 'passwordResetRateLimited');
+  }
+}
 
 export const authRouter = createTRPCRouter({
   getSession: publicProcedure.query(({ ctx }) => {
@@ -42,7 +70,7 @@ export const authRouter = createTRPCRouter({
       z.object({
         name: z.string().trim().min(1).max(100),
         email: z.string().email(),
-        password: z.string().min(8).max(100),
+        password: newPasswordSchema,
         inviteCode: z.string().optional(),
       }),
     )
@@ -131,7 +159,7 @@ export const authRouter = createTRPCRouter({
     .input(
       z.object({
         currentPassword: z.string().min(1),
-        newPassword: z.string().min(8).max(100),
+        newPassword: newPasswordSchema,
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -154,6 +182,48 @@ export const authRouter = createTRPCRouter({
       });
 
       return { success: true };
+    }),
+
+  // "Forgot password?" (#397). The answer is the same whether or not the address has an
+  // account: the lookup and the email aren't waited for, so neither its content nor its timing
+  // tells. A failed email is only logged, and an account's email budget (password-reset.ts)
+  // running out is silent.
+  requestPasswordReset: publicProcedure
+    .input(z.object({ email: z.string().trim().email().max(254) }))
+    .mutation(({ ctx, input }) => {
+      const config = requirePasswordLogin();
+      if (!config.magicLink) {
+        throw new AppError('PRECONDITION_FAILED', 'passwordResetUnavailable');
+      }
+
+      // The same for every address, so being limited doesn't tell whether it has an account
+      checkClientLimit(ctx.headers, 'password-reset-ip', resetRequestsPerIp(), RESET_REQUEST_WINDOW_MS);
+
+      // The server is a long-running Node process (standalone or `next start`), so the work
+      // carries on after the answer is sent.
+      void emailPasswordResetLink(ctx.db, input.email).catch((error: unknown) => {
+        logger.warn('auth.password_reset_email_failed', describeMailError(error));
+      });
+      return { ok: true };
+    }),
+
+  // Sets a new password with a reset link's token (#397), from an emailed link or one an admin made
+  resetPassword: publicProcedure
+    .input(z.object({ token: z.string().min(1).max(200), password: newPasswordSchema }))
+    .mutation(async ({ ctx, input }) => {
+      requirePasswordLogin();
+      checkClientLimit(ctx.headers, 'password-reset-submit-ip', resetSubmitsPerIp(), RESET_SUBMIT_WINDOW_MS);
+      // Hashes the password only once the link is claimed, so a bad or reused link costs no bcrypt
+      const user = await resetPasswordWithToken(ctx.db, input.token, input.password);
+      if (!user) {
+        throw new AppError('BAD_REQUEST', 'resetLinkInvalid');
+      }
+
+      // The link proved who they are, so failed sign-ins from before the reset don't keep the new
+      // password out
+      clearRateLimit(loginRateLimitKey(user.email));
+      logger.info('auth.password_reset', { userId: user.userId });
+      return { ok: true };
     }),
 
   getProfile: protectedProcedure.query(async ({ ctx }) => {

@@ -16,7 +16,7 @@ vi.mock('bcryptjs', () => ({
   default: { compare: vi.fn().mockResolvedValue(true) },
 }));
 
-const { authorizePasswordLogin } = await import('./password-login');
+const { authorizePasswordLogin, loginRateLimitKey } = await import('./password-login');
 const { checkRateLimit } = await import('@/server/lib/rate-limit');
 const { logger } = await import('@/server/lib/logger');
 
@@ -50,6 +50,8 @@ describe('authorizePasswordLogin', () => {
     usersFound([BOB]);
     await authorizePasswordLogin({ email: 'BOB@example.com', password: 'password123' }, new Headers());
     expect(checkRateLimit).toHaveBeenCalledWith('login:bob@example.com', expect.any(Number), expect.any(Number));
+    // The key a password reset clears
+    expect(loginRateLimitKey('Bob@Example.com')).toBe('login:bob@example.com');
   });
 
   test('returns null and logs when several accounts match ignoring case', async () => {

@@ -1,0 +1,10 @@
+{
+  "passwordReset": {
+    "subject": "ShareTab-Passwort zurücksetzen",
+    "heading": "Passwort zurücksetzen",
+    "intro": "Jemand hat angefordert, das Passwort für das ShareTab-Konto {email} zurückzusetzen.",
+    "action": "Neues Passwort festlegen",
+    "expiry": "Der Link funktioniert einmal und läuft in 1 Stunde ab.",
+    "ignore": "Wenn Sie das nicht angefordert haben, ignorieren Sie diese E-Mail. Ihr Passwort bleibt unverändert."
+  }
+}

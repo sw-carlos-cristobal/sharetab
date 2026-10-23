@@ -20,6 +20,15 @@ vi.mock('@/server/db', () => ({ db: mockDb }));
 vi.mock('@/server/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
+const passwordReset = {
+  emailPasswordResetLink: vi.fn(),
+  resetPasswordWithToken: vi.fn(),
+};
+// Tested in their own file
+vi.mock('@/server/lib/password-reset', () => passwordReset);
+
+import { logger } from '@/server/lib/logger';
+import { checkRateLimit } from '@/server/lib/rate-limit';
 
 const OIDC_ENV = {
   OIDC_ISSUER: 'https://auth.example.com/application/o/sharetab/',
@@ -28,9 +37,9 @@ const OIDC_ENV = {
   OIDC_DISPLAY_NAME: 'Authentik',
 };
 
-async function caller(session: { user: { id: string } } | null = null) {
+async function caller(session: { user: { id: string } } | null = null, headers = new Headers()) {
   const { authRouter } = await import('./auth');
-  const ctx = { session, db: mockDb, headers: new Headers(), impersonating: null };
+  const ctx = { session, db: mockDb, headers, impersonating: null };
   return authRouter.createCaller(ctx as unknown as Parameters<typeof authRouter.createCaller>[0]);
 }
 
@@ -47,6 +56,7 @@ beforeEach(() => {
     'EMAIL_SERVER_HOST',
     'GOOGLE_CLIENT_ID',
     'GOOGLE_CLIENT_SECRET',
+    'PASSWORD_RESET_RATE_LIMIT_MAX',
   ]) {
     vi.stubEnv(key, '');
   }
@@ -292,5 +302,274 @@ describe('auth.getProfile', () => {
     });
     const api = await caller({ user: { id: 'user-1' } });
     expect((await api.getProfile()).hasPassword).toBe(false);
+  });
+});
+
+describe('auth.register password length', () => {
+  test('takes a password of 8 to 100 characters, as the other password forms do', async () => {
+    const api = await caller();
+    for (const password of ['7-chars', 'x'.repeat(101)]) {
+      await expect(api.register({ name: 'Ada', email: 'ada@example.com', password })).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+      });
+    }
+  });
+});
+
+describe('auth.requestPasswordReset', () => {
+  beforeEach(() => {
+    stubEnv({ EMAIL_SERVER_HOST: 'smtp.example.com' });
+    passwordReset.emailPasswordResetLink.mockResolvedValue(undefined);
+  });
+
+  test('answers the same whether or not the address has an account, without waiting for the email', async () => {
+    // Never settles: the answer can't depend on the lookup, the database writes or the SMTP server
+    passwordReset.emailPasswordResetLink.mockReturnValue(new Promise(() => {}));
+    const api = await caller();
+
+    expect(await api.requestPasswordReset({ email: 'known@example.com' })).toEqual({ ok: true });
+    expect(await api.requestPasswordReset({ email: 'unknown@example.com' })).toEqual({ ok: true });
+    expect(passwordReset.emailPasswordResetLink).toHaveBeenCalledWith(mockDb, 'known@example.com');
+    expect(passwordReset.emailPasswordResetLink).toHaveBeenCalledWith(mockDb, 'unknown@example.com');
+  });
+
+  test('takes the address trimmed, and refuses one too long to be real', async () => {
+    const api = await caller();
+    await api.requestPasswordReset({ email: '  trimmed@example.com ' });
+    expect(passwordReset.emailPasswordResetLink).toHaveBeenCalledWith(mockDb, 'trimmed@example.com');
+    await expect(api.requestPasswordReset({ email: `${'a'.repeat(250)}@example.com` })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+  });
+
+  test('is refused without email configured, sending nothing', async () => {
+    stubEnv({ EMAIL_SERVER_HOST: '' });
+    const api = await caller();
+    await expect(api.requestPasswordReset({ email: 'bob@example.com' })).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      messageKey: 'passwordResetUnavailable',
+    });
+    expect(passwordReset.emailPasswordResetLink).not.toHaveBeenCalled();
+  });
+
+  test('is refused while password login is off', async () => {
+    stubEnv({ ...OIDC_ENV, DISABLE_PASSWORD_LOGIN: 'true' });
+    const api = await caller();
+    await expect(api.requestPasswordReset({ email: 'bob@example.com' })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      messageKey: 'passwordLoginDisabled',
+    });
+    expect(passwordReset.emailPasswordResetLink).not.toHaveBeenCalled();
+  });
+
+  test('limits requests per client address across email addresses', async () => {
+    const api = await caller(null, new Headers({ 'x-real-ip': '203.0.113.7' }));
+    for (let i = 0; i < 20; i++) {
+      await api.requestPasswordReset({ email: `spray-${i}@example.com` });
+    }
+    await expect(api.requestPasswordReset({ email: 'spray-20@example.com' })).rejects.toMatchObject({
+      code: 'TOO_MANY_REQUESTS',
+      messageKey: 'passwordResetRateLimited',
+    });
+    expect(passwordReset.emailPasswordResetLink).toHaveBeenCalledTimes(20);
+    // Another client isn't held up
+    const other = await caller(null, new Headers({ 'x-real-ip': '203.0.113.8' }));
+    expect(await other.requestPasswordReset({ email: 'spray-21@example.com' })).toEqual({ ok: true });
+  });
+
+  test('PASSWORD_RESET_RATE_LIMIT_MAX raises the per-client limit, for test runs that share one IP', async () => {
+    stubEnv({ PASSWORD_RESET_RATE_LIMIT_MAX: '25' });
+    const api = await caller(null, new Headers({ 'x-real-ip': '203.0.113.11' }));
+    for (let i = 0; i < 25; i++) {
+      await api.requestPasswordReset({ email: `raised-${i}@example.com` });
+    }
+    await expect(api.requestPasswordReset({ email: 'raised-25@example.com' })).rejects.toMatchObject({
+      code: 'TOO_MANY_REQUESTS',
+    });
+  });
+
+  test('the per-client request limit lasts an hour', async () => {
+    vi.useFakeTimers();
+    try {
+      const api = await caller(null, new Headers({ 'x-real-ip': '203.0.113.40' }));
+      for (let i = 0; i < 20; i++) await api.requestPasswordReset({ email: `hour-${i}@example.com` });
+      vi.advanceTimersByTime(60 * 60 * 1000);
+      await expect(api.requestPasswordReset({ email: 'hour-20@example.com' })).rejects.toMatchObject({
+        code: 'TOO_MANY_REQUESTS',
+      });
+      vi.advanceTimersByTime(1);
+      expect(await api.requestPasswordReset({ email: 'hour-21@example.com' })).toEqual({ ok: true });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('without a header naming the client, there is no shared per-client bucket to exhaust', async () => {
+    const api = await caller();
+    for (let i = 0; i < 25; i++) {
+      expect(await api.requestPasswordReset({ email: `no-ip-${i}@example.com` })).toEqual({ ok: true });
+    }
+  });
+
+  test('logs what failed, without the message that can carry the address', async () => {
+    passwordReset.emailPasswordResetLink.mockRejectedValue(
+      Object.assign(new Error('Invalid login for user@example.com'), {
+        code: 'EAUTH',
+        responseCode: 535,
+        command: 'AUTH PLAIN',
+      }),
+    );
+    const api = await caller();
+
+    expect(await api.requestPasswordReset({ email: 'smtp-auth@example.com' })).toEqual({ ok: true });
+
+    await vi.waitFor(() =>
+      expect(logger.warn).toHaveBeenCalledWith('auth.password_reset_email_failed', {
+        error: 'Error',
+        code: 'EAUTH',
+        responseCode: 535,
+        command: 'AUTH PLAIN',
+      }),
+    );
+    expect(JSON.stringify(vi.mocked(logger.warn).mock.calls)).not.toContain('example.com');
+  });
+});
+
+describe('auth.resetPassword', () => {
+  const TOKEN = 'T'.repeat(43);
+  const resetUser = { userId: 'bob', email: 'Bob@example.com', locale: 'de' };
+
+  test('sets the new password with a valid link', async () => {
+    passwordReset.resetPasswordWithToken.mockResolvedValue(resetUser);
+    const api = await caller();
+
+    expect(await api.resetPassword({ token: TOKEN, password: 'new-password' })).toEqual({ ok: true });
+    // The lib hashes the password once it has claimed the link
+    expect(passwordReset.resetPasswordWithToken).toHaveBeenCalledWith(mockDb, TOKEN, 'new-password');
+  });
+
+  test('lifts the sign-in limit for the account, so the new password works at once', async () => {
+    // Imported here: password-login loads the mocked db, which the hoisted mocks can't reach yet
+    const { loginRateLimitKey } = await import('@/server/lib/password-login');
+    const key = loginRateLimitKey('reset-me@example.com');
+    for (let i = 0; i < 5; i++) checkRateLimit(key, 5, 15 * 60 * 1000);
+    expect(checkRateLimit(key, 5, 15 * 60 * 1000).allowed).toBe(false);
+    passwordReset.resetPasswordWithToken.mockResolvedValue({ ...resetUser, email: 'Reset-Me@example.com' });
+    const api = await caller();
+
+    await api.resetPassword({ token: TOKEN, password: 'new-password' });
+
+    expect(checkRateLimit(key, 5, 15 * 60 * 1000).allowed).toBe(true);
+  });
+
+  test('takes a token of 1 to 200 characters', async () => {
+    passwordReset.resetPasswordWithToken.mockResolvedValue(null);
+    const api = await caller();
+    for (const token of ['', 'x'.repeat(201)]) {
+      await expect(api.resetPassword({ token, password: 'new-password' })).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+      });
+    }
+    expect(passwordReset.resetPasswordWithToken).not.toHaveBeenCalled();
+    await api.resetPassword({ token: 'x'.repeat(200), password: 'new-password' }).catch(() => {});
+    expect(passwordReset.resetPasswordWithToken).toHaveBeenCalledWith(mockDb, 'x'.repeat(200), 'new-password');
+  });
+
+  test('the per-client submission limit lasts 15 minutes', async () => {
+    passwordReset.resetPasswordWithToken.mockResolvedValue(null);
+    vi.useFakeTimers();
+    try {
+      const api = await caller(null, new Headers({ 'x-real-ip': '203.0.113.41' }));
+      for (let i = 0; i < 30; i++) await api.resetPassword({ token: TOKEN, password: 'new-password' }).catch(() => {});
+      vi.advanceTimersByTime(15 * 60 * 1000);
+      await expect(api.resetPassword({ token: TOKEN, password: 'new-password' })).rejects.toMatchObject({
+        code: 'TOO_MANY_REQUESTS',
+      });
+      vi.advanceTimersByTime(1);
+      await expect(api.resetPassword({ token: TOKEN, password: 'new-password' })).rejects.toMatchObject({
+        messageKey: 'resetLinkInvalid',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('refuses an unknown, expired or used link', async () => {
+    passwordReset.resetPasswordWithToken.mockResolvedValue(null);
+    const api = await caller();
+    await expect(api.resetPassword({ token: TOKEN, password: 'new-password' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      messageKey: 'resetLinkInvalid',
+    });
+  });
+
+  test('PASSWORD_RESET_RATE_LIMIT_MAX sets the submission limit too, and requests and submissions count apart', async () => {
+    stubEnv({ PASSWORD_RESET_RATE_LIMIT_MAX: '3' });
+    passwordReset.resetPasswordWithToken.mockResolvedValue(null);
+    const headers = new Headers({ 'x-real-ip': '203.0.113.30' });
+    const api = await caller(null, headers);
+    for (let i = 0; i < 3; i++) await api.resetPassword({ token: TOKEN, password: 'new-password' }).catch(() => {});
+    await expect(api.resetPassword({ token: TOKEN, password: 'new-password' })).rejects.toMatchObject({
+      code: 'TOO_MANY_REQUESTS',
+    });
+    // Submissions used up; requests from the same client still have their own budget
+    stubEnv({ EMAIL_SERVER_HOST: 'smtp.example.com' });
+    passwordReset.emailPasswordResetLink.mockResolvedValue(undefined);
+    expect(await api.requestPasswordReset({ email: 'apart@example.com' })).toEqual({ ok: true });
+  });
+
+  test('limits link submissions per client address', async () => {
+    passwordReset.resetPasswordWithToken.mockResolvedValue(null);
+    const api = await caller(null, new Headers({ 'x-real-ip': '203.0.113.20' }));
+    for (let i = 0; i < 30; i++) {
+      await api.resetPassword({ token: TOKEN, password: 'new-password' }).catch(() => {});
+    }
+    await expect(api.resetPassword({ token: TOKEN, password: 'new-password' })).rejects.toMatchObject({
+      code: 'TOO_MANY_REQUESTS',
+    });
+    expect(passwordReset.resetPasswordWithToken).toHaveBeenCalledTimes(30);
+  });
+
+  test('never logs the token or the password', async () => {
+    passwordReset.resetPasswordWithToken.mockResolvedValueOnce(resetUser);
+    passwordReset.resetPasswordWithToken.mockResolvedValueOnce(null);
+    const api = await caller();
+
+    await api.resetPassword({ token: TOKEN, password: 'new-password' });
+    await api.resetPassword({ token: TOKEN, password: 'new-password' }).catch(() => {});
+
+    const logged = JSON.stringify([
+      vi.mocked(logger.info).mock.calls,
+      vi.mocked(logger.warn).mock.calls,
+      vi.mocked(logger.error).mock.calls,
+      vi.mocked(logger.debug).mock.calls,
+    ]);
+    expect(logged).not.toContain(TOKEN);
+    expect(logged).not.toContain('new-password');
+  });
+
+  test('takes a password of 8 to 100 characters, as registration does', async () => {
+    passwordReset.resetPasswordWithToken.mockResolvedValue(resetUser);
+    const api = await caller();
+    await api.resetPassword({ token: TOKEN, password: '8-chars!' });
+    await api.resetPassword({ token: TOKEN, password: 'x'.repeat(100) });
+    passwordReset.resetPasswordWithToken.mockClear();
+    await expect(api.resetPassword({ token: TOKEN, password: '7-chars' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    await expect(api.resetPassword({ token: TOKEN, password: 'x'.repeat(101) })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    expect(passwordReset.resetPasswordWithToken).not.toHaveBeenCalled();
+  });
+
+  test('is refused while password login is off', async () => {
+    stubEnv({ ...OIDC_ENV, DISABLE_PASSWORD_LOGIN: 'true' });
+    const api = await caller();
+    await expect(api.resetPassword({ token: TOKEN, password: 'new-password' })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      messageKey: 'passwordLoginDisabled',
+    });
+    expect(passwordReset.resetPasswordWithToken).not.toHaveBeenCalled();
   });
 });

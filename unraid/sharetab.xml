@@ -95,7 +95,7 @@
     Name="NextAuth URL"
     Target="NEXTAUTH_URL"
     Default="http://192.168.1.x:3000"
-    Description="The URL where ShareTab is accessible (e.g., http://your-server-ip:3000). Split and personal links are copied from the browser address bar, not built from this, so open ShareTab at this URL before sharing one."
+    Description="The URL where ShareTab is accessible (e.g., http://your-server-ip:3000). Links in password and auth-expiry emails are built from it. Split and personal links are copied from the browser address bar, not built from this, so open ShareTab at this URL before sharing one."
     Type="Variable"
     Display="always"
     Required="true"
@@ -249,12 +249,12 @@
     Required="false"
     Mask="false">llava</Config>
 
-  <!-- Email (magic link auth) -->
+  <!-- Email (magic link sign-in, password reset) -->
   <Config
     Name="Email SMTP Host"
     Target="EMAIL_SERVER_HOST"
     Default=""
-    Description="SMTP server for outgoing emails. Used for magic link sign-in and OAuth auth expiry alerts (Meridian / ChatGPT OAuth). Leave blank to disable email sending."
+    Description="SMTP server for outgoing emails. Used for magic link sign-in, password reset emails and OAuth auth expiry alerts (Meridian / ChatGPT OAuth). Leave blank to disable email sending."
     Type="Variable"
     Display="advanced"
     Required="false"
@@ -384,7 +384,7 @@
     Name="Disable Password Login"
     Target="DISABLE_PASSWORD_LOGIN"
     Default="false"
-    Description="Hide the email/password form and close password registration (true/false). Ignored unless OIDC or magic link sign-in is configured (Google does not count: it never links to an existing account). With SSO only, link existing accounts first or their owners cannot sign in."
+    Description="Hide the email/password form, close password registration and turn off password resets (true/false). Ignored unless OIDC or magic link sign-in is configured (Google does not count: it never links to an existing account). With SSO only, link existing accounts first or their owners cannot sign in."
     Type="Variable"
     Display="advanced"
     Required="false"
@@ -448,6 +448,15 @@
     Display="advanced"
     Required="false"
     Mask="false">10</Config>
+  <Config
+    Name="Password Reset Rate Limit"
+    Target="PASSWORD_RESET_RATE_LIMIT_MAX"
+    Default=""
+    Description="Per client IP: password reset requests per hour and reset link submissions per 15 minutes; one value sets both. Leave blank for the defaults (20 and 30)."
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false"></Config>
   <Config
     Name="Guest Upload Global Limit"
     Target="GUEST_UPLOAD_GLOBAL_LIMIT"

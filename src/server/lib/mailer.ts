@@ -1,6 +1,6 @@
 /**
  * Outgoing email: the SMTP settings (`EMAIL_SERVER_*`, `EMAIL_FROM`) shared by the magic-link
- * provider, the admin test email and the auth-expiry alerts; the public URL
+ * provider, the password emails, the admin test email and the auth-expiry alerts; the public URL
  * for links in the emails ShareTab builds; and what to log when a send fails.
  */
 
@@ -50,10 +50,10 @@ export function describeMailError(error: unknown) {
 }
 
 /**
- * The instance's public URL, for the links in auth-expiry emails (Auth.js builds
+ * The instance's public URL, for the links in password and auth-expiry emails (Auth.js builds
  * magic links itself). Taken from configuration, `AUTH_URL` then `NEXTAUTH_URL` as Auth.js
  * prefers them (an empty value counts as unset here), never from the request's Host header,
- * which a request's sender controls. Throws, and logs why, when it isn't an http(s) URL.
+ * which the sender of a reset request controls. Throws, and logs why, when it isn't an http(s) URL.
  */
 export function publicBaseUrl(): string {
   const configured = process.env.AUTH_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000';
@@ -64,7 +64,7 @@ export function publicBaseUrl(): string {
     // Refused below
   }
   if (!url || (url.protocol !== 'http:' && url.protocol !== 'https:')) {
-    // Logged here: a failed send's log (describeMailError) carries no message. Only
+    // Logged here: the password emails' failure logs (describeMailError) carry no message. Only
     // the scheme it was read with: a value without one can carry user:password@
     logger.warn('mail.public_url_invalid', { scheme: url?.protocol ?? null });
     throw new Error('AUTH_URL or NEXTAUTH_URL is not an http(s) URL');
