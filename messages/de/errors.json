@@ -22,7 +22,7 @@
   "passwordLoginDisabled": "Die Anmeldung mit Passwort ist auf diesem Server deaktiviert.",
   "passwordResetUnavailable": "Dieser Server kann keine E-Mails senden und Ihnen daher keinen Link zum Zurücksetzen schicken. Bitten Sie Ihren ShareTab-Administrator um einen.",
   "passwordResetRateLimited": "Zu viele Anfragen zum Zurücksetzen des Passworts. Bitte versuchen Sie es später erneut.",
-  "resetLinkInvalid": "Dieser Link zum Zurücksetzen des Passworts ist ungültig, abgelaufen oder wurde bereits verwendet. Fordern Sie einen neuen an.",
+  "resetLinkInvalid": "Dieser Link zum Zurücksetzen des Passworts ist ungültig, abgelaufen, wurde bereits verwendet oder durch einen neueren ersetzt. Fordern Sie einen neuen an.",
   "passwordResetNotAllowed": "Dieses Konto ist gesperrt oder kein echtes Konto, daher kann sein Passwort nicht zurückgesetzt werden.",
   "userNotFound": "Benutzer nicht gefunden",
   "groupNotFound": "Gruppe nicht gefunden",

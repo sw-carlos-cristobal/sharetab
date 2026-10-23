@@ -22,7 +22,7 @@
   "passwordLoginDisabled": "La connexion par mot de passe est désactivée sur ce serveur.",
   "passwordResetUnavailable": "Ce serveur ne peut pas envoyer d’e-mails, il ne peut donc pas vous envoyer de lien de réinitialisation. Demandez-en un à votre administrateur ShareTab.",
   "passwordResetRateLimited": "Trop de demandes de réinitialisation du mot de passe. Veuillez réessayer plus tard.",
-  "resetLinkInvalid": "Ce lien de réinitialisation du mot de passe est invalide, a expiré ou a déjà été utilisé. Demandez-en un nouveau.",
+  "resetLinkInvalid": "Ce lien de réinitialisation du mot de passe est invalide, a expiré, a déjà été utilisé ou a été remplacé par un lien plus récent. Demandez-en un nouveau.",
   "passwordResetNotAllowed": "Ce compte est suspendu ou n’est pas un vrai compte, son mot de passe ne peut donc pas être réinitialisé.",
   "userNotFound": "Utilisateur introuvable",
   "groupNotFound": "Groupe introuvable",

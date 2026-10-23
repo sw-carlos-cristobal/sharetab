@@ -26,7 +26,11 @@ const passwordReset = {
   emailPasswordChanged: vi.fn(),
   resetPasswordWithToken: vi.fn(),
 };
-vi.mock('@/server/lib/password-reset', () => passwordReset);
+// The real passwordTransaction runs on mockDb's $transaction
+vi.mock('@/server/lib/password-reset', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/server/lib/password-reset')>()),
+  ...passwordReset,
+}));
 
 import bcrypt from 'bcryptjs';
 import { logger } from '@/server/lib/logger';
@@ -39,9 +43,13 @@ const OIDC_ENV = {
   OIDC_DISPLAY_NAME: 'Authentik',
 };
 
-async function caller(session: { user: { id: string } } | null = null, headers = new Headers()) {
+async function caller(
+  session: { user: { id: string }; passwordStamp?: number } | null = null,
+  headers = new Headers(),
+  impersonating: { adminId: string } | null = null,
+) {
   const { authRouter } = await import('./auth');
-  const ctx = { session, db: mockDb, headers, impersonating: null };
+  const ctx = { session, db: mockDb, headers, impersonating };
   return authRouter.createCaller(ctx as unknown as Parameters<typeof authRouter.createCaller>[0]);
 }
 
@@ -59,6 +67,7 @@ beforeEach(() => {
     'GOOGLE_CLIENT_ID',
     'GOOGLE_CLIENT_SECRET',
     'PASSWORD_RESET_RATE_LIMIT_MAX',
+    'AUTH_RATE_LIMIT_MAX',
   ]) {
     vi.stubEnv(key, '');
   }
@@ -282,6 +291,49 @@ describe('password login enabled', () => {
   });
 });
 
+describe('signed-in procedures check the session’s password version again (#397)', () => {
+  const changedAt = new Date('2026-10-01T00:00:00Z');
+  const profileRow = { id: 'user-1', name: 'Alice', email: 'alice@example.com', passwordHash: null };
+
+  test('a session signed in under the current password goes through', async () => {
+    mockDb.user.findUnique.mockResolvedValue({ ...profileRow, suspendedAt: null, passwordChangedAt: changedAt });
+    const api = await caller({ user: { id: 'user-1' }, passwordStamp: changedAt.getTime() });
+    await expect(api.getProfile()).resolves.toMatchObject({ email: 'alice@example.com' });
+  });
+
+  test('a session signed in under an earlier password is refused, even when the jwt callback kept it', async () => {
+    // The jwt callback keeps a session whose own read failed; this read is the one that decides
+    mockDb.user.findUnique.mockResolvedValue({ ...profileRow, suspendedAt: null, passwordChangedAt: changedAt });
+    const api = await caller({ user: { id: 'user-1' }, passwordStamp: changedAt.getTime() - 1000 });
+    await expect(api.getProfile()).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+  });
+
+  test('a session from before versions were recorded counts as version 0', async () => {
+    mockDb.user.findUnique.mockResolvedValue({ ...profileRow, suspendedAt: null, passwordChangedAt: null });
+    await expect((await caller({ user: { id: 'user-1' } })).getProfile()).resolves.toBeDefined();
+    mockDb.user.findUnique.mockResolvedValue({ ...profileRow, suspendedAt: null, passwordChangedAt: changedAt });
+    await expect((await caller({ user: { id: 'user-1' } })).getProfile()).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    });
+  });
+
+  test("while an admin impersonates, the admin's own password version is the one checked", async () => {
+    const adminChangedAt = new Date('2026-09-01T00:00:00Z');
+    mockDb.user.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
+      where.id === 'admin-1'
+        ? { suspendedAt: null, passwordChangedAt: adminChangedAt }
+        : { ...profileRow, suspendedAt: null, passwordChangedAt: changedAt },
+    );
+    const asAdmin = { user: { id: 'user-1' }, passwordStamp: adminChangedAt.getTime() };
+    await expect((await caller(asAdmin, new Headers(), { adminId: 'admin-1' })).getProfile()).resolves.toBeDefined();
+
+    const stale = { user: { id: 'user-1' }, passwordStamp: changedAt.getTime() };
+    await expect((await caller(stale, new Headers(), { adminId: 'admin-1' })).getProfile()).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    });
+  });
+});
+
 describe('auth.getProfile', () => {
   test('reports whether the user has a password without returning the hash', async () => {
     mockDb.user.findUnique.mockResolvedValue({
@@ -358,6 +410,70 @@ describe('auth.changePassword', () => {
     expect(mockDb.user.update).not.toHaveBeenCalled();
   });
 
+  test('says who to sign in again as: the user, whose sessions this change ended', async () => {
+    const api = await caller({ user: { id: 'user-1' } });
+    expect(await api.changePassword({ currentPassword: 'password123', newPassword: 'new-password' })).toEqual({
+      success: true,
+      signInAs: owner.email,
+    });
+  });
+
+  test('says no one to sign in again as while an admin impersonates: the session is the admin’s, and stays', async () => {
+    mockDb.user.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
+      where.id === 'admin-1' ? { suspendedAt: null, passwordChangedAt: null } : owner,
+    );
+    const api = await caller({ user: { id: 'user-1' } }, new Headers(), { adminId: 'admin-1' });
+    expect(await api.changePassword({ currentPassword: 'password123', newPassword: 'new-password' })).toEqual({
+      success: true,
+      signInAs: null,
+    });
+  });
+
+  test('a full connection pool or a timed-out transaction is reported as busy', async () => {
+    mockDb.$transaction.mockRejectedValue(Object.assign(new Error('Unable to start a transaction'), { code: 'P2028' }));
+    const api = await caller({ user: { id: 'user-1' } });
+    await expect(
+      api.changePassword({ currentPassword: 'password123', newPassword: 'new-password' }),
+    ).rejects.toMatchObject({ code: 'SERVICE_UNAVAILABLE', messageKey: 'serverBusy' });
+  });
+
+  test('wrong current passwords are limited for 15 minutes', async () => {
+    mockDb.user.findUnique.mockResolvedValue({ ...owner, id: 'window', email: 'window@example.com' });
+    vi.mocked(bcrypt.compare).mockResolvedValue(false as never);
+    vi.useFakeTimers();
+    try {
+      const api = await caller({ user: { id: 'window' } });
+      for (let i = 0; i < 5; i++) {
+        await api.changePassword({ currentPassword: `guess-${i}`, newPassword: 'new-password' }).catch(() => {});
+      }
+      vi.advanceTimersByTime(15 * 60 * 1000);
+      await expect(
+        api.changePassword({ currentPassword: 'guess-5', newPassword: 'new-password' }),
+      ).rejects.toMatchObject({ code: 'TOO_MANY_REQUESTS' });
+      vi.advanceTimersByTime(1);
+      await expect(
+        api.changePassword({ currentPassword: 'guess-6', newPassword: 'new-password' }),
+      ).rejects.toMatchObject({ messageKey: 'wrongPassword' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('AUTH_RATE_LIMIT_MAX sets the Settings limit, as it does the login form’s', async () => {
+    stubEnv({ AUTH_RATE_LIMIT_MAX: '2' });
+    mockDb.user.findUnique.mockResolvedValue({ ...owner, id: 'two-guesses', email: 'two@example.com' });
+    vi.mocked(bcrypt.compare).mockResolvedValue(false as never);
+    const api = await caller({ user: { id: 'two-guesses' } });
+    for (let i = 0; i < 2; i++) {
+      await expect(
+        api.changePassword({ currentPassword: `guess-${i}`, newPassword: 'new-password' }),
+      ).rejects.toMatchObject({ messageKey: 'wrongPassword' });
+    }
+    await expect(api.changePassword({ currentPassword: 'guess-2', newPassword: 'new-password' })).rejects.toMatchObject(
+      { code: 'TOO_MANY_REQUESTS' },
+    );
+  });
+
   test('refuses a wrong current password, changing nothing', async () => {
     vi.mocked(bcrypt.compare).mockResolvedValue(false as never);
     const api = await caller({ user: { id: 'user-1' } });
@@ -428,7 +544,7 @@ describe('auth.changePassword', () => {
     expect(codes.filter((code) => code === 'TOO_MANY_REQUESTS')).toHaveLength(5);
   });
 
-  test('a right password is not counted, and clears the wrong ones before it', async () => {
+  test('a right password clears the count, so earlier wrong guesses are forgotten', async () => {
     mockDb.user.findUnique.mockResolvedValue({ ...owner, id: 'mistyper', email: 'mistyper@example.com' });
     const api = await caller({ user: { id: 'mistyper' } });
     vi.mocked(bcrypt.compare).mockResolvedValue(false as never);
@@ -487,7 +603,7 @@ describe('auth.changePassword', () => {
     );
     const api = await caller({ user: { id: 'user-1' } });
 
-    expect(await api.changePassword({ currentPassword: 'password123', newPassword: 'new-password' })).toEqual({
+    expect(await api.changePassword({ currentPassword: 'password123', newPassword: 'new-password' })).toMatchObject({
       success: true,
     });
     await vi.waitFor(() =>
@@ -515,7 +631,7 @@ describe('auth.changePassword', () => {
     passwordReset.emailPasswordChanged.mockReturnValue(new Promise(() => {}));
     const api = await caller({ user: { id: 'user-1' } });
 
-    expect(await api.changePassword({ currentPassword: 'password123', newPassword: 'new-password' })).toEqual({
+    expect(await api.changePassword({ currentPassword: 'password123', newPassword: 'new-password' })).toMatchObject({
       success: true,
     });
     expect(passwordReset.emailPasswordChanged).toHaveBeenCalledWith(

@@ -217,16 +217,22 @@ test.describe('Password reset', () => {
   });
 
   test('an admin makes a reset link for a locked-out user, who sets a password with it', async ({ page, browser }) => {
+    // Several sign-ins, two extra browsers and the admin page
+    test.setTimeout(120_000);
     const email = uniqueEmail('pwadmin');
     await registerUser(email);
-    // Sessions signed in before the reset, e.g. someone else's: the reset ends them
-    const earlierSession = await authedContext(email, OLD_PASSWORD);
-    const earlierBrowser = await browser.newContext({ baseURL: BASE });
+    let earlierSession: Awaited<ReturnType<typeof authedContext>> | undefined;
+    let earlierBrowser: Awaited<ReturnType<Browser['newContext']>> | undefined;
     try {
+      // Sessions signed in before the reset, e.g. someone else's: the reset ends them
+      earlierSession = await authedContext(email, OLD_PASSWORD);
+      earlierBrowser = await browser.newContext({ baseURL: BASE });
       expect((await trpcResult(await trpcQuery(earlierSession, 'auth.getProfile')))?.email).toBe(email);
       const earlierPage = await earlierBrowser.newPage();
       await login(earlierPage, email, OLD_PASSWORD);
 
+      // As on an instance without email, where this is the way back in
+      const stubbed = await withLoginOptions(page, { passwordLogin: true, passwordReset: false });
       await login(page, users.alice.email, users.alice.password);
       await page.goto('/en/admin');
       const userSection = page.locator('section', { has: page.getByRole('heading', { name: 'User Management' }) });
@@ -241,6 +247,7 @@ test.describe('Password reset', () => {
 
       const dialog = page.getByRole('dialog', { name: 'Password reset link' });
       await expect(dialog).toBeVisible();
+      expect(stubbed.count).toBeGreaterThan(0);
       const linkField = dialog.getByTestId('reset-password-link-url');
       await expect(linkField).toHaveValue(/\/en\/reset-password#token=[A-Za-z0-9_-]{43}$/);
       const link = await linkField.inputValue();
@@ -272,18 +279,31 @@ test.describe('Password reset', () => {
         await admin.dispose();
       }
     } finally {
-      await earlierSession.dispose();
-      await earlierBrowser.close();
+      await earlierSession?.dispose();
+      await earlierBrowser?.close();
       await removeTestUser(email);
     }
+  });
+
+  test('with password sign-in off, the admin page offers no reset link', async ({ page }) => {
+    await login(page, users.alice.email, users.alice.password);
+    // After signing in: the stub also hides the login page's password form
+    const stubbed = await withLoginOptions(page, { passwordLogin: false, passwordReset: false });
+    await page.goto('/en/admin');
+    const userSection = page.locator('section', { has: page.getByRole('heading', { name: 'User Management' }) });
+    await expect(userSection.getByRole('button', { name: /^Impersonate / }).first()).toBeVisible({ timeout: 30000 });
+    await expect(userSection.getByTestId('reset-password-link')).toHaveCount(0);
+    expect(stubbed.count).toBeGreaterThan(0);
   });
 
   test('a link sent many times at once works once', async () => {
     const email = uniqueEmail('pwrace');
     const userId = await registerUser(email);
-    const admin = await authedContext(users.alice.email, users.alice.password);
-    const clients = await Promise.all(Array.from({ length: 8 }, () => request.newContext({ baseURL: BASE })));
+    let admin: Awaited<ReturnType<typeof authedContext>> | undefined;
+    const clients: Awaited<ReturnType<typeof request.newContext>>[] = [];
     try {
+      admin = await authedContext(users.alice.email, users.alice.password);
+      for (let i = 0; i < 8; i++) clients.push(await request.newContext({ baseURL: BASE }));
       const made = await trpcMutation(admin, 'admin.createPasswordResetLink', { userId });
       expect(made.ok()).toBe(true);
       const { token } = (await made.json()).result.data.json;
@@ -300,13 +320,17 @@ test.describe('Password reset', () => {
       const winners = answers.flatMap((answer, i) => (answer.ok ? [i] : []));
       expect(winners).toHaveLength(1);
       for (const answer of answers.filter((a) => !a.ok)) {
-        expect(answer.body.error.json.data.messageKey).toBe('resetLinkInvalid');
+        // Refused as a used link, or, under load, as busy: never set
+        expect(['resetLinkInvalid', 'serverBusy']).toContain(answer.body.error.json.data.messageKey);
       }
-      // The one that got through set its password
-      expect(await signsIn(email, `race-pass-${winners[0]}`)).toBe(true);
+      // The one that got through set its password, and only it
+      const winner = winners[0]!;
+      expect(await signsIn(email, `race-pass-${winner}`)).toBe(true);
+      expect(await signsIn(email, `race-pass-${(winner + 1) % 8}`)).toBe(false);
+      await expectOnePasswordChangedEmail(email);
     } finally {
       for (const client of clients) await client.dispose();
-      await admin.dispose();
+      await admin?.dispose();
       await removeTestUser(email);
     }
   });

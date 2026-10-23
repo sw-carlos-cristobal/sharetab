@@ -85,7 +85,7 @@ export async function issuePasswordResetToken(db: PrismaClient, userId: string, 
   const token = newResetToken();
   const tokenHash = hashResetToken(token);
   const expiresAt = new Date(now.getTime() + ttlMs);
-  const issued = await db.$transaction(async (tx) => {
+  const issued = await passwordTransaction(db, async (tx) => {
     if (!(await lockUserForReset(tx, userId))) return false;
     await tx.passwordResetToken.upsert({
       where: { userId },
@@ -95,6 +95,26 @@ export async function issuePasswordResetToken(db: PrismaClient, userId: string, 
     return true;
   });
   return issued ? { token, expiresAt } : null;
+}
+
+/**
+ * A transaction that writes a user's password or reset link, with room for a bcrypt hash. A full
+ * connection pool or a transaction that runs out of time (P2028) is reported as busy
+ * (SERVICE_UNAVAILABLE `serverBusy`), not as an unexpected error; nothing it did is kept.
+ */
+export async function passwordTransaction<T>(
+  db: PrismaClient,
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  try {
+    return await db.$transaction(fn, RESET_TRANSACTION_OPTIONS);
+  } catch (error) {
+    if (isTransactionManagerError(error)) {
+      logger.warn('auth.password_transaction_busy', { code: 'P2028', message: error.message });
+      throw new AppError('SERVICE_UNAVAILABLE', 'serverBusy', undefined, { cause: error });
+    }
+    throw error;
+  }
 }
 
 /**
@@ -115,28 +135,20 @@ export async function resetPasswordWithToken(db: PrismaClient, token: string, pa
   });
   if (!row || row.expiresAt <= now) return null;
 
-  try {
-    return await db.$transaction(async (tx) => {
-      const user = await lockUserForReset(tx, row.userId);
-      if (!user) return null;
+  return passwordTransaction(db, async (tx) => {
+    const user = await lockUserForReset(tx, row.userId);
+    if (!user) return null;
 
-      // By hash: a link issued meanwhile reuses the row with a new hash, and this one is then dead
-      const { count } = await tx.passwordResetToken.deleteMany({ where: { tokenHash, expiresAt: { gt: now } } });
-      if (count === 0) return null;
+    // By hash: a link issued meanwhile reuses the row with a new hash, and this one is then dead
+    const { count } = await tx.passwordResetToken.deleteMany({ where: { tokenHash, expiresAt: { gt: now } } });
+    if (count === 0) return null;
 
-      // Cost as at registration
-      const passwordHash = await bcrypt.hash(password, 12);
-      // Stamped now, after the lock wait and the hash: the new password version (auth.ts)
-      await tx.user.update({ where: { id: user.id }, data: { passwordHash, passwordChangedAt: new Date() } });
-      return { userId: user.id, email: user.email, locale: localeOf(user) };
-    }, RESET_TRANSACTION_OPTIONS);
-  } catch (error) {
-    if (isTransactionManagerError(error)) {
-      logger.warn('auth.password_reset_busy', { code: 'P2028', message: error.message });
-      throw new AppError('SERVICE_UNAVAILABLE', 'serverBusy', undefined, { cause: error });
-    }
-    throw error;
-  }
+    // Cost as at registration
+    const passwordHash = await bcrypt.hash(password, 12);
+    // Stamped now, after the lock wait and the hash: the new password version (auth.ts)
+    await tx.user.update({ where: { id: user.id }, data: { passwordHash, passwordChangedAt: new Date() } });
+    return { userId: user.id, email: user.email, locale: localeOf(user) };
+  });
 }
 
 /**
@@ -177,17 +189,13 @@ export async function emailPasswordResetLink(db: PrismaClient, email: string, no
   // The budget counts links made, each replacing the user's last one, not emails delivered: a
   // send that fails still counts, so a refusing SMTP server doesn't let anyone replace a user's
   // link (an admin-made one, say) without limit. No link made, no count
-  let issued;
+  let issued = null;
   try {
     issued = await issuePasswordResetToken(db, user.id, RESET_LINK_TTL_MS, now);
-  } catch (error) {
-    refundRateLimit(budgetKey);
-    throw error;
+  } finally {
+    if (!issued) refundRateLimit(budgetKey);
   }
-  if (!issued) {
-    refundRateLimit(budgetKey);
-    return;
-  }
+  if (!issued) return;
   const locale = localeOf(user);
   await createMailTransport().sendMail({
     from: mailFrom(),

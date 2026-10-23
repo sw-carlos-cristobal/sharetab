@@ -21,7 +21,7 @@
     "mismatch": "Passwörter stimmen nicht überein",
     "submit": "Passwort ändern",
     "submitting": "Ändern...",
-    "success": "Passwort geändert! Ihre anderen Geräte wurden abgemeldet.",
+    "success": "Passwort geändert! Andere Geräte, die bei diesem Konto angemeldet waren, wurden abgemeldet.",
     "signInAgain": "Ihr Passwort wurde geändert, aber dieses Gerät konnte sich damit nicht erneut anmelden. Melden Sie sich mit Ihrem neuen Passwort an."
   }
 }

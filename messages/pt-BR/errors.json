@@ -22,7 +22,7 @@
   "passwordLoginDisabled": "O login com senha está desativado neste servidor.",
   "passwordResetUnavailable": "Este servidor não consegue enviar e-mails, então não pode enviar um link de redefinição para você. Peça um ao administrador do ShareTab.",
   "passwordResetRateLimited": "Muitos pedidos de redefinição de senha. Tente novamente mais tarde.",
-  "resetLinkInvalid": "Este link de redefinição de senha é inválido, expirou ou já foi usado. Peça um novo.",
+  "resetLinkInvalid": "Este link de redefinição de senha é inválido, expirou, já foi usado ou foi substituído por um mais recente. Peça um novo.",
   "passwordResetNotAllowed": "Esta conta está suspensa ou não é uma conta real, então a senha dela não pode ser redefinida.",
   "userNotFound": "Usuário não encontrado",
   "groupNotFound": "Grupo não encontrado",

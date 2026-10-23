@@ -36,15 +36,20 @@ export default function ResetPasswordPage() {
   const [confirm, setConfirm] = useState('');
   const reset = trpc.auth.resetPassword.useMutation({
     onSuccess: () => {
+      // Not left filled in for another link pasted into this tab, someone else's maybe
+      setPassword('');
+      setConfirm('');
       window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${DONE_HASH}`);
+      // replaceState fires no hashchange; this tells every reader of the hash, a page that
+      // remounted meanwhile (a language switch) included
+      window.dispatchEvent(new Event('hashchange'));
     },
   });
   const mismatch = confirm !== '' && password !== confirm;
-  // An outcome belongs to the link it was sent with: another link pasted into this tab only
+  const done = hash === DONE_HASH;
+  // An error belongs to the link it was sent with: another link pasted into this tab only
   // changes the hash, and starts clean
-  const sentWithThisLink = reset.variables?.token === token;
-  const done = hash === DONE_HASH || (reset.isSuccess && sentWithThisLink);
-  const errorForThisLink = sentWithThisLink ? reset.error : null;
+  const errorForThisLink = reset.variables?.token === token ? reset.error : null;
   const linkRefused = errorForThisLink?.data?.messageKey === 'resetLinkInvalid';
 
   function handleSubmit(e: React.FormEvent) {
@@ -56,7 +61,7 @@ export default function ResetPasswordPage() {
   let body: React.ReactNode;
   if (done) {
     body = (
-      <div role="status" data-testid="reset-password-done" className="space-y-4 text-center">
+      <div data-testid="reset-password-done" className="space-y-4 text-center">
         <p className="text-sm text-muted-foreground">{t('success')}</p>
         <Button render={<Link href="/login" />} nativeButton={false} className="rounded-full">
           {t('signIn')}
@@ -67,7 +72,7 @@ export default function ResetPasswordPage() {
     body = <LoadingSpinner className="py-8" />;
   } else if (!token || linkRefused) {
     body = (
-      <div role="alert" data-testid="reset-password-invalid" className="space-y-4 text-center">
+      <div data-testid="reset-password-invalid" className="space-y-4 text-center">
         <p className="text-sm text-muted-foreground">{t('invalidLink')}</p>
         <Link href="/forgot-password" className="text-sm font-medium text-primary hover:underline">
           {t('requestNew')}
@@ -78,9 +83,7 @@ export default function ResetPasswordPage() {
     body = (
       <form onSubmit={handleSubmit} className="space-y-4">
         {errorForThisLink && (
-          <div role="alert" className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-            {errorForThisLink.message}
-          </div>
+          <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{errorForThisLink.message}</div>
         )}
         <div className="space-y-2">
           <Label htmlFor="newPassword">{t('new')}</Label>
@@ -132,7 +135,8 @@ export default function ResetPasswordPage() {
         {!done && token && !linkRefused && <CardDescription className="mt-1">{t('description')}</CardDescription>}
       </CardHeader>
       <CardContent className="pt-4">
-        {/* Always on the page, so screen readers announce the outcome that replaces the form */}
+        {/* Always on the page, so screen readers announce the outcome that replaces the form; what's
+            inside carries no role of its own, which would announce it twice */}
         <div aria-live="polite">{body}</div>
       </CardContent>
     </Card>

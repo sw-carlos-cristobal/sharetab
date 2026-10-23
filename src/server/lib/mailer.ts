@@ -56,5 +56,7 @@ export function describeMailError(error: unknown) {
  */
 export function publicBaseUrl(): string {
   const configured = process.env.AUTH_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000';
-  return configured.replace(/\/+$/, '');
+  // The origin only: Auth.js also takes AUTH_URL with its /api/auth path, and ShareTab's pages
+  // have no base path. A URL that can't be parsed throws, before anything is sent
+  return new URL(configured).origin;
 }

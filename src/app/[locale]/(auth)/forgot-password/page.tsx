@@ -26,6 +26,8 @@ export default function ForgotPasswordPage() {
     request.mutate({ email: email.trim() });
   }
 
+  // A failed background refetch keeps the options last loaded, so the form stays
+  const options = loginOptions.data;
   let body: React.ReactNode;
   if (loginOptions.isPending) {
     body = <LoadingSpinner className="py-8" />;
@@ -33,25 +35,21 @@ export default function ForgotPasswordPage() {
     // The same for every address, with or without an account. Ahead of the options, so a failed
     // background refetch of them doesn't take the answer off the screen
     body = (
-      <div role="status" data-testid="forgot-password-sent" className="space-y-3 text-sm text-muted-foreground">
+      <div data-testid="forgot-password-sent" className="space-y-3 text-sm text-muted-foreground">
         <p>{t('sent', { email: request.variables.email })}</p>
         <p>{tVerify('spamHint')}</p>
       </div>
     );
-  } else if (loginOptions.isError) {
+  } else if (!options) {
     // Whether this server can send email is unknown, so don't claim either way
-    body = (
-      <p role="alert" className="text-sm text-destructive">
-        {tCommon('errors.generic')}
-      </p>
-    );
-  } else if (!loginOptions.data.passwordLogin) {
+    body = <p className="text-sm text-destructive">{tCommon('errors.generic')}</p>;
+  } else if (!options.passwordLogin) {
     body = (
       <p data-testid="forgot-password-login-off" className="text-sm text-muted-foreground">
         {t('passwordLoginOff')}
       </p>
     );
-  } else if (!loginOptions.data.passwordReset) {
+  } else if (!options.passwordReset) {
     body = (
       <p data-testid="forgot-password-ask-admin" className="text-sm text-muted-foreground">
         {t('askAdmin')}
@@ -62,9 +60,7 @@ export default function ForgotPasswordPage() {
       <form onSubmit={handleSubmit} className="space-y-4">
         <p className="text-sm text-muted-foreground">{t('description')}</p>
         {request.error && (
-          <div role="alert" className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-            {request.error.message}
-          </div>
+          <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{request.error.message}</div>
         )}
         <div className="space-y-2">
           <Label htmlFor="email">{t('email')}</Label>
@@ -94,7 +90,8 @@ export default function ForgotPasswordPage() {
         {request.isSuccess && <CardDescription className="mt-1">{t('sentTitle')}</CardDescription>}
       </CardHeader>
       <CardContent className="space-y-6 pt-4">
-        {/* Always on the page, so screen readers announce the answer that replaces the form */}
+        {/* Always on the page, so screen readers announce the answer that replaces the form; what's
+            inside carries no role of its own, which would announce it twice */}
         <div aria-live="polite">{body}</div>
         <p className="text-center">
           <Link href="/login" className="text-sm font-medium text-primary hover:underline">

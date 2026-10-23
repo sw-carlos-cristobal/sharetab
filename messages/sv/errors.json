@@ -22,7 +22,7 @@
   "passwordLoginDisabled": "Inloggning med lösenord är avstängd på den här servern.",
   "passwordResetUnavailable": "Den här servern kan inte skicka e-post, så den kan inte mejla dig en länk för att återställa lösenordet. Be din ShareTab-administratör om en.",
   "passwordResetRateLimited": "För många begäranden om att återställa lösenordet. Försök igen senare.",
-  "resetLinkInvalid": "Länken för att återställa lösenordet är ogiltig, har gått ut eller har redan använts. Begär en ny.",
+  "resetLinkInvalid": "Länken för att återställa lösenordet är ogiltig, har gått ut, har redan använts eller har ersatts av en nyare. Begär en ny.",
   "passwordResetNotAllowed": "Kontot är avstängt eller är inget riktigt konto, så dess lösenord kan inte återställas.",
   "userNotFound": "Användaren hittades inte",
   "groupNotFound": "Gruppen hittades inte",

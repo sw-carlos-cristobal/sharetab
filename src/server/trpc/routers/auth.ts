@@ -10,7 +10,12 @@ import { parseAuthConfig } from '../../lib/auth-config';
 import { readRegistrationMode } from '../../lib/registration-mode';
 import { findUsersByEmail } from '../../lib/user-email';
 import { logger } from '../../lib/logger';
-import { emailPasswordChanged, emailPasswordResetLink, resetPasswordWithToken } from '../../lib/password-reset';
+import {
+  emailPasswordChanged,
+  emailPasswordResetLink,
+  passwordTransaction,
+  resetPasswordWithToken,
+} from '../../lib/password-reset';
 import {
   LOGIN_WINDOW_MS,
   loginAttemptsPerEmail,
@@ -203,7 +208,7 @@ export const authRouter = createTRPCRouter({
       clearRateLimit(guessKey);
 
       const passwordHash = await bcrypt.hash(input.newPassword, 12);
-      await ctx.db.$transaction(async (tx) => {
+      await passwordTransaction(ctx.db, async (tx) => {
         // Only while the password is still the one just checked: a reset link used meanwhile
         // wins, and this change is refused. Writes the user row before the token row, the lock
         // order resetPasswordWithToken uses. passwordChangedAt ends every session signed in
@@ -223,7 +228,9 @@ export const authRouter = createTRPCRouter({
       // (the Settings page signs in again with it)
       clearRateLimit(loginRateLimitKey(user.email));
       notifyPasswordChanged(user);
-      return { success: true };
+      // Who the page signs in again as, with the new password: the user, whose sessions this
+      // change ended. No one while an admin impersonates: the session is the admin's, and stays
+      return { success: true, signInAs: ctx.impersonating ? null : user.email };
     }),
 
   // "Forgot password?" (#397). The answer is the same whether or not the address has an

@@ -21,7 +21,7 @@
     "mismatch": "Lösenord stämmer inte överens",
     "submit": "Byt lösenord",
     "submitting": "Ändrar...",
-    "success": "Lösenordet har ändrats! Dina andra enheter har loggats ut.",
+    "success": "Lösenordet har ändrats! Andra enheter som var inloggade på kontot har loggats ut.",
     "signInAgain": "Ditt lösenord har ändrats, men den här enheten kunde inte logga in igen med det. Logga in med ditt nya lösenord."
   }
 }

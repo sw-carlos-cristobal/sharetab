@@ -229,8 +229,8 @@ describe('signIn callback', () => {
 
       const check = provider === 'google' ? checkGoogleSignIn : checkOidcSignIn;
       expect(check).toHaveBeenCalledWith(db, expect.objectContaining({ sessionUserId: 'u7' }));
-      // The request's cookie header only, never its Authorization header
-      expect(sessionCookieSubject).toHaveBeenCalledWith('authjs.session-token=stale');
+      // The request's headers: session-cookie.ts reads the cookie (and only it) as Auth.js does
+      expect(sessionCookieSubject).toHaveBeenCalledWith(requestHeaders.value);
     });
 
     test('a session auth() still reports is used as it is, without reading the cookie', async () => {

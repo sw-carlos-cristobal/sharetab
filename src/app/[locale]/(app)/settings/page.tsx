@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { signIn, useSession } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
 import { Link, useRouter } from '@/i18n/navigation';
@@ -91,29 +91,23 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [signInAgainFailed, setSignInAgainFailed] = useState(false);
-  const impersonation = trpc.admin.getImpersonationStatus.useQuery();
-  // Who this device signs in again as after the change: decided when it's sent, while this
-  // session is still good. null: an admin impersonating, whose own session the change doesn't
-  // touch; undefined: not known, or password sign-in not confirmed on, so the page says to sign
-  // in again (Auth.js's signIn leaves the page when it has no password provider)
-  const signInAgainAs = useRef<string | null | undefined>(undefined);
 
   const changePassword = trpc.auth.changePassword.useMutation({
-    onSuccess: async (_data, variables) => {
+    onSuccess: async ({ signInAs }, variables) => {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
       setSignInAgainFailed(false);
       // The change ends every session signed in under the old password, this one too (#397):
-      // sign in again with the new one so this device stays signed in
-      const email = signInAgainAs.current;
-      if (email === null) return;
-      if (!email) {
-        setSignInAgainFailed(true);
-        return;
-      }
+      // sign in again with the new one so this device stays signed in. The server says as whom:
+      // no one while an admin impersonates, whose own session the change doesn't touch
+      if (signInAs === null) return;
       try {
-        const result = await signIn('credentials', { email, password: variables.newPassword, redirect: false });
+        const result = await signIn('credentials', {
+          email: signInAs,
+          password: variables.newPassword,
+          redirect: false,
+        });
         if (!result || result.error) setSignInAgainFailed(true);
       } catch {
         // The password did change; only the sign-in failed
@@ -125,12 +119,6 @@ export default function SettingsPage() {
   function handleChangePassword(e: React.FormEvent) {
     e.preventDefault();
     if (newPassword !== confirmPassword) return;
-    const email = profile.data?.email;
-    const sessionEmail = session?.user?.email;
-    const impersonating =
-      impersonation.data?.isImpersonating === true ||
-      (!!email && !!sessionEmail && email.toLowerCase() !== sessionEmail.toLowerCase());
-    signInAgainAs.current = impersonating ? null : loginOptions.data?.passwordLogin === true ? email : undefined;
     changePassword.mutate({ currentPassword, newPassword });
   }
 

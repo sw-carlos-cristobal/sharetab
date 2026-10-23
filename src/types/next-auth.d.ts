@@ -12,6 +12,8 @@ declare module 'next-auth' {
       id: string;
       locale?: string;
     } & DefaultSession['user'];
+    // The password version the session signed in under (#397), checked again by protectedProcedure
+    passwordStamp?: number;
   }
 }
 

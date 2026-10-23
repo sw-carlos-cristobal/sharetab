@@ -13,6 +13,7 @@ import { parseAuthConfig } from './lib/auth-config';
 import { GOOGLE_PROVIDER_ID, checkGoogleSignIn, googleProviderOptions } from './lib/google-sign-in';
 import { OIDC_PROVIDER_ID, checkOidcSignIn, mapOidcProfile } from './lib/oidc-sign-in';
 import { authorizePasswordLogin } from './lib/password-login';
+import { passwordStamp } from './lib/password-stamp';
 import { sessionCookieSubject } from './lib/session-cookie';
 import { readEmailVerified } from './lib/sign-in-identity';
 import { findUserByEmail } from './lib/user-email';
@@ -98,12 +99,7 @@ async function sessionCookieUserId(): Promise<string | null> {
   // auth() reports nobody once the jwt callback has ended the session (a password reset or
   // change, #397), but the cookie stays until the browser next reads /api/auth/session, and
   // Auth.js links a new identity to the cookie's user (it decodes the cookie itself)
-  return sessionCookieSubject((await headers()).get('cookie') ?? '');
-}
-
-/** The password version a session was signed in under: when the password last changed, 0 if never. */
-function passwordStamp(changedAt: Date | string | null | undefined): number {
-  return changedAt ? new Date(changedAt).getTime() : 0;
+  return sessionCookieSubject(await headers());
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -185,9 +181,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           if (fresh?.name) token.name = fresh.name;
           if (fresh?.locale) token.locale = fresh.locale;
         } catch (error) {
-          // Keep the session with the fields it has. A throw here makes auth()
-          // return no session, and the OIDC and Google policies would then
-          // miss that someone is signed in while Auth.js itself still sees them.
+          // Keep the session with the fields it has: ending it here would sign
+          // everyone out whenever the database blips. The password version isn't
+          // checked then, so protectedProcedure (trpc/init.ts) checks it again.
           logger.warn('auth.session_refresh_failed', { error: error instanceof Error ? error.name : 'unknown' });
         }
       }
@@ -201,6 +197,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           session.user.locale = token.locale;
         }
       }
+      session.passwordStamp = typeof token.passwordStamp === 'number' ? token.passwordStamp : 0;
       return session;
     },
   },

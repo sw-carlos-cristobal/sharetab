@@ -22,7 +22,7 @@
   "passwordLoginDisabled": "Password sign-in is turned off on this server.",
   "passwordResetUnavailable": "This server can't send email, so it can't email you a reset link. Ask your ShareTab administrator for one.",
   "passwordResetRateLimited": "Too many password reset requests. Please try again later.",
-  "resetLinkInvalid": "This password reset link is invalid, has expired, or was already used. Request a new one.",
+  "resetLinkInvalid": "This password reset link is invalid, has expired, was already used, or was replaced by a newer one. Request a new one.",
   "passwordResetNotAllowed": "This account is suspended or isn't a real account, so its password can't be reset.",
   "userNotFound": "User not found",
   "groupNotFound": "Group not found",

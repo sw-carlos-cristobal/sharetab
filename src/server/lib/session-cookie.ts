@@ -8,19 +8,34 @@ function sessionSecrets(): string[] {
 }
 
 /**
- * The user id in the Auth.js session cookie of a request's cookie header, or null. Reads the
- * cookie as Auth.js does when it links a new sign-in to the browser's user: its secrets, and
- * never an Authorization header. Both cookie names are tried (Auth.js picks the __Secure- one
- * from the configured URL or the request's protocol): only a cookie Auth.js encrypted decodes,
- * and finding one only ever refuses a sign-in (`isSessionConflict`).
+ * Whether Auth.js names its session cookie __Secure-: by the configured URL's scheme, else by the
+ * request's protocol as Next.js derives it (any x-forwarded-proto that includes https).
  */
-export async function sessionCookieSubject(cookie: string): Promise<string | null> {
+function usesSecureCookie(requestHeaders: Headers): boolean {
+  const configured = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL;
+  if (configured) {
+    try {
+      return new URL(configured).protocol === 'https:';
+    } catch {
+      // Auth.js would fail on it too; go by the request
+    }
+  }
+  return requestHeaders.get('x-forwarded-proto')?.includes('https') ?? false;
+}
+
+/**
+ * The user id in the Auth.js session cookie of a request, or null. Reads the one cookie Auth.js
+ * reads when it links a new sign-in to the browser's user, as it reads it: its name, its secrets,
+ * and never an Authorization header. A leftover cookie of the other name (from before a move to
+ * https, say) is ignored, as Auth.js ignores it: signing out can't clear it.
+ */
+export async function sessionCookieSubject(requestHeaders: Headers): Promise<string | null> {
   const secret = sessionSecrets();
   if (secret.length === 0) return null;
-  const req = { headers: new Headers({ cookie }) };
-  for (const secureCookie of [true, false]) {
-    const token = await getToken({ req, secret, secureCookie });
-    if (token?.sub) return token.sub;
-  }
-  return null;
+  const token = await getToken({
+    req: { headers: new Headers({ cookie: requestHeaders.get('cookie') ?? '' }) },
+    secret,
+    secureCookie: usesSecureCookie(requestHeaders),
+  });
+  return token?.sub ?? null;
 }

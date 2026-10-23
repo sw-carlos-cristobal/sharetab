@@ -65,7 +65,8 @@ describe('authorizePasswordLogin', () => {
   test('case variants share one per-email rate-limit bucket', async () => {
     usersFound([BOB]);
     await authorizePasswordLogin({ email: 'BOB@example.com', password: 'password123' }, new Headers());
-    expect(checkRateLimit).toHaveBeenCalledWith('login:bob@example.com', expect.any(Number), expect.any(Number));
+    // AUTH_RATE_LIMIT_MAX's default in 15 minutes, the window Settings guesses share
+    expect(checkRateLimit).toHaveBeenCalledWith('login:bob@example.com', 5, 15 * 60 * 1000);
     // The key a password reset clears
     expect(loginRateLimitKey('Bob@Example.com')).toBe('login:bob@example.com');
   });

@@ -21,7 +21,7 @@
     "mismatch": "Passwords do not match",
     "submit": "Change password",
     "submitting": "Changing...",
-    "success": "Password changed! Your other devices were signed out.",
+    "success": "Password changed! Other devices signed in to this account were signed out.",
     "signInAgain": "Your password was changed, but this device couldn't sign in again with it. Sign in with your new password."
   }
 }

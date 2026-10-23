@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { trpc } from '@/lib/trpc';
 import { Button } from '@/components/ui/button';
@@ -122,22 +122,29 @@ export function UserManagementSection({ currentUserEmail }: { currentUserEmail?:
   const [resetLinkOpen, setResetLinkOpen] = useState(false);
   // Asked first: a new link replaces the one the user may be about to open, emailed or not
   const [resetLinkFor, setResetLinkFor] = useState<{ id: string; name: string; email: string } | null>(null);
-  const resetLinkName = useRef('');
   // The server refuses reset links while password sign-in is off, so the button isn't offered then
   const loginOptions = trpc.auth.getLoginOptions.useQuery();
   const passwordLogin = loginOptions.data?.passwordLogin === true;
   const createResetLink = trpc.admin.createPasswordResetLink.useMutation({
-    onSuccess: (data) => {
-      utils.admin.getAuditLog.invalidate();
-      setResetLink({
-        name: resetLinkName.current,
-        url: `${window.location.origin}${resetPasswordPath(data.locale, data.token)}`,
-        expiresAt: new Date(data.expiresAt),
-      });
-      setResetLinkOpen(true);
-    },
+    onSuccess: () => utils.admin.getAuditLog.invalidate(),
     onError: (e) => toast.error(e.message),
   });
+
+  function makeResetLink(user: { id: string; name: string }) {
+    createResetLink.mutate(
+      { userId: user.id },
+      {
+        onSuccess: (data) => {
+          setResetLink({
+            name: user.name,
+            url: `${window.location.origin}${resetPasswordPath(data.locale, data.token)}`,
+            expiresAt: new Date(data.expiresAt),
+          });
+          setResetLinkOpen(true);
+        },
+      },
+    );
+  }
 
   async function copyResetLink(url: string) {
     if (await copyToClipboard(url)) {
@@ -442,14 +449,11 @@ export function UserManagementSection({ currentUserEmail }: { currentUserEmail?:
         })}
         confirmLabel={t('users.resetLinkConfirm')}
         destructive={false}
-        onConfirm={() => {
-          if (!resetLinkFor) return;
-          resetLinkName.current = resetLinkFor.name;
-          createResetLink.mutate({ userId: resetLinkFor.id });
-        }}
+        onConfirm={() => resetLinkFor && makeResetLink(resetLinkFor)}
       />
 
-      <Dialog open={resetLinkOpen} onOpenChange={setResetLinkOpen}>
+      {/* Closed only with its buttons: the link isn't shown again, and making another replaces it */}
+      <Dialog open={resetLinkOpen} onOpenChange={setResetLinkOpen} disablePointerDismissal>
         <DialogContent showCloseButton={false}>
           <DialogHeader>
             <DialogTitle>{t('users.resetLinkTitle')}</DialogTitle>

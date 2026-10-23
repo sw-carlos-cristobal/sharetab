@@ -64,6 +64,11 @@ describe('describeMailError', () => {
 });
 
 describe('publicBaseUrl', () => {
+  test('keeps only the origin of a URL with a path (Auth.js takes AUTH_URL=https://host/api/auth)', () => {
+    vi.stubEnv('AUTH_URL', 'https://tabs.example.com/api/auth');
+    expect(publicBaseUrl()).toBe('https://tabs.example.com');
+  });
+
   test('takes AUTH_URL, then NEXTAUTH_URL, without a trailing slash', () => {
     vi.stubEnv('AUTH_URL', '');
     vi.stubEnv('NEXTAUTH_URL', 'https://tabs.example.com/');

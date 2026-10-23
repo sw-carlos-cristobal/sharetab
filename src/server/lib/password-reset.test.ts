@@ -156,6 +156,22 @@ describe('issuePasswordResetToken', () => {
     expect(await issuePasswordResetToken(db, 'token-owner', RESET_LINK_TTL_MS, NOW)).toBeNull();
     expect(tx.passwordResetToken.upsert).not.toHaveBeenCalled();
   });
+
+  test('a full connection pool or a timed-out transaction is reported as busy', async () => {
+    mockDb.$transaction.mockRejectedValue(Object.assign(new Error('Transaction already closed'), { code: 'P2028' }));
+    await expect(issuePasswordResetToken(db, 'token-owner', RESET_LINK_TTL_MS, NOW)).rejects.toMatchObject({
+      code: 'SERVICE_UNAVAILABLE',
+      messageKey: 'serverBusy',
+    });
+  });
+
+  test('issues a link to an account without a password, which can then add one', async () => {
+    // As README says: an account made with a magic link, SSO or Google can set a password this way.
+    // The lock reads no password column, so nothing turns such an account away
+    expect(await issuePasswordResetToken(db, 'token-owner', RESET_LINK_TTL_MS, NOW)).not.toBeNull();
+    const { sql } = lockStatement();
+    expect(sql).not.toContain('passwordHash');
+  });
 });
 
 describe('resetPasswordWithToken', () => {
@@ -296,6 +312,9 @@ describe('emailPasswordResetLink', () => {
       await emailPasswordResetLink(db, i % 2 ? 'BOB@example.com' : 'bob@example.com', NOW);
     }
     expect(sendMail).toHaveBeenCalledTimes(RESET_EMAILS_PER_ACCOUNT);
+    // The requests past the limit don't replace the link either: they stop before any transaction
+    expect(mockDb.$transaction).toHaveBeenCalledTimes(RESET_EMAILS_PER_ACCOUNT);
+    expect(tx.passwordResetToken.upsert).toHaveBeenCalledTimes(RESET_EMAILS_PER_ACCOUNT);
     expect(logger.info).toHaveBeenCalledWith('auth.password_reset_throttled', { userId: user.id });
     // Kept in the main store, keyed by the account: client-chosen keys can't evict it
     expect(checkRateLimit(`password-reset-email:${user.id}`, RESET_EMAILS_PER_ACCOUNT, 1).allowed).toBe(false);

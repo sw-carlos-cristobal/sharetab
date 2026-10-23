@@ -21,7 +21,7 @@
     "mismatch": "As senhas não coincidem",
     "submit": "Alterar senha",
     "submitting": "Alterando...",
-    "success": "Senha alterada! Seus outros dispositivos foram desconectados.",
+    "success": "Senha alterada! Os outros dispositivos conectados a esta conta foram desconectados.",
     "signInAgain": "Sua senha foi alterada, mas este dispositivo não conseguiu entrar de novo com ela. Entre com a nova senha."
   }
 }

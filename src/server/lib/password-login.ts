@@ -36,7 +36,10 @@ export function loginAttemptsPerEmail(): number {
 
 export const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 
-/** Wrong current passwords in Settings, per account: as many in LOGIN_WINDOW_MS as the login form allows. */
+/**
+ * Current-password guesses in Settings, per account: each counted before it's checked, as many in
+ * LOGIN_WINDOW_MS as the login form allows; a right one clears the count.
+ */
 export function passwordChangeGuessKey(userId: string): string {
   return `password-change:${userId}`;
 }

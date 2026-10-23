@@ -22,7 +22,7 @@
   "passwordLoginDisabled": "El inicio de sesión con contraseña está desactivado en este servidor.",
   "passwordResetUnavailable": "Este servidor no puede enviar correos, así que no puede enviarte un enlace para restablecer la contraseña. Pídeselo a tu administrador de ShareTab.",
   "passwordResetRateLimited": "Demasiadas solicitudes para restablecer la contraseña. Inténtalo de nuevo más tarde.",
-  "resetLinkInvalid": "Este enlace para restablecer la contraseña no es válido, ha caducado o ya se usó. Solicita uno nuevo.",
+  "resetLinkInvalid": "Este enlace para restablecer la contraseña no es válido, ha caducado, ya se usó o lo sustituyó uno más reciente. Solicita uno nuevo.",
   "passwordResetNotAllowed": "Esta cuenta está suspendida o no es una cuenta real, así que no se puede restablecer su contraseña.",
   "userNotFound": "Usuario no encontrado",
   "groupNotFound": "Grupo no encontrado",
