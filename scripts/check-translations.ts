@@ -1,30 +1,12 @@
 import { readFileSync, readdirSync, existsSync, statSync } from 'fs';
 import { join } from 'path';
-import { findUnpluralizedCounts, hasPluralForms } from './lib/plural-check';
+import { findMessageProblems, messageEntries } from './lib/message-check';
 
 const messagesDir = join(process.cwd(), 'messages');
 const sourceLocale = 'en';
 
-function getKeys(obj: Record<string, unknown>, prefix = ''): string[] {
-  const keys: string[] = [];
-  for (const [key, value] of Object.entries(obj)) {
-    const fullKey = prefix ? `${prefix}.${key}` : key;
-    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-      keys.push(...getKeys(value as Record<string, unknown>, fullKey));
-    } else {
-      keys.push(fullKey);
-    }
-  }
-  return keys;
-}
-
-function getEntries(obj: Record<string, unknown>, prefix = ''): [string, unknown][] {
-  return Object.entries(obj).flatMap(([key, value]): [string, unknown][] => {
-    const fullKey = prefix ? `${prefix}.${key}` : key;
-    return typeof value === 'object' && value !== null && !Array.isArray(value)
-      ? getEntries(value as Record<string, unknown>, fullKey)
-      : [[fullKey, value]];
-  });
+function getKeys(obj: Record<string, unknown>): string[] {
+  return messageEntries(obj).map(([key]) => key);
 }
 
 function loadNamespace(locale: string, namespace: string): Record<string, unknown> {
@@ -74,20 +56,10 @@ for (const locale of locales) {
   }
 }
 
-// #441: "{count} items" reads "1 items"; a plural gives "1 item"
-for (const locale of [sourceLocale, ...locales]) {
-  if (!hasPluralForms(locale)) continue;
-  for (const namespace of namespaces) {
-    for (const [key, value] of getEntries(loadNamespace(locale, namespace))) {
-      if (typeof value !== 'string') continue;
-      for (const name of findUnpluralizedCounts(value)) {
-        hasErrors = true;
-        console.error(
-          `[${locale}/${namespace}] ${key}: {${name}} is followed by a word outside a plural; use {${name}, plural, one {# …} other {# …}}`,
-        );
-      }
-    }
-  }
+// Messages next-intl can't parse, and (#441) counts outside a plural: "{count} items" reads "1 items"
+for (const problem of findMessageProblems(messagesDir)) {
+  hasErrors = true;
+  console.error(problem);
 }
 
 if (hasErrors) {

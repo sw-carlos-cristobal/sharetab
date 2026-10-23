@@ -47,7 +47,7 @@ messages/
    };
    ```
 
-4. **Run `npm run lint:i18n`** to confirm your locale has exactly the keys English has, then **submit a PR.**
+4. **Run `npm run lint:i18n`** to confirm your locale has exactly the keys English has and follows the rules below, then **submit a PR.**
 
 ## Updating Existing Translations
 
@@ -56,7 +56,8 @@ Edit the specific namespace file (e.g., `messages/es/groups.json`). Reference `m
 ## Rules
 
 - **Keep ICU placeholders intact.** For example: `{name}`, `{count, plural, one {# member} other {# members}}`. These are variables — translate the surrounding text only.
-- **Put a count before a word only inside a plural.** `{count} items` reads "1 items"; write `{count, plural, one {# item} other {# items}}`, with your language's forms in the branches (keep both branches even when the word doesn't change, as in German `{count, plural, one {# Artikel} other {# Artikel}}`). Japanese, Chinese and Korean have one form, so `{count}件` is fine there.
+- **Put a count before a word only inside a plural.** `{count} items` reads "1 items"; write `{count, plural, one {# item} other {# items}}`, with your language's forms in the branches (keep both branches even when the word doesn't change, as in German `{count, plural, one {# Artikel} other {# Artikel}}`). Japanese, Chinese and Korean have one form, so `{count}件` is fine there. The lint catches this for arguments named `count` (or ending in `Count`); check other numbers, such as `{remaining}`, yourself.
+- **Double an apostrophe that comes right before `<` or `{`.** In ICU an apostrophe there starts quoted text, so write `l''<emphasis>` for "l'" followed by emphasized text.
 - **Don't translate brand names.** "ShareTab" and "GitHub" stay as-is.
 - **Use native script** for the language name in the switcher (e.g., "Français" not "French").
 - **Match the tone** of the English source — ShareTab uses concise, friendly UI text.
@@ -66,11 +67,11 @@ Edit the specific namespace file (e.g., `messages/es/groups.json`). Reference `m
 First complete the dev environment setup in [CONTRIBUTING.md](CONTRIBUTING.md#dev-environment-setup) (`npm install`, `npx prisma generate`, and `cp .env.example .env`). Then:
 
 ```bash
-npm run lint:i18n       # Validate keys match English
+npm run lint:i18n       # Validate keys match English and messages follow the rules
 npm run dev:full        # Start the app (keeps running; stop it with Ctrl+C)
 # Navigate to /YOUR_LOCALE/login to see your translations
 ```
 
 ## Validation
 
-Run `npm run lint:i18n` to check that your locale has exactly the same keys as English (no missing or extra keys), and that no `{count}` is followed by a word outside a plural in a language with plural forms. CI runs it too, so run it before you open a PR.
+Run `npm run lint:i18n` to check that your locale has exactly the same keys as English (no missing or extra keys), that every message is valid ICU (the app would show a broken one as its key), and that no argument named `count` or ending in `Count` is followed by a word outside a plural in a language with plural forms. CI runs it too, so run it before you open a PR.

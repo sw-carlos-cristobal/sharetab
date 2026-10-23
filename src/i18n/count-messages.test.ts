@@ -2,6 +2,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { createTranslator, type AbstractIntlMessages } from 'next-intl';
 import { describe, expect, it } from 'vitest';
+import { hasPluralForms } from '../../scripts/lib/message-check';
 import { routing, type Locale } from './routing';
 
 type Values = Record<string, string | number>;
@@ -41,6 +42,22 @@ const COUNT_MESSAGES: [namespace: string, key: string, values: (n: number) => Va
   ['groups', 'list.showAll', (n) => ({ count: n })],
 ];
 
+// Reworded so that no word follows a count
+const NO_WORD_AFTER_COUNT = ['admin.tools.cleanupStats'];
+
+// Where the words after a count are the same for one and for several (German Artikel, "1 left")
+const SAME_FOR_ONE: Partial<Record<Locale, string[]>> = {
+  en: ['split.assign.assignAllItems', 'expenses.receipt.assignAllItems'],
+  de: [
+    'splits.items',
+    'admin.users.count',
+    'split.claim.claimConflict',
+    'split.assign.assignAllItems',
+    'expenses.receipt.assignAllItems',
+  ],
+  sv: ['admin.users.count', 'split.assign.assignAllItems', 'expenses.receipt.assignAllItems'],
+};
+
 describe('count messages', () => {
   it.each(routing.locales)('render in %s for one and for several', (locale) => {
     for (const [namespace, key, values] of COUNT_MESSAGES) {
@@ -49,6 +66,29 @@ describe('count messages', () => {
         expect(t(key, values(n)), `${namespace}.${key} with ${n}`).toContain(String(n));
       }
     }
+  });
+
+  it.each(routing.locales.filter(hasPluralForms))('use other words for one than for two in %s', (locale) => {
+    for (const [namespace, key, values] of COUNT_MESSAGES) {
+      const id = `${namespace}.${key}`;
+      if (NO_WORD_AFTER_COUNT.includes(id) || SAME_FOR_ONE[locale]?.includes(id)) continue;
+      const t = translator(locale, namespace);
+      expect(t(key, values(1)).replace('1', '#'), id).not.toBe(t(key, values(2)).replace('2', '#'));
+    }
+  });
+
+  it.each([
+    ['es', '1 artículo también reclamado por Ana'],
+    ['sv', '1 artikel också vald av Ana'],
+    ['fr', '1 article également réclamé par Ana'],
+    ['de', '1 Artikel auch ausgewählt von Ana'],
+    ['pt-BR', '1 item também selecionado por Ana'],
+  ] as const)('say that one item was also claimed in %s', (locale, text) => {
+    expect(translator(locale, 'split')('claim.claimConflict', { count: 1, names: 'Ana' })).toBe(text);
+  });
+
+  it('group the digits of a large count', () => {
+    expect(translator('en', 'admin')('serverLogs.entries', { count: 1234 })).toBe('1,234 entries');
   });
 
   it('use the singular for one in English', () => {
@@ -85,9 +125,6 @@ describe('count messages', () => {
     expect(translator('fr', 'splits')('items', { count: 1 })).toBe('1 article');
     expect(translator('fr', 'splits')('items', { count: 2 })).toBe('2 articles');
     expect(translator('fr', 'admin')('users.count', { count: 1 })).toBe('1 utilisateur');
-    expect(translator('fr', 'split')('claim.claimConflict', { count: 1, names: 'Ana' })).toBe(
-      '1 article également réclamé par Ana',
-    );
     expect(translator('fr', 'split')('assign.assignAllItems', { remaining: 1 })).toBe(
       'Attribuer tous les articles (1 restant)',
     );

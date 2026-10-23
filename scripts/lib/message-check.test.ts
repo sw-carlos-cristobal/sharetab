@@ -1,5 +1,6 @@
+import { join } from 'path';
 import { describe, expect, it } from 'vitest';
-import { findUnpluralizedCounts, hasPluralForms } from './plural-check';
+import { findMessageProblems, findUnpluralizedCounts, hasPluralForms, messageProblems } from './message-check';
 
 describe('findUnpluralizedCounts', () => {
   it('flags a count followed by a word', () => {
@@ -24,8 +25,20 @@ describe('findUnpluralizedCounts', () => {
     expect(findUnpluralizedCounts('{count} éléments')).toEqual(['count']);
   });
 
+  it('flags a count on either side of a rich-text tag', () => {
+    expect(findUnpluralizedCounts('<b>{count}</b> users')).toEqual(['count']);
+    expect(findUnpluralizedCounts('{count} <b>users</b>')).toEqual(['count']);
+  });
+
   it('flags a count inside a select, which picks no plural form', () => {
     expect(findUnpluralizedCounts('{kind, select, receipt {{count} receipts} other {{count} files}}')).toEqual([
+      'count',
+      'count',
+    ]);
+  });
+
+  it('flags a count inside a plural on another argument', () => {
+    expect(findUnpluralizedCounts('{total, plural, one {{count} items of # total} other {{count} items}}')).toEqual([
       'count',
       'count',
     ]);
@@ -38,7 +51,7 @@ describe('findUnpluralizedCounts', () => {
     );
   });
 
-  it('accepts a count repeated inside a plural branch', () => {
+  it('accepts a count repeated inside its own plural', () => {
     expect(findUnpluralizedCounts('{count, plural, one {one item} other {{count} items}}')).toEqual([]);
   });
 
@@ -53,6 +66,10 @@ describe('findUnpluralizedCounts', () => {
     expect(findUnpluralizedCounts('{count}件の支出')).toEqual([]);
   });
 
+  it('ignores a count quoted as literal text', () => {
+    expect(findUnpluralizedCounts("'{count}' items")).toEqual([]);
+  });
+
   it('ignores arguments that are not counts', () => {
     expect(findUnpluralizedCounts('{name} owes you')).toEqual([]);
     expect(findUnpluralizedCounts('{account} linked')).toEqual([]);
@@ -60,6 +77,10 @@ describe('findUnpluralizedCounts', () => {
 
   it('checks a count after a plural closes', () => {
     expect(findUnpluralizedCounts('{count, plural, one {# item} other {# items}}, {count} people')).toEqual(['count']);
+  });
+
+  it('throws on a message that is not valid ICU', () => {
+    expect(() => findUnpluralizedCounts('{count, plural, one {# item}')).toThrow('MISSING_OTHER_CLAUSE');
   });
 });
 
@@ -74,5 +95,34 @@ describe('hasPluralForms', () => {
     for (const locale of ['ja', 'zh-CN', 'ko']) {
       expect(hasPluralForms(locale)).toBe(false);
     }
+  });
+});
+
+describe('messageProblems', () => {
+  it('reports a count outside a plural in a language with plural forms', () => {
+    expect(messageProblems('fr', '{count} articles')).toEqual([
+      '{count} is followed by a word outside a plural; use {count, plural, one {# …} other {# …}}',
+    ]);
+  });
+
+  it('allows a count before a word in a language with one form', () => {
+    expect(messageProblems('ko', '{count} 항목')).toEqual([]);
+  });
+
+  it('reports a message that does not parse, in every language', () => {
+    // An apostrophe before a tag starts quoted text, so the closing tag has no opening one
+    const message = "copiez l'<emphasis>URL de la barre d'adresse</emphasis>";
+    expect(messageProblems('fr', message)).toEqual(["isn't valid ICU: UNMATCHED_CLOSING_TAG"]);
+    expect(messageProblems('ja', '{count, plural, one {# item}')).toEqual(["isn't valid ICU: MISSING_OTHER_CLAUSE"]);
+  });
+
+  it('reports nothing for a valid message', () => {
+    expect(messageProblems('en', '{count, plural, one {# item} other {# items}}')).toEqual([]);
+  });
+});
+
+describe('findMessageProblems', () => {
+  it("finds none in the app's messages", () => {
+    expect(findMessageProblems(join(process.cwd(), 'messages'))).toEqual([]);
   });
 });

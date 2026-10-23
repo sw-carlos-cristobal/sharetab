@@ -31,7 +31,7 @@ npm test             # Run unit tests (Vitest)
 npm run test:watch   # Unit tests in watch mode
 BASE_URL=http://localhost:3000 npm run test:e2e  # Run Playwright e2e tests (playwright.config.ts falls back to port 3001)
 npm run test:docker  # Build the Docker image and smoke test it (scripts/docker-smoke.sh; DOCKER_HOST=ssh://... for a remote daemon)
-npm run lint:i18n    # Check translations for missing/extra keys and counts outside plurals
+npm run lint:i18n    # Check translations for missing/extra keys, invalid ICU, and counts outside plurals
 npx prisma generate  # Regenerate Prisma client after schema changes
 npx prisma db push   # Push schema without migration (dev only)
 ```
@@ -141,7 +141,7 @@ npx prisma db push   # Push schema without migration (dev only)
 
 - `npm test` — run all unit tests (over 1,100 tests, under 10 seconds)
 - Tests live co-located with source: `src/**/*.test.ts`, plus `docker/**/*.test.mjs` for the Docker build scripts and `scripts/**/*.test.ts` for the repo scripts
-- Covers most of `src/server/lib/`, `src/lib/` money, split-calculator, split-editor-seed, sign-in-errors, avatar, guest-session, claim-drafts, and claim-save, `ai/registry.ts`, `ai/schema.ts`, `ai/providers/openai-codex.ts`, `ai/providers/meridian.ts`, the Auth.js wiring in `server/auth.ts`, the admin, auth, balances, expenses, guest, groups, and receipts routers, `app/api/upload/route.ts`, and `docker/stage-runtime-deps.mjs`. `git ls-files '*.test.ts' '*.test.mjs'` lists them
+- Covers most of `src/server/lib/`, `src/lib/` money, split-calculator, split-editor-seed, sign-in-errors, avatar, guest-session, claim-drafts, and claim-save, `ai/registry.ts`, `ai/schema.ts`, `ai/providers/openai-codex.ts`, `ai/providers/meridian.ts`, the Auth.js wiring in `server/auth.ts`, the admin, auth, balances, expenses, guest, groups, and receipts routers, `app/api/upload/route.ts`, `docker/stage-runtime-deps.mjs`, the translation checks (`scripts/lib/message-check.ts`), and the count messages in every locale (`src/i18n/count-messages.test.ts`). `git ls-files '*.test.ts' '*.test.mjs'` lists them
 
 ### E2E Tests (Playwright)
 
@@ -164,7 +164,7 @@ npx prisma db push   # Push schema without migration (dev only)
 - Locale-aware navigation: import `Link`, `redirect`, `usePathname`, `useRouter` from `@/i18n/navigation`
 - `LanguageSwitcher` component in sidebar and mobile menu
 - User locale preference stored in `User.locale` field (Prisma schema)
-- `npm run lint:i18n` checks for missing or extra translation keys, and for a `count` argument (or one named `…Count`) followed by a word outside a plural in a locale with plural forms (`scripts/lib/plural-check.ts`, #441): `{count} items` reads "1 items", so write `{count, plural, one {# item} other {# items}}`, keeping both branches where the word doesn't change (German `Artikel`). Japanese, Chinese and Korean have one plural form and aren't checked. CI runs it; run it locally after changing any `messages/` file
+- `npm run lint:i18n` checks for missing or extra translation keys, then parses every message in every locale with `@formatjs/icu-messageformat-parser` (the parser next-intl formats with) through `scripts/lib/message-check.ts`. It fails on a message that isn't valid ICU, which next-intl would show as its key (an apostrophe before `<` or `{` starts quoted text: write `''`), and, in a locale with plural forms, on a `count` argument (or one named `…Count`) followed by a word outside a plural on that argument (#441): `{count} items` reads "1 items", so write `{count, plural, one {# item} other {# items}}`, keeping both branches where the word doesn't change (German `Artikel`). Japanese, Chinese and Korean have one plural form and aren't checked for counts. Counts passed under other names (`remaining`, `expired`, `total`) aren't checked, so add a message that shows one to `src/i18n/count-messages.test.ts`, which renders each count message in every locale and fails when one reads the same for 1 as for 2. CI runs it; run it locally after changing any `messages/` file
 - `src/types/next-intl.d.ts` types `t()` keys against the English messages, so `npx tsc --noEmit` fails on a key that isn't in `messages/en/` (lint:i18n alone only compares the other locales with en)
 - To add a new language: add locale to `src/i18n/routing.ts`, create `messages/{locale}/` with all namespace files, add display config to `languageConfig`, and add its `Intl` locale to `moneyLocales` in `src/lib/money.ts` (typed `satisfies Record<Locale, string>`, so `tsc` fails until you do)
 
