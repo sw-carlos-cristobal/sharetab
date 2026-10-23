@@ -7,6 +7,8 @@ export type SignInErrorKey =
   | 'emailMissing'
   | 'accountNotLinked'
   | 'accountExists'
+  | 'emailUnverified'
+  | 'adminEmailNotHosted'
   | 'registrationDisabled'
   | 'linkExpired'
   | 'generic';
@@ -22,10 +24,12 @@ const GOOGLE_ERROR_KEYS: Record<GoogleSignInError, SignInErrorKey> = {
   GoogleSessionActive: 'sessionActive',
   GoogleAccountExists: 'accountExists',
   GoogleRegistrationDisabled: 'registrationDisabled',
-  // Rare: Google sends no verified email, or a non-Google address that is
-  // ADMIN_EMAIL. The auth.google_denied log line has the code.
-  GoogleEmailUnverified: 'generic',
-  GoogleAdminEmailNotHosted: 'generic',
+  // Trying again can't help with either, so neither gets the generic message.
+  // Decided before the account-exists check, so it says nothing about which accounts exist.
+  GoogleEmailUnverified: 'emailUnverified',
+  // The message doesn't mention the admin rule (the code in the URL does,
+  // only until the admin account exists); the README explains it.
+  GoogleAdminEmailNotHosted: 'adminEmailNotHosted',
 };
 
 // A Map, not an object lookup: the code comes from the URL, and keys like

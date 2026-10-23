@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
-import { signIn } from 'next-auth/react';
+import { signIn, signOut } from 'next-auth/react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
 import { Link, useRouter } from '@/i18n/navigation';
@@ -62,6 +62,7 @@ function GoogleIcon({ className }: { className?: string }) {
 
 function LoginForm() {
   const t = useTranslations('auth.login');
+  const tCommon = useTranslations('common');
   const locale = useLocale() as Locale;
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -73,6 +74,7 @@ function LoginForm() {
   const [magicLinkSending, setMagicLinkSending] = useState(false);
   const [showMagicLink, setShowMagicLink] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
+  const [signOutFailed, setSignOutFailed] = useState(false);
   const loginOptions = trpc.auth.getLoginOptions.useQuery();
   // Quick Split needs uploads; hide its link only once we know guests are refused.
   const guestUploadStatus = trpc.guest.getUploadStatus.useQuery();
@@ -102,10 +104,13 @@ function LoginForm() {
   // triggers a new attempt, which sets its own error state.
   const urlErrorKey = getSignInErrorKey(searchParams.get('error'));
   const shownError = error || (urlErrorKey ? t(`errors.${urlErrorKey}`) : '');
+  // The refusal says to sign out first, and this page has no other way to.
+  const showSignOut = !error && urlErrorKey === 'sessionActive';
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    setSignOutFailed(false);
     setLoading(true);
 
     const result = await signIn('credentials', {
@@ -128,6 +133,7 @@ function LoginForm() {
   async function handleMagicLink(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    setSignOutFailed(false);
     setMagicLinkSending(true);
 
     const result = await signIn('nodemailer', {
@@ -147,6 +153,7 @@ function LoginForm() {
 
   async function handleProviderSignIn(provider: 'oidc' | 'google') {
     setError('');
+    setSignOutFailed(false);
     setRedirecting(true);
     try {
       // Full-page redirect to the identity provider; failures normally come
@@ -200,6 +207,25 @@ function LoginForm() {
                 className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive"
               >
                 {shownError}
+                {showSignOut && (
+                  <Button
+                    data-testid="login-sign-out"
+                    variant="link"
+                    className="ml-1 h-auto p-0 text-sm text-destructive underline"
+                    onClick={() => {
+                      setSignOutFailed(false);
+                      // Keeps the button, so a failed sign-out can be tried again.
+                      signOut({ callbackUrl: `/${locale}/login` }).catch(() => setSignOutFailed(true));
+                    }}
+                  >
+                    {tCommon('nav.signOut')}
+                  </Button>
+                )}
+                {showSignOut && signOutFailed && (
+                  <span data-testid="login-sign-out-failed" className="block">
+                    {tCommon('errors.generic')}
+                  </span>
+                )}
               </div>
             )}
 
@@ -209,7 +235,10 @@ function LoginForm() {
                   {oidc && (
                     <Button
                       data-testid="oidc-sign-in"
-                      variant={passwordLogin || magicLinkOnly ? 'outline' : 'default'}
+                      // Next to Google it's outlined too: Google's branding
+                      // rules want its button at least as prominent as other
+                      // third-party sign-in buttons.
+                      variant={passwordLogin || magicLinkOnly || google ? 'outline' : 'default'}
                       className="w-full rounded-full h-10 text-sm font-medium"
                       onClick={() => handleProviderSignIn('oidc')}
                       disabled={redirecting}
@@ -221,8 +250,8 @@ function LoginForm() {
                   {google && (
                     <Button
                       data-testid="google-sign-in"
-                      // Outlined: the primary color stays with the password
-                      // form, the magic-link form, or the SSO button.
+                      // Always outlined: the primary color belongs to the
+                      // password or magic-link form, when there is one.
                       variant="outline"
                       className="w-full rounded-full h-10 text-sm font-medium"
                       onClick={() => handleProviderSignIn('google')}

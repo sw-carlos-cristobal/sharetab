@@ -228,6 +228,27 @@ describe('password login enabled', () => {
     const api = await caller();
     expect(await api.getRegistrationMode()).toEqual({ mode: 'open' });
   });
+
+  test('register is refused while the setting is closed', async () => {
+    stubEnv({ REGISTER_RATE_LIMIT_MAX: '9999' });
+    mockDb.systemSetting.findUnique.mockResolvedValue({ key: 'registrationMode', value: 'closed' });
+    const api = await caller();
+    await expect(
+      api.register({ name: 'Ada', email: 'ada@example.com', password: 'password123' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(mockDb.$transaction).not.toHaveBeenCalled();
+  });
+
+  test('register goes ahead with an unrecognised setting, read as open', async () => {
+    stubEnv({ REGISTER_RATE_LIMIT_MAX: '9999' });
+    mockDb.systemSetting.findUnique.mockResolvedValue({ key: 'registrationMode', value: 'something-else' });
+    mockDb.$queryRaw.mockResolvedValue([]);
+    const tx = { user: { create: vi.fn().mockResolvedValue({ id: 'new', name: 'Ada', email: 'ada@example.com' }) } };
+    mockDb.$transaction.mockImplementation(async (fn: (client: typeof tx) => unknown) => fn(tx));
+    const api = await caller();
+    await api.register({ name: 'Ada', email: 'ada@example.com', password: 'password123' });
+    expect(tx.user.create).toHaveBeenCalled();
+  });
 });
 
 describe('auth.getProfile', () => {

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 // The Auth.js wiring in auth.ts: which providers it registers, how its signIn
 // callback hands OIDC and Google sign-ins to their policies (tested in their
-// own files), and which sign-ins it logs.
+// own files), which sign-ins it logs, and the jwt callback's profile refresh.
 const { nextAuth, authMock, google, logger, checkGoogleSignIn, checkOidcSignIn, db } = vi.hoisted(() => ({
   nextAuth: vi.fn(),
   authMock: vi.fn(),
@@ -29,8 +29,21 @@ vi.mock('./lib/oidc-sign-in', async (importOriginal) => ({
   checkOidcSignIn,
 }));
 
+interface CapturedProvider {
+  id: string;
+  profile?: (claims: Record<string, unknown>) => unknown;
+  [key: string]: unknown;
+}
+
 interface CapturedConfig {
-  callbacks: { signIn: (params: Record<string, unknown>) => Promise<boolean | string> };
+  providers: CapturedProvider[];
+  callbacks: {
+    signIn: (params: Record<string, unknown>) => Promise<boolean | string>;
+    jwt: (params: {
+      token: Record<string, unknown>;
+      user?: Record<string, unknown>;
+    }) => Promise<Record<string, unknown>>;
+  };
   events: { signIn: (message: Record<string, unknown>) => void };
 }
 
@@ -74,6 +87,10 @@ const OIDC_ENV = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // clearAllMocks keeps implementations, so a test's rejection can't reach the next one.
+  authMock.mockResolvedValue(null);
+  checkGoogleSignIn.mockResolvedValue(true);
+  checkOidcSignIn.mockResolvedValue(true);
 });
 
 afterEach(() => {
@@ -82,27 +99,52 @@ afterEach(() => {
 
 describe('Google provider registration', () => {
   test('registers Google under the id the signIn callback checks, with its account chooser', async () => {
-    await loadAuth(GOOGLE_ENV);
+    const config = await loadAuth(GOOGLE_ENV);
+    expect(config.providers.map((p) => p.id)).toContain('google');
     expect(google).toHaveBeenCalledWith({
       id: 'google',
       clientId: 'id.apps.googleusercontent.com',
       clientSecret: 'g-secret',
       authorization: { params: { prompt: 'select_account' } },
-      profile: expect.any(Function),
     });
   });
 
-  test("maps Google's profile like an OIDC one: name capped at 100 characters, web image URLs only", async () => {
-    await loadAuth(GOOGLE_ENV);
-    const { profile } = google.mock.calls[0]?.[0] as { profile: (claims: Record<string, unknown>) => unknown };
-    expect(
-      profile({ sub: 'g-1', name: 'A'.repeat(150), email: 'Alice@Gmail.com', picture: 'javascript:alert(1)' }),
-    ).toEqual({ id: 'g-1', name: 'A'.repeat(100), email: 'alice@gmail.com', image: null });
+  test('registers no Google provider without both variables, and logs which one is missing', async () => {
+    const config = await loadAuth({ GOOGLE_CLIENT_ID: 'id.apps.googleusercontent.com' });
+    expect(config.providers.map((p) => p.id)).not.toContain('google');
+    expect(google).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith('auth.config', {
+      warning: expect.stringContaining('GOOGLE_CLIENT_SECRET') as unknown,
+    });
+  });
+});
+
+describe('other providers', () => {
+  test('registers the password form unless DISABLE_PASSWORD_LOGIN turns it off', async () => {
+    expect((await loadAuth()).providers.map((p) => p.id)).toContain('credentials');
+    const ssoOnly = await loadAuth({ ...OIDC_ENV, DISABLE_PASSWORD_LOGIN: 'true' });
+    expect(ssoOnly.providers.map((p) => p.id)).not.toContain('credentials');
   });
 
-  test('registers no Google provider without both variables', async () => {
-    await loadAuth({ GOOGLE_CLIENT_ID: 'id.apps.googleusercontent.com' });
-    expect(google).not.toHaveBeenCalled();
+  test('registers OIDC with UserInfo profiles, its email-linking setting and the profile caps', async () => {
+    const oidcOf = (config: CapturedConfig) => config.providers.find((p) => p.id === 'oidc');
+    const oidc = oidcOf(await loadAuth({ ...OIDC_ENV, OIDC_DISPLAY_NAME: 'Authentik' }));
+    expect(oidc).toMatchObject({
+      type: 'oidc',
+      name: 'Authentik',
+      issuer: OIDC_ENV.OIDC_ISSUER,
+      clientId: OIDC_ENV.OIDC_CLIENT_ID,
+      clientSecret: OIDC_ENV.OIDC_CLIENT_SECRET,
+      idToken: false,
+      allowDangerousEmailAccountLinking: false,
+      client: { token_endpoint_auth_method: 'client_secret_basic' },
+    });
+    expect(oidc?.profile?.({ sub: 's', name: 'A'.repeat(150), picture: 'javascript:alert(1)' })).toMatchObject({
+      name: 'A'.repeat(100),
+      image: null,
+    });
+    const linking = oidcOf(await loadAuth({ ...OIDC_ENV, OIDC_ALLOW_EMAIL_LINKING: 'true' }));
+    expect(linking).toMatchObject({ allowDangerousEmailAccountLinking: true });
   });
 });
 
@@ -111,6 +153,11 @@ describe('signIn callback', () => {
     user: { email: 'alice@gmail.com' },
     account: { provider: 'google', providerAccountId: 'g-1' },
     profile: { sub: 'g-1', email: 'alice@gmail.com', email_verified: true },
+  };
+  const oidcSignIn = {
+    user: { email: 'alice@example.com' },
+    account: { provider: 'oidc', providerAccountId: 'sub-1' },
+    profile: { sub: 'sub-1' },
   };
 
   test("hands a Google sign-in to the Google policy with the browser's session, the ID token's claims and ADMIN_EMAIL", async () => {
@@ -127,6 +174,39 @@ describe('signIn callback', () => {
       adminEmail: 'admin@example.com',
     });
     expect(checkOidcSignIn).not.toHaveBeenCalled();
+  });
+
+  test.each(['google', 'oidc'] as const)(
+    'fails closed: an error in the %s policy fails the sign-in (Auth.js refuses it)',
+    async (provider) => {
+      const config = await loadAuth({ ...GOOGLE_ENV, ...OIDC_ENV });
+      authMock.mockResolvedValue(null);
+      checkGoogleSignIn.mockRejectedValue(new Error('connection lost'));
+      checkOidcSignIn.mockRejectedValue(new Error('connection lost'));
+      const signIn = provider === 'google' ? googleSignIn : oidcSignIn;
+      await expect(config.callbacks.signIn(signIn)).rejects.toThrow('connection lost');
+    },
+  );
+
+  test.each(['google', 'oidc'] as const)(
+    'fails closed: an error reading the session fails the %s sign-in, rather than seeing nobody signed in',
+    async (provider) => {
+      const config = await loadAuth({ ...GOOGLE_ENV, ...OIDC_ENV });
+      authMock.mockRejectedValue(new Error('session read failed'));
+      const signIn = provider === 'google' ? googleSignIn : oidcSignIn;
+      await expect(config.callbacks.signIn(signIn)).rejects.toThrow('session read failed');
+      expect(checkGoogleSignIn).not.toHaveBeenCalled();
+      expect(checkOidcSignIn).not.toHaveBeenCalled();
+    },
+  );
+
+  test('passes a null email to the Google policy when Auth.js has none', async () => {
+    const config = await loadAuth(GOOGLE_ENV);
+    authMock.mockResolvedValue(null);
+    checkGoogleSignIn.mockResolvedValue('/login?error=GoogleEmailUnverified');
+
+    await config.callbacks.signIn({ ...googleSignIn, user: {} });
+    expect(checkGoogleSignIn).toHaveBeenCalledWith(db, expect.objectContaining({ email: null }));
   });
 
   test('passes no session user to the Google policy when nobody is signed in', async () => {
@@ -175,6 +255,36 @@ describe('signIn callback', () => {
     expect(checkOidcSignIn).toHaveBeenCalledWith(db, expect.objectContaining({ passwordLogin: false }));
   });
 
+  test("passes the OIDC settings' defaults, and OIDC_AUTO_REGISTER=false", async () => {
+    authMock.mockResolvedValue(null);
+    checkOidcSignIn.mockResolvedValue(true);
+    const oidcSignIn = {
+      user: { email: 'alice@example.com' },
+      account: { provider: 'oidc', providerAccountId: 'sub-1' },
+      profile: { sub: 'sub-1' },
+    };
+
+    await (await loadAuth(OIDC_ENV)).callbacks.signIn(oidcSignIn);
+    expect(checkOidcSignIn).toHaveBeenLastCalledWith(
+      db,
+      expect.objectContaining({ allowEmailLinking: false, autoRegister: true }),
+    );
+
+    await (await loadAuth({ ...OIDC_ENV, OIDC_AUTO_REGISTER: 'false' })).callbacks.signIn(oidcSignIn);
+    expect(checkOidcSignIn).toHaveBeenLastCalledWith(
+      db,
+      expect.objectContaining({ allowEmailLinking: false, autoRegister: false }),
+    );
+  });
+
+  test('lets an "oidc" sign-in through untouched when OIDC is not configured (no such provider)', async () => {
+    const config = await loadAuth(GOOGLE_ENV);
+    expect(
+      await config.callbacks.signIn({ user: { id: 'u1' }, account: { provider: 'oidc', providerAccountId: 's' } }),
+    ).toBe(true);
+    expect(checkOidcSignIn).not.toHaveBeenCalled();
+  });
+
   test('leaves password and magic-link sign-ins to their providers', async () => {
     const config = await loadAuth({ ...GOOGLE_ENV, ...OIDC_ENV });
     for (const provider of ['credentials', 'nodemailer']) {
@@ -198,9 +308,53 @@ describe('signIn event', () => {
     expect(logger.info).toHaveBeenCalledWith(event, { userId: 'u1', email: 'alice@gmail.com', isNewUser: true });
   });
 
+  test('logs isNewUser false when Auth.js leaves it out', async () => {
+    const config = await loadAuth(GOOGLE_ENV);
+    config.events.signIn({ user: { id: 'u1', email: 'alice@gmail.com' }, account: { provider: 'google' } });
+    expect(logger.info).toHaveBeenCalledWith('auth.google_login', {
+      userId: 'u1',
+      email: 'alice@gmail.com',
+      isNewUser: false,
+    });
+  });
+
   test('logs nothing for password sign-ins', async () => {
     const config = await loadAuth();
     config.events.signIn({ user: { id: 'u1' }, account: { provider: 'credentials' } });
     expect(logger.info).not.toHaveBeenCalled();
+  });
+});
+
+describe('jwt callback', () => {
+  test("refreshes the signed-in user's name and locale from the database", async () => {
+    const config = await loadAuth();
+    db.user.findUnique.mockResolvedValue({ name: 'New Name', locale: 'de' });
+    expect(await config.callbacks.jwt({ token: { id: 'u1', name: 'Old', locale: 'en' } })).toMatchObject({
+      id: 'u1',
+      name: 'New Name',
+      locale: 'de',
+    });
+    expect(db.user.findUnique).toHaveBeenCalledWith({ where: { id: 'u1' }, select: { name: true, locale: true } });
+  });
+
+  test("puts the user's id, name and locale on the token at sign-in", async () => {
+    const config = await loadAuth();
+    db.user.findUnique.mockResolvedValue(null);
+    expect(await config.callbacks.jwt({ token: {}, user: { id: 'u1', name: 'Ada', locale: 'de' } })).toMatchObject({
+      id: 'u1',
+      name: 'Ada',
+      locale: 'de',
+    });
+  });
+
+  test('keeps the session when the refresh fails, so auth() still reports who is signed in', async () => {
+    const config = await loadAuth();
+    db.user.findUnique.mockRejectedValue(new Error('pool timeout'));
+    expect(await config.callbacks.jwt({ token: { id: 'u1', name: 'Old', locale: 'en' } })).toEqual({
+      id: 'u1',
+      name: 'Old',
+      locale: 'en',
+    });
+    expect(logger.warn).toHaveBeenCalledWith('auth.session_refresh_failed', { error: 'Error' });
   });
 });

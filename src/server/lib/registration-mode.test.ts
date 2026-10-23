@@ -12,6 +12,9 @@ describe('readRegistrationMode', () => {
     [null, 'open'],
     ['open', 'open'],
     ['something-else', 'open'],
+    // Only the exact stored values count.
+    ['Closed', 'open'],
+    [' closed', 'open'],
     ['invite-only', 'invite-only'],
     ['closed', 'closed'],
   ])('stored setting %s reads as %s', async (stored, mode) => {
@@ -23,8 +26,10 @@ describe('readRegistrationMode', () => {
 
 describe('isRegistrationOpen', () => {
   test.each([
+    [null, true],
     ['something-else', true],
     ['invite-only', false],
+    ['closed', false],
   ])('stored setting %s reads as open: %s', async (stored, open) => {
     expect(await isRegistrationOpen(dbWithMode(stored).client)).toBe(open);
   });

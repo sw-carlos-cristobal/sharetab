@@ -123,9 +123,10 @@ export function parseAuthConfig(env: Env): AuthConfig {
   let passwordLogin = !parseBoolean(env, 'DISABLE_PASSWORD_LOGIN', false, warnings);
   // Refuse to disable password login when no other sign-in method is
   // configured. (Whether existing accounts can use it is up to the admin; see
-  // README.) Google doesn't count: it never links to an existing account, so
-  // password, magic-link and OIDC accounts, usually the admin's included,
-  // would be locked out.
+  // README.) Google doesn't count: unlike OIDC (email linking) or magic link
+  // (any account, by its email), there's no way to move an existing account
+  // to Google, so every password account, usually the admin's included, would
+  // be locked out.
   if (!passwordLogin && !oidc && !magicLink) {
     warnings.push(
       'DISABLE_PASSWORD_LOGIN is ignored: neither OIDC nor magic link sign-in is configured (Google sign-in never links to an existing account).',

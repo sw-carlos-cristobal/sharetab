@@ -31,9 +31,15 @@ describe('decideOidcSignIn', () => {
   });
 
   test('allows a linked identity when its own user is already signed in', () => {
-    expect(decideOidcSignIn({ ...NEW_IDENTITY, linkedUserId: 'user-1', sessionUserId: 'user-1' })).toEqual({
-      allow: true,
-    });
+    // The email matches that same user's account, as it does for every linked identity.
+    expect(
+      decideOidcSignIn({
+        ...NEW_IDENTITY,
+        linkedUserId: 'user-1',
+        sessionUserId: 'user-1',
+        userByEmail: { ...EXISTING_USER, hasLinkedIdentity: true },
+      }),
+    ).toEqual({ allow: true });
   });
 
   test('denies a linked identity while a different user is signed in', () => {
@@ -72,8 +78,14 @@ describe('decideOidcSignIn', () => {
     });
   });
 
-  test('denies when the IdP sends no email', () => {
+  test('denies when the IdP sends no email, or a blank one', () => {
     expect(decideOidcSignIn({ ...NEW_IDENTITY, email: null })).toEqual({ allow: false, error: 'OidcEmailMissing' });
+    expect(decideOidcSignIn({ ...NEW_IDENTITY, email: '' })).toEqual({ allow: false, error: 'OidcEmailMissing' });
+    // Before the auto-register check, so the message names what the IdP must fix.
+    expect(decideOidcSignIn({ ...NEW_IDENTITY, email: null, autoRegister: false })).toEqual({
+      allow: false,
+      error: 'OidcEmailMissing',
+    });
   });
 
   test('never links to a placeholder user, even with linking enabled', () => {
@@ -102,6 +114,44 @@ describe('decideOidcSignIn', () => {
         allowEmailLinking: true,
       }),
     ).toEqual({ allow: false, error: 'OidcAccountNotLinked', reason: 'already_linked' });
+  });
+
+  test('a placeholder is refused as such even when it has a linked identity', () => {
+    expect(
+      decideOidcSignIn({
+        ...NEW_IDENTITY,
+        userByEmail: { id: 'placeholder-1', isPlaceholder: true, hasLinkedIdentity: true },
+        allowEmailLinking: true,
+      }),
+    ).toEqual({ allow: false, error: 'OidcAccountNotLinked', reason: 'placeholder' });
+  });
+
+  test('linking off is the reason given even when the IdP says the email is unverified', () => {
+    expect(decideOidcSignIn({ ...NEW_IDENTITY, userByEmail: EXISTING_USER, emailVerified: false })).toEqual({
+      allow: false,
+      error: 'OidcAccountNotLinked',
+      reason: 'linking_disabled',
+    });
+  });
+
+  test('gives already_linked, not linking_disabled, as the reason for an account with an identity while linking is off', () => {
+    expect(decideOidcSignIn({ ...NEW_IDENTITY, userByEmail: { ...EXISTING_USER, hasLinkedIdentity: true } })).toEqual({
+      allow: false,
+      error: 'OidcAccountNotLinked',
+      reason: 'already_linked',
+    });
+  });
+
+  test('an unverified email is the reason given even while password registration is open', () => {
+    expect(
+      decideOidcSignIn({
+        ...NEW_IDENTITY,
+        userByEmail: EXISTING_USER,
+        allowEmailLinking: true,
+        emailVerified: false,
+        passwordRegistrationOpen: true,
+      }),
+    ).toEqual({ allow: false, error: 'OidcAccountNotLinked', reason: 'email_unverified' });
   });
 
   test('denies an existing email when linking is off', () => {
@@ -161,6 +211,58 @@ describe('decideOidcSignIn', () => {
     ).toEqual({ allow: true });
   });
 
+  // Most IdPs send email_verified: true. It must not turn a refusal into a link.
+  test.each([true, null, false])(
+    'the refusals that come before the email check hold with email_verified %s',
+    (emailVerified) => {
+      const linking = { ...NEW_IDENTITY, emailVerified, allowEmailLinking: true };
+      expect(
+        decideOidcSignIn({ ...linking, userByEmail: { id: 'p1', isPlaceholder: true, hasLinkedIdentity: false } }),
+      ).toEqual({ allow: false, error: 'OidcAccountNotLinked', reason: 'placeholder' });
+      expect(decideOidcSignIn({ ...linking, userByEmail: { ...EXISTING_USER, hasLinkedIdentity: true } })).toEqual({
+        allow: false,
+        error: 'OidcAccountNotLinked',
+        reason: 'already_linked',
+      });
+      expect(decideOidcSignIn({ ...linking, allowEmailLinking: false, userByEmail: EXISTING_USER })).toEqual({
+        allow: false,
+        error: 'OidcAccountNotLinked',
+        reason: 'linking_disabled',
+      });
+    },
+  );
+
+  test.each([true, null])('open password registration refuses linking with email_verified %s', (emailVerified) => {
+    expect(
+      decideOidcSignIn({
+        ...NEW_IDENTITY,
+        emailVerified,
+        userByEmail: EXISTING_USER,
+        allowEmailLinking: true,
+        passwordRegistrationOpen: true,
+      }),
+    ).toEqual({ allow: false, error: 'OidcAccountNotLinked', reason: 'password_registration_open' });
+  });
+
+  test('a returning SSO user signs in to their own account while linking is on', () => {
+    expect(
+      decideOidcSignIn({
+        ...NEW_IDENTITY,
+        linkedUserId: 'user-1',
+        allowEmailLinking: true,
+        userByEmail: { ...EXISTING_USER, hasLinkedIdentity: true },
+        passwordRegistrationOpen: true,
+      }),
+    ).toEqual({ allow: true });
+  });
+
+  test('denies a brand-new identity when auto-register is off, with linking on too', () => {
+    expect(decideOidcSignIn({ ...NEW_IDENTITY, autoRegister: false, allowEmailLinking: true })).toEqual({
+      allow: false,
+      error: 'OidcRegistrationDisabled',
+    });
+  });
+
   test('denies a brand-new identity when auto-register is off', () => {
     expect(decideOidcSignIn({ ...NEW_IDENTITY, autoRegister: false })).toEqual({
       allow: false,
@@ -188,6 +290,18 @@ describe('mapOidcProfile', () => {
       email: 'alice@example.com',
       image: 'https://auth.example.com/alice.png',
     });
+  });
+
+  test("prefers the name claim over given and family name (it keeps the person's own order)", () => {
+    expect(mapOidcProfile({ sub: 's', name: '山田 太郎', given_name: '太郎', family_name: '山田' }).name).toBe(
+      '山田 太郎',
+    );
+  });
+
+  test('prefers given and family name over preferred_username', () => {
+    expect(
+      mapOidcProfile({ sub: 's', given_name: 'Alice', family_name: 'Doe', preferred_username: 'alice' }).name,
+    ).toBe('Alice Doe');
   });
 
   test('builds the name from given and family name when name is absent', () => {
@@ -239,7 +353,8 @@ function mockDb(overrides: {
   account?: { userId: string } | null;
   usersByEmail?: MatchRow[];
   sessionUser?: { id: string } | null;
-  linkedIdentityOf?: string[];
+  /** Account rows, which findFirst filters by every key in its `where`. */
+  accounts?: { userId: string; provider: string }[];
   registrationMode?: string | null;
 }) {
   const rows = overrides.usersByEmail ?? [];
@@ -247,9 +362,12 @@ function mockDb(overrides: {
     $queryRaw: vi.fn().mockResolvedValue(rows.map(({ id }) => ({ id }))),
     account: {
       findUnique: vi.fn().mockResolvedValue(overrides.account ?? null),
-      findFirst: vi.fn(async ({ where }: { where: { userId: string } }) =>
-        overrides.linkedIdentityOf?.includes(where.userId) ? { id: `acc-${where.userId}` } : null,
-      ),
+      findFirst: vi.fn(async ({ where }: { where: Record<string, string> }) => {
+        const row = overrides.accounts?.find((account) =>
+          Object.entries(where).every(([key, value]) => account[key as keyof typeof account] === value),
+        );
+        return row ? { id: `acc-${row.userId}-${row.provider}` } : null;
+      }),
     },
     user: {
       findMany: vi.fn().mockResolvedValue(rows),
@@ -285,24 +403,35 @@ describe('gatherOidcFacts', () => {
   });
 
   test('resolves the email match case-insensitively', async () => {
-    const { client } = mockDb({
+    const { db, client } = mockDb({
       usersByEmail: [{ id: 'u1', email: 'Alice@example.com', isPlaceholder: false }],
     });
     const facts = await gatherOidcFacts(client, INPUT);
     expect(facts.userByEmail).toEqual({ id: 'u1', isPlaceholder: false, hasLinkedIdentity: false });
+    // findUsersByEmail's lower(email) = lower(...) query, with the address as its parameter
+    expect(db.$queryRaw.mock.calls[0]?.join(' ')).toContain('lower(email) = lower(');
+    expect(db.$queryRaw.mock.calls[0]).toContain('alice@example.com');
   });
 
-  test('reports whether the matched user already has an IdP or Google identity linked', async () => {
+  test('reports a placeholder or deleted user as such', async () => {
+    const { client } = mockDb({
+      usersByEmail: [{ id: 'p1', email: 'alice@example.com', isPlaceholder: true }],
+    });
+    expect((await gatherOidcFacts(client, INPUT)).userByEmail).toMatchObject({ id: 'p1', isPlaceholder: true });
+  });
+
+  test.each(['oidc', 'google'])('reports a matched user with a linked %s identity as linked', async (provider) => {
     const { db, client } = mockDb({
       usersByEmail: [{ id: 'u1', email: 'alice@example.com', isPlaceholder: false }],
-      linkedIdentityOf: ['u1'],
+      accounts: [{ userId: 'u1', provider }],
     });
     expect((await gatherOidcFacts(client, INPUT)).userByEmail).toEqual({
       id: 'u1',
       isPlaceholder: false,
       hasLinkedIdentity: true,
     });
-    expect(db.account.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: 'u1' } }));
+    // Only whether a row exists: not the stored OAuth tokens.
+    expect(db.account.findFirst).toHaveBeenCalledWith({ where: { userId: 'u1' }, select: { id: true } });
   });
 
   test('several case variants are ambiguous even when one matches exactly', async () => {
@@ -315,19 +444,20 @@ describe('gatherOidcFacts', () => {
     expect((await gatherOidcFacts(client, INPUT)).userByEmail).toBe('ambiguous');
   });
 
-  test('reports ambiguous email matches', async () => {
+  test('reports ambiguous email matches, however many case variants there are', async () => {
     const { client } = mockDb({
       usersByEmail: [
         { id: 'u1', email: 'Alice@example.com', isPlaceholder: false },
         { id: 'u2', email: 'ALICE@example.com', isPlaceholder: false },
+        { id: 'u3', email: 'alice@EXAMPLE.com', isPlaceholder: false },
       ],
     });
     expect((await gatherOidcFacts(client, INPUT)).userByEmail).toBe('ambiguous');
   });
 
-  test('skips the email lookup when the IdP sent no email', async () => {
+  test.each([null, ''])('skips the email lookup when the IdP sent the email %j', async (email) => {
     const { db, client } = mockDb({});
-    const facts = await gatherOidcFacts(client, { ...INPUT, email: null });
+    const facts = await gatherOidcFacts(client, { ...INPUT, email });
     expect(facts.userByEmail).toBeNull();
     expect(db.$queryRaw).not.toHaveBeenCalled();
   });
@@ -408,6 +538,27 @@ describe('checkOidcSignIn', () => {
     vi.clearAllMocks();
   });
 
+  test.each([
+    ['the linked-identity lookup', 'account'],
+    ['the signed-in user lookup', 'user'],
+    ['the email lookup', 'email'],
+    ["the matched account's identity lookup", 'identity'],
+    ['the Registration setting', 'setting'],
+  ] as const)('fails closed: a database error in %s refuses the sign-in instead of allowing it', async (_, lookup) => {
+    const { db, client } = mockDb({
+      sessionUser: { id: 'u9' },
+      usersByEmail: [{ id: 'u1', email: 'alice@example.com', isPlaceholder: false }],
+    });
+    const lost = new Error('connection lost');
+    if (lookup === 'account') db.account.findUnique.mockRejectedValue(lost);
+    if (lookup === 'user') db.user.findUnique.mockRejectedValue(lost);
+    if (lookup === 'email') db.$queryRaw.mockRejectedValue(lost);
+    if (lookup === 'identity') db.account.findFirst.mockRejectedValue(lost);
+    if (lookup === 'setting') db.systemSetting.findUnique.mockRejectedValue(lost);
+    const input = { ...INPUT, sessionUserId: 'u9', allowEmailLinking: true };
+    await expect(checkOidcSignIn(client, input)).rejects.toThrow('connection lost');
+  });
+
   test('returns true for an allowed sign-in', async () => {
     expect(await checkOidcSignIn(mockDb({}).client, INPUT)).toBe(true);
     expect(logger.warn).not.toHaveBeenCalled();
@@ -431,4 +582,89 @@ describe('checkOidcSignIn', () => {
       email: 'alice@example.com',
     });
   });
+
+  test.each([
+    ['OidcEmailMissing', { email: null }],
+    ['OidcRegistrationDisabled', { autoRegister: false }],
+  ])('redirects an %s denial to the login page', async (code, input) => {
+    expect(await checkOidcSignIn(mockDb({}).client, { ...INPUT, ...input })).toBe(`/login?error=${code}`);
+  });
+
+  test('never links a placeholder or deleted user, with linking on', async () => {
+    const { client } = mockDb({
+      usersByEmail: [{ id: 'p1', email: 'alice@example.com', isPlaceholder: true }],
+    });
+    const input = { ...INPUT, allowEmailLinking: true, passwordLogin: false };
+    expect(await checkOidcSignIn(client, input)).toBe('/login?error=OidcAccountNotLinked');
+    expect(logger.warn).toHaveBeenCalledWith('auth.oidc_denied', {
+      error: 'OidcAccountNotLinked',
+      reason: 'placeholder',
+      email: 'alice@example.com',
+    });
+  });
+
+  test('logs already_linked for an account made through Google, with linking on', async () => {
+    const { client } = mockDb({
+      usersByEmail: [{ id: 'u1', email: 'alice@example.com', isPlaceholder: false }],
+      accounts: [{ userId: 'u1', provider: 'google' }],
+    });
+    const input = { ...INPUT, allowEmailLinking: true, passwordLogin: false };
+    expect(await checkOidcSignIn(client, input)).toBe('/login?error=OidcAccountNotLinked');
+    expect(logger.warn).toHaveBeenCalledWith('auth.oidc_denied', {
+      error: 'OidcAccountNotLinked',
+      reason: 'already_linked',
+      email: 'alice@example.com',
+    });
+  });
+});
+
+describe('decideOidcSignIn across the email_verified values IdPs send', () => {
+  test.each([true, null, false])('email_verified %s', (emailVerified) => {
+    const base = { ...NEW_IDENTITY, emailVerified, allowEmailLinking: true };
+    const sessionActive = { allow: false, error: 'OidcSessionActive' };
+    // Another user is signed in: nothing may be attached to them.
+    expect(decideOidcSignIn({ ...base, sessionUserId: 'user-2' })).toEqual(sessionActive);
+    expect(decideOidcSignIn({ ...base, sessionUserId: 'user-2', userByEmail: EXISTING_USER })).toEqual(sessionActive);
+    expect(
+      decideOidcSignIn({ ...base, sessionUserId: 'user-2', userByEmail: EXISTING_USER, autoRegister: false }),
+    ).toEqual(sessionActive);
+    expect(
+      decideOidcSignIn({
+        ...base,
+        sessionUserId: 'user-2',
+        passwordRegistrationOpen: true,
+        userByEmail: EXISTING_USER,
+      }),
+    ).toEqual(sessionActive);
+    expect(decideOidcSignIn({ ...NEW_IDENTITY, emailVerified, email: null })).toEqual({
+      allow: false,
+      error: 'OidcEmailMissing',
+    });
+    // Auto-register off: no new account.
+    expect(decideOidcSignIn({ ...NEW_IDENTITY, emailVerified, autoRegister: false })).toEqual({
+      allow: false,
+      error: 'OidcRegistrationDisabled',
+    });
+    // Several case variants of the address: no way to pick one.
+    expect(decideOidcSignIn({ ...base, userByEmail: 'ambiguous' })).toEqual({
+      allow: false,
+      error: 'OidcAccountNotLinked',
+      reason: 'ambiguous_email',
+    });
+  });
+});
+
+test('gatherOidcFacts looks the signed-in user up by the session id', async () => {
+  const { db, client } = mockDb({ sessionUser: { id: 'u9' } });
+  const input = {
+    providerAccountId: 'sub-1',
+    email: 'alice@example.com',
+    emailVerified: null,
+    sessionUserId: 'u9',
+    autoRegister: true,
+    allowEmailLinking: false,
+    passwordLogin: true,
+  };
+  await gatherOidcFacts(client, input);
+  expect(db.user.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'u9' } }));
 });

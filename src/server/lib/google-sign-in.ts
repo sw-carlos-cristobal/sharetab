@@ -10,6 +10,7 @@
  */
 
 import type { PrismaClient } from '@/generated/prisma/client';
+import type { GoogleConfig } from './auth-config';
 import { logger } from './logger';
 import { isRegistrationOpen } from './registration-mode';
 import { findLinkedUserId, findSignedInUserId, isSessionConflict, readEmailVerified } from './sign-in-identity';
@@ -17,6 +18,22 @@ import { findUsersByEmail } from './user-email';
 
 /** Provider id of the Google provider (callback path `/api/auth/callback/google`). */
 export const GOOGLE_PROVIDER_ID = 'google';
+
+/**
+ * The options `auth.ts` gives Auth.js' Google provider; `google-provider.test.ts`
+ * runs them through the real Auth.js.
+ */
+export function googleProviderOptions(config: GoogleConfig) {
+  return {
+    // Pinned, since the signIn callback picks the Google policy by it.
+    id: GOOGLE_PROVIDER_ID,
+    clientId: config.clientId,
+    clientSecret: config.clientSecret,
+    // Always show Google's account chooser, so on a shared device the next
+    // person isn't signed in as whoever is still signed in to Google.
+    authorization: { params: { prompt: 'select_account' } },
+  };
+}
 
 export type GoogleSignInError =
   | 'GoogleSessionActive'
@@ -38,10 +55,10 @@ export interface GoogleSignInFacts {
   /** Google's `email_verified` claim, or null when it doesn't send one. */
   emailVerified: boolean | null;
   /**
-   * Google hosts the mailbox (a Gmail address, or a Workspace account: the `hd`
-   * claim), so it vouches for who holds the address now. For other addresses
-   * `email_verified` only says the address was verified when the Google
-   * account was made.
+   * Google is authoritative for the address (a Gmail address, or an account in
+   * a Workspace or Cloud Identity domain: the `hd` claim), so it vouches for
+   * who holds it now. For other addresses `email_verified` only says the
+   * address was verified when the Google account was made.
    */
   emailHostedByGoogle: boolean;
   /** The email is the instance's `ADMIN_EMAIL`, ignoring case. */
@@ -74,7 +91,7 @@ export function decideGoogleSignIn(facts: GoogleSignInFacts): GoogleSignInDecisi
 
   // ADMIN_EMAIL grants admin by address. Someone who once held a mailbox at
   // another provider can keep a Google account with it verified, so only an
-  // address Google hosts may create the admin account.
+  // address Google is authoritative for may create the admin account.
   if (facts.isAdminEmail && !facts.emailHostedByGoogle) return { allow: false, error: 'GoogleAdminEmailNotHosted' };
 
   // Invite-only counts as closed: ShareTab has no way to take an invite code through Google.
@@ -127,6 +144,12 @@ export async function checkGoogleSignIn(db: PrismaClient, input: GoogleFactsInpu
   const decision = decideGoogleSignIn(await gatherGoogleFacts(db, input));
   if (decision.allow) return true;
 
-  logger.warn('auth.google_denied', { error: decision.error, email: input.email });
+  // The Google account's ID too: an account whose Google account was deleted
+  // and made again only signs in once its `Account` row has the new one.
+  logger.warn('auth.google_denied', {
+    error: decision.error,
+    email: input.email,
+    providerAccountId: input.providerAccountId,
+  });
   return `/login?error=${decision.error}`;
 }

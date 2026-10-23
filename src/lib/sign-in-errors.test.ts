@@ -12,9 +12,8 @@ describe('getSignInErrorKey', () => {
     ['GoogleSessionActive', 'sessionActive'],
     ['GoogleAccountExists', 'accountExists'],
     ['GoogleRegistrationDisabled', 'registrationDisabled'],
-    // Same as the fallback for unknown codes: these rows document the intent.
-    ['GoogleEmailUnverified', 'generic'],
-    ['GoogleAdminEmailNotHosted', 'generic'],
+    ['GoogleEmailUnverified', 'emailUnverified'],
+    ['GoogleAdminEmailNotHosted', 'adminEmailNotHosted'],
     ['OidcEmailMissing', 'emailMissing'],
     ['OidcAccountNotLinked', 'accountNotLinked'],
     ['OAuthAccountNotLinked', 'accountNotLinked'],

@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Archive, ArrowUpRight, ArrowDownLeft, Plus, ChevronRight, TrendingUp, TrendingDown } from 'lucide-react';
-import Image from 'next/image';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Link } from '@/i18n/navigation';
 import { getInitials, avatarColor } from '@/lib/avatar';
 
@@ -314,15 +314,17 @@ export default function DashboardPage() {
                         <div className="flex -space-x-2">
                           {visibleMembers.map((member) => {
                             const name = member.user.name ?? member.user.placeholderName ?? member.user.email ?? '?';
+                            // A plain <img> (not next/image): avatars come from
+                            // whichever host Google or the IdP serves them from.
                             return member.user.image ? (
-                              <Image
-                                key={member.user.id}
-                                src={member.user.image}
-                                alt={name}
-                                width={28}
-                                height={28}
-                                className="h-7 w-7 rounded-full ring-2 ring-card"
-                              />
+                              <Avatar key={member.user.id} className="size-7 ring-2 ring-card">
+                                <AvatarImage src={member.user.image} alt={name} />
+                                <AvatarFallback
+                                  className={`text-[10px] font-medium text-white ${avatarColor(member.user.id)}`}
+                                >
+                                  {getInitials(name)}
+                                </AvatarFallback>
+                              </Avatar>
                             ) : (
                               <div
                                 key={member.user.id}

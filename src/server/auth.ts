@@ -9,7 +9,7 @@ import type { SMTPTransportOptions } from 'nodemailer';
 import { db } from './db';
 import { logger } from './lib/logger';
 import { parseAuthConfig } from './lib/auth-config';
-import { GOOGLE_PROVIDER_ID, checkGoogleSignIn } from './lib/google-sign-in';
+import { GOOGLE_PROVIDER_ID, checkGoogleSignIn, googleProviderOptions } from './lib/google-sign-in';
 import { OIDC_PROVIDER_ID, checkOidcSignIn, mapOidcProfile } from './lib/oidc-sign-in';
 import { authorizePasswordLogin } from './lib/password-login';
 import { readEmailVerified } from './lib/sign-in-identity';
@@ -46,20 +46,7 @@ if (authConfig.passwordLogin) {
 }
 
 if (authConfig.google) {
-  providers.push(
-    Google({
-      // Pinned, since the signIn callback picks the Google policy by it.
-      id: GOOGLE_PROVIDER_ID,
-      clientId: authConfig.google.clientId,
-      clientSecret: authConfig.google.clientSecret,
-      // Always show Google's account chooser, so on a shared device the next
-      // person isn't signed in as whoever is still signed in to Google.
-      authorization: { params: { prompt: 'select_account' } },
-      // Google's ID token claims are standard OIDC ones: the same caps as an
-      // OIDC profile (the register form's name limit, web image URLs only).
-      profile: (claims) => mapOidcProfile(claims),
-    }),
-  );
+  providers.push(Google(googleProviderOptions(authConfig.google)));
 }
 
 if (authConfig.magicLink) {
@@ -112,7 +99,7 @@ const LOGIN_EVENTS: Record<string, string> = {
  * Who is already signed in in this browser, so the OIDC and Google policies
  * never attach a new identity to someone else's account.
  */
-async function signedInUserId(): Promise<string | null> {
+async function sessionCookieUserId(): Promise<string | null> {
   return (await auth())?.user?.id ?? null;
 }
 
@@ -142,7 +129,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           email: user.email ?? null,
           // Claims from Google's ID token.
           claims: profile ?? {},
-          sessionUserId: await signedInUserId(),
+          sessionUserId: await sessionCookieUserId(),
           adminEmail: process.env.ADMIN_EMAIL,
         });
       }
@@ -153,7 +140,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           email: user.email ?? null,
           // Raw claims from the UserInfo endpoint (see `idToken: false` above).
           emailVerified: readEmailVerified(profile ?? {}),
-          sessionUserId: await signedInUserId(),
+          sessionUserId: await sessionCookieUserId(),
           autoRegister: authConfig.oidc.autoRegister,
           allowEmailLinking: authConfig.oidc.allowEmailLinking,
           passwordLogin: authConfig.passwordLogin,
@@ -170,12 +157,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       // Always refresh profile fields from DB to pick up profile changes.
       if (token.id) {
-        const fresh = await db.user.findUnique({
-          where: { id: token.id as string },
-          select: { name: true, locale: true },
-        });
-        if (fresh?.name) token.name = fresh.name;
-        if (fresh?.locale) token.locale = fresh.locale;
+        try {
+          const fresh = await db.user.findUnique({
+            where: { id: token.id as string },
+            select: { name: true, locale: true },
+          });
+          if (fresh?.name) token.name = fresh.name;
+          if (fresh?.locale) token.locale = fresh.locale;
+        } catch (error) {
+          // Keep the session with the fields it has. A throw here makes auth()
+          // return no session, and the OIDC and Google policies would then
+          // miss that someone is signed in while Auth.js itself still sees them.
+          logger.warn('auth.session_refresh_failed', { error: error instanceof Error ? error.name : 'unknown' });
+        }
       }
       return token;
     },

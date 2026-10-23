@@ -392,10 +392,33 @@ describe('registration mode', () => {
     vi.unstubAllEnvs();
   });
 
+  test.each(['invite-only', 'closed'])('returns the stored %s setting', async (mode) => {
+    mockDb.systemSetting.findUnique.mockResolvedValue({ key: 'registrationMode', value: mode });
+    const api = await callerAs(adminSession);
+    expect(await api.getRegistrationMode()).toEqual({ mode });
+  });
+
   test('reads an unrecognised stored setting as open, as sign-up does', async () => {
     mockDb.systemSetting.findUnique.mockResolvedValue({ key: 'registrationMode', value: 'something-else' });
     const api = await callerAs(adminSession);
     expect(await api.getRegistrationMode()).toEqual({ mode: 'open' });
+  });
+
+  test.each(['open', 'invite-only', 'closed'] as const)('saves the %s setting', async (mode) => {
+    mockDb.systemSetting.upsert.mockResolvedValue({ key: 'registrationMode', value: mode });
+    const api = await callerAs(adminSession);
+    expect(await api.setRegistrationMode({ mode })).toEqual({ mode });
+    expect(mockDb.systemSetting.upsert).toHaveBeenCalledWith({
+      where: { key: 'registrationMode' },
+      update: { value: mode },
+      // A fresh install has no row yet.
+      create: { key: 'registrationMode', value: mode },
+    });
+    expect(mockDb.adminAuditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ action: 'REGISTRATION_MODE_CHANGED', metadata: { mode } }) as unknown,
+      }),
+    );
   });
 
   test('refuses to save a mode ShareTab does not know', async () => {
