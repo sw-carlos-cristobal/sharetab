@@ -48,9 +48,9 @@ messages/
    };
    ```
 
-4. **Run `npm run lint:i18n`** to confirm your locale has exactly the keys English has and follows the rules below.
+4. **Run `npm run lint:i18n`** to confirm your locale has exactly the keys English has, its messages are valid ICU, and counts follow the plural rules below.
 
-5. **Run `npx vitest run src/i18n`.** For a language with plural forms, it adds your language to `src/i18n/__snapshots__/messages.test.ts.snap`, showing each message that shows a count for 1 and for 2. Check that the singulars read right, commit the file (CI fails without it), then **submit a PR.**
+5. **Run `npx vitest run src/i18n`.** For a language with plural forms, it adds your language to `src/i18n/__snapshots__/messages.test.ts.snap`, showing the messages listed in the test's `COUNT_MESSAGES` for 0, 1 and 2. Check that the singulars read right, commit the file (CI fails without it), then **submit a PR.**
 
 ## Updating Existing Translations
 
@@ -59,7 +59,7 @@ Edit the specific namespace file (e.g., `messages/es/groups.json`). Reference `m
 ## Rules
 
 - **Keep ICU placeholders intact.** For example: `{name}`, `{count, plural, one {# member} other {# members}}`. These are variables — translate the surrounding text only.
-- **Put a count before a word only inside a plural.** `{count} items` reads "1 items"; write `{count, plural, one {# item} other {# items}}`, with your language's forms in the branches (keep both branches even when the word doesn't change, as in German `{count, plural, one {# Artikel} other {# Artikel}}`). Japanese, Chinese and Korean have one form, so `{count}件` is fine there. The lint catches this for arguments named `count` (or ending in `Count`); check other numbers, such as `{remaining}`, yourself. A plural needs a `one` branch in every language that has that form (`=1` doesn't replace it: French and Portuguese use `one` for 0 too).
+- **Put a count before a word only inside a plural.** `{count} items` reads "1 items"; write `{count, plural, one {# item} other {# items}}`, with your language's forms in the branches (keep both branches even when the word doesn't change, as in German `{count, plural, one {# Artikel} other {# Artikel}}`). Japanese, Chinese and Korean have one form, so `{count}件` is fine there. The lint catches this for arguments named `count` (or ending in `Count`); check other numbers, such as `{remaining}`, yourself. A plural needs a `one` branch in every language that has that form (`=1` doesn't replace it: French and Brazilian Portuguese use `one` for 0 too).
 - **Double an apostrophe that comes right before `{`, `}`, `<` or `>`, or before `#` inside a plural.** In ICU an apostrophe there starts quoted text, shown as written (`l'{name}` shows "l{name}"), so write `l''<emphasis>` for "l'" followed by emphasized text. The lint only catches this when it leaves the message unparseable.
 - **Don't translate brand names.** "ShareTab" and "GitHub" stay as-is.
 - **Use native script** for the language name in the switcher (e.g., "Français" not "French").
@@ -70,7 +70,7 @@ Edit the specific namespace file (e.g., `messages/es/groups.json`). Reference `m
 First complete the dev environment setup in [CONTRIBUTING.md](CONTRIBUTING.md#dev-environment-setup) (`npm install`, `npx prisma generate`, and `cp .env.example .env`). Then:
 
 ```bash
-npm run lint:i18n       # Validate keys match English and messages follow the rules
+npm run lint:i18n       # Validate keys match English, messages parse, and counts use plurals
 npx vitest run src/i18n # Check the messages that show a count (see Validation)
 npm run dev:full        # Start the app (keeps running; stop it with Ctrl+C)
 # Navigate to /YOUR_LOCALE/login to see your translations
@@ -80,4 +80,4 @@ npm run dev:full        # Start the app (keeps running; stop it with Ctrl+C)
 
 Run `npm run lint:i18n` to check that your locale has exactly the same keys as English (no missing or extra keys), that every message is valid ICU (the app would show a broken one as its key), and that counts follow the plural rules above. CI runs it too, so run it before you open a PR.
 
-`src/i18n/messages.test.ts` keeps a snapshot of the messages that show a count (listed in its `COUNT_MESSAGES`: the messages with a plural, and a few that show a number another way), for 1 and for 2, in every language with plural forms. If you change one of those messages, `npx vitest run src/i18n` fails until you update the snapshot with `npx vitest run src/i18n -u`; check that the singulars in the snapshot's diff read right.
+`src/i18n/messages.test.ts` keeps a snapshot of the messages listed in its `COUNT_MESSAGES` (those with a plural, except a few it gives a reason for, plus a few that show a count another way), for 0, 1 and 2, in every language with plural forms. If you change one of those messages, `npx vitest run src/i18n` fails until you update the snapshot with `npx vitest run src/i18n -u`; check that the singulars in the snapshot's diff read right.

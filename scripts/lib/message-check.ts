@@ -42,8 +42,9 @@ function collect(elements: MessageFormatElement[], pluralized: ReadonlySet<strin
     ) {
       found.push(element.value);
     } else if (isPluralElement(element)) {
-      // A plural's branches already depend on its own argument (cardinal or ordinal)
-      const inside = new Set([...pluralized, element.value]);
+      // A cardinal plural's branches already depend on its own argument; an ordinal's pick "1st"
+      // or "2nd", not "item" or "items"
+      const inside = element.pluralType === 'cardinal' ? new Set([...pluralized, element.value]) : pluralized;
       for (const option of Object.values(element.options)) collect(option.value, inside, found);
     } else if (isSelectElement(element)) {
       for (const option of Object.values(element.options)) collect(option.value, pluralized, found);
@@ -66,8 +67,9 @@ export function findUnpluralizedCounts(message: string): string[] {
   return unpluralizedCounts(parse(message));
 }
 
-// The arguments of cardinal plurals with no `one` form, which show 1 in the `other` form. `=1`
-// doesn't stand in for it: French and Portuguese use `one` for 0 too
+// The arguments of cardinal plurals with no `one` form. Without `one` or `=1`, 1 shows in the
+// `other` form; `=1` doesn't stand in for it either, since French and Brazilian Portuguese use
+// `one` for 0 too
 function pluralsWithoutOne(elements: MessageFormatElement[]): string[] {
   return withoutTags(elements).flatMap((element) => {
     if (!isPluralElement(element) && !isSelectElement(element)) return [];
@@ -113,7 +115,7 @@ export function messageProblems(locale: string, message: string): string[] {
   }
   if (categories.includes('one')) {
     for (const name of pluralsWithoutOne(elements)) {
-      problems.push(`the plural on {${name}} has no 'one' form, so 1 reads like 2; add one {…}`);
+      problems.push(`the plural on {${name}} has no 'one' form; add one {…}`);
     }
   }
   return problems;
@@ -141,7 +143,7 @@ export function messageEntries(obj: Record<string, unknown>, prefix = ''): [stri
 /**
  * `messageProblems` for every message in every locale folder under `messagesDir`, as
  * "[locale/namespace] key: problem", plus folders that aren't a supported language and files that
- * aren't a JSON object.
+ * aren't valid JSON or aren't a JSON object.
  */
 export function findMessageProblems(messagesDir: string): string[] {
   const problems: string[] = [];

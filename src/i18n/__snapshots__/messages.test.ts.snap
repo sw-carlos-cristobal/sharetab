@@ -1,557 +1,689 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`count messages > read as they should for one and for two in de 1`] = `
+exports[`count messages > read as they should for none, one and two in de 1`] = `
 {
   "admin.audit.filesDeleted": [
+    "0 Dateien",
     "1 Datei",
     "2 Dateien",
   ],
   "admin.groups.count": [
+    "0 Gruppen",
     "1 Gruppe",
     "2 Gruppen",
   ],
   "admin.groups.expenses": [
+    "0 Ausgaben",
     "1 Ausgabe",
     "2 Ausgaben",
   ],
   "admin.groups.settlements": [
+    "0 Abrechnungen",
     "1 Abrechnung",
     "2 Abrechnungen",
   ],
   "admin.serverLogs.entries": [
+    "0 Einträge",
     "1 Eintrag",
     "2 Einträge",
   ],
   "admin.storage.cleanedUp": [
+    "0 Dateien bereinigt (3 KB freigegeben)",
     "1 Datei bereinigt (3 KB freigegeben)",
     "2 Dateien bereinigt (3 KB freigegeben)",
   ],
   "admin.storage.filesOnDisk": [
+    "0 Dateien auf der Festplatte",
     "1 Datei auf der Festplatte",
     "2 Dateien auf der Festplatte",
   ],
   "admin.storage.unusedCleanedUp": [
+    "0 Belege gelöscht",
     "1 Beleg gelöscht",
     "2 Belege gelöscht",
   ],
   "admin.tools.cleanupStats": [
+    "Abgelaufene Gast-Aufteilungen: 0 von 3.",
     "Abgelaufene Gast-Aufteilungen: 1 von 4.",
     "Abgelaufene Gast-Aufteilungen: 2 von 5.",
   ],
   "admin.tools.cleanupSuccess": [
+    "0 abgelaufene Aufteilungen gelöscht",
     "1 abgelaufene Aufteilung gelöscht",
     "2 abgelaufene Aufteilungen gelöscht",
   ],
   "admin.users.count": [
+    "0 Benutzer",
     "1 Benutzer",
     "2 Benutzer",
   ],
   "auth.invite.invited": [
+    "Sie wurden eingeladen, der Gruppe Trip beizutreten (0 Mitglieder)",
     "Sie wurden eingeladen, der Gruppe Trip beizutreten (1 Mitglied)",
     "Sie wurden eingeladen, der Gruppe Trip beizutreten (2 Mitglieder)",
   ],
   "auth.invite.invitedBy": [
+    "Ana hat Sie eingeladen, der Gruppe Trip beizutreten (0 Mitglieder)",
     "Ana hat Sie eingeladen, der Gruppe Trip beizutreten (1 Mitglied)",
     "Ana hat Sie eingeladen, der Gruppe Trip beizutreten (2 Mitglieder)",
   ],
   "dashboard.archivedGroups": [
+    "0 archivierte Gruppen",
     "1 archivierte Gruppe",
     "2 archivierte Gruppen",
   ],
   "dashboard.members": [
+    "0 Mitglieder",
     "1 Mitglied",
     "2 Mitglieder",
   ],
   "expenses.receipt.assignAllItems": [
+    "Alle Artikel zuordnen (0 übrig)",
     "Alle Artikel zuordnen (1 übrig)",
     "Alle Artikel zuordnen (2 übrig)",
   ],
   "groups.list.expenseCount": [
+    "0 Ausgaben",
     "1 Ausgabe",
     "2 Ausgaben",
   ],
   "groups.list.memberCount": [
+    "0 Mitglieder",
     "1 Mitglied",
     "2 Mitglieder",
   ],
   "split.assign.assignAllItems": [
+    "Alle Artikel zuordnen (0 übrig)",
     "Alle Artikel zuordnen (1 übrig)",
     "Alle Artikel zuordnen (2 übrig)",
   ],
   "split.claim.claimConflict": [
+    "0 Artikel auch ausgewählt von Ana",
     "1 Artikel auch ausgewählt von Ana",
     "2 Artikel auch ausgewählt von Ana",
   ],
   "splits.items": [
+    "0 Artikel",
     "1 Artikel",
     "2 Artikel",
   ],
   "splits.people": [
+    "0 Personen",
     "1 Person",
     "2 Personen",
   ],
 }
 `;
 
-exports[`count messages > read as they should for one and for two in en 1`] = `
+exports[`count messages > read as they should for none, one and two in en 1`] = `
 {
   "admin.audit.filesDeleted": [
+    "0 files",
     "1 file",
     "2 files",
   ],
   "admin.groups.count": [
+    "0 groups",
     "1 group",
     "2 groups",
   ],
   "admin.groups.expenses": [
+    "0 expenses",
     "1 expense",
     "2 expenses",
   ],
   "admin.groups.settlements": [
+    "0 settlements",
     "1 settlement",
     "2 settlements",
   ],
   "admin.serverLogs.entries": [
+    "0 entries",
     "1 entry",
     "2 entries",
   ],
   "admin.storage.cleanedUp": [
+    "Cleaned up 0 files (3 KB freed)",
     "Cleaned up 1 file (3 KB freed)",
     "Cleaned up 2 files (3 KB freed)",
   ],
   "admin.storage.filesOnDisk": [
+    "0 files on disk",
     "1 file on disk",
     "2 files on disk",
   ],
   "admin.storage.unusedCleanedUp": [
+    "Deleted 0 receipts",
     "Deleted 1 receipt",
     "Deleted 2 receipts",
   ],
   "admin.tools.cleanupStats": [
+    "Expired guest splits: 0 of 3.",
     "Expired guest splits: 1 of 4.",
     "Expired guest splits: 2 of 5.",
   ],
   "admin.tools.cleanupSuccess": [
+    "Deleted 0 expired splits",
     "Deleted 1 expired split",
     "Deleted 2 expired splits",
   ],
   "admin.users.count": [
+    "0 users",
     "1 user",
     "2 users",
   ],
   "auth.invite.invited": [
+    "You've been invited to join Trip (0 members)",
     "You've been invited to join Trip (1 member)",
     "You've been invited to join Trip (2 members)",
   ],
   "auth.invite.invitedBy": [
+    "Ana invited you to join Trip (0 members)",
     "Ana invited you to join Trip (1 member)",
     "Ana invited you to join Trip (2 members)",
   ],
   "dashboard.archivedGroups": [
+    "0 archived groups",
     "1 archived group",
     "2 archived groups",
   ],
   "dashboard.members": [
+    "0 members",
     "1 member",
     "2 members",
   ],
   "expenses.receipt.assignAllItems": [
+    "Assign all items (0 remaining)",
     "Assign all items (1 remaining)",
     "Assign all items (2 remaining)",
   ],
   "groups.list.expenseCount": [
+    "0 expenses",
     "1 expense",
     "2 expenses",
   ],
   "groups.list.memberCount": [
+    "0 members",
     "1 member",
     "2 members",
   ],
   "split.assign.assignAllItems": [
+    "Assign all items (0 left)",
     "Assign all items (1 left)",
     "Assign all items (2 left)",
   ],
   "split.claim.claimConflict": [
+    "0 items also claimed by Ana",
     "1 item also claimed by Ana",
     "2 items also claimed by Ana",
   ],
   "splits.items": [
+    "0 items",
     "1 item",
     "2 items",
   ],
   "splits.people": [
+    "0 people",
     "1 person",
     "2 people",
   ],
 }
 `;
 
-exports[`count messages > read as they should for one and for two in es 1`] = `
+exports[`count messages > read as they should for none, one and two in es 1`] = `
 {
   "admin.audit.filesDeleted": [
+    "0 archivos",
     "1 archivo",
     "2 archivos",
   ],
   "admin.groups.count": [
+    "0 grupos",
     "1 grupo",
     "2 grupos",
   ],
   "admin.groups.expenses": [
+    "0 gastos",
     "1 gasto",
     "2 gastos",
   ],
   "admin.groups.settlements": [
+    "0 liquidaciones",
     "1 liquidación",
     "2 liquidaciones",
   ],
   "admin.serverLogs.entries": [
+    "0 entradas",
     "1 entrada",
     "2 entradas",
   ],
   "admin.storage.cleanedUp": [
+    "0 archivos limpiados (3 KB liberados)",
     "1 archivo limpiado (3 KB liberados)",
     "2 archivos limpiados (3 KB liberados)",
   ],
   "admin.storage.filesOnDisk": [
+    "0 archivos en disco",
     "1 archivo en disco",
     "2 archivos en disco",
   ],
   "admin.storage.unusedCleanedUp": [
+    "0 recibos eliminados",
     "1 recibo eliminado",
     "2 recibos eliminados",
   ],
   "admin.tools.cleanupStats": [
+    "Divisiones de invitados expiradas: 0 de 3.",
     "Divisiones de invitados expiradas: 1 de 4.",
     "Divisiones de invitados expiradas: 2 de 5.",
   ],
   "admin.tools.cleanupSuccess": [
+    "0 divisiones expiradas eliminadas",
     "1 división expirada eliminada",
     "2 divisiones expiradas eliminadas",
   ],
   "admin.users.count": [
+    "0 usuarios",
     "1 usuario",
     "2 usuarios",
   ],
   "auth.invite.invited": [
+    "Te han invitado a unirte a Trip (0 miembros)",
     "Te han invitado a unirte a Trip (1 miembro)",
     "Te han invitado a unirte a Trip (2 miembros)",
   ],
   "auth.invite.invitedBy": [
+    "Ana te ha invitado a unirte a Trip (0 miembros)",
     "Ana te ha invitado a unirte a Trip (1 miembro)",
     "Ana te ha invitado a unirte a Trip (2 miembros)",
   ],
   "dashboard.archivedGroups": [
+    "0 grupos archivados",
     "1 grupo archivado",
     "2 grupos archivados",
   ],
   "dashboard.members": [
+    "0 miembros",
     "1 miembro",
     "2 miembros",
   ],
   "expenses.receipt.assignAllItems": [
+    "Asignar todos los artículos (0 restantes)",
     "Asignar todos los artículos (1 restante)",
     "Asignar todos los artículos (2 restantes)",
   ],
   "groups.list.expenseCount": [
+    "0 gastos",
     "1 gasto",
     "2 gastos",
   ],
   "groups.list.memberCount": [
+    "0 miembros",
     "1 miembro",
     "2 miembros",
   ],
   "split.assign.assignAllItems": [
+    "Asignar todos los artículos (0 restantes)",
     "Asignar todos los artículos (1 restante)",
     "Asignar todos los artículos (2 restantes)",
   ],
   "split.claim.claimConflict": [
+    "0 artículos también reclamados por Ana",
     "1 artículo también reclamado por Ana",
     "2 artículos también reclamados por Ana",
   ],
   "splits.items": [
+    "0 artículos",
     "1 artículo",
     "2 artículos",
   ],
   "splits.people": [
+    "0 personas",
     "1 persona",
     "2 personas",
   ],
 }
 `;
 
-exports[`count messages > read as they should for one and for two in fr 1`] = `
+exports[`count messages > read as they should for none, one and two in fr 1`] = `
 {
   "admin.audit.filesDeleted": [
+    "0 fichier",
     "1 fichier",
     "2 fichiers",
   ],
   "admin.groups.count": [
+    "0 groupe",
     "1 groupe",
     "2 groupes",
   ],
   "admin.groups.expenses": [
+    "0 dépense",
     "1 dépense",
     "2 dépenses",
   ],
   "admin.groups.settlements": [
+    "0 règlement",
     "1 règlement",
     "2 règlements",
   ],
   "admin.serverLogs.entries": [
+    "0 entrée",
     "1 entrée",
     "2 entrées",
   ],
   "admin.storage.cleanedUp": [
+    "0 fichier nettoyé (3 KB libérés)",
     "1 fichier nettoyé (3 KB libérés)",
     "2 fichiers nettoyés (3 KB libérés)",
   ],
   "admin.storage.filesOnDisk": [
+    "0 fichier sur le disque",
     "1 fichier sur le disque",
     "2 fichiers sur le disque",
   ],
   "admin.storage.unusedCleanedUp": [
+    "0 reçu supprimé",
     "1 reçu supprimé",
     "2 reçus supprimés",
   ],
   "admin.tools.cleanupStats": [
+    "Partages invités expirés : 0 sur 3.",
     "Partages invités expirés : 1 sur 4.",
     "Partages invités expirés : 2 sur 5.",
   ],
   "admin.tools.cleanupSuccess": [
+    "0 partage expiré supprimé",
     "1 partage expiré supprimé",
     "2 partages expirés supprimés",
   ],
   "admin.users.count": [
+    "0 utilisateur",
     "1 utilisateur",
     "2 utilisateurs",
   ],
   "auth.invite.invited": [
+    "Vous avez été invité à rejoindre Trip (0 membre)",
     "Vous avez été invité à rejoindre Trip (1 membre)",
     "Vous avez été invité à rejoindre Trip (2 membres)",
   ],
   "auth.invite.invitedBy": [
+    "Ana vous a invité à rejoindre Trip (0 membre)",
     "Ana vous a invité à rejoindre Trip (1 membre)",
     "Ana vous a invité à rejoindre Trip (2 membres)",
   ],
   "dashboard.archivedGroups": [
+    "0 groupe archivé",
     "1 groupe archivé",
     "2 groupes archivés",
   ],
   "dashboard.members": [
+    "0 membre",
     "1 membre",
     "2 membres",
   ],
   "expenses.receipt.assignAllItems": [
+    "Attribuer tous les articles (0 restant)",
     "Attribuer tous les articles (1 restant)",
     "Attribuer tous les articles (2 restants)",
   ],
   "groups.list.expenseCount": [
+    "0 dépense",
     "1 dépense",
     "2 dépenses",
   ],
   "groups.list.memberCount": [
+    "0 membre",
     "1 membre",
     "2 membres",
   ],
   "split.assign.assignAllItems": [
+    "Attribuer tous les articles (0 restant)",
     "Attribuer tous les articles (1 restant)",
     "Attribuer tous les articles (2 restants)",
   ],
   "split.claim.claimConflict": [
+    "0 article également réclamé par Ana",
     "1 article également réclamé par Ana",
     "2 articles également réclamés par Ana",
   ],
   "splits.items": [
+    "0 article",
     "1 article",
     "2 articles",
   ],
   "splits.people": [
+    "0 personne",
     "1 personne",
     "2 personnes",
   ],
 }
 `;
 
-exports[`count messages > read as they should for one and for two in pt-BR 1`] = `
+exports[`count messages > read as they should for none, one and two in pt-BR 1`] = `
 {
   "admin.audit.filesDeleted": [
+    "0 arquivo",
     "1 arquivo",
     "2 arquivos",
   ],
   "admin.groups.count": [
+    "0 grupo",
     "1 grupo",
     "2 grupos",
   ],
   "admin.groups.expenses": [
+    "0 despesa",
     "1 despesa",
     "2 despesas",
   ],
   "admin.groups.settlements": [
+    "0 acerto",
     "1 acerto",
     "2 acertos",
   ],
   "admin.serverLogs.entries": [
+    "0 entrada",
     "1 entrada",
     "2 entradas",
   ],
   "admin.storage.cleanedUp": [
+    "0 arquivo limpo (3 KB liberados)",
     "1 arquivo limpo (3 KB liberados)",
     "2 arquivos limpos (3 KB liberados)",
   ],
   "admin.storage.filesOnDisk": [
+    "0 arquivo no disco",
     "1 arquivo no disco",
     "2 arquivos no disco",
   ],
   "admin.storage.unusedCleanedUp": [
+    "0 recibo excluído",
     "1 recibo excluído",
     "2 recibos excluídos",
   ],
   "admin.tools.cleanupStats": [
+    "Divisões de convidados expiradas: 0 de 3.",
     "Divisões de convidados expiradas: 1 de 4.",
     "Divisões de convidados expiradas: 2 de 5.",
   ],
   "admin.tools.cleanupSuccess": [
+    "0 divisão expirada excluída",
     "1 divisão expirada excluída",
     "2 divisões expiradas excluídas",
   ],
   "admin.users.count": [
+    "0 usuário",
     "1 usuário",
     "2 usuários",
   ],
   "auth.invite.invited": [
+    "Você foi convidado para participar de Trip (0 membro)",
     "Você foi convidado para participar de Trip (1 membro)",
     "Você foi convidado para participar de Trip (2 membros)",
   ],
   "auth.invite.invitedBy": [
+    "Ana convidou você para participar de Trip (0 membro)",
     "Ana convidou você para participar de Trip (1 membro)",
     "Ana convidou você para participar de Trip (2 membros)",
   ],
   "dashboard.archivedGroups": [
+    "0 grupo arquivado",
     "1 grupo arquivado",
     "2 grupos arquivados",
   ],
   "dashboard.members": [
+    "0 membro",
     "1 membro",
     "2 membros",
   ],
   "expenses.receipt.assignAllItems": [
+    "Atribuir todos os itens (0 restante)",
     "Atribuir todos os itens (1 restante)",
     "Atribuir todos os itens (2 restantes)",
   ],
   "groups.list.expenseCount": [
+    "0 despesa",
     "1 despesa",
     "2 despesas",
   ],
   "groups.list.memberCount": [
+    "0 membro",
     "1 membro",
     "2 membros",
   ],
   "split.assign.assignAllItems": [
+    "Atribuir todos os itens (0 restante)",
     "Atribuir todos os itens (1 restante)",
     "Atribuir todos os itens (2 restantes)",
   ],
   "split.claim.claimConflict": [
+    "0 item também selecionado por Ana",
     "1 item também selecionado por Ana",
     "2 itens também selecionados por Ana",
   ],
   "splits.items": [
+    "0 item",
     "1 item",
     "2 itens",
   ],
   "splits.people": [
+    "0 pessoa",
     "1 pessoa",
     "2 pessoas",
   ],
 }
 `;
 
-exports[`count messages > read as they should for one and for two in sv 1`] = `
+exports[`count messages > read as they should for none, one and two in sv 1`] = `
 {
   "admin.audit.filesDeleted": [
+    "0 filer",
     "1 fil",
     "2 filer",
   ],
   "admin.groups.count": [
+    "0 grupper",
     "1 grupp",
     "2 grupper",
   ],
   "admin.groups.expenses": [
+    "0 utgifter",
     "1 utgift",
     "2 utgifter",
   ],
   "admin.groups.settlements": [
+    "0 avräkningar",
     "1 avräkning",
     "2 avräkningar",
   ],
   "admin.serverLogs.entries": [
+    "0 poster",
     "1 post",
     "2 poster",
   ],
   "admin.storage.cleanedUp": [
+    "0 filer rensade (3 KB frigjort)",
     "1 fil rensad (3 KB frigjort)",
     "2 filer rensade (3 KB frigjort)",
   ],
   "admin.storage.filesOnDisk": [
+    "0 filer på disk",
     "1 fil på disk",
     "2 filer på disk",
   ],
   "admin.storage.unusedCleanedUp": [
+    "0 kvitton raderade",
     "1 kvitto raderat",
     "2 kvitton raderade",
   ],
   "admin.tools.cleanupStats": [
+    "Utgångna gästdelningar: 0 av 3.",
     "Utgångna gästdelningar: 1 av 4.",
     "Utgångna gästdelningar: 2 av 5.",
   ],
   "admin.tools.cleanupSuccess": [
+    "0 utgångna delningar borttagna",
     "1 utgången delning borttagen",
     "2 utgångna delningar borttagna",
   ],
   "admin.users.count": [
+    "0 användare",
     "1 användare",
     "2 användare",
   ],
   "auth.invite.invited": [
+    "Du har blivit inbjuden att gå med i Trip (0 medlemmar)",
     "Du har blivit inbjuden att gå med i Trip (1 medlem)",
     "Du har blivit inbjuden att gå med i Trip (2 medlemmar)",
   ],
   "auth.invite.invitedBy": [
+    "Ana har bjudit in dig att gå med i Trip (0 medlemmar)",
     "Ana har bjudit in dig att gå med i Trip (1 medlem)",
     "Ana har bjudit in dig att gå med i Trip (2 medlemmar)",
   ],
   "dashboard.archivedGroups": [
+    "0 arkiverade grupper",
     "1 arkiverad grupp",
     "2 arkiverade grupper",
   ],
   "dashboard.members": [
+    "0 medlemmar",
     "1 medlem",
     "2 medlemmar",
   ],
   "expenses.receipt.assignAllItems": [
+    "Tilldela alla artiklar (0 kvar)",
     "Tilldela alla artiklar (1 kvar)",
     "Tilldela alla artiklar (2 kvar)",
   ],
   "groups.list.expenseCount": [
+    "0 utgifter",
     "1 utgift",
     "2 utgifter",
   ],
   "groups.list.memberCount": [
+    "0 medlemmar",
     "1 medlem",
     "2 medlemmar",
   ],
   "split.assign.assignAllItems": [
+    "Tilldela alla artiklar (0 kvar)",
     "Tilldela alla artiklar (1 kvar)",
     "Tilldela alla artiklar (2 kvar)",
   ],
   "split.claim.claimConflict": [
+    "0 artiklar också valda av Ana",
     "1 artikel också vald av Ana",
     "2 artiklar också valda av Ana",
   ],
   "splits.items": [
+    "0 artiklar",
     "1 artikel",
     "2 artiklar",
   ],
   "splits.people": [
+    "0 personer",
     "1 person",
     "2 personer",
   ],

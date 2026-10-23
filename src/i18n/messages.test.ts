@@ -100,12 +100,13 @@ describe('count messages', () => {
     }
   });
 
-  // The snapshot shows each message for 1 and for 2, so a review sees every singular
-  it.each(pluralLocales)('read as they should for one and for two in %s', (locale) => {
+  // The snapshot shows each message for 0, 1 and 2, so a review sees every singular (French and
+  // Brazilian Portuguese use it for 0 too)
+  it.each(pluralLocales)('read as they should for none, one and two in %s', (locale) => {
     const rendered = Object.fromEntries(
       COUNT_MESSAGES.map(([namespace, key, values]) => {
         const t = translator(locale, namespace);
-        return [`${namespace}.${key}`, [t(key, values(1)), t(key, values(2))]];
+        return [`${namespace}.${key}`, [0, 1, 2].map((n) => t(key, values(n)))];
       }),
     );
     expect(rendered).toMatchSnapshot();

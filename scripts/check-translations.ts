@@ -9,7 +9,8 @@ function getKeys(obj: Record<string, unknown>): string[] {
   return messageEntries(obj).map(([key]) => key);
 }
 
-// A file that isn't a JSON object reads as empty here; findMessageProblems reports it
+// A file that isn't valid JSON, or isn't a JSON object, reads as empty here; findMessageProblems
+// reports it (or the folder, when that isn't a supported language)
 function loadNamespace(locale: string, namespace: string): Record<string, unknown> {
   const filePath = join(messagesDir, locale, `${namespace}.json`);
   if (!existsSync(filePath)) return {};
@@ -64,8 +65,9 @@ for (const locale of locales) {
   }
 }
 
-// Files that aren't JSON objects, messages next-intl can't parse, and (#441) counts that skip plural
-// rules: a count before a word outside a plural, and a plural with no form for one ("1 items")
+// Folders that aren't a supported language, files that aren't valid JSON objects, messages
+// next-intl can't parse, and (#441) counts that skip plural rules: a count before a word outside a
+// plural, and a plural with no form for one ("1 items")
 for (const problem of findMessageProblems(messagesDir)) {
   hasErrors = true;
   console.error(problem);

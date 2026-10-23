@@ -61,6 +61,10 @@ describe('findUnpluralizedCounts', () => {
     expect(findUnpluralizedCounts('{count, selectordinal, one {#st} other {#th}} place')).toEqual([]);
   });
 
+  it('flags a count before a word inside a selectordinal, which picks the ordinal form, not the noun', () => {
+    expect(findUnpluralizedCounts('{count, selectordinal, other {{count} items}}')).toEqual(['count']);
+  });
+
   it('accepts a count not followed by a word', () => {
     expect(findUnpluralizedCounts('Items ({count})')).toEqual([]);
     expect(findUnpluralizedCounts('Total: {count}.')).toEqual([]);
@@ -121,19 +125,19 @@ describe('messageProblems', () => {
   });
 
   it('reports a plural without a form for one, where the language has one', () => {
-    const problem = "the plural on {count} has no 'one' form, so 1 reads like 2; add one {…}";
+    const problem = "the plural on {count} has no 'one' form; add one {…}";
     expect(messageProblems('en', '{count, plural, other {# items}}')).toEqual([problem]);
     expect(messageProblems('de', 'Mit {count, plural, other {# Personen}} teilen')).toEqual([problem]);
   });
 
-  it('wants one rather than =1, which in French and Portuguese leaves 0 in the plural', () => {
+  it('wants one rather than =1, which in French and Brazilian Portuguese leaves 0 in the plural', () => {
     expect(messageProblems('fr', '{count, plural, =1 {# article} other {# articles}}')).toEqual([
-      "the plural on {count} has no 'one' form, so 1 reads like 2; add one {…}",
+      "the plural on {count} has no 'one' form; add one {…}",
     ]);
   });
 
   it('finds a plural without one inside a tag, a select or another plural', () => {
-    const problem = (name: string) => `the plural on {${name}} has no 'one' form, so 1 reads like 2; add one {…}`;
+    const problem = (name: string) => `the plural on {${name}} has no 'one' form; add one {…}`;
     expect(messageProblems('en', '<b>{count, plural, other {# items}}</b>')).toEqual([problem('count')]);
     expect(messageProblems('en', '{kind, select, a {{count, plural, other {# items}}} other {x}}')).toEqual([
       problem('count'),
@@ -178,11 +182,11 @@ describe('findMessageProblems', () => {
     expect(findMessageProblems(root)).toEqual([
       '[en/splits] items: {count} is followed by a word outside a plural; use {count, plural, one {# …} other {# …}}',
       '[en/splits] nested.people: {count} is followed by a word outside a plural; use {count, plural, one {# …} other {# …}}',
-      "[fr/splits] items: the plural on {count} has no 'one' form, so 1 reads like 2; add one {…}",
+      "[fr/splits] items: the plural on {count} has no 'one' form; add one {…}",
     ]);
   });
 
-  it('skips values that are not messages and files that are not JSON', () => {
+  it("skips values that are not messages and files that don't end in .json", () => {
     const root = writeTree({
       'README.md': '{count} items',
       'en/notes.txt': '{count} items',
