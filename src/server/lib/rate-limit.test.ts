@@ -8,6 +8,7 @@ const {
   checkRateLimit,
   peekRateLimit,
   refundRateLimit,
+  clearRateLimit,
   parsePositiveInt,
   MAX_RATE_LIMIT_KEYS,
   checkTokenRateLimit,
@@ -137,6 +138,15 @@ describe('checkRateLimit', () => {
     refundRateLimit(key);
     refundRateLimit(key); // second refund must not go below zero
     expect(checkRateLimit(key, 1, 60000).allowed).toBe(true);
+  });
+
+  test('clearRateLimit gives a key its whole budget back', () => {
+    const key = 'test-clear';
+    for (let i = 0; i < 3; i++) checkRateLimit(key, 3, 60000);
+    expect(checkRateLimit(key, 3, 60000).allowed).toBe(false);
+    clearRateLimit(key);
+    for (let i = 0; i < 3; i++) expect(checkRateLimit(key, 3, 60000).allowed).toBe(true);
+    clearRateLimit('test-clear-unknown');
   });
 
   test('retryAfterMs decreases as time passes', () => {

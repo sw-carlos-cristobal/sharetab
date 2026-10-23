@@ -15,7 +15,7 @@ export const MAX_RATE_LIMIT_KEYS = 50_000;
 
 /**
  * Two stores, so that flooding the capped one can't evict counters that guard something else:
- * - the main store (checkRateLimit / peekRateLimit / refundRateLimit) keeps login, registration,
+ * - the main store (checkRateLimit / peekRateLimit / refundRateLimit / clearRateLimit) keeps login, registration,
  *   per-IP, per-user and global counters, and never evicts;
  * - the token store (checkTokenRateLimit / peekTokenRateLimit) keeps only counters keyed by a
  *   client-sent share token, person token or receipt id, and is capped at MAX_RATE_LIMIT_KEYS.
@@ -72,13 +72,17 @@ function createStore(maxKeys: number) {
     }
   }
 
+  function clear(key: string): void {
+    attempts.delete(key);
+  }
+
   function sweep(now: number) {
     for (const [key, entry] of attempts) {
       if (now > entry.resetAt) attempts.delete(key);
     }
   }
 
-  return { check, peek, refund, sweep };
+  return { check, peek, refund, clear, sweep };
 }
 
 const mainStore = createStore(Infinity);
@@ -115,6 +119,14 @@ export function peekRateLimit(key: string, maxAttempts: number): RateLimitResult
  */
 export function refundRateLimit(key: string): void {
   mainStore.refund(key);
+}
+
+/**
+ * Forget a key's counter, giving it its whole budget back. Use when the caller has proven who
+ * they are another way (a password reset lifts that account's sign-in limit).
+ */
+export function clearRateLimit(key: string): void {
+  mainStore.clear(key);
 }
 
 /**

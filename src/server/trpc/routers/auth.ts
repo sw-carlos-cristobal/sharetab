@@ -2,14 +2,25 @@ import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { AppError } from '@/server/lib/app-error';
 import { createTRPCRouter, publicProcedure, protectedProcedure } from '../init';
-import { checkRateLimit, parsePositiveInt } from '../../lib/rate-limit';
-import { getClientIp } from '../../lib/client-ip';
+import { checkRateLimit, clearRateLimit, parsePositiveInt } from '../../lib/rate-limit';
+import { FALLBACK_IP, getClientIp } from '../../lib/client-ip';
 import { locales } from '@/i18n/routing';
 import { stripUndefined } from '../../lib/strip-undefined';
 import { parseAuthConfig } from '../../lib/auth-config';
 import { readRegistrationMode } from '../../lib/registration-mode';
 import { findUsersByEmail } from '../../lib/user-email';
+import { logger } from '../../lib/logger';
+import { emailPasswordResetLink, findValidResetToken, resetPasswordWithToken } from '../../lib/password-reset';
 import { Prisma } from '@/generated/prisma/client';
+
+const RESET_REQUEST_WINDOW_MS = 60 * 60 * 1000;
+// Per address: enough for someone retrying a lost email, too few to flood an inbox
+const RESET_REQUESTS_PER_EMAIL = 5;
+// Per client address, across email addresses
+const RESET_REQUESTS_PER_IP = 20;
+
+// Same rules as registration
+const newPasswordSchema = z.string().min(8).max(100);
 
 export const authRouter = createTRPCRouter({
   getSession: publicProcedure.query(({ ctx }) => {
@@ -22,6 +33,8 @@ export const authRouter = createTRPCRouter({
     const config = parseAuthConfig(process.env);
     return {
       passwordLogin: config.passwordLogin,
+      // "Forgot password?" emails a reset link; without email, only an admin can make one
+      passwordReset: config.passwordLogin && config.magicLink,
       magicLink: config.magicLink,
       oidc: config.oidc ? { name: config.oidc.displayName } : null,
       google: config.google !== null,
@@ -152,8 +165,72 @@ export const authRouter = createTRPCRouter({
         where: { id: ctx.user.id },
         data: { passwordHash },
       });
+      // A reset link sent before the change would otherwise still undo it
+      await ctx.db.passwordResetToken.deleteMany({ where: { userId: ctx.user.id } });
 
       return { success: true };
+    }),
+
+  // "Forgot password?" (#397). The answer is the same whether or not the address has an
+  // account: the lookup and the email happen after it, so neither its content nor its timing
+  // tells. A failed email is only logged.
+  requestPasswordReset: publicProcedure
+    .input(z.object({ email: z.string().trim().email().max(254) }))
+    .mutation(({ ctx, input }) => {
+      const config = parseAuthConfig(process.env);
+      if (!config.passwordLogin) {
+        throw new AppError('FORBIDDEN', 'passwordLoginDisabled');
+      }
+      if (!config.magicLink) {
+        throw new AppError('PRECONDITION_FAILED', 'passwordResetUnavailable');
+      }
+
+      // Per client address first, so a refused request doesn't also use up the address's
+      // budget. Skipped when no header names the client, as for password login: one shared
+      // bucket would let one client block everyone's resets.
+      const ip = getClientIp(ctx.headers);
+      if (ip !== FALLBACK_IP) {
+        const { allowed } = checkRateLimit(`password-reset-ip:${ip}`, RESET_REQUESTS_PER_IP, RESET_REQUEST_WINDOW_MS);
+        if (!allowed) throw new AppError('TOO_MANY_REQUESTS', 'passwordResetRateLimited');
+      }
+      // Counted for every address, with or without an account, so being limited doesn't tell either
+      const { allowed } = checkRateLimit(
+        `password-reset:${input.email.toLowerCase()}`,
+        RESET_REQUESTS_PER_EMAIL,
+        RESET_REQUEST_WINDOW_MS,
+      );
+      if (!allowed) throw new AppError('TOO_MANY_REQUESTS', 'passwordResetRateLimited');
+
+      // The server is a long-running Node process (standalone or `next start`), so the work
+      // carries on after the answer is sent.
+      void emailPasswordResetLink(ctx.db, input.email).catch((error: unknown) => {
+        logger.warn('auth.password_reset_email_failed', { error: error instanceof Error ? error.name : 'unknown' });
+      });
+      return { ok: true };
+    }),
+
+  // Sets a new password with a reset link's token (#397), from an emailed link or one an admin made
+  resetPassword: publicProcedure
+    .input(z.object({ token: z.string().min(1).max(200), password: newPasswordSchema }))
+    .mutation(async ({ ctx, input }) => {
+      if (!parseAuthConfig(process.env).passwordLogin) {
+        throw new AppError('FORBIDDEN', 'passwordLoginDisabled');
+      }
+      // Checked before hashing, so a bad link costs no bcrypt work
+      if (!(await findValidResetToken(ctx.db, input.token))) {
+        throw new AppError('BAD_REQUEST', 'resetLinkInvalid');
+      }
+      const passwordHash = await bcrypt.hash(input.password, 12);
+      const user = await resetPasswordWithToken(ctx.db, input.token, passwordHash);
+      if (!user) {
+        throw new AppError('BAD_REQUEST', 'resetLinkInvalid');
+      }
+
+      // The link proved who they are, so failed sign-ins from before the reset don't keep the
+      // new password out (password login's per-address bucket, keyed like it)
+      clearRateLimit(`login:${user.email.toLowerCase()}`);
+      logger.info('auth.password_reset', { userId: user.userId });
+      return { ok: true };
     }),
 
   getProfile: protectedProcedure.query(async ({ ctx }) => {

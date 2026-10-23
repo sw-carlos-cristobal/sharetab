@@ -47,6 +47,22 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+// A password reset link (#397), emailed by "Forgot password?" or made by an admin. Only a
+// SHA-256 hash of the link's token is stored. Single use: setting the password deletes all of
+// the user's reset tokens, and issuing one replaces the user's earlier ones
+// (src/server/lib/password-reset.ts)
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
 // ─── CORE MODELS ───────────────────────────────────────────
 
 model User {
@@ -66,6 +82,7 @@ model User {
 
   accounts        Account[]
   sessions        Session[]
+  passwordResetTokens PasswordResetToken[]
   groupMembers    GroupMember[]
   expensesPaid    Expense[]          @relation("PaidBy")
   expensesAdded   Expense[]          @relation("AddedBy")
@@ -375,6 +392,7 @@ enum AdminAction {
   VENMO_SETTING_CHANGED
   GUEST_UPLOADS_SETTING_CHANGED
   UNUSED_RECEIPTS_CLEANED
+  PASSWORD_RESET_LINK_CREATED
 }
 
 model SystemSetting {

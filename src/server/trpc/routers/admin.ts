@@ -8,7 +8,7 @@ import {
   createProviderByName,
 } from '@/server/ai/registry';
 import { type AdminAction, type PrismaClient, Prisma } from '@/generated/prisma/client';
-import nodemailer from 'nodemailer';
+import { createMailTransport, mailFrom } from '@/server/lib/mailer';
 import fs from 'fs';
 import * as fsp from 'fs/promises';
 import path from 'path';
@@ -46,6 +46,10 @@ import {
 } from '@/server/lib/openai-codex-login';
 
 import { getBuildInfo } from '@/server/lib/build-info';
+import { parseAuthConfig } from '@/server/lib/auth-config';
+import { ADMIN_RESET_LINK_TTL_MS, canResetPassword, issuePasswordResetToken } from '@/server/lib/password-reset';
+import { defaultLocale } from '@/i18n/routing';
+import { isSupportedLocale } from '@/lib/locale-paths';
 import { REGISTRATION_MODES, readRegistrationMode } from '@/server/lib/registration-mode';
 import { isGuestUploadsForcedOff, readGuestUploadsSetting, saveGuestUploadsSetting } from '@/server/lib/guest-uploads';
 
@@ -389,9 +393,10 @@ export const adminRouter = createTRPCRouter({
           suspendedAt: new Date(),
         },
       });
-      // Remove auth records (sessions, accounts)
+      // Remove auth records (sessions, accounts, password reset links)
       await tx.account.deleteMany({ where: { userId: input.userId } });
       await tx.session.deleteMany({ where: { userId: input.userId } });
+      await tx.passwordResetToken.deleteMany({ where: { userId: input.userId } });
       // Transfer ownership before removing memberships
       const ownedGroups = await tx.groupMember.findMany({
         where: { userId: input.userId, role: 'OWNER' },
@@ -430,6 +435,32 @@ export const adminRouter = createTRPCRouter({
     });
 
     return { deleted: true, userId: input.userId };
+  }),
+
+  // A password reset link for the admin to hand over (#397): the only way back in for a
+  // locked-out user on an instance without email. Returns the token, not a URL: the admin's
+  // page builds the link from its own address, as it does split links. Replaces the user's
+  // earlier links, emailed ones included.
+  createPasswordResetLink: adminProcedure.input(z.object({ userId: z.string() })).mutation(async ({ ctx, input }) => {
+    if (!parseAuthConfig(process.env).passwordLogin) {
+      throw new AppError('FORBIDDEN', 'passwordLoginDisabled');
+    }
+
+    const user = await ctx.db.user.findUnique({
+      where: { id: input.userId },
+      select: { id: true, email: true, locale: true, isPlaceholder: true, suspendedAt: true },
+    });
+    if (!user) {
+      throw new AppError('NOT_FOUND', 'userNotFound');
+    }
+    if (!canResetPassword(user)) {
+      throw new AppError('BAD_REQUEST', 'passwordResetNotAllowed');
+    }
+
+    const { token, expiresAt } = await issuePasswordResetToken(ctx.db, user.id, ADMIN_RESET_LINK_TTL_MS);
+    await logAdminAction(ctx.db, ctx.user.id, 'PASSWORD_RESET_LINK_CREATED', user.id, { email: user.email });
+
+    return { token, locale: isSupportedLocale(user.locale) ? user.locale : defaultLocale, expiresAt };
   }),
 
   listGroups: adminProcedure
@@ -832,17 +863,8 @@ export const adminRouter = createTRPCRouter({
       throw new AppError('PRECONDITION_FAILED', 'emailNotConfigured');
     }
 
-    const transport = nodemailer.createTransport({
-      host,
-      port: parseInt(process.env.EMAIL_SERVER_PORT ?? '587'),
-      secure: parseInt(process.env.EMAIL_SERVER_PORT ?? '587') === 465,
-      auth: {
-        user: process.env.EMAIL_SERVER_USER,
-        pass: process.env.EMAIL_SERVER_PASSWORD,
-      },
-    });
-
-    const from = process.env.EMAIL_FROM ?? 'ShareTab <noreply@sharetab.local>';
+    const transport = createMailTransport();
+    const from = mailFrom();
     const to = ctx.user.email!;
 
     try {

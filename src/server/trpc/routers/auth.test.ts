@@ -13,6 +13,7 @@ const mockDb = {
   systemSetting: { findUnique: vi.fn() },
   systemInvite: { findUnique: vi.fn() },
   user: { findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn() },
+  passwordResetToken: { deleteMany: vi.fn() },
   $transaction: vi.fn(),
   $queryRaw: vi.fn(),
 };
@@ -20,6 +21,16 @@ vi.mock('@/server/db', () => ({ db: mockDb }));
 vi.mock('@/server/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
+const passwordReset = {
+  emailPasswordResetLink: vi.fn(),
+  findValidResetToken: vi.fn(),
+  resetPasswordWithToken: vi.fn(),
+};
+vi.mock('@/server/lib/password-reset', () => passwordReset);
+
+import bcrypt from 'bcryptjs';
+import { logger } from '@/server/lib/logger';
+import { checkRateLimit } from '@/server/lib/rate-limit';
 
 const OIDC_ENV = {
   OIDC_ISSUER: 'https://auth.example.com/application/o/sharetab/',
@@ -28,9 +39,9 @@ const OIDC_ENV = {
   OIDC_DISPLAY_NAME: 'Authentik',
 };
 
-async function caller(session: { user: { id: string } } | null = null) {
+async function caller(session: { user: { id: string } } | null = null, headers = new Headers()) {
   const { authRouter } = await import('./auth');
-  const ctx = { session, db: mockDb, headers: new Headers(), impersonating: null };
+  const ctx = { session, db: mockDb, headers, impersonating: null };
   return authRouter.createCaller(ctx as unknown as Parameters<typeof authRouter.createCaller>[0]);
 }
 
@@ -59,14 +70,33 @@ afterEach(() => {
 describe('auth.getLoginOptions', () => {
   test('defaults to password login only', async () => {
     const api = await caller();
-    expect(await api.getLoginOptions()).toEqual({ passwordLogin: true, magicLink: false, oidc: null, google: false });
+    expect(await api.getLoginOptions()).toEqual({
+      passwordLogin: true,
+      passwordReset: false,
+      magicLink: false,
+      oidc: null,
+      google: false,
+    });
+  });
+
+  test('offers password reset by email when email is configured', async () => {
+    stubEnv({ EMAIL_SERVER_HOST: 'smtp.example.com' });
+    const api = await caller();
+    expect(await api.getLoginOptions()).toMatchObject({ passwordLogin: true, passwordReset: true, magicLink: true });
   });
 
   test('exposes the OIDC button name but never the issuer or secret', async () => {
     stubEnv({ ...OIDC_ENV, EMAIL_SERVER_HOST: 'smtp.example.com', DISABLE_PASSWORD_LOGIN: 'true' });
     const api = await caller();
     const options = await api.getLoginOptions();
-    expect(options).toEqual({ passwordLogin: false, magicLink: true, oidc: { name: 'Authentik' }, google: false });
+    expect(options).toEqual({
+      passwordLogin: false,
+      // No passwords to reset while password login is off
+      passwordReset: false,
+      magicLink: true,
+      oidc: { name: 'Authentik' },
+      google: false,
+    });
     expect(JSON.stringify(options)).not.toContain('s3cret');
     expect(JSON.stringify(options)).not.toContain('auth.example.com');
   });
@@ -75,7 +105,7 @@ describe('auth.getLoginOptions', () => {
     stubEnv({ GOOGLE_CLIENT_ID: 'id.apps.googleusercontent.com', GOOGLE_CLIENT_SECRET: 'g-secret' });
     const api = await caller();
     const options = await api.getLoginOptions();
-    expect(options).toEqual({ passwordLogin: true, magicLink: false, oidc: null, google: true });
+    expect(options).toEqual({ passwordLogin: true, passwordReset: false, magicLink: false, oidc: null, google: true });
     expect(JSON.stringify(options)).not.toContain('g-secret');
     expect(JSON.stringify(options)).not.toContain('googleusercontent');
   });
@@ -292,5 +322,159 @@ describe('auth.getProfile', () => {
     });
     const api = await caller({ user: { id: 'user-1' } });
     expect((await api.getProfile()).hasPassword).toBe(false);
+  });
+});
+
+describe('auth.changePassword', () => {
+  test('a changed password ends every reset link the user has', async () => {
+    mockDb.user.findUnique.mockResolvedValue({ id: 'user-1', suspendedAt: null, passwordHash: 'old-hash' });
+    vi.mocked(bcrypt.compare).mockResolvedValue(true as never);
+    const api = await caller({ user: { id: 'user-1' } });
+
+    await api.changePassword({ currentPassword: 'password123', newPassword: 'new-password' });
+
+    expect(mockDb.user.update).toHaveBeenCalledWith({ where: { id: 'user-1' }, data: { passwordHash: 'hashed' } });
+    expect(mockDb.passwordResetToken.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+  });
+});
+
+describe('auth.requestPasswordReset', () => {
+  beforeEach(() => {
+    stubEnv({ EMAIL_SERVER_HOST: 'smtp.example.com' });
+    passwordReset.emailPasswordResetLink.mockResolvedValue(undefined);
+  });
+
+  test('answers the same whether or not the address has an account, without waiting for the email', async () => {
+    // Never settles: the answer can't depend on the lookup, the database writes or the SMTP server
+    passwordReset.emailPasswordResetLink.mockReturnValue(new Promise(() => {}));
+    const api = await caller();
+
+    expect(await api.requestPasswordReset({ email: 'known@example.com' })).toEqual({ ok: true });
+    expect(await api.requestPasswordReset({ email: 'unknown@example.com' })).toEqual({ ok: true });
+    expect(passwordReset.emailPasswordResetLink).toHaveBeenCalledWith(mockDb, 'known@example.com');
+    expect(passwordReset.emailPasswordResetLink).toHaveBeenCalledWith(mockDb, 'unknown@example.com');
+  });
+
+  test('logs a failed email instead of telling the requester', async () => {
+    passwordReset.emailPasswordResetLink.mockRejectedValue(new Error('smtp down: user@example.com'));
+    const api = await caller();
+
+    expect(await api.requestPasswordReset({ email: 'smtp-fail@example.com' })).toEqual({ ok: true });
+    await vi.waitFor(() =>
+      expect(logger.warn).toHaveBeenCalledWith('auth.password_reset_email_failed', { error: 'Error' }),
+    );
+  });
+
+  test('is refused without email configured, sending nothing', async () => {
+    stubEnv({ EMAIL_SERVER_HOST: '' });
+    const api = await caller();
+    await expect(api.requestPasswordReset({ email: 'bob@example.com' })).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      messageKey: 'passwordResetUnavailable',
+    });
+    expect(passwordReset.emailPasswordResetLink).not.toHaveBeenCalled();
+  });
+
+  test('is refused while password login is off', async () => {
+    stubEnv({ ...OIDC_ENV, DISABLE_PASSWORD_LOGIN: 'true' });
+    const api = await caller();
+    await expect(api.requestPasswordReset({ email: 'bob@example.com' })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      messageKey: 'passwordLoginDisabled',
+    });
+    expect(passwordReset.emailPasswordResetLink).not.toHaveBeenCalled();
+  });
+
+  test('limits requests per address, in any letter case, whether or not it has an account', async () => {
+    const api = await caller();
+    for (let i = 0; i < 5; i++) {
+      await api.requestPasswordReset({ email: i % 2 ? 'Limited@Example.com' : 'limited@example.com' });
+    }
+    await expect(api.requestPasswordReset({ email: 'LIMITED@example.com' })).rejects.toMatchObject({
+      code: 'TOO_MANY_REQUESTS',
+      messageKey: 'passwordResetRateLimited',
+    });
+    expect(passwordReset.emailPasswordResetLink).toHaveBeenCalledTimes(5);
+  });
+
+  test('limits requests per client address across email addresses', async () => {
+    const api = await caller(null, new Headers({ 'x-real-ip': '203.0.113.7' }));
+    for (let i = 0; i < 20; i++) {
+      await api.requestPasswordReset({ email: `spray-${i}@example.com` });
+    }
+    await expect(api.requestPasswordReset({ email: 'spray-20@example.com' })).rejects.toMatchObject({
+      code: 'TOO_MANY_REQUESTS',
+    });
+    // Another client isn't held up
+    const other = await caller(null, new Headers({ 'x-real-ip': '203.0.113.8' }));
+    expect(await other.requestPasswordReset({ email: 'spray-21@example.com' })).toEqual({ ok: true });
+  });
+});
+
+describe('auth.resetPassword', () => {
+  const TOKEN = 'T'.repeat(43);
+
+  test('sets the new password with a valid link', async () => {
+    passwordReset.findValidResetToken.mockResolvedValue({ userId: 'bob' });
+    passwordReset.resetPasswordWithToken.mockResolvedValue({ userId: 'bob', email: 'Bob@example.com' });
+    const api = await caller();
+
+    expect(await api.resetPassword({ token: TOKEN, password: 'new-password' })).toEqual({ ok: true });
+    expect(bcrypt.hash).toHaveBeenCalledWith('new-password', 12);
+    expect(passwordReset.resetPasswordWithToken).toHaveBeenCalledWith(mockDb, TOKEN, 'hashed');
+  });
+
+  test('lifts the sign-in limit for the account, so the new password works at once', async () => {
+    for (let i = 0; i < 5; i++) checkRateLimit('login:reset-me@example.com', 5, 15 * 60 * 1000);
+    expect(checkRateLimit('login:reset-me@example.com', 5, 15 * 60 * 1000).allowed).toBe(false);
+    passwordReset.findValidResetToken.mockResolvedValue({ userId: 'bob' });
+    passwordReset.resetPasswordWithToken.mockResolvedValue({ userId: 'bob', email: 'Reset-Me@example.com' });
+    const api = await caller();
+
+    await api.resetPassword({ token: TOKEN, password: 'new-password' });
+
+    expect(checkRateLimit('login:reset-me@example.com', 5, 15 * 60 * 1000).allowed).toBe(true);
+  });
+
+  test('refuses an unknown, expired or used link without hashing the password', async () => {
+    passwordReset.findValidResetToken.mockResolvedValue(null);
+    const api = await caller();
+    await expect(api.resetPassword({ token: TOKEN, password: 'new-password' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      messageKey: 'resetLinkInvalid',
+    });
+    expect(bcrypt.hash).not.toHaveBeenCalled();
+    expect(passwordReset.resetPasswordWithToken).not.toHaveBeenCalled();
+  });
+
+  test('refuses a link used up while the password was being hashed', async () => {
+    passwordReset.findValidResetToken.mockResolvedValue({ userId: 'bob' });
+    passwordReset.resetPasswordWithToken.mockResolvedValue(null);
+    const api = await caller();
+    await expect(api.resetPassword({ token: TOKEN, password: 'new-password' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      messageKey: 'resetLinkInvalid',
+    });
+  });
+
+  test('takes a password of the length registration does', async () => {
+    const api = await caller();
+    await expect(api.resetPassword({ token: TOKEN, password: 'short' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    await expect(api.resetPassword({ token: TOKEN, password: 'x'.repeat(101) })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    expect(passwordReset.findValidResetToken).not.toHaveBeenCalled();
+  });
+
+  test('is refused while password login is off', async () => {
+    stubEnv({ ...OIDC_ENV, DISABLE_PASSWORD_LOGIN: 'true' });
+    const api = await caller();
+    await expect(api.resetPassword({ token: TOKEN, password: 'new-password' })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      messageKey: 'passwordLoginDisabled',
+    });
+    expect(passwordReset.findValidResetToken).not.toHaveBeenCalled();
   });
 });

@@ -1,0 +1,10 @@
+{
+  "passwordReset": {
+    "subject": "Redefina sua senha do ShareTab",
+    "heading": "Redefina sua senha",
+    "intro": "Alguém pediu para redefinir a senha da conta do ShareTab {email}.",
+    "action": "Escolher uma nova senha",
+    "expiry": "O link funciona uma vez e expira em 1 hora.",
+    "ignore": "Se não foi você, ignore este e-mail. Sua senha continua a mesma."
+  }
+}
