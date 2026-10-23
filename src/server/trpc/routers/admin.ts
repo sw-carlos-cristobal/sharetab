@@ -8,12 +8,11 @@ import {
   createProviderByName,
 } from '@/server/ai/registry';
 import { type AdminAction, type PrismaClient, Prisma } from '@/generated/prisma/client';
-import { createMailTransport, mailFrom } from '@/server/lib/mailer';
+import { createMailTransport, describeMailError, mailFrom } from '@/server/lib/mailer';
 import fs from 'fs';
 import * as fsp from 'fs/promises';
 import path from 'path';
 import { getRecentLogs, logger } from '@/server/lib/logger';
-import { describeMailError } from '@/server/lib/mailer';
 import { deleteGroupWithData } from '@/server/lib/group-delete';
 import { lockGroupMembers } from '@/server/lib/group-balances';
 import {
