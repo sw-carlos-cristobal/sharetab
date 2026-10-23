@@ -46,6 +46,7 @@ import {
 } from '@/server/lib/openai-codex-login';
 
 import { getBuildInfo } from '@/server/lib/build-info';
+import { REGISTRATION_MODES, readRegistrationMode } from '@/server/lib/registration-mode';
 import { isGuestUploadsForcedOff, readGuestUploadsSetting, saveGuestUploadsSetting } from '@/server/lib/guest-uploads';
 
 // How long a successful Meridian login waits for the proxy start attempt.
@@ -615,19 +616,12 @@ export const adminRouter = createTRPCRouter({
 
   // ─── Registration Control ───────────────────────────────
 
-  getRegistrationMode: adminProcedure.query(async ({ ctx }) => {
-    const setting = await ctx.db.systemSetting.findUnique({
-      where: { key: 'registrationMode' },
-    });
-    return {
-      mode: (setting?.value ?? 'open') as 'open' | 'invite-only' | 'closed',
-    };
-  }),
+  getRegistrationMode: adminProcedure.query(async ({ ctx }) => ({ mode: await readRegistrationMode(ctx.db) })),
 
   setRegistrationMode: adminProcedure
     .input(
       z.object({
-        mode: z.enum(['open', 'invite-only', 'closed']),
+        mode: z.enum(REGISTRATION_MODES),
       }),
     )
     .mutation(async ({ ctx, input }) => {

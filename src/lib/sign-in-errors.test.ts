@@ -9,6 +9,12 @@ describe('getSignInErrorKey', () => {
 
   test.each([
     ['OidcSessionActive', 'sessionActive'],
+    ['GoogleSessionActive', 'sessionActive'],
+    ['GoogleAccountExists', 'accountExists'],
+    ['GoogleRegistrationDisabled', 'registrationDisabled'],
+    // Same as the fallback for unknown codes: these rows document the intent.
+    ['GoogleEmailUnverified', 'generic'],
+    ['GoogleAdminEmailNotHosted', 'generic'],
     ['OidcEmailMissing', 'emailMissing'],
     ['OidcAccountNotLinked', 'accountNotLinked'],
     ['OAuthAccountNotLinked', 'accountNotLinked'],

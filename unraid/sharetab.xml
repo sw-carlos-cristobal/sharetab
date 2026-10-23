@@ -27,7 +27,7 @@
     - Cross-group dashboard with debt simplification
     - 9 languages
     - PWA installable on mobile
-    - Sign-in options: email/password, magic link email, and OIDC single sign-on (Authentik, Authelia, Keycloak, ...); a Google provider can also be configured, but the login page has no Google button
+    - Sign-in options: email/password, magic link email, Google, and OIDC single sign-on (Authentik, Authelia, Keycloak, ...)
 
     This template runs the :stable image, which can lag the newest features described in the README.
   </Overview>
@@ -301,7 +301,7 @@
     Name="Google OAuth Client ID"
     Target="GOOGLE_CLIENT_ID"
     Default=""
-    Description="Google OAuth client ID (optional). The login page has no Google button, but sign-ins sent to the provider directly still work and create accounts for any Google user; see the README security notes."
+    Description="Google OAuth client ID (optional). With the secret set too, the login page shows a Sign in with Google button. Redirect URI to register at Google, https on a public domain name (not a bare IP, .lan or .local): [NEXTAUTH_URL]/api/auth/callback/google. New accounts only while Registration Mode is Open, for Google users whose email Google has verified; never links to an existing account. See the README. Images built before the Sign in with Google button (issue #224), which the :stable tag may still be, have no button and let any Google user create an account."
     Type="Variable"
     Display="advanced"
     Required="false"
@@ -384,7 +384,7 @@
     Name="Disable Password Login"
     Target="DISABLE_PASSWORD_LOGIN"
     Default="false"
-    Description="Hide the email/password form and close registration (true/false). Ignored unless OIDC or magic link sign-in is configured. With SSO only, link existing accounts first or their owners cannot sign in."
+    Description="Hide the email/password form and close password registration (true/false). Ignored unless OIDC or magic link sign-in is configured (Google does not count: it never links to an existing account). With SSO only, link existing accounts first or their owners cannot sign in."
     Type="Variable"
     Display="advanced"
     Required="false"
@@ -393,7 +393,7 @@
     Name="Disable Guest Uploads"
     Target="DISABLE_GUEST_UPLOADS"
     Default="false"
-    Description="Lock guest (no account) receipt uploads and AI scans off, overriding the admin toggle (true/false). Signed-in users with an active account keep Quick Split, so also limit who can create an account: Registration Control only covers password sign-up; magic link, Google and OIDC auto-registration still create accounts."
+    Description="Lock guest (no account) receipt uploads and AI scans off, overriding the admin toggle (true/false). Signed-in users with an active account keep Quick Split, so also limit who can create an account: Registration Control covers password and Google sign-up; magic link and OIDC auto-registration still create accounts."
     Type="Variable"
     Display="advanced"
     Required="false"

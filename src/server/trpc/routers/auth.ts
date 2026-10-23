@@ -7,6 +7,7 @@ import { getClientIp } from '../../lib/client-ip';
 import { locales } from '@/i18n/routing';
 import { stripUndefined } from '../../lib/strip-undefined';
 import { parseAuthConfig } from '../../lib/auth-config';
+import { readRegistrationMode } from '../../lib/registration-mode';
 import { findUsersByEmail } from '../../lib/user-email';
 import { Prisma } from '@/generated/prisma/client';
 
@@ -16,13 +17,14 @@ export const authRouter = createTRPCRouter({
   }),
 
   // Which sign-in methods the login page should offer. Never includes the
-  // OIDC issuer or secrets — only what the UI renders.
+  // OIDC issuer, client ids or secrets — only what the UI renders.
   getLoginOptions: publicProcedure.query(() => {
     const config = parseAuthConfig(process.env);
     return {
       passwordLogin: config.passwordLogin,
       magicLink: config.magicLink,
       oidc: config.oidc ? { name: config.oidc.displayName } : null,
+      google: config.google !== null,
     };
   }),
 
@@ -32,10 +34,7 @@ export const authRouter = createTRPCRouter({
     if (!parseAuthConfig(process.env).passwordLogin) {
       return { mode: 'closed' as const };
     }
-    const setting = await ctx.db.systemSetting.findUnique({
-      where: { key: 'registrationMode' },
-    });
-    return { mode: (setting?.value ?? 'open') as 'open' | 'invite-only' | 'closed' };
+    return { mode: await readRegistrationMode(ctx.db) };
   }),
 
   register: publicProcedure
@@ -61,10 +60,7 @@ export const authRouter = createTRPCRouter({
       }
 
       // Check registration mode
-      const modeSetting = await ctx.db.systemSetting.findUnique({
-        where: { key: 'registrationMode' },
-      });
-      const mode = modeSetting?.value ?? 'open';
+      const mode = await readRegistrationMode(ctx.db);
 
       if (mode === 'closed') {
         throw new AppError('FORBIDDEN', 'registrationClosed');

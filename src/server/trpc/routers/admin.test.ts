@@ -381,6 +381,32 @@ async function callerAs(session: { user: { id: string; email: string } }) {
   return adminRouter.createCaller(ctx as unknown as Parameters<typeof adminRouter.createCaller>[0]);
 }
 
+describe('registration mode', () => {
+  beforeEach(() => {
+    vi.stubEnv('ADMIN_EMAIL', 'admin@example.com');
+    vi.clearAllMocks();
+    mockDb.user.findUnique.mockResolvedValue({ suspendedAt: null });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test('reads an unrecognised stored setting as open, as sign-up does', async () => {
+    mockDb.systemSetting.findUnique.mockResolvedValue({ key: 'registrationMode', value: 'something-else' });
+    const api = await callerAs(adminSession);
+    expect(await api.getRegistrationMode()).toEqual({ mode: 'open' });
+  });
+
+  test('refuses to save a mode ShareTab does not know', async () => {
+    const api = await callerAs(adminSession);
+    await expect(api.setRegistrationMode({ mode: 'everyone' as 'open' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    expect(mockDb.systemSetting.upsert).not.toHaveBeenCalled();
+  });
+});
+
 describe('guest uploads toggle', () => {
   beforeEach(async () => {
     vi.stubEnv('ADMIN_EMAIL', 'admin@example.com');

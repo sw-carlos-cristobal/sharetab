@@ -1,11 +1,15 @@
 /**
  * Policy for OIDC sign-ins. `decideOidcSignIn` is pure; `gatherOidcFacts`
- * collects its inputs from the database. The Auth.js `signIn` callback turns
- * a denial into a redirect to `/login?error=<code>`.
+ * collects its inputs from the database; `checkOidcSignIn` runs both for the
+ * Auth.js `signIn` callback, turning a denial into a redirect to
+ * `/login?error=<code>`.
  */
 
 import type { PrismaClient } from '@/generated/prisma/client';
 import { isHttpUrl } from './auth-config';
+import { logger } from './logger';
+import { isRegistrationOpen } from './registration-mode';
+import { findLinkedUserId, findSignedInUserId, isSessionConflict } from './sign-in-identity';
 import { findUsersByEmail } from './user-email';
 
 /** Provider id of the generic OIDC provider (callback path `/api/auth/callback/oidc`). */
@@ -30,7 +34,7 @@ export interface OidcSignInFacts {
   /** The IdP's `email_verified` claim, or null when it doesn't send one. */
   emailVerified: boolean | null;
   /** The user with that email ignoring case, or 'ambiguous' when several case variants exist. */
-  userByEmail: { id: string; isPlaceholder: boolean; hasOidcAccount: boolean } | 'ambiguous' | null;
+  userByEmail: { id: string; isPlaceholder: boolean; hasLinkedIdentity: boolean } | 'ambiguous' | null;
   autoRegister: boolean;
   allowEmailLinking: boolean;
   /** Anyone can create a password account (password login on, registration not closed or invite-only). */
@@ -63,27 +67,23 @@ function linkRefusal(
   if (user === 'ambiguous') return 'ambiguous_email';
   // Placeholder and deleted-user records must never gain a login.
   if (user.isPlaceholder) return 'placeholder';
-  // An account with an IdP identity only signs in with that one; otherwise
-  // anyone who can claim the email at the IdP could attach a second one.
-  if (user.hasOidcAccount) return 'already_linked';
+  // An account already linked to an IdP or Google identity keeps only that
+  // one; otherwise anyone who can claim the email at the IdP could attach a second.
+  if (user.hasLinkedIdentity) return 'already_linked';
   if (!facts.allowEmailLinking) return 'linking_disabled';
   // The IdP itself doesn't vouch for the address (Authentik's default email
   // mapping always says so), so it proves nothing about who owns the account.
   if (facts.emailVerified === false) return 'email_unverified';
   // While anyone can register a password account, someone could register
   // another person's address in advance and receive their IdP identity on
-  // that person's first SSO sign-in.
+  // that person's first SSO sign-in. (An account made through Google has a
+  // Google identity, so it's refused above as already_linked.)
   if (facts.passwordRegistrationOpen) return 'password_registration_open';
   return null;
 }
 
 export function decideOidcSignIn(facts: OidcSignInFacts): OidcSignInDecision {
-  // Auth.js would silently link an unlinked identity to whoever is signed in
-  // in this browser (on a shared device, someone else's account), and
-  // refuses a linked identity that belongs to a different signed-in user.
-  if (facts.sessionUserId && facts.sessionUserId !== facts.linkedUserId) {
-    return { allow: false, error: 'OidcSessionActive' };
-  }
+  if (isSessionConflict(facts)) return { allow: false, error: 'OidcSessionActive' };
 
   // Returning user, matched by `sub`: the email at the IdP may have changed.
   if (facts.linkedUserId) return { allow: true };
@@ -131,14 +131,6 @@ export function mapOidcProfile(claims: Record<string, unknown>): OidcUserProfile
   };
 }
 
-/** The `email_verified` claim; some IdPs send it as the string "true" or "false". */
-export function readEmailVerified(claims: Record<string, unknown>): boolean | null {
-  const value = claims['email_verified'];
-  if (value === true || value === 'true') return true;
-  if (value === false || value === 'false') return false;
-  return null;
-}
-
 export interface OidcFactsInput {
   providerAccountId: string;
   email: string | null;
@@ -155,40 +147,24 @@ async function describeEmailMatch(db: PrismaClient, email: string): Promise<Oidc
   if (matches.length > 1) return 'ambiguous';
   const [user] = matches;
   if (!user) return null;
-  const oidcAccount = await db.account.findFirst({
-    where: { userId: user.id, provider: OIDC_PROVIDER_ID },
-    select: { id: true },
-  });
-  return { id: user.id, isPlaceholder: user.isPlaceholder, hasOidcAccount: oidcAccount !== null };
-}
-
-async function isPasswordRegistrationOpen(db: PrismaClient, passwordLogin: boolean): Promise<boolean> {
-  if (!passwordLogin) return false;
-  const setting = await db.systemSetting.findUnique({ where: { key: 'registrationMode' }, select: { value: true } });
-  // Same reading as auth.register: anything but closed / invite-only is open.
-  return setting?.value !== 'closed' && setting?.value !== 'invite-only';
+  // Only OIDC and Google sign-ins create Account rows (magic links and
+  // passwords don't), so any row is an external identity linked to the account.
+  const linkedIdentity = await db.account.findFirst({ where: { userId: user.id }, select: { id: true } });
+  return { id: user.id, isPlaceholder: user.isPlaceholder, hasLinkedIdentity: linkedIdentity !== null };
 }
 
 export async function gatherOidcFacts(db: PrismaClient, input: OidcFactsInput): Promise<OidcSignInFacts> {
-  const [account, userByEmail, sessionUser, passwordRegistrationOpen] = await Promise.all([
-    db.account.findUnique({
-      where: {
-        provider_providerAccountId: { provider: OIDC_PROVIDER_ID, providerAccountId: input.providerAccountId },
-      },
-      select: { userId: true },
-    }),
+  const [linkedUserId, userByEmail, sessionUserId, passwordRegistrationOpen] = await Promise.all([
+    findLinkedUserId(db, OIDC_PROVIDER_ID, input.providerAccountId),
     input.email ? describeEmailMatch(db, input.email) : null,
-    // Auth.js ignores a session whose user row is gone, so we do too. Deleted
-    // users that ShareTab keeps as placeholder rows still count as signed in,
-    // which also stops Auth.js linking a new identity to that row.
-    input.sessionUserId ? db.user.findUnique({ where: { id: input.sessionUserId }, select: { id: true } }) : null,
+    findSignedInUserId(db, input.sessionUserId),
     // Only matters when linking could happen.
-    input.allowEmailLinking ? isPasswordRegistrationOpen(db, input.passwordLogin) : false,
+    input.allowEmailLinking && input.passwordLogin ? isRegistrationOpen(db) : false,
   ]);
 
   return {
-    linkedUserId: account?.userId ?? null,
-    sessionUserId: sessionUser?.id ?? null,
+    linkedUserId,
+    sessionUserId,
     email: input.email,
     emailVerified: input.emailVerified,
     userByEmail,
@@ -196,4 +172,17 @@ export async function gatherOidcFacts(db: PrismaClient, input: OidcFactsInput): 
     allowEmailLinking: input.allowEmailLinking,
     passwordRegistrationOpen,
   };
+}
+
+/** The `signIn` callback's answer for an OIDC sign-in: `true`, or where to redirect a denial. */
+export async function checkOidcSignIn(db: PrismaClient, input: OidcFactsInput): Promise<true | string> {
+  const decision = decideOidcSignIn(await gatherOidcFacts(db, input));
+  if (decision.allow) return true;
+
+  logger.warn('auth.oidc_denied', {
+    error: decision.error,
+    ...('reason' in decision ? { reason: decision.reason } : {}),
+    email: input.email,
+  });
+  return `/login?error=${decision.error}`;
 }

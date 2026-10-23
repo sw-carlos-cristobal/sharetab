@@ -13,8 +13,36 @@ describe('parseAuthConfig', () => {
       passwordLogin: true,
       magicLink: false,
       oidc: null,
+      google: null,
       warnings: [],
     });
+  });
+
+  test('Google client id and secret enable Google, trimmed', () => {
+    const config = parseAuthConfig({
+      GOOGLE_CLIENT_ID: ' id.apps.googleusercontent.com ',
+      GOOGLE_CLIENT_SECRET: ' g-secret ',
+    });
+    expect(config.google).toEqual({ clientId: 'id.apps.googleusercontent.com', clientSecret: 'g-secret' });
+    expect(config.warnings).toEqual([]);
+  });
+
+  test.each([
+    [{ GOOGLE_CLIENT_ID: 'id' }, 'GOOGLE_CLIENT_SECRET'],
+    [{ GOOGLE_CLIENT_SECRET: 'g-secret' }, 'GOOGLE_CLIENT_ID'],
+    [{ GOOGLE_CLIENT_ID: 'id', GOOGLE_CLIENT_SECRET: '   ' }, 'GOOGLE_CLIENT_SECRET'],
+  ])('partial Google config %o disables Google and names %s', (env, missing) => {
+    const config = parseAuthConfig(env);
+    expect(config.google).toBeNull();
+    expect(config.warnings).toHaveLength(1);
+    expect(config.warnings[0]).toContain(missing);
+    expect(config.warnings[0]).not.toContain('g-secret');
+  });
+
+  test('blank Google vars leave Google off without a warning', () => {
+    const config = parseAuthConfig({ GOOGLE_CLIENT_ID: '', GOOGLE_CLIENT_SECRET: '  ' });
+    expect(config.google).toBeNull();
+    expect(config.warnings).toEqual([]);
   });
 
   test('issuer, client id and secret enable OIDC with defaults', () => {
@@ -138,14 +166,33 @@ describe('parseAuthConfig', () => {
     expect(config.passwordLogin).toBe(false);
   });
 
-  test('DISABLE_PASSWORD_LOGIN is ignored when only Google is configured (no Google button on the login page)', () => {
+  test('DISABLE_PASSWORD_LOGIN is ignored when only Google is configured (Google never links to an existing account)', () => {
     const config = parseAuthConfig({
       GOOGLE_CLIENT_ID: 'id',
       GOOGLE_CLIENT_SECRET: 'secret',
       DISABLE_PASSWORD_LOGIN: 'true',
     });
+    expect(config.google).not.toBeNull();
     expect(config.passwordLogin).toBe(true);
     expect(config.warnings).toHaveLength(1);
+    expect(config.warnings[0]).toContain('DISABLE_PASSWORD_LOGIN');
+  });
+
+  test('DISABLE_PASSWORD_LOGIN turns password login off with Google and OIDC configured', () => {
+    const config = parseAuthConfig({
+      ...OIDC_ENV,
+      GOOGLE_CLIENT_ID: 'id',
+      GOOGLE_CLIENT_SECRET: 'secret',
+      DISABLE_PASSWORD_LOGIN: 'true',
+    });
+    expect(config.passwordLogin).toBe(false);
+    expect(config.warnings).toEqual([]);
+  });
+
+  test('DISABLE_PASSWORD_LOGIN is ignored when Google is only partially configured', () => {
+    const config = parseAuthConfig({ GOOGLE_CLIENT_ID: 'id', DISABLE_PASSWORD_LOGIN: 'true' });
+    expect(config.passwordLogin).toBe(true);
+    expect(config.warnings).toHaveLength(2);
   });
 
   test('DISABLE_PASSWORD_LOGIN is ignored with a warning when no other sign-in method exists', () => {

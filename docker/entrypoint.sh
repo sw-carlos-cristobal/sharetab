@@ -205,7 +205,7 @@ if [ -n "$EMAIL_SERVER_HOST" ]; then
 else
   echo "  Magic Link:     disabled"
 fi
-if [ -n "$GOOGLE_CLIENT_ID" ]; then
+if [ -n "$GOOGLE_CLIENT_ID" ] && [ -n "$GOOGLE_CLIENT_SECRET" ]; then
   echo "  Google OAuth:   enabled"
 else
   echo "  Google OAuth:   disabled"

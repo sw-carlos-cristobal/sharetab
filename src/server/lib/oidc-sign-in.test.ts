@@ -1,10 +1,14 @@
-import { describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 import type { PrismaClient } from '@/generated/prisma/client';
+
+const { logger } = vi.hoisted(() => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }));
+vi.mock('./logger', () => ({ logger }));
+
 import {
+  checkOidcSignIn,
   decideOidcSignIn,
   gatherOidcFacts,
   mapOidcProfile,
-  readEmailVerified,
   type OidcSignInFacts,
 } from './oidc-sign-in';
 
@@ -19,7 +23,7 @@ const NEW_IDENTITY: OidcSignInFacts = {
   passwordRegistrationOpen: false,
 };
 
-const EXISTING_USER = { id: 'user-1', isPlaceholder: false, hasOidcAccount: false };
+const EXISTING_USER = { id: 'user-1', isPlaceholder: false, hasLinkedIdentity: false };
 
 describe('decideOidcSignIn', () => {
   test('allows an identity that is already linked', () => {
@@ -46,7 +50,7 @@ describe('decideOidcSignIn', () => {
         sessionUserId: null,
         email: null,
         emailVerified: false,
-        userByEmail: { id: 'user-3', isPlaceholder: true, hasOidcAccount: false },
+        userByEmail: { id: 'user-3', isPlaceholder: true, hasLinkedIdentity: false },
         autoRegister: false,
         allowEmailLinking: false,
         passwordRegistrationOpen: true,
@@ -76,7 +80,7 @@ describe('decideOidcSignIn', () => {
     expect(
       decideOidcSignIn({
         ...NEW_IDENTITY,
-        userByEmail: { id: 'placeholder-1', isPlaceholder: true, hasOidcAccount: false },
+        userByEmail: { id: 'placeholder-1', isPlaceholder: true, hasLinkedIdentity: false },
         allowEmailLinking: true,
       }),
     ).toEqual({ allow: false, error: 'OidcAccountNotLinked', reason: 'placeholder' });
@@ -90,11 +94,11 @@ describe('decideOidcSignIn', () => {
     });
   });
 
-  test('never links a second IdP identity to an account that already has one', () => {
+  test('never links a second IdP identity to an account that already has an IdP or Google identity', () => {
     expect(
       decideOidcSignIn({
         ...NEW_IDENTITY,
-        userByEmail: { ...EXISTING_USER, hasOidcAccount: true },
+        userByEmail: { ...EXISTING_USER, hasLinkedIdentity: true },
         allowEmailLinking: true,
       }),
     ).toEqual({ allow: false, error: 'OidcAccountNotLinked', reason: 'already_linked' });
@@ -229,31 +233,13 @@ describe('mapOidcProfile', () => {
   });
 });
 
-describe('readEmailVerified', () => {
-  test('reads a boolean claim', () => {
-    expect(readEmailVerified({ email_verified: true })).toBe(true);
-    expect(readEmailVerified({ email_verified: false })).toBe(false);
-  });
-
-  test('reads the "true" / "false" strings some IdPs send', () => {
-    expect(readEmailVerified({ email_verified: 'true' })).toBe(true);
-    expect(readEmailVerified({ email_verified: 'false' })).toBe(false);
-  });
-
-  test('returns null when the claim is missing or not a boolean', () => {
-    expect(readEmailVerified({})).toBeNull();
-    expect(readEmailVerified({ email_verified: 'yes' })).toBeNull();
-    expect(readEmailVerified({ email_verified: 0 })).toBeNull();
-  });
-});
-
 type MatchRow = { id: string; email: string; isPlaceholder: boolean };
 
 function mockDb(overrides: {
   account?: { userId: string } | null;
   usersByEmail?: MatchRow[];
   sessionUser?: { id: string } | null;
-  oidcAccountOf?: string[];
+  linkedIdentityOf?: string[];
   registrationMode?: string | null;
 }) {
   const rows = overrides.usersByEmail ?? [];
@@ -262,7 +248,7 @@ function mockDb(overrides: {
     account: {
       findUnique: vi.fn().mockResolvedValue(overrides.account ?? null),
       findFirst: vi.fn(async ({ where }: { where: { userId: string } }) =>
-        overrides.oidcAccountOf?.includes(where.userId) ? { id: `acc-${where.userId}` } : null,
+        overrides.linkedIdentityOf?.includes(where.userId) ? { id: `acc-${where.userId}` } : null,
       ),
     },
     user: {
@@ -303,19 +289,20 @@ describe('gatherOidcFacts', () => {
       usersByEmail: [{ id: 'u1', email: 'Alice@example.com', isPlaceholder: false }],
     });
     const facts = await gatherOidcFacts(client, INPUT);
-    expect(facts.userByEmail).toEqual({ id: 'u1', isPlaceholder: false, hasOidcAccount: false });
+    expect(facts.userByEmail).toEqual({ id: 'u1', isPlaceholder: false, hasLinkedIdentity: false });
   });
 
-  test('reports whether the matched user already has an IdP identity linked', async () => {
-    const { client } = mockDb({
+  test('reports whether the matched user already has an IdP or Google identity linked', async () => {
+    const { db, client } = mockDb({
       usersByEmail: [{ id: 'u1', email: 'alice@example.com', isPlaceholder: false }],
-      oidcAccountOf: ['u1'],
+      linkedIdentityOf: ['u1'],
     });
     expect((await gatherOidcFacts(client, INPUT)).userByEmail).toEqual({
       id: 'u1',
       isPlaceholder: false,
-      hasOidcAccount: true,
+      hasLinkedIdentity: true,
     });
+    expect(db.account.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: 'u1' } }));
   });
 
   test('several case variants are ambiguous even when one matches exactly', async () => {
@@ -402,6 +389,46 @@ describe('gatherOidcFacts', () => {
       allowEmailLinking: true,
       email: 'alice@example.com',
       emailVerified: false,
+    });
+  });
+});
+
+describe('checkOidcSignIn', () => {
+  const INPUT = {
+    providerAccountId: 'sub-1',
+    email: 'alice@example.com',
+    emailVerified: null,
+    sessionUserId: null,
+    autoRegister: true,
+    allowEmailLinking: false,
+    passwordLogin: true,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  test('returns true for an allowed sign-in', async () => {
+    expect(await checkOidcSignIn(mockDb({}).client, INPUT)).toBe(true);
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  test('redirects a denial to the login page with its code and logs it', async () => {
+    const { client } = mockDb({ sessionUser: { id: 'u9' } });
+    expect(await checkOidcSignIn(client, { ...INPUT, sessionUserId: 'u9' })).toBe('/login?error=OidcSessionActive');
+    expect(logger.warn).toHaveBeenCalledWith('auth.oidc_denied', {
+      error: 'OidcSessionActive',
+      email: 'alice@example.com',
+    });
+  });
+
+  test("logs why an existing account wasn't linked", async () => {
+    const { client } = mockDb({ usersByEmail: [{ id: 'u1', email: 'alice@example.com', isPlaceholder: false }] });
+    expect(await checkOidcSignIn(client, INPUT)).toBe('/login?error=OidcAccountNotLinked');
+    expect(logger.warn).toHaveBeenCalledWith('auth.oidc_denied', {
+      error: 'OidcAccountNotLinked',
+      reason: 'linking_disabled',
+      email: 'alice@example.com',
     });
   });
 });

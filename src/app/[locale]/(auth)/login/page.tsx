@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
@@ -36,6 +36,30 @@ function OrDivider({ label }: { label: string }) {
   );
 }
 
+/** Google's "G" mark, which its sign-in branding asks buttons to show. */
+function GoogleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        fill="#4285F4"
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+      />
+    </svg>
+  );
+}
+
 function LoginForm() {
   const t = useTranslations('auth.login');
   const locale = useLocale() as Locale;
@@ -48,10 +72,19 @@ function LoginForm() {
   const [magicLinkEmail, setMagicLinkEmail] = useState('');
   const [magicLinkSending, setMagicLinkSending] = useState(false);
   const [showMagicLink, setShowMagicLink] = useState(false);
-  const [oidcRedirecting, setOidcRedirecting] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
   const loginOptions = trpc.auth.getLoginOptions.useQuery();
   // Quick Split needs uploads; hide its link only once we know guests are refused.
   const guestUploadStatus = trpc.guest.getUploadStatus.useQuery();
+  // Back from the provider's page (e.g. Google's account chooser) can restore
+  // this page from the back/forward cache with the buttons still disabled.
+  useEffect(() => {
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) setRedirecting(false);
+    };
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+  }, []);
   const callbackPath = normalizeCallbackPath(searchParams.get('callbackUrl'), locale);
   const callbackHref = stripLocalePrefix(callbackPath);
   const registerHref = `/register?callbackUrl=${encodeURIComponent(callbackPath)}`;
@@ -63,6 +96,7 @@ function LoginForm() {
   const magicLinkEnabled = loginOptions.data?.magicLink ?? false;
   const magicLinkOnly = !passwordLogin && magicLinkEnabled;
   const oidc = loginOptions.data?.oidc ?? null;
+  const google = loginOptions.data?.google ?? false;
 
   // Errors from Auth.js redirects (`/login?error=...`) show until the user
   // triggers a new attempt, which sets its own error state.
@@ -111,15 +145,15 @@ function LoginForm() {
     }
   }
 
-  async function handleOidc() {
+  async function handleProviderSignIn(provider: 'oidc' | 'google') {
     setError('');
-    setOidcRedirecting(true);
+    setRedirecting(true);
     try {
       // Full-page redirect to the identity provider; failures normally come
       // back as `/login?error=...`.
-      await signIn('oidc', { redirectTo: callbackPath });
+      await signIn(provider, { redirectTo: callbackPath });
     } catch {
-      setOidcRedirecting(false);
+      setRedirecting(false);
       setError(t('errors.generic'));
     }
   }
@@ -169,18 +203,39 @@ function LoginForm() {
               </div>
             )}
 
-            {oidc && (
+            {(oidc || google) && (
               <>
-                <Button
-                  data-testid="oidc-sign-in"
-                  variant={passwordLogin || magicLinkOnly ? 'outline' : 'default'}
-                  className="w-full rounded-full h-10 text-sm font-medium"
-                  onClick={handleOidc}
-                  disabled={oidcRedirecting}
-                >
-                  <KeyRound className="mr-2 h-4 w-4" />
-                  {t('sso', { provider: oidc.name })}
-                </Button>
+                <div className="space-y-3">
+                  {oidc && (
+                    <Button
+                      data-testid="oidc-sign-in"
+                      variant={passwordLogin || magicLinkOnly ? 'outline' : 'default'}
+                      className="w-full rounded-full h-10 text-sm font-medium"
+                      onClick={() => handleProviderSignIn('oidc')}
+                      disabled={redirecting}
+                    >
+                      <KeyRound className="mr-2 h-4 w-4" />
+                      {t('sso', { provider: oidc.name })}
+                    </Button>
+                  )}
+                  {google && (
+                    <Button
+                      data-testid="google-sign-in"
+                      // Outlined: the primary color stays with the password
+                      // form, the magic-link form, or the SSO button.
+                      variant="outline"
+                      className="w-full rounded-full h-10 text-sm font-medium"
+                      onClick={() => handleProviderSignIn('google')}
+                      disabled={redirecting}
+                    >
+                      {/* Google's branding puts its colored mark on white, in dark mode too. */}
+                      <span className="mr-2 flex h-5 w-5 items-center justify-center rounded-full bg-white">
+                        <GoogleIcon className="size-3.5" />
+                      </span>
+                      {t('sso', { provider: 'Google' })}
+                    </Button>
+                  )}
+                </div>
                 {(passwordLogin || magicLinkOnly) && <OrDivider label={t('or')} />}
               </>
             )}

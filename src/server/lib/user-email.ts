@@ -3,7 +3,7 @@
  * magic-link emails, while password sign-ups store the casing the user typed,
  * so every lookup that should find "the account for this address" ignores
  * case: the Auth.js adapter, password login, registration's duplicate check,
- * and the OIDC sign-in policy.
+ * and the OIDC and Google sign-in policies.
  */
 
 import type { PrismaClient } from '@/generated/prisma/client';
