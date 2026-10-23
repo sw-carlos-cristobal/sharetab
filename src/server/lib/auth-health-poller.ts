@@ -1,5 +1,5 @@
-import nodemailer from 'nodemailer';
 import { db } from '@/server/db';
+import { createMailTransport, mailFrom, publicBaseUrl } from './mailer';
 import { isProviderConfigured } from '@/server/ai/registry';
 import { checkOpenAICodexHealth } from './openai-codex-login';
 import { getStoredMeridianTokenExpiry, refreshIfNeeded as refreshMeridianToken } from './meridian-login';
@@ -240,18 +240,9 @@ export async function sendAuthExpiryEmail(
     return false;
   }
 
-  const transport = nodemailer.createTransport({
-    host,
-    port: parseInt(process.env.EMAIL_SERVER_PORT ?? '587'),
-    secure: parseInt(process.env.EMAIL_SERVER_PORT ?? '587') === 465,
-    auth: {
-      user: process.env.EMAIL_SERVER_USER,
-      pass: process.env.EMAIL_SERVER_PASSWORD,
-    },
-  });
-
-  const from = process.env.EMAIL_FROM ?? 'ShareTab <noreply@sharetab.local>';
-  const dashboardUrl = `${process.env.NEXTAUTH_URL ?? 'http://localhost:3000'}/admin`;
+  const transport = createMailTransport();
+  const from = mailFrom();
+  const dashboardUrl = `${publicBaseUrl()}/admin`;
   const providerLabel = provider === 'openai-codex' ? 'ChatGPT OAuth (OpenAI Codex)' : 'Claude AI';
 
   const loginSection = loginUrl ? `<p><strong>Login URL:</strong><br/><a href="${loginUrl}">${loginUrl}</a></p>` : '';

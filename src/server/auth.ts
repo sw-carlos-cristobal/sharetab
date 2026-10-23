@@ -5,9 +5,9 @@ import { PrismaAdapter } from '@auth/prisma-adapter';
 import Credentials from 'next-auth/providers/credentials';
 import Google from 'next-auth/providers/google';
 import Nodemailer from 'next-auth/providers/nodemailer';
-import type { SMTPTransportOptions } from 'nodemailer';
 import { db } from './db';
 import { logger } from './lib/logger';
+import { mailFrom, smtpOptions } from './lib/mailer';
 import { parseAuthConfig } from './lib/auth-config';
 import { GOOGLE_PROVIDER_ID, checkGoogleSignIn, googleProviderOptions } from './lib/google-sign-in';
 import { OIDC_PROVIDER_ID, checkOidcSignIn, mapOidcProfile } from './lib/oidc-sign-in';
@@ -50,22 +50,13 @@ if (authConfig.google) {
 }
 
 if (authConfig.magicLink) {
-  // Checked against nodemailer's own type: Auth.js types `server` as `any`
-  // under nodemailer 10, whose transport modules are namespaces that
-  // @auth/core's declarations use as types.
-  const server = {
-    host: process.env.EMAIL_SERVER_HOST,
-    port: parseInt(process.env.EMAIL_SERVER_PORT ?? '587'),
-    secure: parseInt(process.env.EMAIL_SERVER_PORT ?? '587') === 465,
-    auth: {
-      ...(process.env.EMAIL_SERVER_USER !== undefined ? { user: process.env.EMAIL_SERVER_USER } : {}),
-      ...(process.env.EMAIL_SERVER_PASSWORD !== undefined ? { pass: process.env.EMAIL_SERVER_PASSWORD } : {}),
-    },
-  } satisfies SMTPTransportOptions;
   providers.push(
     Nodemailer({
-      server,
-      from: process.env.EMAIL_FROM ?? 'ShareTab <noreply@sharetab.local>',
+      // Checked against nodemailer's own type (smtpOptions): Auth.js types `server` as `any`
+      // under nodemailer 10, whose transport modules are namespaces that @auth/core's
+      // declarations use as types.
+      server: smtpOptions(),
+      from: mailFrom(),
     }),
   );
 }

@@ -3,10 +3,11 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 // The Auth.js wiring in auth.ts: which providers it registers, how its signIn
 // callback hands OIDC and Google sign-ins to their policies (tested in their
 // own files), which sign-ins it logs, and the jwt callback's profile refresh.
-const { nextAuth, authMock, google, logger, checkGoogleSignIn, checkOidcSignIn, db } = vi.hoisted(() => ({
+const { nextAuth, authMock, google, nodemailer, logger, checkGoogleSignIn, checkOidcSignIn, db } = vi.hoisted(() => ({
   nextAuth: vi.fn(),
   authMock: vi.fn(),
   google: vi.fn((options: unknown) => ({ id: 'google', options })),
+  nodemailer: vi.fn((options: unknown) => ({ id: 'nodemailer', options })),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
   checkGoogleSignIn: vi.fn(),
   checkOidcSignIn: vi.fn(),
@@ -16,7 +17,7 @@ vi.mock('next-auth', () => ({ default: nextAuth }));
 vi.mock('@auth/prisma-adapter', () => ({ PrismaAdapter: vi.fn(() => ({})) }));
 vi.mock('next-auth/providers/credentials', () => ({ default: vi.fn(() => ({ id: 'credentials' })) }));
 vi.mock('next-auth/providers/google', () => ({ default: google }));
-vi.mock('next-auth/providers/nodemailer', () => ({ default: vi.fn(() => ({ id: 'nodemailer' })) }));
+vi.mock('next-auth/providers/nodemailer', () => ({ default: nodemailer }));
 vi.mock('bcryptjs', () => ({ default: { compare: vi.fn() } }));
 vi.mock('./db', () => ({ db }));
 vi.mock('./lib/logger', () => ({ logger }));
@@ -322,6 +323,19 @@ describe('signIn event', () => {
     const config = await loadAuth();
     config.events.signIn({ user: { id: 'u1' }, account: { provider: 'credentials' } });
     expect(logger.info).not.toHaveBeenCalled();
+  });
+});
+
+describe('magic link provider', () => {
+  test('sends with the shared SMTP settings and sender', async () => {
+    await loadAuth({
+      EMAIL_SERVER_HOST: 'smtp.example.com',
+      EMAIL_SERVER_PORT: '465',
+      EMAIL_FROM: 'Tabs <t@example.com>',
+    });
+    const { smtpOptions, mailFrom } = await import('./lib/mailer');
+    expect(nodemailer).toHaveBeenCalledWith({ server: smtpOptions(), from: mailFrom() });
+    expect(smtpOptions()).toMatchObject({ host: 'smtp.example.com', port: 465, secure: true });
   });
 });
 

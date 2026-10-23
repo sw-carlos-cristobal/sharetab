@@ -232,6 +232,12 @@ Each push to `main` starts an image build; each build that passes its smoke test
 
 Each push to `main` also gets a GitHub release named `Build YYYY.MM.DD.N-<sha>` listing the changes since the previous build; see [Releases](../../releases). The `stable` git tag normally marks the commit `:stable` was built from ([browse it](../../tree/stable)); after a failed promotion (see [Releases](#releases)) the tag and the image can point at different commits. ShareTab no longer publishes numbered (semver) versions; the last was v0.8.0.
 
+### Email settings (#397)
+
+- An empty `EMAIL_FROM`, `EMAIL_SERVER_USER` or `EMAIL_SERVER_PASSWORD` now counts as unset: an empty `EMAIL_FROM` no longer replaces the default sender, and empty credentials no longer make ShareTab try to log in to the SMTP server.
+- The links in emails ShareTab builds itself (auth-expiry alerts) use the origin of `AUTH_URL`, then `NEXTAUTH_URL`. A value that isn't an http(s) URL stops those emails, logged as `mail.public_url_invalid`.
+- Starting a Meridian login from the admin dashboard returns its login link even when the email about it can't be sent.
+
 ### Google sign-in button (#360)
 
 - With `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` set, the login page now shows a **Sign in with Google** button.

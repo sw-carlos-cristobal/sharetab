@@ -419,6 +419,24 @@ describe('MeridianHealthPoller', () => {
     expect(call.subject).toContain('Claude AI authentication expired');
   });
 
+  test('sendAuthExpiryEmail uses the shared mail settings: credentials only when set, default sender, AUTH_URL first', async () => {
+    process.env.AUTH_URL = 'https://auth-url.example.com';
+    delete process.env.EMAIL_FROM;
+    delete process.env.EMAIL_SERVER_USER;
+    delete process.env.EMAIL_SERVER_PASSWORD;
+    const mockSendMail = vi.fn().mockResolvedValue({});
+    vi.mocked(nodemailer.createTransport).mockReturnValue(mockTransporter(mockSendMail));
+
+    const { sendAuthExpiryEmail } = await import('./auth-health-poller');
+    await sendAuthExpiryEmail('Not logged in. Run: claude login');
+
+    const options = vi.mocked(nodemailer.createTransport).mock.calls.at(-1)![0] as { auth: unknown };
+    expect(options.auth).toStrictEqual({});
+    const call = mockSendMail.mock.calls[0]![0];
+    expect(call.from).toBe('ShareTab <noreply@sharetab.local>');
+    expect(call.text).toContain('https://auth-url.example.com/admin');
+  });
+
   test('sendAuthExpiryEmail skips when email is not configured', async () => {
     delete process.env.EMAIL_SERVER_HOST;
     const mockSendMail = vi.fn();

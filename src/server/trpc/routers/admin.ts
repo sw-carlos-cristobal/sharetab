@@ -8,11 +8,12 @@ import {
   createProviderByName,
 } from '@/server/ai/registry';
 import { type AdminAction, type PrismaClient, Prisma } from '@/generated/prisma/client';
-import nodemailer from 'nodemailer';
+import { createMailTransport, mailFrom } from '@/server/lib/mailer';
 import fs from 'fs';
 import * as fsp from 'fs/promises';
 import path from 'path';
-import { getRecentLogs } from '@/server/lib/logger';
+import { getRecentLogs, logger } from '@/server/lib/logger';
+import { describeMailError } from '@/server/lib/mailer';
 import { deleteGroupWithData } from '@/server/lib/group-delete';
 import { lockGroupMembers } from '@/server/lib/group-balances';
 import {
@@ -832,17 +833,8 @@ export const adminRouter = createTRPCRouter({
       throw new AppError('PRECONDITION_FAILED', 'emailNotConfigured');
     }
 
-    const transport = nodemailer.createTransport({
-      host,
-      port: parseInt(process.env.EMAIL_SERVER_PORT ?? '587'),
-      secure: parseInt(process.env.EMAIL_SERVER_PORT ?? '587') === 465,
-      auth: {
-        user: process.env.EMAIL_SERVER_USER,
-        pass: process.env.EMAIL_SERVER_PASSWORD,
-      },
-    });
-
-    const from = process.env.EMAIL_FROM ?? 'ShareTab <noreply@sharetab.local>';
+    const transport = createMailTransport();
+    const from = mailFrom();
     const to = ctx.user.email!;
 
     try {
@@ -1082,8 +1074,10 @@ export const adminRouter = createTRPCRouter({
     try {
       const url = await startLogin();
 
-      // Send email with login URL
-      await sendAuthExpiryEmail('Re-authentication initiated from admin dashboard', url);
+      // Send email with login URL. Best effort: the login has started, and its URL comes back here
+      await sendAuthExpiryEmail('Re-authentication initiated from admin dashboard', url).catch((error: unknown) => {
+        logger.warn('admin.meridian_login_email_failed', describeMailError(error));
+      });
 
       await logAdminAction(ctx.db, ctx.user.id, 'MERIDIAN_LOGIN_STARTED', null, {
         url,
