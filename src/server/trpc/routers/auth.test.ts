@@ -24,9 +24,13 @@ const passwordReset = {
   emailPasswordResetLink: vi.fn(),
   resetPasswordWithToken: vi.fn(),
 };
-// Tested in their own file
-vi.mock('@/server/lib/password-reset', () => passwordReset);
+// The real passwordTransaction runs on mockDb's $transaction
+vi.mock('@/server/lib/password-reset', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/server/lib/password-reset')>()),
+  ...passwordReset,
+}));
 
+import bcrypt from 'bcryptjs';
 import { logger } from '@/server/lib/logger';
 import { checkRateLimit } from '@/server/lib/rate-limit';
 
@@ -302,6 +306,53 @@ describe('auth.getProfile', () => {
     });
     const api = await caller({ user: { id: 'user-1' } });
     expect((await api.getProfile()).hasPassword).toBe(false);
+  });
+});
+
+describe('auth.changePassword', () => {
+  const tx = { user: { update: vi.fn() }, passwordResetToken: { deleteMany: vi.fn() } };
+  const owner = { id: 'user-1', email: 'Owner@Example.com', locale: 'sv', suspendedAt: null, passwordHash: 'old-hash' };
+
+  beforeEach(() => {
+    mockDb.user.findUnique.mockResolvedValue(owner);
+    vi.mocked(bcrypt.compare).mockResolvedValue(true as never);
+    mockDb.$transaction.mockImplementation(async (fn: (client: typeof tx) => unknown) => fn(tx));
+  });
+
+  test('sets the password and ends the reset link, in one transaction', async () => {
+    const api = await caller({ user: { id: 'user-1' } });
+
+    await api.changePassword({ currentPassword: 'password123', newPassword: 'new-password' });
+
+    expect(bcrypt.compare).toHaveBeenCalledWith('password123', 'old-hash');
+    expect(bcrypt.hash).toHaveBeenCalledWith('new-password', 12);
+    expect(mockDb.$transaction).toHaveBeenCalledTimes(1);
+    expect(tx.user.update).toHaveBeenCalledWith({ where: { id: 'user-1' }, data: { passwordHash: 'hashed' } });
+    // A link sent before the change can't undo it
+    expect(tx.passwordResetToken.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
+    // The user row first, the lock order a reset uses
+    expect(tx.user.update.mock.invocationCallOrder[0]).toBeLessThan(
+      tx.passwordResetToken.deleteMany.mock.invocationCallOrder[0]!,
+    );
+    expect(mockDb.user.update).not.toHaveBeenCalled();
+  });
+
+  test('a full connection pool or a timed-out transaction is reported as busy', async () => {
+    mockDb.$transaction.mockRejectedValue(Object.assign(new Error('Unable to start a transaction'), { code: 'P2028' }));
+    const api = await caller({ user: { id: 'user-1' } });
+    await expect(
+      api.changePassword({ currentPassword: 'password123', newPassword: 'new-password' }),
+    ).rejects.toMatchObject({ code: 'SERVICE_UNAVAILABLE', messageKey: 'serverBusy' });
+  });
+
+  test('refuses a wrong current password, changing nothing', async () => {
+    vi.mocked(bcrypt.compare).mockResolvedValue(false as never);
+    const api = await caller({ user: { id: 'user-1' } });
+    await expect(
+      api.changePassword({ currentPassword: 'wrong-pass', newPassword: 'new-password' }),
+    ).rejects.toMatchObject({ code: 'UNAUTHORIZED', messageKey: 'wrongPassword' });
+    expect(bcrypt.hash).not.toHaveBeenCalled();
+    expect(mockDb.$transaction).not.toHaveBeenCalled();
   });
 });
 

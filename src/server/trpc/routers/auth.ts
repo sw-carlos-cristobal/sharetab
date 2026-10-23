@@ -10,7 +10,7 @@ import { parseAuthConfig } from '../../lib/auth-config';
 import { readRegistrationMode } from '../../lib/registration-mode';
 import { findUsersByEmail } from '../../lib/user-email';
 import { logger } from '../../lib/logger';
-import { emailPasswordResetLink, resetPasswordWithToken } from '../../lib/password-reset';
+import { emailPasswordResetLink, passwordTransaction, resetPasswordWithToken } from '../../lib/password-reset';
 import { loginRateLimitKey, requirePasswordLogin } from '../../lib/password-login';
 import { describeMailError } from '../../lib/mailer';
 import { Prisma } from '@/generated/prisma/client';
@@ -176,9 +176,14 @@ export const authRouter = createTRPCRouter({
       }
 
       const passwordHash = await bcrypt.hash(input.newPassword, 12);
-      await ctx.db.user.update({
-        where: { id: ctx.user.id },
-        data: { passwordHash },
+      await passwordTransaction(ctx.db, async (tx) => {
+        // Writes the user row before the token row, the lock order resetPasswordWithToken uses
+        await tx.user.update({
+          where: { id: ctx.user.id },
+          data: { passwordHash },
+        });
+        // A reset link sent before the change would otherwise still undo it
+        await tx.passwordResetToken.deleteMany({ where: { userId: ctx.user.id } });
       });
 
       return { success: true };
