@@ -236,7 +236,7 @@ Each push to `main` also gets a GitHub release named `Build YYYY.MM.DD.N-<sha>` 
 ### Password reset (#397)
 
 - **Forgot password?** on the login page now opens a page that emails a reset link when email is configured, and otherwise tells people to ask the administrator; the admin dashboard's User Management makes such links (see [Forgotten passwords](#forgotten-passwords)). Set `NEXTAUTH_URL` to your public URL: emailed links are built from it.
-- Setting a new password, with a link or in Settings, ends every session signed in under the old one. Sessions from before the upgrade keep working until that user's password changes. While the database can't be read, sessions count as signed out, so every open tab that loads a page or regains focus then has to sign in again once it's back.
+- Setting a new password, with a link or in Settings, ends every session signed in under the old one. Sessions from before the upgrade keep working until that user's password changes. While the database can't be read, sessions count as signed out: as soon as any tab loads a page or is switched back to, that browser is signed out in every tab and has to sign in again once the database is back.
 - `AUTH_RATE_LIMIT_MAX` now also limits wrong current passwords in Settings, and `DISABLE_PASSWORD_LOGIN` now also turns off password changes there.
 - With email configured, a reset or a password change emails the account a "password changed" notice. An empty `EMAIL_FROM`, `EMAIL_SERVER_USER` or `EMAIL_SERVER_PASSWORD` now counts as unset.
 

@@ -404,7 +404,7 @@ describe('emailPasswordResetLink', () => {
     vi.stubEnv('NEXTAUTH_URL', 'sharetab.lan:3000');
     findUserByEmail.mockResolvedValue(freshUser());
     await expect(emailPasswordResetLink(db, 'bob@example.com', NOW)).rejects.toThrow('http');
-    expect(logger.warn).toHaveBeenCalledWith('mail.public_url_invalid', { baseUrl: 'sharetab.lan:3000' });
+    expect(logger.warn).toHaveBeenCalledWith('mail.public_url_invalid', { scheme: 'sharetab.lan:' });
     expect(mockDb.$transaction).not.toHaveBeenCalled();
     expect(sendMail).not.toHaveBeenCalled();
 

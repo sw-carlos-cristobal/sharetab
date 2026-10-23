@@ -64,8 +64,9 @@ export function publicBaseUrl(): string {
     // Refused below
   }
   if (!url || (url.protocol !== 'http:' && url.protocol !== 'https:')) {
-    // Logged here: the callers' failure logs carry no error message
-    logger.warn('mail.public_url_invalid', { baseUrl: configured });
+    // Logged here: the password emails' failure logs (describeMailError) carry no message. Only
+    // the scheme it was read with: a value without one can carry user:password@
+    logger.warn('mail.public_url_invalid', { scheme: url?.protocol ?? null });
     throw new Error('AUTH_URL or NEXTAUTH_URL is not an http(s) URL');
   }
   // The origin only: Auth.js also takes AUTH_URL with its /api/auth path, and ShareTab's pages

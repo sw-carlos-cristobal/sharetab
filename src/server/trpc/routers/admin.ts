@@ -12,7 +12,8 @@ import { createMailTransport, mailFrom } from '@/server/lib/mailer';
 import fs from 'fs';
 import * as fsp from 'fs/promises';
 import path from 'path';
-import { getRecentLogs } from '@/server/lib/logger';
+import { getRecentLogs, logger } from '@/server/lib/logger';
+import { describeMailError } from '@/server/lib/mailer';
 import { deleteGroupWithData } from '@/server/lib/group-delete';
 import { lockGroupMembers } from '@/server/lib/group-balances';
 import {
@@ -1118,8 +1119,10 @@ export const adminRouter = createTRPCRouter({
     try {
       const url = await startLogin();
 
-      // Send email with login URL
-      await sendAuthExpiryEmail('Re-authentication initiated from admin dashboard', url);
+      // Send email with login URL. Best effort: the login has started, and its URL comes back here
+      await sendAuthExpiryEmail('Re-authentication initiated from admin dashboard', url).catch((error: unknown) => {
+        logger.warn('admin.meridian_login_email_failed', describeMailError(error));
+      });
 
       await logAdminAction(ctx.db, ctx.user.id, 'MERIDIAN_LOGIN_STARTED', null, {
         url,

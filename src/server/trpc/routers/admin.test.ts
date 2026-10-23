@@ -148,24 +148,27 @@ vi.mock('@/server/ai/providers/meridian', () => ({
   startMeridianProxy: mockStartMeridianProxy,
   getMeridianStartError: mockGetMeridianStartError,
 }));
-const { mockCheckMeridianHealth, mockInvalidateMeridianHealthCache } = vi.hoisted(() => ({
+const { mockCheckMeridianHealth, mockInvalidateMeridianHealthCache, mockSendAuthExpiryEmail } = vi.hoisted(() => ({
   mockCheckMeridianHealth: vi.fn(),
   mockInvalidateMeridianHealthCache: vi.fn(),
+  mockSendAuthExpiryEmail: vi.fn(),
 }));
 vi.mock('@/server/lib/auth-health-poller', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/server/lib/auth-health-poller')>()),
   checkMeridianHealth: mockCheckMeridianHealth,
   invalidateMeridianHealthCache: mockInvalidateMeridianHealthCache,
+  sendAuthExpiryEmail: mockSendAuthExpiryEmail,
 }));
 const { issuePasswordResetToken } = vi.hoisted(() => ({ issuePasswordResetToken: vi.fn() }));
 vi.mock('@/server/lib/password-reset', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/server/lib/password-reset')>()),
   issuePasswordResetToken,
 }));
-const { mockSubmitCode } = vi.hoisted(() => ({ mockSubmitCode: vi.fn() }));
+const { mockSubmitCode, mockStartLogin } = vi.hoisted(() => ({ mockSubmitCode: vi.fn(), mockStartLogin: vi.fn() }));
 vi.mock('@/server/lib/meridian-login', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/server/lib/meridian-login')>()),
   submitCode: mockSubmitCode,
+  startLogin: mockStartLogin,
   isLoginInProgress: vi.fn().mockReturnValue(false),
 }));
 
@@ -924,5 +927,29 @@ describe('password reset links (#397)', () => {
       tx.passwordResetToken.deleteMany.mock.invocationCallOrder[0]!,
     );
     expect(mockDb.passwordResetToken.deleteMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('admin.startMeridianLogin', () => {
+  beforeEach(() => {
+    vi.stubEnv('ADMIN_EMAIL', 'admin@example.com');
+    vi.clearAllMocks();
+    mockDb.user.findUnique.mockResolvedValue({ suspendedAt: null });
+    mockStartLogin.mockResolvedValue('https://claude.ai/oauth/authorize?state=s');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test('returns the login URL even when the email about it can’t be sent: the login has started', async () => {
+    // A failing SMTP server, or AUTH_URL/NEXTAUTH_URL that isn't an http(s) URL
+    mockSendAuthExpiryEmail.mockRejectedValue(new Error('AUTH_URL or NEXTAUTH_URL is not an http(s) URL'));
+    const api = await callerAs(adminSession);
+
+    await expect(api.startMeridianLogin()).resolves.toEqual({ url: 'https://claude.ai/oauth/authorize?state=s' });
+    expect(mockDb.adminAuditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ action: 'MERIDIAN_LOGIN_STARTED' }) }),
+    );
   });
 });

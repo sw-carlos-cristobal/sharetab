@@ -166,12 +166,15 @@ test.describe('Password reset', () => {
       await page.evaluate((other) => {
         window.location.hash = `token=${other}`;
       }, otherToken);
+      // Still filled in while the first link's request is out
+      await expect(page.getByLabel('New password', { exact: true })).toHaveValue(NEW_PASSWORD);
       const answered = page.waitForResponse('**/api/trpc/auth.resetPassword**');
       release();
       expect((await answered).ok()).toBe(true);
 
       // The first link did its job, but the page still offers the second one, with nothing filled in
       await expect(page.getByLabel('New password', { exact: true })).toHaveValue('');
+      await expect(page.getByLabel('Confirm new password')).toHaveValue('');
       await expect(page).toHaveURL(new RegExp(`#token=${otherToken}$`));
       await expect(page.getByTestId('reset-password-done')).toHaveCount(0);
       expect(await signsIn(email, NEW_PASSWORD)).toBe(true);

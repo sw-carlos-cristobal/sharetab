@@ -188,10 +188,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           // A sign-in keeps its session: its provider just read the version, and the next check
           // reads it again. Otherwise the version can't be checked, so the session counts as
           // ended (#397) and every caller of auth() refuses it for this request. Only the
-          // session endpoint clears the cookie, and SessionProvider reads it on every page load
-          // and tab focus, so while the database is down each open tab is signed out when it
-          // next loads or regains focus. The OIDC and Google policies still see who is signed
-          // in: sessionCookieUserId reads the cookie itself.
+          // session endpoint clears the cookie, but SessionProvider reads it whenever a page
+          // loads or a tab becomes visible, and tells the browser's other tabs to read it too, so
+          // while the database is down a browser is signed out, in every tab, as soon as any of
+          // its tabs loads or becomes visible. The OIDC and Google policies still see who is
+          // signed in: sessionCookieUserId reads the cookie itself.
           return user?.id ? token : null;
         }
       }

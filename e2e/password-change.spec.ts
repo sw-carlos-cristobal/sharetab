@@ -121,6 +121,28 @@ test.describe('Password Change — Settings Page', () => {
     }
   });
 
+  test('says to sign in again, and stays on the page, when the sign-in providers can’t be loaded (#397)', async ({
+    page,
+  }) => {
+    const email = uniqueEmail('pwproviders');
+    try {
+      await register(page, 'PW Providers User', email, 'testpass123');
+      await page.goto('/en/settings');
+      // Auth.js's signIn would leave the page here, even with redirect: false
+      await page.route('**/api/auth/providers', (route) => route.fulfill({ status: 500, body: '' }));
+      await page.locator('#currentPassword').fill('testpass123');
+      await page.locator('#newPassword').fill('newpass456');
+      await page.locator('#confirmPassword').fill('newpass456');
+      await page.getByRole('button', { name: 'Change password' }).click();
+
+      await expect(page.getByTestId('password-changed')).toBeVisible();
+      await expect(page.getByTestId('password-sign-in-again')).toBeVisible();
+      await expect(page).toHaveURL(/\/en\/settings$/);
+    } finally {
+      await removeTestUser(email);
+    }
+  });
+
   test('an admin impersonating someone changes their password and stays signed in as the admin (#397)', async ({
     page,
     browser,

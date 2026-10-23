@@ -75,14 +75,23 @@ describe('publicBaseUrl', () => {
     expect(publicBaseUrl()).toBe('https://tabs.example.com');
   });
 
-  test('refuses a value that isn’t an http(s) URL, and logs it, since the callers’ failure logs carry no message', () => {
+  test('refuses a value that isn’t an http(s) URL, logging the scheme it was read with', () => {
     // new URL('sharetab.lan:3000').origin is the string "null"
-    for (const value of ['sharetab.lan:3000', 'not a url']) {
+    for (const [value, scheme] of [
+      ['sharetab.lan:3000', 'sharetab.lan:'],
+      ['localhost:3000', 'localhost:'],
+      ['ftp://tabs.example.com', 'ftp:'],
+      ['not a url', null],
+    ] as const) {
       vi.mocked(logger.warn).mockClear();
       vi.stubEnv('AUTH_URL', value);
       expect(() => publicBaseUrl()).toThrow('http');
-      expect(logger.warn).toHaveBeenCalledWith('mail.public_url_invalid', { baseUrl: value });
+      expect(logger.warn).toHaveBeenCalledWith('mail.public_url_invalid', { scheme });
     }
+    // A password before an @ isn't logged
+    vi.stubEnv('AUTH_URL', 'user:secret@tabs.example.com');
+    expect(() => publicBaseUrl()).toThrow('http');
+    expect(JSON.stringify(vi.mocked(logger.warn).mock.calls)).not.toContain('secret');
   });
 
   test('takes AUTH_URL, then NEXTAUTH_URL, without a trailing slash', () => {
