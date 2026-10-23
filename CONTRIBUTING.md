@@ -59,7 +59,7 @@ This creates three demo users you can log in with:
 npm test
 ```
 
-Runs over 1,100 fast Vitest tests (under 10 seconds). Tests sit next to the code they cover (`src/**/*.test.ts`, plus `docker/**/*.test.mjs` for the Docker build scripts): money and split math, balance computation, rate limiting, exchange rates, sign-in, OIDC and Google policy, guest sessions, AI providers, and the admin, auth, balances, expenses, guest, groups, and receipts routers.
+Runs over 1,100 fast Vitest tests (under 10 seconds). Tests sit next to the code they cover (`src/**/*.test.ts`, plus `docker/**/*.test.mjs` for the Docker build scripts and `scripts/**/*.test.ts` for the repo scripts): money and split math, balance computation, rate limiting, exchange rates, sign-in, OIDC and Google policy, guest sessions, AI providers, and the admin, auth, balances, expenses, guest, groups, and receipts routers.
 
 ### E2E tests
 
@@ -103,7 +103,7 @@ TypeScript runs in strict mode with extra checks, including `exactOptionalProper
 ### Translations
 
 ```bash
-npm run lint:i18n   # every locale has exactly the keys English has
+npm run lint:i18n   # every locale has exactly the keys English has, and counts use plurals
 ```
 
 CI runs it too; run it locally whenever you add or change UI text. See [CONTRIBUTING-TRANSLATIONS.md](CONTRIBUTING-TRANSLATIONS.md).

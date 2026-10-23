@@ -172,7 +172,7 @@
     "memberCount": "{count, plural, one {# miembro} other {# miembros}}",
     "expenseCount": "{count, plural, one {# gasto} other {# gastos}}",
     "unarchive": "Desarchivar",
-    "showAll": "Mostrar los {count} grupos"
+    "showAll": "Mostrar {count, plural, one {# grupo} other {los # grupos}}"
   },
   "payments": {
     "title": "Pagos",

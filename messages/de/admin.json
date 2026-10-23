@@ -12,18 +12,18 @@
     "receipts": "Belege",
     "inDatabase": "in der Datenbank",
     "diskUsage": "Speichernutzung",
-    "filesOnDisk": "{count} Dateien auf der Festplatte",
+    "filesOnDisk": "{count, plural, one {# Datei} other {# Dateien}} auf der Festplatte",
     "orphanedFiles": "Verwaiste Dateien",
     "orphanDescription": "Dateien auf der Festplatte, die von keinem Beleg in der Datenbank referenziert werden",
     "cleanUp": "Bereinigen",
-    "cleanedUp": "{count} Dateien bereinigt ({size} freigegeben)",
+    "cleanedUp": "{count, plural, one {# Datei} other {# Dateien}} bereinigt ({size} freigegeben)",
     "unusedReceipts": "Ungenutzte Belege",
     "unusedDescription": "Belege, älter als ein Tag, die keine Gruppe, Ausgabe oder Aufteilung verwendet ({size})",
-    "unusedCleanedUp": "{count} Belege gelöscht"
+    "unusedCleanedUp": "{count, plural, one {# Beleg} other {# Belege}} gelöscht"
   },
   "users": {
     "title": "Benutzerverwaltung",
-    "count": "{count} Benutzer",
+    "count": "{count, plural, one {# Benutzer} other {# Benutzer}}",
     "searchPlaceholder": "Nach Name oder E-Mail suchen...",
     "retry": "Erneut versuchen",
     "noUsers": "Keine Benutzer gefunden.",
@@ -54,9 +54,9 @@
   },
   "groups": {
     "title": "Gruppenübersicht",
-    "count": "{count} Gruppen",
-    "expenses": "{count} Ausgaben",
-    "settlements": "{count} Abrechnungen",
+    "count": "{count, plural, one {# Gruppe} other {# Gruppen}}",
+    "expenses": "{count, plural, one {# Ausgabe} other {# Ausgaben}}",
+    "settlements": "{count, plural, one {# Abrechnung} other {# Abrechnungen}}",
     "searchPlaceholder": "Nach Gruppenname suchen...",
     "filterAll": "Alle",
     "filterActive": "Aktiv",
@@ -184,9 +184,9 @@
     "emailButton": "Test-E-Mail senden",
     "cleanupTitle": "Gast-Aufteilungen bereinigen",
     "cleanupLoading": "Laden...",
-    "cleanupStats": "{expired} abgelaufen von {total} Gast-Aufteilungen insgesamt.",
+    "cleanupStats": "Abgelaufene Gast-Aufteilungen: {expired} von {total}.",
     "cleanupButton": "Abgelaufene löschen",
-    "cleanupSuccess": "{count} abgelaufene Aufteilungen gelöscht",
+    "cleanupSuccess": "{count, plural, one {# abgelaufene Aufteilung} other {# abgelaufene Aufteilungen}} gelöscht",
     "unknownError": "Unbekannter Fehler"
   },
   "authExpiry": {
@@ -204,7 +204,7 @@
   },
   "serverLogs": {
     "title": "Server-Protokolle",
-    "entries": "{count} Einträge",
+    "entries": "{count, plural, one {# Eintrag} other {# Einträge}}",
     "filterPlaceholder": "Protokolle filtern...",
     "scrollToBottom": "Nach unten scrollen",
     "noEntries": "Keine Protokolleinträge gefunden",
@@ -238,7 +238,7 @@
     "actionMeridianLoginFailed": "Meridian-Anmeldung fehlgeschlagen",
     "actionMeridianLogout": "Meridian-Abmeldung",
     "actionNotifyPrefChanged": "Benachrichtigungspräferenz geändert",
-    "filesDeleted": "{count} Dateien",
+    "filesDeleted": "{count, plural, one {# Datei} other {# Dateien}}",
     "actionAIProviderTest": "KI-Anbietertest",
     "actionGuestUploadsChanged": "Gast-Uploads geändert",
     "actionExportCreated": "Datenexport"

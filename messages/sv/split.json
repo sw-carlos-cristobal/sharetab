@@ -142,7 +142,7 @@
     "splitButton": "Dela",
     "cancelButton": "Avbryt",
     "alreadyClaimed": "Redan vald",
-    "claimConflict": "{count} artikel/artiklar också valda av {names}",
+    "claimConflict": "{count, plural, one {# artikel också vald} other {# artiklar också valda}} av {names}",
     "finalizeSplit": "Slutför delning",
     "finalizing": "Slutför...",
     "finalizeTitle": "Slutför denna delning?",

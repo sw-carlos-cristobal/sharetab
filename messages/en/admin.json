@@ -12,18 +12,18 @@
     "receipts": "Receipts",
     "inDatabase": "in database",
     "diskUsage": "Disk Usage",
-    "filesOnDisk": "{count} files on disk",
+    "filesOnDisk": "{count, plural, one {# file} other {# files}} on disk",
     "orphanedFiles": "Orphaned Files",
     "orphanDescription": "files on disk not referenced by any receipt in the database",
     "cleanUp": "Clean up",
-    "cleanedUp": "Cleaned up {count} files ({size} freed)",
+    "cleanedUp": "Cleaned up {count, plural, one {# file} other {# files}} ({size} freed)",
     "unusedReceipts": "Unused Receipts",
     "unusedDescription": "receipts over a day old that no group, expense or split uses ({size})",
-    "unusedCleanedUp": "Deleted {count} receipts"
+    "unusedCleanedUp": "Deleted {count, plural, one {# receipt} other {# receipts}}"
   },
   "users": {
     "title": "User Management",
-    "count": "{count} users",
+    "count": "{count, plural, one {# user} other {# users}}",
     "searchPlaceholder": "Search by name or email...",
     "retry": "Retry",
     "noUsers": "No users found.",
@@ -54,9 +54,9 @@
   },
   "groups": {
     "title": "Group Overview",
-    "count": "{count} groups",
-    "expenses": "{count} expenses",
-    "settlements": "{count} settlements",
+    "count": "{count, plural, one {# group} other {# groups}}",
+    "expenses": "{count, plural, one {# expense} other {# expenses}}",
+    "settlements": "{count, plural, one {# settlement} other {# settlements}}",
     "searchPlaceholder": "Search by group name...",
     "filterAll": "All",
     "filterActive": "Active",
@@ -184,9 +184,9 @@
     "emailButton": "Send Test Email",
     "cleanupTitle": "Guest Split Cleanup",
     "cleanupLoading": "Loading...",
-    "cleanupStats": "{expired} expired of {total} total guest splits.",
+    "cleanupStats": "Expired guest splits: {expired} of {total}.",
     "cleanupButton": "Purge Expired",
-    "cleanupSuccess": "Deleted {count} expired splits",
+    "cleanupSuccess": "Deleted {count, plural, one {# expired split} other {# expired splits}}",
     "unknownError": "Unknown error"
   },
   "authExpiry": {
@@ -204,7 +204,7 @@
   },
   "serverLogs": {
     "title": "Server Logs",
-    "entries": "{count} entries",
+    "entries": "{count, plural, one {# entry} other {# entries}}",
     "filterPlaceholder": "Filter logs...",
     "scrollToBottom": "Scroll to bottom",
     "noEntries": "No log entries found",
@@ -238,7 +238,7 @@
     "actionMeridianLoginFailed": "Meridian Login Failed",
     "actionMeridianLogout": "Meridian Logout",
     "actionNotifyPrefChanged": "Notify Pref Changed",
-    "filesDeleted": "{count} files",
+    "filesDeleted": "{count, plural, one {# file} other {# files}}",
     "actionAIProviderTest": "AI Provider Test",
     "actionGuestUploadsChanged": "Guest Uploads Changed",
     "actionExportCreated": "Data Export"

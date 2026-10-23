@@ -142,7 +142,7 @@
     "splitButton": "Split",
     "cancelButton": "Cancel",
     "alreadyClaimed": "Already claimed",
-    "claimConflict": "{count} item(s) also claimed by {names}",
+    "claimConflict": "{count, plural, one {# item} other {# items}} also claimed by {names}",
     "finalizeSplit": "Finalize Split",
     "finalizing": "Finalizing...",
     "finalizeTitle": "Finalize this split?",

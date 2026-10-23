@@ -12,18 +12,18 @@
     "receipts": "Recibos",
     "inDatabase": "no banco de dados",
     "diskUsage": "Uso de disco",
-    "filesOnDisk": "{count} arquivos no disco",
+    "filesOnDisk": "{count, plural, one {# arquivo} other {# arquivos}} no disco",
     "orphanedFiles": "Arquivos órfãos",
     "orphanDescription": "arquivos no disco não referenciados por nenhum recibo no banco de dados",
     "cleanUp": "Limpar",
-    "cleanedUp": "{count} arquivos limpos ({size} liberados)",
+    "cleanedUp": "{count, plural, one {# arquivo limpo} other {# arquivos limpos}} ({size} liberados)",
     "unusedReceipts": "Recibos não usados",
     "unusedDescription": "recibos com mais de um dia que nenhum grupo, despesa ou divisão usa ({size})",
-    "unusedCleanedUp": "{count} recibos excluídos"
+    "unusedCleanedUp": "{count, plural, one {# recibo excluído} other {# recibos excluídos}}"
   },
   "users": {
     "title": "Gerenciamento de usuários",
-    "count": "{count} usuários",
+    "count": "{count, plural, one {# usuário} other {# usuários}}",
     "searchPlaceholder": "Pesquisar por nome ou e-mail...",
     "retry": "Tentar novamente",
     "noUsers": "Nenhum usuário encontrado.",
@@ -54,9 +54,9 @@
   },
   "groups": {
     "title": "Visão geral dos grupos",
-    "count": "{count} grupos",
-    "expenses": "{count} despesas",
-    "settlements": "{count} acertos",
+    "count": "{count, plural, one {# grupo} other {# grupos}}",
+    "expenses": "{count, plural, one {# despesa} other {# despesas}}",
+    "settlements": "{count, plural, one {# acerto} other {# acertos}}",
     "searchPlaceholder": "Pesquisar por nome do grupo...",
     "filterAll": "Todos",
     "filterActive": "Ativos",
@@ -184,9 +184,9 @@
     "emailButton": "Enviar e-mail de teste",
     "cleanupTitle": "Limpeza de divisões de convidados",
     "cleanupLoading": "Carregando...",
-    "cleanupStats": "{expired} expirados de {total} divisões de convidados no total.",
+    "cleanupStats": "Divisões de convidados expiradas: {expired} de {total}.",
     "cleanupButton": "Purgar expirados",
-    "cleanupSuccess": "{count} divisões expiradas excluídas",
+    "cleanupSuccess": "{count, plural, one {# divisão expirada excluída} other {# divisões expiradas excluídas}}",
     "unknownError": "Erro desconhecido"
   },
   "authExpiry": {
@@ -204,7 +204,7 @@
   },
   "serverLogs": {
     "title": "Logs do servidor",
-    "entries": "{count} entradas",
+    "entries": "{count, plural, one {# entrada} other {# entradas}}",
     "filterPlaceholder": "Filtrar logs...",
     "scrollToBottom": "Ir para o final",
     "noEntries": "Nenhuma entrada de log encontrada",
@@ -238,7 +238,7 @@
     "actionMeridianLoginFailed": "Falha no login Meridian",
     "actionMeridianLogout": "Logout Meridian",
     "actionNotifyPrefChanged": "Preferência de notificação alterada",
-    "filesDeleted": "{count} arquivos",
+    "filesDeleted": "{count, plural, one {# arquivo} other {# arquivos}}",
     "actionAIProviderTest": "Teste de provedor IA",
     "actionGuestUploadsChanged": "Envio de convidados alterado",
     "actionExportCreated": "Exportação de dados"

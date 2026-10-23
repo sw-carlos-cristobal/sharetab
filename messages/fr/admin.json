@@ -12,18 +12,18 @@
     "receipts": "Reçus",
     "inDatabase": "en base de données",
     "diskUsage": "Utilisation du disque",
-    "filesOnDisk": "{count} fichiers sur le disque",
+    "filesOnDisk": "{count, plural, one {# fichier} other {# fichiers}} sur le disque",
     "orphanedFiles": "Fichiers orphelins",
     "orphanDescription": "fichiers sur le disque non référencés par aucun reçu dans la base de données",
     "cleanUp": "Nettoyer",
-    "cleanedUp": "{count} fichiers nettoyés ({size} libérés)",
+    "cleanedUp": "{count, plural, one {# fichier nettoyé} other {# fichiers nettoyés}} ({size} libérés)",
     "unusedReceipts": "Reçus inutilisés",
     "unusedDescription": "reçus de plus d'un jour qu'aucun groupe, dépense ou partage n'utilise ({size})",
-    "unusedCleanedUp": "{count} reçus supprimés"
+    "unusedCleanedUp": "{count, plural, one {# reçu supprimé} other {# reçus supprimés}}"
   },
   "users": {
     "title": "Gestion des utilisateurs",
-    "count": "{count} utilisateurs",
+    "count": "{count, plural, one {# utilisateur} other {# utilisateurs}}",
     "searchPlaceholder": "Rechercher par nom ou e-mail...",
     "retry": "Réessayer",
     "noUsers": "Aucun utilisateur trouvé.",
@@ -54,9 +54,9 @@
   },
   "groups": {
     "title": "Aperçu des groupes",
-    "count": "{count} groupes",
-    "expenses": "{count} dépenses",
-    "settlements": "{count} règlements",
+    "count": "{count, plural, one {# groupe} other {# groupes}}",
+    "expenses": "{count, plural, one {# dépense} other {# dépenses}}",
+    "settlements": "{count, plural, one {# règlement} other {# règlements}}",
     "searchPlaceholder": "Rechercher par nom de groupe...",
     "filterAll": "Tous",
     "filterActive": "Actifs",
@@ -184,9 +184,9 @@
     "emailButton": "Envoyer un e-mail de test",
     "cleanupTitle": "Nettoyage des partages invités",
     "cleanupLoading": "Chargement...",
-    "cleanupStats": "{expired} expirés sur {total} partages invités au total.",
+    "cleanupStats": "Partages invités expirés : {expired} sur {total}.",
     "cleanupButton": "Purger les expirés",
-    "cleanupSuccess": "{count} partages expirés supprimés",
+    "cleanupSuccess": "{count, plural, one {# partage expiré supprimé} other {# partages expirés supprimés}}",
     "unknownError": "Erreur inconnue"
   },
   "authExpiry": {
@@ -204,7 +204,7 @@
   },
   "serverLogs": {
     "title": "Journaux du serveur",
-    "entries": "{count} entrées",
+    "entries": "{count, plural, one {# entrée} other {# entrées}}",
     "filterPlaceholder": "Filtrer les journaux...",
     "scrollToBottom": "Aller en bas",
     "noEntries": "Aucune entrée de journal trouvée",
@@ -238,7 +238,7 @@
     "actionMeridianLoginFailed": "Échec connexion Meridian",
     "actionMeridianLogout": "Déconnexion Meridian",
     "actionNotifyPrefChanged": "Préférence de notification modifiée",
-    "filesDeleted": "{count} fichiers",
+    "filesDeleted": "{count, plural, one {# fichier} other {# fichiers}}",
     "actionAIProviderTest": "Test fournisseur IA",
     "actionGuestUploadsChanged": "Envoi invités modifié",
     "actionExportCreated": "Exportation de données"

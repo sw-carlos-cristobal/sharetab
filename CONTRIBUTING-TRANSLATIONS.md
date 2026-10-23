@@ -56,6 +56,7 @@ Edit the specific namespace file (e.g., `messages/es/groups.json`). Reference `m
 ## Rules
 
 - **Keep ICU placeholders intact.** For example: `{name}`, `{count, plural, one {# member} other {# members}}`. These are variables — translate the surrounding text only.
+- **Put a count before a word only inside a plural.** `{count} items` reads "1 items"; write `{count, plural, one {# item} other {# items}}`, with your language's forms in the branches (keep both branches even when the word doesn't change, as in German `{count, plural, one {# Artikel} other {# Artikel}}`). Japanese, Chinese and Korean have one form, so `{count}件` is fine there.
 - **Don't translate brand names.** "ShareTab" and "GitHub" stay as-is.
 - **Use native script** for the language name in the switcher (e.g., "Français" not "French").
 - **Match the tone** of the English source — ShareTab uses concise, friendly UI text.
@@ -72,4 +73,4 @@ npm run dev:full        # Start the app (keeps running; stop it with Ctrl+C)
 
 ## Validation
 
-Run `npm run lint:i18n` to check that your locale has exactly the same keys as English (no missing or extra keys). CI doesn't run this check, so run it before you open a PR.
+Run `npm run lint:i18n` to check that your locale has exactly the same keys as English (no missing or extra keys), and that no `{count}` is followed by a word outside a plural in a language with plural forms. CI runs it too, so run it before you open a PR.

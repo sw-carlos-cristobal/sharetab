@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync, existsSync, statSync } from 'fs';
 import { join } from 'path';
+import { findUnpluralizedCounts, hasPluralForms } from './lib/plural-check';
 
 const messagesDir = join(process.cwd(), 'messages');
 const sourceLocale = 'en';
@@ -15,6 +16,15 @@ function getKeys(obj: Record<string, unknown>, prefix = ''): string[] {
     }
   }
   return keys;
+}
+
+function getEntries(obj: Record<string, unknown>, prefix = ''): [string, unknown][] {
+  return Object.entries(obj).flatMap(([key, value]): [string, unknown][] => {
+    const fullKey = prefix ? `${prefix}.${key}` : key;
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
+      ? getEntries(value as Record<string, unknown>, fullKey)
+      : [[fullKey, value]];
+  });
 }
 
 function loadNamespace(locale: string, namespace: string): Record<string, unknown> {
@@ -60,6 +70,22 @@ for (const locale of locales) {
     if (!existsSync(filePath)) {
       hasErrors = true;
       console.error(`[${locale}] Missing file: ${namespace}.json`);
+    }
+  }
+}
+
+// #441: "{count} items" reads "1 items"; a plural gives "1 item"
+for (const locale of [sourceLocale, ...locales]) {
+  if (!hasPluralForms(locale)) continue;
+  for (const namespace of namespaces) {
+    for (const [key, value] of getEntries(loadNamespace(locale, namespace))) {
+      if (typeof value !== 'string') continue;
+      for (const name of findUnpluralizedCounts(value)) {
+        hasErrors = true;
+        console.error(
+          `[${locale}/${namespace}] ${key}: {${name}} is followed by a word outside a plural; use {${name}, plural, one {# …} other {# …}}`,
+        );
+      }
     }
   }
 }

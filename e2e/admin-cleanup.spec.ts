@@ -78,7 +78,7 @@ test.describe('Admin — Guest Split Cleanup', () => {
     });
     await expect(toolsSection).toBeVisible({ timeout: 30000 });
     await expect(toolsSection.getByText('Guest Split Cleanup')).toBeVisible({ timeout: 30000 });
-    await expect(toolsSection.getByText('guest splits')).toBeVisible();
+    await expect(toolsSection.getByText(/Expired guest splits: \d+ of \d+/)).toBeVisible();
     await expect(toolsSection.getByRole('button', { name: 'Purge Expired' })).toBeVisible();
   });
 
@@ -97,7 +97,7 @@ test.describe('Admin — Guest Split Cleanup', () => {
     if (!isDisabled) {
       await purgeButton.click();
       // Should show a success message
-      await expect(toolsSection.getByText(/Deleted \d+ expired splits/)).toBeVisible({
+      await expect(toolsSection.getByText(/Deleted \d+ expired splits?/)).toBeVisible({
         timeout: 10000,
       });
     }

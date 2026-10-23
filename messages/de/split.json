@@ -142,7 +142,7 @@
     "splitButton": "Aufteilen",
     "cancelButton": "Abbrechen",
     "alreadyClaimed": "Bereits ausgewählt",
-    "claimConflict": "{count} Artikel auch ausgewählt von {names}",
+    "claimConflict": "{count, plural, one {# Artikel} other {# Artikel}} auch ausgewählt von {names}",
     "finalizeSplit": "Aufteilung abschließen",
     "finalizing": "Wird abgeschlossen...",
     "finalizeTitle": "Aufteilung abschließen?",

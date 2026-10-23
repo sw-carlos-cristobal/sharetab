@@ -119,7 +119,7 @@
     "splitAriaLabel": "Separar {name} em linha separada",
     "perPersonTotals": "Totais por pessoa",
     "creatingExpense": "Criando despesa...",
-    "assignAllItems": "Atribuir todos os itens ({remaining} restantes)",
+    "assignAllItems": "Atribuir todos os itens ({remaining, plural, one {# restante} other {# restantes}})",
     "createExpense": "Criar despesa a partir do recibo",
     "saving": "Salvando...",
     "saveForLater": "Salvar para depois",

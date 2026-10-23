@@ -12,18 +12,18 @@
     "receipts": "Kvitton",
     "inDatabase": "i databasen",
     "diskUsage": "Diskanvändning",
-    "filesOnDisk": "{count} filer på disk",
+    "filesOnDisk": "{count, plural, one {# fil} other {# filer}} på disk",
     "orphanedFiles": "Föräldralösa filer",
     "orphanDescription": "filer på disk som inte refereras av något kvitto i databasen",
     "cleanUp": "Rensa",
-    "cleanedUp": "{count} filer rensade ({size} frigjort)",
+    "cleanedUp": "{count, plural, one {# fil rensad} other {# filer rensade}} ({size} frigjort)",
     "unusedReceipts": "Oanvända kvitton",
     "unusedDescription": "kvitton äldre än en dag som ingen grupp, utgift eller delning använder ({size})",
-    "unusedCleanedUp": "{count} kvitton raderade"
+    "unusedCleanedUp": "{count, plural, one {# kvitto raderat} other {# kvitton raderade}}"
   },
   "users": {
     "title": "Användarhantering",
-    "count": "{count} användare",
+    "count": "{count, plural, one {# användare} other {# användare}}",
     "searchPlaceholder": "Sök på namn eller e-post...",
     "retry": "Försök igen",
     "noUsers": "Inga användare hittades.",
@@ -54,9 +54,9 @@
   },
   "groups": {
     "title": "Gruppöversikt",
-    "count": "{count} grupper",
-    "expenses": "{count} utgifter",
-    "settlements": "{count} avräkningar",
+    "count": "{count, plural, one {# grupp} other {# grupper}}",
+    "expenses": "{count, plural, one {# utgift} other {# utgifter}}",
+    "settlements": "{count, plural, one {# avräkning} other {# avräkningar}}",
     "searchPlaceholder": "Sök på gruppnamn...",
     "filterAll": "Alla",
     "filterActive": "Aktiva",
@@ -184,9 +184,9 @@
     "emailButton": "Skicka testmeddelande",
     "cleanupTitle": "Rensning av gästdelningar",
     "cleanupLoading": "Laddar...",
-    "cleanupStats": "{expired} utgångna av {total} totala gästdelningar.",
+    "cleanupStats": "Utgångna gästdelningar: {expired} av {total}.",
     "cleanupButton": "Rensa utgångna",
-    "cleanupSuccess": "{count} utgångna delningar borttagna",
+    "cleanupSuccess": "{count, plural, one {# utgången delning borttagen} other {# utgångna delningar borttagna}}",
     "unknownError": "Okänt fel"
   },
   "authExpiry": {
@@ -204,7 +204,7 @@
   },
   "serverLogs": {
     "title": "Serverloggar",
-    "entries": "{count} poster",
+    "entries": "{count, plural, one {# post} other {# poster}}",
     "filterPlaceholder": "Filtrera loggar...",
     "scrollToBottom": "Scrolla till botten",
     "noEntries": "Inga loggposter hittades",
@@ -238,7 +238,7 @@
     "actionMeridianLoginFailed": "Meridian-inloggning misslyckades",
     "actionMeridianLogout": "Meridian-utloggning",
     "actionNotifyPrefChanged": "Notifieringsinställning ändrad",
-    "filesDeleted": "{count} filer",
+    "filesDeleted": "{count, plural, one {# fil} other {# filer}}",
     "actionAIProviderTest": "AI-leverantörstest",
     "actionGuestUploadsChanged": "Gästuppladdning ändrad",
     "actionExportCreated": "Dataexport"
