@@ -172,7 +172,7 @@
     "memberCount": "{count, plural, one {# medlem} other {# medlemmar}}",
     "expenseCount": "{count, plural, one {# utgift} other {# utgifter}}",
     "unarchive": "Avarkivera",
-    "showAll": "Visa alla grupper ({count})"
+    "showAll": "Visa alla {count, plural, one {# grupp} other {# grupper}}"
   },
   "payments": {
     "title": "Betalningar",

@@ -35,8 +35,8 @@ exports[`count messages > read as they should for one and for two in de 1`] = `
     "2 Belege gelöscht",
   ],
   "admin.tools.cleanupStats": [
-    "Abgelaufene Gast-Aufteilungen: 1 von 1.",
-    "Abgelaufene Gast-Aufteilungen: 2 von 2.",
+    "Abgelaufene Gast-Aufteilungen: 1 von 4.",
+    "Abgelaufene Gast-Aufteilungen: 2 von 5.",
   ],
   "admin.tools.cleanupSuccess": [
     "1 abgelaufene Aufteilung gelöscht",
@@ -46,13 +46,33 @@ exports[`count messages > read as they should for one and for two in de 1`] = `
     "1 Benutzer",
     "2 Benutzer",
   ],
+  "auth.invite.invited": [
+    "Sie wurden eingeladen, der Gruppe Trip beizutreten (1 Mitglied)",
+    "Sie wurden eingeladen, der Gruppe Trip beizutreten (2 Mitglieder)",
+  ],
+  "auth.invite.invitedBy": [
+    "Ana hat Sie eingeladen, der Gruppe Trip beizutreten (1 Mitglied)",
+    "Ana hat Sie eingeladen, der Gruppe Trip beizutreten (2 Mitglieder)",
+  ],
+  "dashboard.archivedGroups": [
+    "1 archivierte Gruppe",
+    "2 archivierte Gruppen",
+  ],
+  "dashboard.members": [
+    "1 Mitglied",
+    "2 Mitglieder",
+  ],
   "expenses.receipt.assignAllItems": [
     "Alle Artikel zuordnen (1 übrig)",
     "Alle Artikel zuordnen (2 übrig)",
   ],
-  "groups.list.showAll": [
-    "Alle Gruppen anzeigen (1)",
-    "Alle Gruppen anzeigen (2)",
+  "groups.list.expenseCount": [
+    "1 Ausgabe",
+    "2 Ausgaben",
+  ],
+  "groups.list.memberCount": [
+    "1 Mitglied",
+    "2 Mitglieder",
   ],
   "split.assign.assignAllItems": [
     "Alle Artikel zuordnen (1 übrig)",
@@ -108,8 +128,8 @@ exports[`count messages > read as they should for one and for two in en 1`] = `
     "Deleted 2 receipts",
   ],
   "admin.tools.cleanupStats": [
-    "Expired guest splits: 1 of 1.",
-    "Expired guest splits: 2 of 2.",
+    "Expired guest splits: 1 of 4.",
+    "Expired guest splits: 2 of 5.",
   ],
   "admin.tools.cleanupSuccess": [
     "Deleted 1 expired split",
@@ -119,13 +139,33 @@ exports[`count messages > read as they should for one and for two in en 1`] = `
     "1 user",
     "2 users",
   ],
+  "auth.invite.invited": [
+    "You've been invited to join Trip (1 member)",
+    "You've been invited to join Trip (2 members)",
+  ],
+  "auth.invite.invitedBy": [
+    "Ana invited you to join Trip (1 member)",
+    "Ana invited you to join Trip (2 members)",
+  ],
+  "dashboard.archivedGroups": [
+    "1 archived group",
+    "2 archived groups",
+  ],
+  "dashboard.members": [
+    "1 member",
+    "2 members",
+  ],
   "expenses.receipt.assignAllItems": [
     "Assign all items (1 remaining)",
     "Assign all items (2 remaining)",
   ],
-  "groups.list.showAll": [
-    "Show all groups (1)",
-    "Show all groups (2)",
+  "groups.list.expenseCount": [
+    "1 expense",
+    "2 expenses",
+  ],
+  "groups.list.memberCount": [
+    "1 member",
+    "2 members",
   ],
   "split.assign.assignAllItems": [
     "Assign all items (1 left)",
@@ -181,8 +221,8 @@ exports[`count messages > read as they should for one and for two in es 1`] = `
     "2 recibos eliminados",
   ],
   "admin.tools.cleanupStats": [
-    "Divisiones de invitados expiradas: 1 de 1.",
-    "Divisiones de invitados expiradas: 2 de 2.",
+    "Divisiones de invitados expiradas: 1 de 4.",
+    "Divisiones de invitados expiradas: 2 de 5.",
   ],
   "admin.tools.cleanupSuccess": [
     "1 división expirada eliminada",
@@ -192,13 +232,33 @@ exports[`count messages > read as they should for one and for two in es 1`] = `
     "1 usuario",
     "2 usuarios",
   ],
+  "auth.invite.invited": [
+    "Te han invitado a unirte a Trip (1 miembro)",
+    "Te han invitado a unirte a Trip (2 miembros)",
+  ],
+  "auth.invite.invitedBy": [
+    "Ana te ha invitado a unirte a Trip (1 miembro)",
+    "Ana te ha invitado a unirte a Trip (2 miembros)",
+  ],
+  "dashboard.archivedGroups": [
+    "1 grupo archivado",
+    "2 grupos archivados",
+  ],
+  "dashboard.members": [
+    "1 miembro",
+    "2 miembros",
+  ],
   "expenses.receipt.assignAllItems": [
     "Asignar todos los artículos (1 restante)",
     "Asignar todos los artículos (2 restantes)",
   ],
-  "groups.list.showAll": [
-    "Mostrar todos los grupos (1)",
-    "Mostrar todos los grupos (2)",
+  "groups.list.expenseCount": [
+    "1 gasto",
+    "2 gastos",
+  ],
+  "groups.list.memberCount": [
+    "1 miembro",
+    "2 miembros",
   ],
   "split.assign.assignAllItems": [
     "Asignar todos los artículos (1 restante)",
@@ -254,8 +314,8 @@ exports[`count messages > read as they should for one and for two in fr 1`] = `
     "2 reçus supprimés",
   ],
   "admin.tools.cleanupStats": [
-    "Partages invités expirés : 1 sur 1.",
-    "Partages invités expirés : 2 sur 2.",
+    "Partages invités expirés : 1 sur 4.",
+    "Partages invités expirés : 2 sur 5.",
   ],
   "admin.tools.cleanupSuccess": [
     "1 partage expiré supprimé",
@@ -265,13 +325,33 @@ exports[`count messages > read as they should for one and for two in fr 1`] = `
     "1 utilisateur",
     "2 utilisateurs",
   ],
+  "auth.invite.invited": [
+    "Vous avez été invité à rejoindre Trip (1 membre)",
+    "Vous avez été invité à rejoindre Trip (2 membres)",
+  ],
+  "auth.invite.invitedBy": [
+    "Ana vous a invité à rejoindre Trip (1 membre)",
+    "Ana vous a invité à rejoindre Trip (2 membres)",
+  ],
+  "dashboard.archivedGroups": [
+    "1 groupe archivé",
+    "2 groupes archivés",
+  ],
+  "dashboard.members": [
+    "1 membre",
+    "2 membres",
+  ],
   "expenses.receipt.assignAllItems": [
     "Attribuer tous les articles (1 restant)",
     "Attribuer tous les articles (2 restants)",
   ],
-  "groups.list.showAll": [
-    "Afficher tous les groupes (1)",
-    "Afficher tous les groupes (2)",
+  "groups.list.expenseCount": [
+    "1 dépense",
+    "2 dépenses",
+  ],
+  "groups.list.memberCount": [
+    "1 membre",
+    "2 membres",
   ],
   "split.assign.assignAllItems": [
     "Attribuer tous les articles (1 restant)",
@@ -327,8 +407,8 @@ exports[`count messages > read as they should for one and for two in pt-BR 1`] =
     "2 recibos excluídos",
   ],
   "admin.tools.cleanupStats": [
-    "Divisões de convidados expiradas: 1 de 1.",
-    "Divisões de convidados expiradas: 2 de 2.",
+    "Divisões de convidados expiradas: 1 de 4.",
+    "Divisões de convidados expiradas: 2 de 5.",
   ],
   "admin.tools.cleanupSuccess": [
     "1 divisão expirada excluída",
@@ -338,13 +418,33 @@ exports[`count messages > read as they should for one and for two in pt-BR 1`] =
     "1 usuário",
     "2 usuários",
   ],
+  "auth.invite.invited": [
+    "Você foi convidado para participar de Trip (1 membro)",
+    "Você foi convidado para participar de Trip (2 membros)",
+  ],
+  "auth.invite.invitedBy": [
+    "Ana convidou você para participar de Trip (1 membro)",
+    "Ana convidou você para participar de Trip (2 membros)",
+  ],
+  "dashboard.archivedGroups": [
+    "1 grupo arquivado",
+    "2 grupos arquivados",
+  ],
+  "dashboard.members": [
+    "1 membro",
+    "2 membros",
+  ],
   "expenses.receipt.assignAllItems": [
     "Atribuir todos os itens (1 restante)",
     "Atribuir todos os itens (2 restantes)",
   ],
-  "groups.list.showAll": [
-    "Mostrar todos os grupos (1)",
-    "Mostrar todos os grupos (2)",
+  "groups.list.expenseCount": [
+    "1 despesa",
+    "2 despesas",
+  ],
+  "groups.list.memberCount": [
+    "1 membro",
+    "2 membros",
   ],
   "split.assign.assignAllItems": [
     "Atribuir todos os itens (1 restante)",
@@ -400,8 +500,8 @@ exports[`count messages > read as they should for one and for two in sv 1`] = `
     "2 kvitton raderade",
   ],
   "admin.tools.cleanupStats": [
-    "Utgångna gästdelningar: 1 av 1.",
-    "Utgångna gästdelningar: 2 av 2.",
+    "Utgångna gästdelningar: 1 av 4.",
+    "Utgångna gästdelningar: 2 av 5.",
   ],
   "admin.tools.cleanupSuccess": [
     "1 utgången delning borttagen",
@@ -411,13 +511,33 @@ exports[`count messages > read as they should for one and for two in sv 1`] = `
     "1 användare",
     "2 användare",
   ],
+  "auth.invite.invited": [
+    "Du har blivit inbjuden att gå med i Trip (1 medlem)",
+    "Du har blivit inbjuden att gå med i Trip (2 medlemmar)",
+  ],
+  "auth.invite.invitedBy": [
+    "Ana har bjudit in dig att gå med i Trip (1 medlem)",
+    "Ana har bjudit in dig att gå med i Trip (2 medlemmar)",
+  ],
+  "dashboard.archivedGroups": [
+    "1 arkiverad grupp",
+    "2 arkiverade grupper",
+  ],
+  "dashboard.members": [
+    "1 medlem",
+    "2 medlemmar",
+  ],
   "expenses.receipt.assignAllItems": [
     "Tilldela alla artiklar (1 kvar)",
     "Tilldela alla artiklar (2 kvar)",
   ],
-  "groups.list.showAll": [
-    "Visa alla grupper (1)",
-    "Visa alla grupper (2)",
+  "groups.list.expenseCount": [
+    "1 utgift",
+    "2 utgifter",
+  ],
+  "groups.list.memberCount": [
+    "1 medlem",
+    "2 medlemmar",
   ],
   "split.assign.assignAllItems": [
     "Tilldela alla artiklar (1 kvar)",

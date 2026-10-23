@@ -31,7 +31,7 @@ npm test             # Run unit tests (Vitest)
 npm run test:watch   # Unit tests in watch mode
 BASE_URL=http://localhost:3000 npm run test:e2e  # Run Playwright e2e tests (playwright.config.ts falls back to port 3001)
 npm run test:docker  # Build the Docker image and smoke test it (scripts/docker-smoke.sh; DOCKER_HOST=ssh://... for a remote daemon)
-npm run lint:i18n    # Check translations for missing/extra keys, invalid ICU, quoting apostrophes, and counts outside plurals
+npm run lint:i18n    # Check translations for missing/extra keys, invalid ICU, counts outside plurals, and plurals with no `one` form
 npx prisma generate  # Regenerate Prisma client after schema changes
 npx prisma db push   # Push schema without migration (dev only)
 ```
@@ -166,14 +166,14 @@ npx prisma db push   # Push schema without migration (dev only)
 - User locale preference stored in `User.locale` field (Prisma schema)
 - `npm run lint:i18n` checks for missing or extra translation keys, then parses every message in every locale through `scripts/lib/message-check.ts` with `@formatjs/icu-messageformat-parser`, the parser package next-intl's formatter (`intl-messageformat`) is built on (the lint has its own copy, a devDependency, so the two versions can differ). It fails on:
   - a message that isn't valid ICU, which next-intl would show as its key
-  - an apostrophe right before `{`, `}`, `<`, `>` or `#`: ICU starts quoted text there, shown as written (`l'{name}` shows "l{name}"), so write `''` for the apostrophe
   - in a locale with plural forms, a `count` argument (or one named `…Count`) followed by a word outside a plural on that argument (#441): `{count} items` reads "1 items", so write `{count, plural, one {# item} other {# items}}`, keeping both branches where the word doesn't change (German `Artikel`)
-  - in a locale with a `one` form, a plural with neither `one` nor `=1`, which shows 1 in the `other` form
+  - in a locale with a `one` form, a cardinal plural without one, which shows 1 in the `other` form; `=1` doesn't stand in for it, since French and Portuguese use `one` for 0 too
+  - a folder under `messages/` that isn't a language the runtime supports, and a namespace file that isn't a JSON object
 
-  Japanese, Chinese and Korean have one plural form and aren't checked for counts. Counts passed under other names (`remaining`, `expired`, `total`) aren't checked, so add a message that shows one to `COUNT_MESSAGES` in `src/i18n/messages.test.ts`, whose snapshot (`src/i18n/__snapshots__/`) records each count message for 1 and for 2 in every locale with plural forms: after changing one, run `npx vitest run src/i18n -u` and read the singulars in the snapshot diff. CI runs lint:i18n; run it locally after changing any `messages/` file
+  Japanese, Chinese and Korean have one plural form and aren't checked for counts. An apostrophe right before `{`, `}`, `<` or `>` (or `#` inside a plural) starts ICU quoted text, shown as written (`l'{name}` shows "l{name}"), so write `''` for it; the lint only catches that when it leaves the message unparseable. Counts passed under other names (`remaining`, `expired`, `total`) aren't checked either. `COUNT_MESSAGES` in `src/i18n/messages.test.ts` lists every English message with a plural (a test fails on one it lacks, unless `NOT_COUNT_MESSAGES` says why) plus messages that show a count under another name, and its snapshot (`src/i18n/__snapshots__/`) records each for 1 and for 2 in every locale with plural forms: after changing one, run `npx vitest run src/i18n -u` and read the singulars in the snapshot diff. CI runs lint:i18n; run it locally after changing any `messages/` file
 
 - `src/types/next-intl.d.ts` types `t()` keys against the English messages, so `npx tsc --noEmit` fails on a key that isn't in `messages/en/` (lint:i18n alone only compares the other locales with en)
-- To add a new language: add locale to `src/i18n/routing.ts`, create `messages/{locale}/` with all namespace files, add display config to `languageConfig`, and add its `Intl` locale to `moneyLocales` in `src/lib/money.ts` (typed `satisfies Record<Locale, string>`, so `tsc` fails until you do)
+- To add a new language: add locale to `src/i18n/routing.ts`, create `messages/{locale}/` with all namespace files, add display config to `languageConfig`, and add its `Intl` locale to `moneyLocales` in `src/lib/money.ts` (typed `satisfies Record<Locale, string>`, so `tsc` fails until you do). For a language with plural forms, run `npx vitest run src/i18n` and commit its new section of `src/i18n/__snapshots__/messages.test.ts.snap`, after reading its singulars: CI fails on a missing snapshot
 
 ## CI and Releases
 

@@ -82,7 +82,7 @@ describe('findUnpluralizedCounts', () => {
   });
 
   it('throws on a message that is not valid ICU', () => {
-    expect(() => findUnpluralizedCounts('{count, plural, one {# item}')).toThrow('MISSING_OTHER_CLAUSE');
+    expect(() => findUnpluralizedCounts('{count, plural, one {# item}')).toThrow();
   });
 });
 
@@ -114,24 +114,10 @@ describe('messageProblems', () => {
   it('reports a message that does not parse, with where, in every language', () => {
     // The apostrophe before the tag starts quoted text that "d'" ends, so the closing tag has no opening one
     const message = "copiez l'<emphasis>URL de la barre d'adresse</emphasis>";
-    expect(messageProblems('fr', message)).toEqual(["isn't valid ICU: UNMATCHED_CLOSING_TAG at character 45"]);
+    expect(messageProblems('fr', message)).toEqual([expect.stringMatching(/^isn't valid ICU: \w+ at character \d+$/)]);
     expect(messageProblems('ja', '{count, plural, one {# item}')).toEqual([
-      "isn't valid ICU: MISSING_OTHER_CLAUSE at character 29",
+      expect.stringMatching(/^isn't valid ICU: \w+ at character \d+$/),
     ]);
-  });
-
-  it('reports an apostrophe that starts quoted text, in every language', () => {
-    const problem =
-      "an apostrophe before {, }, <, > or # starts text that shows as written; write '' for an apostrophe";
-    // These parse, but show "l{name} a payé" and "l<b>URL</b>"
-    expect(messageProblems('fr', "l'{name} a payé")).toEqual([problem]);
-    expect(messageProblems('fr', "copiez l'<b>URL</b>")).toEqual([problem]);
-    expect(messageProblems('ja', "'{name}'")).toEqual([problem]);
-  });
-
-  it('accepts a doubled apostrophe, and one before other text', () => {
-    expect(messageProblems('fr', "copiez l''<b>URL</b> d'adresse")).toEqual([]);
-    expect(messageProblems('en', "{name}'s groups")).toEqual([]);
   });
 
   it('reports a plural without a form for one, where the language has one', () => {
@@ -140,8 +126,24 @@ describe('messageProblems', () => {
     expect(messageProblems('de', 'Mit {count, plural, other {# Personen}} teilen')).toEqual([problem]);
   });
 
-  it('accepts a plural with =1 instead of one, an ordinal, and a language with one form', () => {
-    expect(messageProblems('en', '{count, plural, =1 {one item} other {# items}}')).toEqual([]);
+  it('wants one rather than =1, which in French and Portuguese leaves 0 in the plural', () => {
+    expect(messageProblems('fr', '{count, plural, =1 {# article} other {# articles}}')).toEqual([
+      "the plural on {count} has no 'one' form, so 1 reads like 2; add one {…}",
+    ]);
+  });
+
+  it('finds a plural without one inside a tag, a select or another plural', () => {
+    const problem = (name: string) => `the plural on {${name}} has no 'one' form, so 1 reads like 2; add one {…}`;
+    expect(messageProblems('en', '<b>{count, plural, other {# items}}</b>')).toEqual([problem('count')]);
+    expect(messageProblems('en', '{kind, select, a {{count, plural, other {# items}}} other {x}}')).toEqual([
+      problem('count'),
+    ]);
+    expect(
+      messageProblems('en', '{n, plural, one {{count, plural, other {# items}}} other {{count, plural, other {#}}}}'),
+    ).toEqual([problem('count'), problem('count')]);
+  });
+
+  it('accepts an ordinal, and a plural in a language with one form', () => {
     expect(messageProblems('en', '{count, selectordinal, other {#th}} place')).toEqual([]);
     expect(messageProblems('ja', '{count, plural, other {#件}}')).toEqual([]);
   });
@@ -170,13 +172,13 @@ describe('findMessageProblems', () => {
   it('labels each problem with its locale, namespace and key', () => {
     const root = writeTree({
       'en/splits.json': JSON.stringify({ items: '{count} items', ok: '{n}', nested: { people: '{count} people' } }),
-      'fr/splits.json': JSON.stringify({ items: "l'{count}" }),
+      'fr/splits.json': JSON.stringify({ items: '{count, plural, other {# articles}}' }),
       'ja/splits.json': JSON.stringify({ items: '{count} 件' }),
     });
     expect(findMessageProblems(root)).toEqual([
       '[en/splits] items: {count} is followed by a word outside a plural; use {count, plural, one {# …} other {# …}}',
       '[en/splits] nested.people: {count} is followed by a word outside a plural; use {count, plural, one {# …} other {# …}}',
-      "[fr/splits] items: an apostrophe before {, }, <, > or # starts text that shows as written; write '' for an apostrophe",
+      "[fr/splits] items: the plural on {count} has no 'one' form, so 1 reads like 2; add one {…}",
     ]);
   });
 
@@ -189,12 +191,20 @@ describe('findMessageProblems', () => {
     expect(findMessageProblems(root)).toEqual([]);
   });
 
-  it('reports a folder that is not a language and a file that is not valid JSON', () => {
-    const root = writeTree({ 'pt_BR/splits.json': '{}', 'en/splits.json': '{ "items": ' });
+  it('reports a folder that is not a language, and a file that is not a JSON object', () => {
+    const root = writeTree({
+      'backup/splits.json': '{}',
+      'pt_BR/splits.json': '{}',
+      'en/splits.json': '{ "items": ',
+      'en/common.json': 'null',
+    });
     const problems = findMessageProblems(root);
-    expect(problems).toHaveLength(2);
-    expect(problems[0]).toMatch(/^\[en\/splits\] isn't valid JSON: /);
-    expect(problems[1]).toBe("[pt_BR] isn't a language tag");
+    expect(problems).toEqual([
+      "[backup] isn't a language this runtime supports",
+      "[en/common] isn't a JSON object",
+      expect.stringMatching(/^\[en\/splits\] isn't valid JSON: /),
+      "[pt_BR] isn't a language this runtime supports",
+    ]);
   });
 
   it("finds none in the app's messages", () => {

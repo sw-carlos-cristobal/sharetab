@@ -59,23 +59,20 @@ function unpluralizedCounts(elements: MessageFormatElement[]): string[] {
 
 /**
  * The count arguments in an ICU message that a word follows outside a plural on that argument,
- * in order. Parses the message with the parser next-intl's formatter uses, so it throws on one
- * that isn't valid ICU.
+ * in order. Parses the message with the parser package next-intl's formatter uses (its own copy,
+ * so the versions can differ), and throws on one that isn't valid ICU.
  */
 export function findUnpluralizedCounts(message: string): string[] {
   return unpluralizedCounts(parse(message));
 }
 
-// The arguments of cardinal plurals with neither `one` nor `=1`, which show 1 in the `other` form
+// The arguments of cardinal plurals with no `one` form, which show 1 in the `other` form. `=1`
+// doesn't stand in for it: French and Portuguese use `one` for 0 too
 function pluralsWithoutOne(elements: MessageFormatElement[]): string[] {
   return withoutTags(elements).flatMap((element) => {
     if (!isPluralElement(element) && !isSelectElement(element)) return [];
     const inside = Object.values(element.options).flatMap((option) => pluralsWithoutOne(option.value));
-    const missing =
-      isPluralElement(element) &&
-      element.pluralType === 'cardinal' &&
-      !('one' in element.options) &&
-      !('=1' in element.options);
+    const missing = isPluralElement(element) && element.pluralType === 'cardinal' && !('one' in element.options);
     return missing ? [element.value, ...inside] : inside;
   });
 }
@@ -89,9 +86,6 @@ export function hasPluralForms(locale: string): boolean {
   return pluralCategories(locale).length > 1;
 }
 
-// In ICU an apostrophe before one of these starts quoted text, shown as written; '' is an apostrophe
-const QUOTING_APOSTROPHE = /(?<!')'(?=[{}<>#])/;
-
 function describeParseError(error: unknown): string {
   if (!(error instanceof Error)) return String(error);
   const offset = (error as { location?: { start?: { offset?: number } } }).location?.start?.offset;
@@ -100,8 +94,8 @@ function describeParseError(error: unknown): string {
 
 /**
  * What lint:i18n reports for one message: that it isn't valid ICU (next-intl would show its key
- * instead); an apostrophe that starts quoted text; and, in a language with plural forms, each count
- * a word follows outside a plural, and each plural with no form for one.
+ * instead), and, in a language with plural forms, each count a word follows outside a plural and
+ * each plural with no form for one.
  */
 export function messageProblems(locale: string, message: string): string[] {
   let elements: MessageFormatElement[];
@@ -111,9 +105,6 @@ export function messageProblems(locale: string, message: string): string[] {
     return [`isn't valid ICU: ${describeParseError(error)}`];
   }
   const problems: string[] = [];
-  if (QUOTING_APOSTROPHE.test(message)) {
-    problems.push("an apostrophe before {, }, <, > or # starts text that shows as written; write '' for an apostrophe");
-  }
   const categories = pluralCategories(locale);
   if (categories.length > 1) {
     for (const name of unpluralizedCounts(elements)) {
@@ -128,10 +119,10 @@ export function messageProblems(locale: string, message: string): string[] {
   return problems;
 }
 
-function isLanguageTag(name: string): boolean {
+// A folder name Intl.PluralRules would fall back to the host's language for, or throw on, isn't one
+function isSupportedLanguage(name: string): boolean {
   try {
-    Intl.getCanonicalLocales(name);
-    return true;
+    return Intl.PluralRules.supportedLocalesOf(name).length > 0;
   } catch {
     return false;
   }
@@ -149,29 +140,34 @@ export function messageEntries(obj: Record<string, unknown>, prefix = ''): [stri
 
 /**
  * `messageProblems` for every message in every locale folder under `messagesDir`, as
- * "[locale/namespace] key: problem", plus folders that aren't language tags and files that aren't JSON.
+ * "[locale/namespace] key: problem", plus folders that aren't a supported language and files that
+ * aren't a JSON object.
  */
 export function findMessageProblems(messagesDir: string): string[] {
   const problems: string[] = [];
   for (const locale of readdirSync(messagesDir).sort()) {
     const localeDir = join(messagesDir, locale);
     if (!statSync(localeDir).isDirectory()) continue;
-    if (!isLanguageTag(locale)) {
-      problems.push(`[${locale}] isn't a language tag`);
+    if (!isSupportedLanguage(locale)) {
+      problems.push(`[${locale}] isn't a language this runtime supports`);
       continue;
     }
     for (const file of readdirSync(localeDir)
       .filter((f) => f.endsWith('.json'))
       .sort()) {
-      const label = `${locale}/${file.replace('.json', '')}`;
-      let messages: Record<string, unknown>;
+      const label = `${locale}/${file.slice(0, -'.json'.length)}`;
+      let messages: unknown;
       try {
-        messages = JSON.parse(readFileSync(join(localeDir, file), 'utf-8')) as Record<string, unknown>;
+        messages = JSON.parse(readFileSync(join(localeDir, file), 'utf-8'));
       } catch (error) {
         problems.push(`[${label}] isn't valid JSON: ${error instanceof Error ? error.message : String(error)}`);
         continue;
       }
-      for (const [key, value] of messageEntries(messages)) {
+      if (typeof messages !== 'object' || messages === null || Array.isArray(messages)) {
+        problems.push(`[${label}] isn't a JSON object`);
+        continue;
+      }
+      for (const [key, value] of messageEntries(messages as Record<string, unknown>)) {
         if (typeof value !== 'string') continue;
         for (const problem of messageProblems(locale, value)) problems.push(`[${label}] ${key}: ${problem}`);
       }
