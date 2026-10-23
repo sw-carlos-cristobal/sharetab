@@ -52,8 +52,11 @@
     "errorLoading": "Kunde inte ladda användare.",
     "searchAriaLabel": "Sök användare",
     "deleteUser": "Ta bort {name}",
+    "resetLinkConfirmTitle": "Skapa en länk för att återställa lösenordet?",
+    "resetLinkConfirmDescription": "En länk där {name} ({email}) kan välja ett nytt lösenord. Den ersätter kontots tidigare länkar för att återställa lösenordet, även en som skickats med e-post, och sparas i granskningsloggen.",
+    "resetLinkConfirm": "Skapa länk",
     "resetLinkTitle": "Länk för att återställa lösenordet",
-    "resetLinkDescription": "Skicka själv den här länken till <strong>{name}</strong>. Den fungerar en gång, till {expires}, och ersätter alla tidigare länkar för att återställa lösenordet.",
+    "resetLinkDescription": "Skicka själv den här länken till <strong>{name}</strong>. Den fungerar en gång, till {expires} om inte en nyare länk ersätter den, och ersätter alla tidigare länkar för att återställa lösenordet.",
     "resetLinkCopy": "Kopiera länk",
     "resetLinkCopied": "Länken har kopierats"
   },

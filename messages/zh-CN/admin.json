@@ -52,8 +52,11 @@
     "errorLoading": "加载用户失败。",
     "searchAriaLabel": "搜索用户",
     "deleteUser": "删除 {name}",
+    "resetLinkConfirmTitle": "创建密码重置链接？",
+    "resetLinkConfirmDescription": "供 {name}（{email}）设置新密码的链接。它会取代其之前的所有重置链接（包括通过邮件发送的链接），并记录在审计日志中。",
+    "resetLinkConfirm": "创建链接",
     "resetLinkTitle": "密码重置链接",
-    "resetLinkDescription": "请您亲自将此链接发送给 <strong>{name}</strong>。它只能使用一次，有效期至 {expires}，并会取代其之前的所有重置链接。",
+    "resetLinkDescription": "请您亲自将此链接发送给 <strong>{name}</strong>。它只能使用一次，有效期至 {expires}（除非被更新的链接取代），并会取代其之前的所有重置链接。",
     "resetLinkCopy": "复制链接",
     "resetLinkCopied": "链接已复制"
   },

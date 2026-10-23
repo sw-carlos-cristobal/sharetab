@@ -52,8 +52,11 @@
     "errorLoading": "Error al cargar usuarios.",
     "searchAriaLabel": "Buscar usuarios",
     "deleteUser": "Eliminar {name}",
+    "resetLinkConfirmTitle": "¿Crear un enlace para restablecer la contraseña?",
+    "resetLinkConfirmDescription": "Un enlace para que {name} ({email}) elija una contraseña nueva. Sustituye cualquier enlace de restablecimiento que tenga, incluido uno enviado por correo, y queda en el registro de auditoría.",
+    "resetLinkConfirm": "Crear enlace",
     "resetLinkTitle": "Enlace para restablecer la contraseña",
-    "resetLinkDescription": "Envía tú mismo este enlace a <strong>{name}</strong>. Funciona una vez, hasta el {expires}, y sustituye cualquier enlace de restablecimiento que tuviera.",
+    "resetLinkDescription": "Envía tú mismo este enlace a <strong>{name}</strong>. Funciona una vez, hasta el {expires} salvo que lo sustituya un enlace más reciente, y sustituye cualquier enlace de restablecimiento que tuviera.",
     "resetLinkCopy": "Copiar enlace",
     "resetLinkCopied": "Enlace copiado"
   },

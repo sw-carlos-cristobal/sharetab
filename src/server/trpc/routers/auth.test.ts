@@ -344,6 +344,7 @@ describe('auth.changePassword', () => {
     await api.changePassword({ currentPassword: 'password123', newPassword: 'new-password' });
 
     expect(bcrypt.compare).toHaveBeenCalledWith('password123', 'old-hash');
+    expect(bcrypt.hash).toHaveBeenCalledWith('new-password', 12);
     expect(mockDb.$transaction).toHaveBeenCalledTimes(1);
     expect(tx.user.updateMany).toHaveBeenCalledWith({
       // Only while the password is still the one just checked
@@ -364,6 +365,16 @@ describe('auth.changePassword', () => {
       api.changePassword({ currentPassword: 'wrong-pass', newPassword: 'new-password' }),
     ).rejects.toMatchObject({ code: 'UNAUTHORIZED', messageKey: 'wrongPassword' });
     expect(bcrypt.hash).not.toHaveBeenCalled();
+    expect(mockDb.$transaction).not.toHaveBeenCalled();
+  });
+
+  test('is refused while password login is off, checking nothing', async () => {
+    stubEnv({ ...OIDC_ENV, DISABLE_PASSWORD_LOGIN: 'true' });
+    const api = await caller({ user: { id: 'user-1' } });
+    await expect(
+      api.changePassword({ currentPassword: 'password123', newPassword: 'new-password' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN', messageKey: 'passwordLoginDisabled' });
+    expect(bcrypt.compare).not.toHaveBeenCalled();
     expect(mockDb.$transaction).not.toHaveBeenCalled();
   });
 
@@ -390,8 +401,51 @@ describe('auth.changePassword', () => {
       ).rejects.toMatchObject({ messageKey: 'wrongPassword' });
     }
     await expect(api.changePassword({ currentPassword: 'guess-6', newPassword: 'new-password' })).rejects.toMatchObject(
-      { code: 'TOO_MANY_REQUESTS' },
+      { code: 'TOO_MANY_REQUESTS', messageKey: 'tooManyRequestsLater' },
     );
+    expect(bcrypt.compare).toHaveBeenCalledTimes(5);
+  });
+
+  test('counts a guess before checking it, so guesses sent at once are limited too', async () => {
+    mockDb.user.findUnique.mockResolvedValue({ ...owner, id: 'burst', email: 'burst@example.com' });
+    // Each check gives way to the others, as bcrypt does while it hashes
+    vi.mocked(bcrypt.compare).mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve(false), 1)) as never,
+    );
+    const api = await caller({ user: { id: 'burst' } });
+
+    const results = await Promise.allSettled(
+      Array.from({ length: 10 }, (_, i) =>
+        api.changePassword({ currentPassword: `guess-${i}`, newPassword: 'new-password' }),
+      ),
+    );
+
+    expect(bcrypt.compare).toHaveBeenCalledTimes(5);
+    const codes = results.map((result) =>
+      result.status === 'rejected' ? (result.reason as { code: string }).code : 'ok',
+    );
+    expect(codes.filter((code) => code === 'UNAUTHORIZED')).toHaveLength(5);
+    expect(codes.filter((code) => code === 'TOO_MANY_REQUESTS')).toHaveLength(5);
+  });
+
+  test('a right password is not counted, and clears the wrong ones before it', async () => {
+    mockDb.user.findUnique.mockResolvedValue({ ...owner, id: 'mistyper', email: 'mistyper@example.com' });
+    const api = await caller({ user: { id: 'mistyper' } });
+    vi.mocked(bcrypt.compare).mockResolvedValue(false as never);
+    for (let i = 0; i < 4; i++) {
+      await api.changePassword({ currentPassword: `typo-${i}`, newPassword: 'new-password' }).catch(() => {});
+    }
+    vi.mocked(bcrypt.compare).mockResolvedValue(true as never);
+    await api.changePassword({ currentPassword: 'password123', newPassword: 'new-password' });
+
+    // The four typos are forgotten: five more wrong guesses are checked before the limit
+    vi.mocked(bcrypt.compare).mockClear();
+    vi.mocked(bcrypt.compare).mockResolvedValue(false as never);
+    for (let i = 0; i < 5; i++) {
+      await expect(
+        api.changePassword({ currentPassword: `again-${i}`, newPassword: 'new-password' }),
+      ).rejects.toMatchObject({ messageKey: 'wrongPassword' });
+    }
     expect(bcrypt.compare).toHaveBeenCalledTimes(5);
   });
 
@@ -414,7 +468,7 @@ describe('auth.changePassword', () => {
 
     await expect(
       api.changePassword({ currentPassword: 'password123', newPassword: 'new-password' }),
-    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    ).rejects.toMatchObject({ code: 'CONFLICT', messageKey: 'passwordChangedElsewhere' });
     expect(tx.passwordResetToken.deleteMany).not.toHaveBeenCalled();
   });
 
@@ -559,6 +613,22 @@ describe('auth.requestPasswordReset', () => {
     });
   });
 
+  test('the per-client request limit lasts an hour', async () => {
+    vi.useFakeTimers();
+    try {
+      const api = await caller(null, new Headers({ 'x-real-ip': '203.0.113.40' }));
+      for (let i = 0; i < 20; i++) await api.requestPasswordReset({ email: `hour-${i}@example.com` });
+      vi.advanceTimersByTime(60 * 60 * 1000);
+      await expect(api.requestPasswordReset({ email: 'hour-20@example.com' })).rejects.toMatchObject({
+        code: 'TOO_MANY_REQUESTS',
+      });
+      vi.advanceTimersByTime(1);
+      expect(await api.requestPasswordReset({ email: 'hour-21@example.com' })).toEqual({ ok: true });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test('without a header naming the client, there is no shared per-client bucket to exhaust', async () => {
     const api = await caller();
     for (let i = 0; i < 25; i++) {
@@ -619,6 +689,48 @@ describe('auth.resetPassword', () => {
     await api.resetPassword({ token: TOKEN, password: 'new-password' });
 
     expect(checkRateLimit(key, 5, 15 * 60 * 1000).allowed).toBe(true);
+  });
+
+  test('also clears wrong current passwords counted in Settings', async () => {
+    for (let i = 0; i < 5; i++) checkRateLimit('password-change:bob', 5, 15 * 60 * 1000);
+    passwordReset.resetPasswordWithToken.mockResolvedValue(resetUser);
+    const api = await caller();
+
+    await api.resetPassword({ token: TOKEN, password: 'new-password' });
+
+    expect(checkRateLimit('password-change:bob', 5, 15 * 60 * 1000).allowed).toBe(true);
+  });
+
+  test('takes a token of 1 to 200 characters', async () => {
+    passwordReset.resetPasswordWithToken.mockResolvedValue(null);
+    const api = await caller();
+    for (const token of ['', 'x'.repeat(201)]) {
+      await expect(api.resetPassword({ token, password: 'new-password' })).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+      });
+    }
+    expect(passwordReset.resetPasswordWithToken).not.toHaveBeenCalled();
+    await api.resetPassword({ token: 'x'.repeat(200), password: 'new-password' }).catch(() => {});
+    expect(passwordReset.resetPasswordWithToken).toHaveBeenCalledWith(mockDb, 'x'.repeat(200), 'new-password');
+  });
+
+  test('the per-client submission limit lasts 15 minutes', async () => {
+    passwordReset.resetPasswordWithToken.mockResolvedValue(null);
+    vi.useFakeTimers();
+    try {
+      const api = await caller(null, new Headers({ 'x-real-ip': '203.0.113.41' }));
+      for (let i = 0; i < 30; i++) await api.resetPassword({ token: TOKEN, password: 'new-password' }).catch(() => {});
+      vi.advanceTimersByTime(15 * 60 * 1000);
+      await expect(api.resetPassword({ token: TOKEN, password: 'new-password' })).rejects.toMatchObject({
+        code: 'TOO_MANY_REQUESTS',
+      });
+      vi.advanceTimersByTime(1);
+      await expect(api.resetPassword({ token: TOKEN, password: 'new-password' })).rejects.toMatchObject({
+        messageKey: 'resetLinkInvalid',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test('emails the account that its password changed when email is configured', async () => {

@@ -46,10 +46,13 @@ import {
 } from '@/server/lib/openai-codex-login';
 
 import { getBuildInfo } from '@/server/lib/build-info';
-import { parseAuthConfig } from '@/server/lib/auth-config';
-import { ADMIN_RESET_LINK_TTL_MS, canResetPassword, issuePasswordResetToken } from '@/server/lib/password-reset';
-import { defaultLocale } from '@/i18n/routing';
-import { isSupportedLocale } from '@/lib/locale-paths';
+import {
+  ADMIN_RESET_LINK_TTL_MS,
+  canResetPassword,
+  issuePasswordResetToken,
+  localeOf,
+} from '@/server/lib/password-reset';
+import { requirePasswordLogin } from '@/server/lib/password-login';
 import { REGISTRATION_MODES, readRegistrationMode } from '@/server/lib/registration-mode';
 import { isGuestUploadsForcedOff, readGuestUploadsSetting, saveGuestUploadsSetting } from '@/server/lib/guest-uploads';
 
@@ -446,9 +449,7 @@ export const adminRouter = createTRPCRouter({
   // page builds the link from its own address, as it does split links. Replaces the user's
   // earlier links, emailed ones included.
   createPasswordResetLink: adminProcedure.input(z.object({ userId: z.string() })).mutation(async ({ ctx, input }) => {
-    if (!parseAuthConfig(process.env).passwordLogin) {
-      throw new AppError('FORBIDDEN', 'passwordLoginDisabled');
-    }
+    requirePasswordLogin();
 
     const user = await ctx.db.user.findUnique({
       where: { id: input.userId },
@@ -457,11 +458,12 @@ export const adminRouter = createTRPCRouter({
     if (!user) {
       throw new AppError('NOT_FOUND', 'userNotFound');
     }
+    // Saves a transaction in the usual case; checked again under the user row's lock
     if (!canResetPassword(user)) {
       throw new AppError('BAD_REQUEST', 'passwordResetNotAllowed');
     }
 
-    // Checked again under the user row's lock: suspended or deleted meanwhile gives no link
+    // Under the user row's lock: suspended or deleted meanwhile gives no link
     const issued = await issuePasswordResetToken(ctx.db, user.id, ADMIN_RESET_LINK_TTL_MS);
     if (!issued) {
       throw new AppError('BAD_REQUEST', 'passwordResetNotAllowed');
@@ -470,7 +472,7 @@ export const adminRouter = createTRPCRouter({
 
     return {
       token: issued.token,
-      locale: isSupportedLocale(user.locale) ? user.locale : defaultLocale,
+      locale: localeOf(user),
       expiresAt: issued.expiresAt,
     };
   }),

@@ -18,6 +18,7 @@
   "emailTaken": "No se pudo crear la cuenta. Prueba con otro correo electrónico o inicia sesión.",
   "noPasswordToChange": "La cuenta usa OAuth o un enlace mágico: no hay contraseña que cambiar",
   "wrongPassword": "La contraseña actual es incorrecta",
+  "passwordChangedElsewhere": "Tu contraseña acaba de cambiarse por otra vía, por ejemplo con un enlace de restablecimiento. Inicia sesión con la contraseña nueva.",
   "passwordLoginDisabled": "El inicio de sesión con contraseña está desactivado en este servidor.",
   "passwordResetUnavailable": "Este servidor no puede enviar correos, así que no puede enviarte un enlace para restablecer la contraseña. Pídeselo a tu administrador de ShareTab.",
   "passwordResetRateLimited": "Demasiadas solicitudes para restablecer la contraseña. Inténtalo de nuevo más tarde.",

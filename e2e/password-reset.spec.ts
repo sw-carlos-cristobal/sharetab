@@ -1,4 +1,4 @@
-import { test, expect, type Browser, type Page } from '@playwright/test';
+import { test, expect, request, type Browser, type Page } from '@playwright/test';
 import {
   users,
   login,
@@ -8,9 +8,9 @@ import {
   trpcQuery,
   trpcResult,
   trpcError,
-  deleteTestUser,
+  removeTestUser,
 } from './helpers';
-import { outbox, mailTo, readResetLink, passwordChangedEmails } from './mock-smtp-outbox';
+import { outbox, mailTo, readResetLink, expectOnePasswordChangedEmail } from './mock-smtp-outbox';
 
 // #397: a forgotten password can be reset, by an emailed link (with SMTP) or a link an admin makes
 const hasEmailConfig = !!process.env.EMAIL_SERVER_HOST;
@@ -19,20 +19,13 @@ const BASE = process.env.BASE_URL || 'http://localhost:3001';
 const OLD_PASSWORD = 'password123';
 const NEW_PASSWORD = 'reset-pass-456';
 
-async function registerUser(email: string) {
+/** Registers a user with OLD_PASSWORD and returns their id. */
+async function registerUser(email: string): Promise<string> {
   const admin = await authedContext(users.alice.email, users.alice.password);
   try {
     const res = await trpcMutation(admin, 'auth.register', { name: 'Reset Test', email, password: OLD_PASSWORD });
     expect(res.ok()).toBe(true);
-  } finally {
-    await admin.dispose();
-  }
-}
-
-async function removeUser(email: string) {
-  const admin = await authedContext(users.alice.email, users.alice.password);
-  try {
-    await deleteTestUser(admin, email);
+    return (await res.json()).result.data.json.id;
   } finally {
     await admin.dispose();
   }
@@ -62,6 +55,8 @@ async function setPasswordWithLink(browser: Browser, link: string, password: str
     await page.getByLabel('Confirm new password').fill(password);
     await page.getByRole('button', { name: 'Set password' }).click();
     await expect(page.getByTestId('reset-password-done')).toBeVisible();
+    // The used token leaves the address bar
+    await expect(page).toHaveURL(/\/reset-password#done$/);
 
     // The link works once. A new page: going to the same URL again would only change the fragment
     const again = await context.newPage();
@@ -149,7 +144,7 @@ test.describe('Password reset', () => {
 
   test('a request for an unknown address looks the same as for a known one', async ({ page }) => {
     // CI runs a mock SMTP server: a missing setting there must fail, not skip
-    if (process.env.CI) expect(hasEmailConfig, 'EMAIL_SERVER_HOST').toBe(true);
+    if (process.env.CI) expect(hasEmailConfig && !!outbox, 'EMAIL_SERVER_HOST and MOCK_SMTP_OUTBOX').toBe(true);
     test.skip(!hasEmailConfig, 'Email server not configured — set EMAIL_SERVER_HOST to enable');
     const knownEmail = uniqueEmail('pwknown');
     const unknownEmail = uniqueEmail('nobody');
@@ -171,13 +166,28 @@ test.describe('Password reset', () => {
       await expect(known).toBeVisible();
       expect((await known.innerText()).replace(knownEmail, '<email>')).toBe(unknownText);
 
-      // Only the known address got mail
+      // The server's answers themselves are the same, not just the page built from them
+      const anonymous = await request.newContext({ baseURL: BASE });
+      try {
+        const answers = [];
+        for (const email of [uniqueEmail('nobody'), knownEmail]) {
+          const res = await trpcMutation(anonymous, 'auth.requestPasswordReset', { email });
+          answers.push({ status: res.status(), body: await res.json() });
+        }
+        expect(answers[0]).toEqual({ status: 200, body: { result: { data: { json: { ok: true } } } } });
+        expect(answers[1]).toEqual(answers[0]);
+      } finally {
+        await anonymous.dispose();
+      }
+
+      // Only the known address got mail, and the unknown one still has none a moment later
       if (outbox) {
         await expect.poll(() => readResetLink(knownEmail), { timeout: 15000 }).not.toBeNull();
+        await new Promise((resolve) => setTimeout(resolve, 1000));
         expect(mailTo(unknownEmail)).toHaveLength(0);
       }
     } finally {
-      await removeUser(knownEmail);
+      await removeTestUser(knownEmail);
     }
   });
 
@@ -200,19 +210,22 @@ test.describe('Password reset', () => {
       expect(await signsIn(email, NEW_PASSWORD)).toBe(true);
       expect(await signsIn(email, OLD_PASSWORD)).toBe(false);
       // And the account is told its password changed
-      await expect.poll(() => passwordChangedEmails(email), { timeout: 15000 }).toBe(1);
+      await expectOnePasswordChangedEmail(email);
     } finally {
-      await removeUser(email);
+      await removeTestUser(email);
     }
   });
 
   test('an admin makes a reset link for a locked-out user, who sets a password with it', async ({ page, browser }) => {
     const email = uniqueEmail('pwadmin');
     await registerUser(email);
-    // A session signed in before the reset, e.g. someone else's: the reset ends it
+    // Sessions signed in before the reset, e.g. someone else's: the reset ends them
     const earlierSession = await authedContext(email, OLD_PASSWORD);
+    const earlierBrowser = await browser.newContext({ baseURL: BASE });
     try {
       expect((await trpcResult(await trpcQuery(earlierSession, 'auth.getProfile')))?.email).toBe(email);
+      const earlierPage = await earlierBrowser.newPage();
+      await login(earlierPage, email, OLD_PASSWORD);
 
       await login(page, users.alice.email, users.alice.password);
       await page.goto('/en/admin');
@@ -221,6 +234,10 @@ test.describe('Password reset', () => {
       await userSection.getByPlaceholder('Search by name or email...').fill(email);
       const row = userSection.locator('tr', { hasText: email }).first();
       await row.getByRole('button', { name: /^Create a password reset link for / }).click();
+      // Asked first, naming the account: the link replaces any they have
+      const confirm = page.getByRole('alertdialog');
+      await expect(confirm).toContainText(email);
+      await confirm.getByRole('button', { name: 'Make link' }).click();
 
       const dialog = page.getByRole('dialog', { name: 'Password reset link' });
       await expect(dialog).toBeVisible();
@@ -234,10 +251,11 @@ test.describe('Password reset', () => {
       // Ended: refused as signed out, not some other failure
       const ended = await trpcQuery(earlierSession, 'auth.getProfile');
       expect((await trpcError(ended))?.data?.code).toBe('UNAUTHORIZED');
+      // The browser signed in before is sent to the sign-in page
+      await earlierPage.goto('/en/dashboard');
+      await expect(earlierPage).toHaveURL(/\/en\/login/);
       // With email configured, the account is told its password changed
-      if (hasEmailConfig && outbox) {
-        await expect.poll(() => passwordChangedEmails(email), { timeout: 15000 }).toBe(1);
-      }
+      await expectOnePasswordChangedEmail(email);
 
       // Recorded in the audit log, with the user it was for
       const admin = await authedContext(users.alice.email, users.alice.password);
@@ -255,7 +273,41 @@ test.describe('Password reset', () => {
       }
     } finally {
       await earlierSession.dispose();
-      await removeUser(email);
+      await earlierBrowser.close();
+      await removeTestUser(email);
+    }
+  });
+
+  test('a link sent many times at once works once', async () => {
+    const email = uniqueEmail('pwrace');
+    const userId = await registerUser(email);
+    const admin = await authedContext(users.alice.email, users.alice.password);
+    const clients = await Promise.all(Array.from({ length: 8 }, () => request.newContext({ baseURL: BASE })));
+    try {
+      const made = await trpcMutation(admin, 'admin.createPasswordResetLink', { userId });
+      expect(made.ok()).toBe(true);
+      const { token } = (await made.json()).result.data.json;
+
+      const answers = await Promise.all(
+        clients.map((client, i) =>
+          trpcMutation(client, 'auth.resetPassword', { token, password: `race-pass-${i}` }).then(async (res) => ({
+            ok: res.ok(),
+            body: await res.json(),
+          })),
+        ),
+      );
+
+      const winners = answers.flatMap((answer, i) => (answer.ok ? [i] : []));
+      expect(winners).toHaveLength(1);
+      for (const answer of answers.filter((a) => !a.ok)) {
+        expect(answer.body.error.json.data.messageKey).toBe('resetLinkInvalid');
+      }
+      // The one that got through set its password
+      expect(await signsIn(email, `race-pass-${winners[0]}`)).toBe(true);
+    } finally {
+      for (const client of clients) await client.dispose();
+      await admin.dispose();
+      await removeTestUser(email);
     }
   });
 });

@@ -57,7 +57,7 @@ export function hashResetToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
-function localeOf(user: { locale: string }): Locale {
+export function localeOf(user: { locale: string }): Locale {
   return isSupportedLocale(user.locale) ? user.locale : defaultLocale;
 }
 
@@ -174,23 +174,26 @@ export async function emailPasswordResetLink(db: PrismaClient, email: string, no
     return;
   }
 
-  const issued = await issuePasswordResetToken(db, user.id, RESET_LINK_TTL_MS, now);
+  // The budget counts links made, each replacing the user's last one, not emails delivered: a
+  // send that fails still counts, so a refusing SMTP server doesn't let anyone replace a user's
+  // link (an admin-made one, say) without limit. No link made, no count
+  let issued;
+  try {
+    issued = await issuePasswordResetToken(db, user.id, RESET_LINK_TTL_MS, now);
+  } catch (error) {
+    refundRateLimit(budgetKey);
+    throw error;
+  }
   if (!issued) {
     refundRateLimit(budgetKey);
     return;
   }
   const locale = localeOf(user);
-  try {
-    await createMailTransport().sendMail({
-      from: mailFrom(),
-      to: user.email,
-      ...passwordResetEmail(locale, { email: user.email, url: `${baseUrl}${resetPasswordPath(locale, issued.token)}` }),
-    });
-  } catch (error) {
-    // Nothing reached the user, so it doesn't count against their emails
-    refundRateLimit(budgetKey);
-    throw error;
-  }
+  await createMailTransport().sendMail({
+    from: mailFrom(),
+    to: user.email,
+    ...passwordResetEmail(locale, { email: user.email, url: `${baseUrl}${resetPasswordPath(locale, issued.token)}` }),
+  });
   logger.info('auth.password_reset_sent', { userId: user.id });
 }
 

@@ -47,6 +47,8 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+// ─── PASSWORD RESET (app managed) ──────────────────────────
+
 // A password reset link (#397), emailed by "Forgot password?" or made by an admin. Only a
 // SHA-256 hash of the link's token is stored. One row per user: issuing a link replaces the
 // earlier one, and using it, changing the password, suspending or deleting the user deletes it

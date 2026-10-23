@@ -52,8 +52,11 @@
     "errorLoading": "ユーザーの読み込みに失敗しました。",
     "searchAriaLabel": "ユーザーを検索",
     "deleteUser": "{name}を削除",
+    "resetLinkConfirmTitle": "パスワード再設定リンクを作成しますか？",
+    "resetLinkConfirmDescription": "{name}（{email}）さんが新しいパスワードを設定するためのリンクです。メールで送られたものを含め、以前の再設定リンクは無効になり、監査ログに記録されます。",
+    "resetLinkConfirm": "リンクを作成",
     "resetLinkTitle": "パスワード再設定リンク",
-    "resetLinkDescription": "このリンクを <strong>{name}</strong> さんに直接送ってください。1回だけ使用でき、{expires} まで有効です。以前の再設定リンクは無効になります。",
+    "resetLinkDescription": "このリンクを <strong>{name}</strong> さんに直接送ってください。1回だけ使用でき、より新しいリンクに置き換えられない限り {expires} まで有効です。以前の再設定リンクは無効になります。",
     "resetLinkCopy": "リンクをコピー",
     "resetLinkCopied": "リンクをコピーしました"
   },

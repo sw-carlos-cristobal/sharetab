@@ -52,8 +52,11 @@
     "errorLoading": "Falha ao carregar usuários.",
     "searchAriaLabel": "Pesquisar usuários",
     "deleteUser": "Excluir {name}",
+    "resetLinkConfirmTitle": "Criar um link de redefinição de senha?",
+    "resetLinkConfirmDescription": "Um link para {name} ({email}) escolher uma nova senha. Ele substitui qualquer link de redefinição anterior, inclusive um enviado por e-mail, e fica registrado no log de auditoria.",
+    "resetLinkConfirm": "Criar link",
     "resetLinkTitle": "Link de redefinição de senha",
-    "resetLinkDescription": "Envie você mesmo este link para <strong>{name}</strong>. Ele funciona uma vez, até {expires}, e substitui qualquer link de redefinição anterior.",
+    "resetLinkDescription": "Envie você mesmo este link para <strong>{name}</strong>. Ele funciona uma vez, até {expires}, a menos que um link mais recente o substitua, e substitui qualquer link de redefinição anterior.",
     "resetLinkCopy": "Copiar link",
     "resetLinkCopied": "Link copiado"
   },

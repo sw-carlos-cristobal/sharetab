@@ -52,8 +52,11 @@
     "errorLoading": "사용자를 불러오지 못했습니다.",
     "searchAriaLabel": "사용자 검색",
     "deleteUser": "{name} 삭제",
+    "resetLinkConfirmTitle": "비밀번호 재설정 링크를 만들까요?",
+    "resetLinkConfirmDescription": "{name}({email})님이 새 비밀번호를 설정할 수 있는 링크입니다. 이메일로 보낸 링크를 포함해 이전 재설정 링크는 모두 무효가 되며, 감사 로그에 기록됩니다.",
+    "resetLinkConfirm": "링크 만들기",
     "resetLinkTitle": "비밀번호 재설정 링크",
-    "resetLinkDescription": "이 링크를 <strong>{name}</strong>님에게 직접 보내세요. 한 번만 사용할 수 있고 {expires}까지 유효하며, 이전 재설정 링크는 모두 무효가 됩니다.",
+    "resetLinkDescription": "이 링크를 <strong>{name}</strong>님에게 직접 보내세요. 한 번만 사용할 수 있고, 더 새로운 링크로 대체되지 않는 한 {expires}까지 유효하며, 이전 재설정 링크는 모두 무효가 됩니다.",
     "resetLinkCopy": "링크 복사",
     "resetLinkCopied": "링크를 복사했습니다"
   },

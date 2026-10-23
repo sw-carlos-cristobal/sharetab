@@ -18,6 +18,7 @@
   "emailTaken": "无法创建账户。请换一个邮箱，或直接登录。",
   "noPasswordToChange": "此账户使用 OAuth 或邮件链接登录，没有可更改的密码",
   "wrongPassword": "当前密码不正确",
+  "passwordChangedElsewhere": "您的密码刚刚通过其他方式（例如重置链接）被更改。请使用新密码登录。",
   "passwordLoginDisabled": "此服务器已关闭密码登录。",
   "passwordResetUnavailable": "此服务器无法发送邮件，因此无法通过邮件向您发送重置链接。请向您的 ShareTab 管理员索取。",
   "passwordResetRateLimited": "密码重置请求过多，请过段时间再试。",

@@ -20,7 +20,7 @@ describe('smtpOptions', () => {
     vi.stubEnv('EMAIL_SERVER_USER', undefined);
     vi.stubEnv('EMAIL_SERVER_PASSWORD', undefined);
     expect(smtpOptions().auth).toStrictEqual({});
-    // Any key makes nodemailer log in, which an unauthenticated relay refuses
+    // With either key nodemailer logs in when the server offers AUTH, and empty ones fail with EAUTH
     vi.stubEnv('EMAIL_SERVER_USER', '');
     vi.stubEnv('EMAIL_SERVER_PASSWORD', '');
     expect(smtpOptions().auth).toStrictEqual({});

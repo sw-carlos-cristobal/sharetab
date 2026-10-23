@@ -14,7 +14,8 @@ export function smtpOptions() {
     host: process.env.EMAIL_SERVER_HOST,
     port,
     secure: port === 465,
-    // Empty counts as unset (docker-compose passes them empty): any key makes nodemailer log in
+    // Empty counts as unset (docker-compose passes them empty): with either key, nodemailer logs in
+    // whenever the server offers AUTH, and fails empty credentials as EAUTH "Missing credentials"
     auth: {
       ...(process.env.EMAIL_SERVER_USER ? { user: process.env.EMAIL_SERVER_USER } : {}),
       ...(process.env.EMAIL_SERVER_PASSWORD ? { pass: process.env.EMAIL_SERVER_PASSWORD } : {}),

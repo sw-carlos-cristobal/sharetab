@@ -174,7 +174,7 @@ describe('resetPasswordWithToken', () => {
     const update = tx.user.update.mock.calls[0]![0] as { where: unknown; data: { passwordChangedAt: Date } };
     // The user the lock returned, which is the one the token belongs to
     expect(update.where).toEqual({ id: 'token-owner' });
-    expect(update.data).toMatchObject({ passwordHash: 'new-hash' });
+    expect(update.data).toEqual({ passwordHash: 'new-hash', passwordChangedAt: expect.any(Date) });
     expect(mockDb.$transaction).toHaveBeenCalledWith(expect.any(Function), { maxWait: 5_000, timeout: 15_000 });
     expectNothingOutsideTransaction();
   });
@@ -316,22 +316,41 @@ describe('emailPasswordResetLink', () => {
     expect(sendMail).toHaveBeenCalledTimes(RESET_EMAILS_PER_ACCOUNT + 1);
   });
 
-  test('a failed send gives the email back to the budget', async () => {
-    const user = freshUser();
-    findUserByEmail.mockResolvedValue(user);
+  /** How many reset emails the account can still be sent this hour */
+  async function emailsLeft(email = 'bob@example.com') {
+    sendMail.mockClear();
+    for (let i = 0; i < RESET_EMAILS_PER_ACCOUNT + 1; i++) await emailPasswordResetLink(db, email, NOW);
+    return sendMail.mock.calls.length;
+  }
+
+  test('a failed send still counts: the link it carried replaced the one the user had', async () => {
+    findUserByEmail.mockResolvedValue(freshUser());
     sendMail.mockRejectedValueOnce(new Error('smtp down'));
     await expect(emailPasswordResetLink(db, 'bob@example.com', NOW)).rejects.toThrow('smtp down');
+    expect(tx.passwordResetToken.upsert).toHaveBeenCalledTimes(1);
 
-    for (let i = 0; i < RESET_EMAILS_PER_ACCOUNT; i++) await emailPasswordResetLink(db, 'bob@example.com', NOW);
-    expect(sendMail).toHaveBeenCalledTimes(RESET_EMAILS_PER_ACCOUNT + 1);
+    expect(await emailsLeft()).toBe(RESET_EMAILS_PER_ACCOUNT - 1);
   });
 
-  test('a public URL that can’t be parsed fails before the old link is replaced', async () => {
+  test('no link made, because the user was suspended meanwhile or the database failed, doesn’t count', async () => {
+    findUserByEmail.mockResolvedValue(freshUser());
+    tx.$queryRaw.mockResolvedValueOnce([{ ...lockedUser, suspendedAt: NOW }]);
+    await emailPasswordResetLink(db, 'bob@example.com', NOW);
+    mockDb.$transaction.mockRejectedValueOnce(new Error('connection reset'));
+    await expect(emailPasswordResetLink(db, 'bob@example.com', NOW)).rejects.toThrow('connection reset');
+
+    expect(await emailsLeft()).toBe(RESET_EMAILS_PER_ACCOUNT);
+  });
+
+  test('a public URL that can’t be parsed fails before the old link is replaced or the budget is spent', async () => {
     vi.stubEnv('NEXTAUTH_URL', 'not a url');
     findUserByEmail.mockResolvedValue(freshUser());
     await expect(emailPasswordResetLink(db, 'bob@example.com', NOW)).rejects.toThrow();
     expect(mockDb.$transaction).not.toHaveBeenCalled();
     expect(sendMail).not.toHaveBeenCalled();
+
+    vi.stubEnv('NEXTAUTH_URL', 'https://sharetab.example.com');
+    expect(await emailsLeft()).toBe(RESET_EMAILS_PER_ACCOUNT);
   });
 
   test('warns when the link would travel over plain HTTP', async () => {

@@ -52,8 +52,11 @@
     "errorLoading": "Échec du chargement des utilisateurs.",
     "searchAriaLabel": "Rechercher des utilisateurs",
     "deleteUser": "Supprimer {name}",
+    "resetLinkConfirmTitle": "Créer un lien de réinitialisation du mot de passe ?",
+    "resetLinkConfirmDescription": "Un lien pour que {name} ({email}) choisisse un nouveau mot de passe. Il remplace tout lien de réinitialisation précédent, y compris un lien envoyé par e-mail, et est consigné dans le journal d'audit.",
+    "resetLinkConfirm": "Créer le lien",
     "resetLinkTitle": "Lien de réinitialisation du mot de passe",
-    "resetLinkDescription": "Envoyez vous-même ce lien à <strong>{name}</strong>. Il ne fonctionne qu’une fois, jusqu’au {expires}, et remplace tout lien de réinitialisation précédent.",
+    "resetLinkDescription": "Envoyez vous-même ce lien à <strong>{name}</strong>. Il ne fonctionne qu’une fois, jusqu’au {expires} sauf si un lien plus récent le remplace, et remplace tout lien de réinitialisation précédent.",
     "resetLinkCopy": "Copier le lien",
     "resetLinkCopied": "Lien copié"
   },

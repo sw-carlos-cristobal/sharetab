@@ -94,7 +94,8 @@ export default function SettingsPage() {
   const impersonation = trpc.admin.getImpersonationStatus.useQuery();
   // Who this device signs in again as after the change: decided when it's sent, while this
   // session is still good. null: an admin impersonating, whose own session the change doesn't
-  // touch; undefined: not known, so the page says to sign in again
+  // touch; undefined: not known, or password sign-in not confirmed on, so the page says to sign
+  // in again (Auth.js's signIn leaves the page when it has no password provider)
   const signInAgainAs = useRef<string | null | undefined>(undefined);
 
   const changePassword = trpc.auth.changePassword.useMutation({
@@ -129,7 +130,7 @@ export default function SettingsPage() {
     const impersonating =
       impersonation.data?.isImpersonating === true ||
       (!!email && !!sessionEmail && email.toLowerCase() !== sessionEmail.toLowerCase());
-    signInAgainAs.current = impersonating ? null : email;
+    signInAgainAs.current = impersonating ? null : loginOptions.data?.passwordLogin === true ? email : undefined;
     changePassword.mutate({ currentPassword, newPassword });
   }
 
@@ -181,6 +182,7 @@ export default function SettingsPage() {
                 <Input
                   id="currentPassword"
                   type="password"
+                  autoComplete="current-password"
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
                   required
@@ -192,10 +194,12 @@ export default function SettingsPage() {
                 <Input
                   id="newPassword"
                   type="password"
+                  autoComplete="new-password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   required
                   minLength={8}
+                  maxLength={100}
                 />
               </div>
               <div className="space-y-2">
@@ -203,10 +207,12 @@ export default function SettingsPage() {
                 <Input
                   id="confirmPassword"
                   type="password"
+                  autoComplete="new-password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
                   minLength={8}
+                  maxLength={100}
                 />
                 {confirmPassword && newPassword !== confirmPassword && (
                   <p className="text-sm text-red-600">{t('password.mismatch')}</p>

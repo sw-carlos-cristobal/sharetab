@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
+import { expect } from '@playwright/test';
 
 /** Where scripts/mock-smtp.mjs writes the mail it accepts (CI sets it). */
 export const outbox = process.env.MOCK_SMTP_OUTBOX;
@@ -31,4 +32,15 @@ export function readResetLink(email: string): string | null {
 /** How many "your password was changed" emails mock-smtp received for this address. */
 export function passwordChangedEmails(email: string): number {
   return mailTo(email).filter((message) => /^Subject: Your ShareTab password was changed\r?$/m.test(message)).length;
+}
+
+/**
+ * With email configured and the outbox kept, checks the account got one "password changed" email:
+ * waits for it, then a moment more, so a second one would show. Checks nothing otherwise.
+ */
+export async function expectOnePasswordChangedEmail(email: string) {
+  if (!process.env.EMAIL_SERVER_HOST || !outbox) return;
+  await expect.poll(() => passwordChangedEmails(email), { timeout: 15000 }).toBe(1);
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  expect(passwordChangedEmails(email)).toBe(1);
 }

@@ -52,8 +52,11 @@
     "errorLoading": "Failed to load users.",
     "searchAriaLabel": "Search users",
     "deleteUser": "Delete {name}",
+    "resetLinkConfirmTitle": "Make a password reset link?",
+    "resetLinkConfirmDescription": "A link for {name} ({email}) to set a new password. It replaces any reset link they have, an emailed one included, and is recorded in the audit log.",
+    "resetLinkConfirm": "Make link",
     "resetLinkTitle": "Password reset link",
-    "resetLinkDescription": "Send this link to <strong>{name}</strong> yourself. It works once, until {expires}, and replaces any reset link they had.",
+    "resetLinkDescription": "Send this link to <strong>{name}</strong> yourself. It works once, until {expires} unless a newer link replaces it, and replaces any reset link they had.",
     "resetLinkCopy": "Copy link",
     "resetLinkCopied": "Link copied"
   },

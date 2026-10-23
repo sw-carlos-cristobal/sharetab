@@ -5,7 +5,6 @@ import { PrismaAdapter } from '@auth/prisma-adapter';
 import Credentials from 'next-auth/providers/credentials';
 import Google from 'next-auth/providers/google';
 import Nodemailer from 'next-auth/providers/nodemailer';
-import { getToken } from 'next-auth/jwt';
 import { headers } from 'next/headers';
 import { db } from './db';
 import { logger } from './lib/logger';
@@ -14,6 +13,7 @@ import { parseAuthConfig } from './lib/auth-config';
 import { GOOGLE_PROVIDER_ID, checkGoogleSignIn, googleProviderOptions } from './lib/google-sign-in';
 import { OIDC_PROVIDER_ID, checkOidcSignIn, mapOidcProfile } from './lib/oidc-sign-in';
 import { authorizePasswordLogin } from './lib/password-login';
+import { sessionCookieSubject } from './lib/session-cookie';
 import { readEmailVerified } from './lib/sign-in-identity';
 import { findUserByEmail } from './lib/user-email';
 
@@ -97,37 +97,8 @@ async function sessionCookieUserId(): Promise<string | null> {
   if (signedIn) return signedIn;
   // auth() reports nobody once the jwt callback has ended the session (a password reset or
   // change, #397), but the cookie stays until the browser next reads /api/auth/session, and
-  // Auth.js links a new identity to the cookie's user (it decodes the cookie itself). Read it
-  // as Auth.js does: the one cookie it uses, its secrets, and no Authorization header.
-  const secret = sessionSecrets();
-  if (secret.length === 0) return null;
-  const requestHeaders = await headers();
-  const token = await getToken({
-    req: { headers: new Headers({ cookie: requestHeaders.get('cookie') ?? '' }) },
-    secret,
-    secureCookie: usesSecureCookies(requestHeaders),
-  });
-  return token?.sub ?? null;
-}
-
-/** The secrets Auth.js signs sessions with: AUTH_SECRET, else NEXTAUTH_SECRET, else AUTH_SECRET_3..1 */
-function sessionSecrets(): string[] {
-  const secret = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET;
-  if (secret) return [secret];
-  return [3, 2, 1].map((i) => process.env[`AUTH_SECRET_${i}`]).filter((s): s is string => !!s);
-}
-
-/** Whether Auth.js names its session cookie __Secure-: the configured URL's scheme, else the request's */
-function usesSecureCookies(requestHeaders: Headers): boolean {
-  const configured = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL;
-  if (configured) {
-    try {
-      return new URL(configured).protocol === 'https:';
-    } catch {
-      // Auth.js would fail on it too; go by the request
-    }
-  }
-  return requestHeaders.get('x-forwarded-proto') === 'https';
+  // Auth.js links a new identity to the cookie's user (it decodes the cookie itself)
+  return sessionCookieSubject((await headers()).get('cookie') ?? '');
 }
 
 /** The password version a session was signed in under: when the password last changed, 0 if never. */
@@ -190,7 +161,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // it read with the hash it verified, the other providers the user row they signed in to.
         // A provider that passes none takes the current one from the refresh below
         if (user.passwordChangedAt !== undefined) token.passwordStamp = passwordStamp(user.passwordChangedAt);
-        else delete token.passwordStamp;
       }
       const signingIn = Boolean(user?.id);
       // Always refresh profile fields from DB to pick up profile changes.

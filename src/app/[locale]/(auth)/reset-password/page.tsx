@@ -19,6 +19,10 @@ function subscribeToHash(onChange: () => void) {
   return () => window.removeEventListener('hashchange', onChange);
 }
 
+// Replaces the token in the address bar once the password is set, so switching language (which
+// keeps the fragment) or reloading shows the outcome instead of the form for a used link
+const DONE_HASH = '#done';
+
 // A password reset link (#397), emailed by "Forgot password?" or made by an admin
 export default function ResetPasswordPage() {
   const t = useTranslations('auth.resetPassword');
@@ -30,12 +34,16 @@ export default function ResetPasswordPage() {
   const token = hash === null ? null : readResetToken(hash);
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
-  const reset = trpc.auth.resetPassword.useMutation();
+  const reset = trpc.auth.resetPassword.useMutation({
+    onSuccess: () => {
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${DONE_HASH}`);
+    },
+  });
   const mismatch = confirm !== '' && password !== confirm;
   // An outcome belongs to the link it was sent with: another link pasted into this tab only
   // changes the hash, and starts clean
   const sentWithThisLink = reset.variables?.token === token;
-  const done = reset.isSuccess && sentWithThisLink;
+  const done = hash === DONE_HASH || (reset.isSuccess && sentWithThisLink);
   const errorForThisLink = sentWithThisLink ? reset.error : null;
   const linkRefused = errorForThisLink?.data?.messageKey === 'resetLinkInvalid';
 
@@ -123,7 +131,10 @@ export default function ResetPasswordPage() {
         <CardTitle className="text-2xl font-semibold tracking-tight">{done ? t('successTitle') : t('title')}</CardTitle>
         {!done && token && !linkRefused && <CardDescription className="mt-1">{t('description')}</CardDescription>}
       </CardHeader>
-      <CardContent className="pt-4">{body}</CardContent>
+      <CardContent className="pt-4">
+        {/* Always on the page, so screen readers announce the outcome that replaces the form */}
+        <div aria-live="polite">{body}</div>
+      </CardContent>
     </Card>
   );
 }

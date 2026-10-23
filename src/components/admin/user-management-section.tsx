@@ -31,6 +31,7 @@ import {
 import { toast } from 'sonner';
 import { copyToClipboard } from '@/lib/clipboard';
 import { resetPasswordPath } from '@/lib/password-reset-link';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 
 type UserSortBy = 'name' | 'email' | 'groupCount' | 'createdAt';
 type UserStatus = 'all' | 'active' | 'suspended' | 'placeholder';
@@ -119,7 +120,12 @@ export function UserManagementSection({ currentUserEmail }: { currentUserEmail?:
   // Kept while the dialog animates closed, so its text doesn't blank out
   const [resetLink, setResetLink] = useState<{ name: string; url: string; expiresAt: Date } | null>(null);
   const [resetLinkOpen, setResetLinkOpen] = useState(false);
+  // Asked first: a new link replaces the one the user may be about to open, emailed or not
+  const [resetLinkFor, setResetLinkFor] = useState<{ id: string; name: string; email: string } | null>(null);
   const resetLinkName = useRef('');
+  // The server refuses reset links while password sign-in is off, so the button isn't offered then
+  const loginOptions = trpc.auth.getLoginOptions.useQuery();
+  const passwordLogin = loginOptions.data?.passwordLogin === true;
   const createResetLink = trpc.admin.createPasswordResetLink.useMutation({
     onSuccess: (data) => {
       utils.admin.getAuditLog.invalidate();
@@ -343,18 +349,17 @@ export function UserManagementSection({ currentUserEmail }: { currentUserEmail?:
                                   <UserCheck className="h-4 w-4 text-purple-600" />
                                 </Button>
                               )}
-                              {!user.isPlaceholder && !user.isSuspended && (
+                              {passwordLogin && !user.isPlaceholder && !user.isSuspended && (
                                 <Button
                                   variant="ghost"
                                   size="icon-sm"
                                   aria-label={t('users.resetPassword', { name: user.name ?? user.email })}
                                   title={t('users.resetPassword', { name: user.name ?? user.email })}
                                   data-testid="reset-password-link"
-                                  onClick={() => {
+                                  onClick={() =>
                                     // Taken now: the list may change before the request answers
-                                    resetLinkName.current = user.name ?? user.email;
-                                    createResetLink.mutate({ userId: user.id });
-                                  }}
+                                    setResetLinkFor({ id: user.id, name: user.name ?? user.email, email: user.email })
+                                  }
                                   disabled={createResetLink.isPending}
                                 >
                                   <KeyRound className="h-4 w-4 text-blue-600" />
@@ -426,6 +431,23 @@ export function UserManagementSection({ currentUserEmail }: { currentUserEmail?:
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={resetLinkFor !== null}
+        onOpenChange={(open) => !open && setResetLinkFor(null)}
+        title={t('users.resetLinkConfirmTitle')}
+        description={t('users.resetLinkConfirmDescription', {
+          name: resetLinkFor?.name ?? '',
+          email: resetLinkFor?.email ?? '',
+        })}
+        confirmLabel={t('users.resetLinkConfirm')}
+        destructive={false}
+        onConfirm={() => {
+          if (!resetLinkFor) return;
+          resetLinkName.current = resetLinkFor.name;
+          createResetLink.mutate({ userId: resetLinkFor.id });
+        }}
+      />
 
       <Dialog open={resetLinkOpen} onOpenChange={setResetLinkOpen}>
         <DialogContent showCloseButton={false}>

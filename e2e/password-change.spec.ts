@@ -6,12 +6,12 @@ import {
   uniqueEmail,
   register,
   authedContext,
-  deleteTestUser,
   trpcQuery,
   trpcResult,
   trpcError,
+  removeTestUser,
 } from './helpers';
-import { outbox, passwordChangedEmails } from './mock-smtp-outbox';
+import { expectOnePasswordChangedEmail } from './mock-smtp-outbox';
 
 test.describe('Password Change — Settings Page', () => {
   test('settings page shows change password form', async ({ page }) => {
@@ -87,12 +87,10 @@ test.describe('Password Change — Settings Page', () => {
       }
 
       // With email configured, the account is told its password changed
-      if (process.env.EMAIL_SERVER_HOST && outbox) {
-        await expect.poll(() => passwordChangedEmails(email), { timeout: 15000 }).toBe(1);
-      }
+      await expectOnePasswordChangedEmail(email);
     } finally {
       await otherDevice.dispose();
-      await removeUser(email);
+      await removeTestUser(email);
     }
   });
 
@@ -118,19 +116,52 @@ test.describe('Password Change — Settings Page', () => {
       await expect(notice).toBeVisible();
       await expect(notice.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/en/login');
     } finally {
-      await removeUser(email);
+      await removeTestUser(email);
+    }
+  });
+
+  test('an admin impersonating someone changes their password and stays signed in as the admin (#397)', async ({
+    page,
+    browser,
+  }) => {
+    const email = uniqueEmail('pwimpersonated');
+    const signUp = await browser.newContext({ baseURL: process.env.BASE_URL || 'http://localhost:3001' });
+    try {
+      await register(await signUp.newPage(), 'PW Impersonated', email, 'testpass123');
+    } finally {
+      await signUp.close();
+    }
+    const admin = await authedContext(users.alice.email, users.alice.password);
+    try {
+      const listed = await trpcResult(await trpcQuery(admin, 'admin.listUsers', { search: email, limit: 1 }));
+      const userId = listed.users[0].id;
+
+      await login(page, users.alice.email, users.alice.password);
+      const start = await page.request.post('/api/admin/impersonate', { data: { userId } });
+      expect(start.ok()).toBe(true);
+      try {
+        await page.goto('/en/settings');
+        // The impersonated user's Settings
+        await expect(page.locator('#email')).toHaveValue(email);
+        await page.locator('#currentPassword').fill('testpass123');
+        await page.locator('#newPassword').fill('newpass456');
+        await page.locator('#confirmPassword').fill('newpass456');
+        await page.getByRole('button', { name: 'Change password' }).click();
+
+        await expect(page.getByTestId('password-changed')).toBeVisible();
+        await expect(page.getByTestId('password-sign-in-again')).toHaveCount(0);
+        // Still the admin's own session: the change ended the user's sessions, not this one
+        const session = await (await page.request.get('/api/auth/session')).json();
+        expect(session?.user?.email).toBe(users.alice.email);
+      } finally {
+        await page.request.delete('/api/admin/impersonate');
+      }
+    } finally {
+      await admin.dispose();
+      await removeTestUser(email);
     }
   });
 });
-
-async function removeUser(email: string) {
-  const admin = await authedContext(users.alice.email, users.alice.password);
-  try {
-    await deleteTestUser(admin, email);
-  } finally {
-    await admin.dispose();
-  }
-}
 
 test.describe('Forgot Password — Login Page', () => {
   test('login page shows forgot password link', async ({ page }) => {

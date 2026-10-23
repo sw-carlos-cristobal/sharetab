@@ -2,7 +2,7 @@ import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { AppError } from '@/server/lib/app-error';
 import { createTRPCRouter, publicProcedure, protectedProcedure } from '../init';
-import { checkRateLimit, clearRateLimit, parsePositiveInt, peekRateLimit } from '../../lib/rate-limit';
+import { checkRateLimit, clearRateLimit, parsePositiveInt } from '../../lib/rate-limit';
 import { FALLBACK_IP, getClientIp } from '../../lib/client-ip';
 import { locales } from '@/i18n/routing';
 import { stripUndefined } from '../../lib/strip-undefined';
@@ -11,7 +11,13 @@ import { readRegistrationMode } from '../../lib/registration-mode';
 import { findUsersByEmail } from '../../lib/user-email';
 import { logger } from '../../lib/logger';
 import { emailPasswordChanged, emailPasswordResetLink, resetPasswordWithToken } from '../../lib/password-reset';
-import { LOGIN_WINDOW_MS, loginAttemptsPerEmail, loginRateLimitKey } from '../../lib/password-login';
+import {
+  LOGIN_WINDOW_MS,
+  loginAttemptsPerEmail,
+  loginRateLimitKey,
+  passwordChangeGuessKey,
+  requirePasswordLogin,
+} from '../../lib/password-login';
 import { describeMailError } from '../../lib/mailer';
 import { Prisma } from '@/generated/prisma/client';
 
@@ -173,6 +179,7 @@ export const authRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      requirePasswordLogin();
       const user = await ctx.db.user.findUnique({
         where: { id: ctx.user.id },
       });
@@ -180,18 +187,20 @@ export const authRouter = createTRPCRouter({
         throw new AppError('BAD_REQUEST', 'noPasswordToChange');
       }
 
-      // Wrong current passwords are limited like attempts at the login form, so a session someone
-      // else holds can't guess the password here faster than there. A counter of its own: one
-      // shared with the login form would let anyone who knows the address block this change
-      const guessKey = `password-change:${user.id}`;
-      if (!peekRateLimit(guessKey, loginAttemptsPerEmail()).allowed) {
-        throw new AppError('TOO_MANY_REQUESTS');
+      // Current passwords are limited like attempts at the login form, so a session someone else
+      // holds can't guess the password here faster than there: each is counted before it's
+      // checked, so guesses sent at once are held too, and a right one clears the count. A counter
+      // of its own: one shared with the login form would let anyone who knows the address block
+      // this change
+      const guessKey = passwordChangeGuessKey(user.id);
+      if (!checkRateLimit(guessKey, loginAttemptsPerEmail(), LOGIN_WINDOW_MS).allowed) {
+        throw new AppError('TOO_MANY_REQUESTS', 'tooManyRequestsLater');
       }
       const valid = await bcrypt.compare(input.currentPassword, user.passwordHash);
       if (!valid) {
-        checkRateLimit(guessKey, loginAttemptsPerEmail(), LOGIN_WINDOW_MS);
         throw new AppError('UNAUTHORIZED', 'wrongPassword');
       }
+      clearRateLimit(guessKey);
 
       const passwordHash = await bcrypt.hash(input.newPassword, 12);
       await ctx.db.$transaction(async (tx) => {
@@ -204,7 +213,7 @@ export const authRouter = createTRPCRouter({
           data: { passwordHash, passwordChangedAt: new Date() },
         });
         if (count === 0) {
-          throw new AppError('CONFLICT');
+          throw new AppError('CONFLICT', 'passwordChangedElsewhere');
         }
         // A reset link sent before the change would otherwise still undo it
         await tx.passwordResetToken.deleteMany({ where: { userId: ctx.user.id } });
@@ -224,10 +233,7 @@ export const authRouter = createTRPCRouter({
   requestPasswordReset: publicProcedure
     .input(z.object({ email: z.string().trim().email().max(254) }))
     .mutation(({ ctx, input }) => {
-      const config = parseAuthConfig(process.env);
-      if (!config.passwordLogin) {
-        throw new AppError('FORBIDDEN', 'passwordLoginDisabled');
-      }
+      const config = requirePasswordLogin();
       if (!config.magicLink) {
         throw new AppError('PRECONDITION_FAILED', 'passwordResetUnavailable');
       }
@@ -247,9 +253,7 @@ export const authRouter = createTRPCRouter({
   resetPassword: publicProcedure
     .input(z.object({ token: z.string().min(1).max(200), password: newPasswordSchema }))
     .mutation(async ({ ctx, input }) => {
-      if (!parseAuthConfig(process.env).passwordLogin) {
-        throw new AppError('FORBIDDEN', 'passwordLoginDisabled');
-      }
+      requirePasswordLogin();
       checkClientLimit(ctx.headers, 'password-reset-submit-ip', resetSubmitsPerIp(), RESET_SUBMIT_WINDOW_MS);
       // Hashes the password only once the link is claimed, so a bad or reused link costs no bcrypt
       const user = await resetPasswordWithToken(ctx.db, input.token, input.password);
@@ -257,9 +261,10 @@ export const authRouter = createTRPCRouter({
         throw new AppError('BAD_REQUEST', 'resetLinkInvalid');
       }
 
-      // The link proved who they are, so failed sign-ins from before the reset don't keep the
-      // new password out
+      // The link proved who they are, so failed sign-ins and Settings guesses from before the
+      // reset don't keep the new password out
       clearRateLimit(loginRateLimitKey(user.email));
+      clearRateLimit(passwordChangeGuessKey(user.userId));
       logger.info('auth.password_reset', { userId: user.userId });
       notifyPasswordChanged(user);
       return { ok: true };

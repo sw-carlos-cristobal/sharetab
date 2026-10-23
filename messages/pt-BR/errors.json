@@ -18,6 +18,7 @@
   "emailTaken": "Não foi possível criar a conta. Tente outro e-mail ou entre.",
   "noPasswordToChange": "A conta usa OAuth ou link mágico — não há senha para alterar",
   "wrongPassword": "A senha atual está incorreta",
+  "passwordChangedElsewhere": "Sua senha acabou de ser alterada de outra forma, por exemplo com um link de redefinição. Entre com a nova senha.",
   "passwordLoginDisabled": "O login com senha está desativado neste servidor.",
   "passwordResetUnavailable": "Este servidor não consegue enviar e-mails, então não pode enviar um link de redefinição para você. Peça um ao administrador do ShareTab.",
   "passwordResetRateLimited": "Muitos pedidos de redefinição de senha. Tente novamente mais tarde.",

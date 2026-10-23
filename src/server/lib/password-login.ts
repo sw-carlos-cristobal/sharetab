@@ -5,14 +5,25 @@
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { db } from '../db';
+import { AppError } from './app-error';
+import { parseAuthConfig } from './auth-config';
 import { logger } from './logger';
 import { checkRateLimit, parsePositiveInt } from './rate-limit';
 import { getClientIp, FALLBACK_IP } from './client-ip';
 import { AmbiguousEmailError, findUserByEmail } from './user-email';
 
+/** Refuses the password routes while password sign-in is off (`DISABLE_PASSWORD_LOGIN`). */
+export function requirePasswordLogin() {
+  const config = parseAuthConfig(process.env);
+  if (!config.passwordLogin) {
+    throw new AppError('FORBIDDEN', 'passwordLoginDisabled');
+  }
+  return config;
+}
+
 /**
- * The per-address login rate-limit key, also cleared by a password reset. Lowercased like the
- * user lookup, so case variants share a bucket.
+ * The per-address login rate-limit key, also cleared by a password reset or a change in Settings.
+ * Lowercased like the user lookup, so case variants share a bucket.
  */
 export function loginRateLimitKey(email: string): string {
   return `login:${email.toLowerCase()}`;
@@ -24,6 +35,11 @@ export function loginAttemptsPerEmail(): number {
 }
 
 export const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+
+/** Wrong current passwords in Settings, per account: as many in LOGIN_WINDOW_MS as the login form allows. */
+export function passwordChangeGuessKey(userId: string): string {
+  return `password-change:${userId}`;
+}
 
 const loginSchema = z.object({
   email: z.string().email(),

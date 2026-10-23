@@ -18,6 +18,7 @@
   "emailTaken": "アカウントを作成できません。別のメールアドレスを使用するか、ログインしてください。",
   "noPasswordToChange": "このアカウントはOAuthまたはマジックリンクでログインするため、変更するパスワードがありません",
   "wrongPassword": "現在のパスワードが正しくありません",
+  "passwordChangedElsewhere": "パスワードは別の方法（リセットリンクなど）で変更されたばかりです。新しいパスワードでサインインしてください。",
   "passwordLoginDisabled": "このサーバーではパスワードによるログインが無効になっています。",
   "passwordResetUnavailable": "このサーバーはメールを送信できないため、再設定リンクをメールでお送りできません。ShareTab の管理者にリンクを依頼してください。",
   "passwordResetRateLimited": "パスワード再設定のリクエストが多すぎます。時間をおいてもう一度お試しください。",

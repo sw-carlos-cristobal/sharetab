@@ -49,7 +49,9 @@ messages/
    };
    ```
 
-4. **Run `npm run lint:i18n`** to confirm your locale has exactly the keys English has, then **submit a PR.**
+4. **Register the server-only files**: import your `errors.json` into the `catalogs` in `src/server/lib/app-error.ts`, and your `emails.json` into the `catalogs` in `src/server/lib/password-reset-email.ts`, the same way English is (the type check fails until you do).
+
+5. **Run `npm run lint:i18n`** to confirm your locale has exactly the keys English has, then **submit a PR.**
 
 ## Updating Existing Translations
 
@@ -74,4 +76,4 @@ npm run dev:full        # Start the app (keeps running; stop it with Ctrl+C)
 
 ## Validation
 
-Run `npm run lint:i18n` to check that your locale has exactly the same keys as English (no missing or extra keys). CI doesn't run this check, so run it before you open a PR.
+Run `npm run lint:i18n` to check that your locale has exactly the same keys as English (no missing or extra keys). CI runs it too, but run it before you open a PR.
