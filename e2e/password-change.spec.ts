@@ -6,9 +6,10 @@ import {
   uniqueEmail,
   register,
   authedContext,
-  deleteTestUser,
   trpcQuery,
   trpcResult,
+  trpcError,
+  removeTestUser,
 } from './helpers';
 
 test.describe('Password Change — Settings Page', () => {
@@ -53,32 +54,138 @@ test.describe('Password Change — Settings Page', () => {
     const oldPassword = 'testpass123';
     const newPassword = 'newpass456';
 
-    await register(page, 'PW Change User', email, oldPassword);
-    await page.goto('/en/settings');
-
-    await page.locator('#currentPassword').fill(oldPassword);
-    await page.locator('#newPassword').fill(newPassword);
-    await page.locator('#confirmPassword').fill(newPassword);
-    await page.getByRole('button', { name: 'Change password' }).click();
-
-    await expect(page.getByText(/changed|updated|success/i)).toBeVisible({ timeout: 5000 });
-
-    // Verify new password works by logging in via API and accessing a protected route
-    const ctx = await authedContext(email, newPassword);
+    let otherDevice: Awaited<ReturnType<typeof authedContext>> | undefined;
     try {
-      const res = await trpcQuery(ctx, 'groups.list');
-      const data = await trpcResult(res);
-      expect(data).toBeDefined();
+      await register(page, 'PW Change User', email, oldPassword);
+      // Another device signed in before the change (#397)
+      otherDevice = await authedContext(email, oldPassword);
+      expect((await trpcResult(await trpcQuery(otherDevice, 'auth.getProfile')))?.email).toBe(email);
+      await page.goto('/en/settings');
+
+      await page.locator('#currentPassword').fill(oldPassword);
+      await page.locator('#newPassword').fill(newPassword);
+      await page.locator('#confirmPassword').fill(newPassword);
+      await page.getByRole('button', { name: 'Change password' }).click();
+
+      await expect(page.getByTestId('password-changed')).toBeVisible();
+      await expect(page.getByTestId('password-sign-in-again')).toHaveCount(0);
+
+      // This device signed in again with the new password; the other one was signed out
+      const session = await (await page.request.get('/api/auth/session')).json();
+      expect(session?.user?.email).toBe(email);
+      const ended = await trpcQuery(otherDevice, 'auth.getProfile');
+      expect((await trpcError(ended))?.data?.code).toBe('UNAUTHORIZED');
+
+      // Verify new password works by logging in via API and accessing a protected route
+      const ctx = await authedContext(email, newPassword);
+      try {
+        const res = await trpcQuery(ctx, 'groups.list');
+        const data = await trpcResult(res);
+        expect(data).toBeDefined();
+      } finally {
+        await ctx.dispose();
+      }
     } finally {
-      await ctx.dispose();
+      await otherDevice?.dispose();
+      await removeTestUser(email);
     }
+  });
 
-    // Clean up the test user
-    const admin = await authedContext(users.alice.email, users.alice.password);
+  test('says to sign in again when signing back in after the change fails (#397)', async ({ page }) => {
+    const email = uniqueEmail('pwagain');
     try {
-      await deleteTestUser(admin, email);
+      await register(page, 'PW Again User', email, 'testpass123');
+      await page.goto('/en/settings');
+      // As if the new password were refused: the change itself goes through
+      await page.route('**/api/auth/callback/credentials**', (route) =>
+        route.fulfill({
+          status: 200,
+          json: { url: new URL('/api/auth/error?error=CredentialsSignin', page.url()).href },
+        }),
+      );
+      await page.locator('#currentPassword').fill('testpass123');
+      await page.locator('#newPassword').fill('newpass456');
+      await page.locator('#confirmPassword').fill('newpass456');
+      await page.getByRole('button', { name: 'Change password' }).click();
+
+      await expect(page.getByTestId('password-changed')).toBeVisible();
+      const notice = page.getByTestId('password-sign-in-again');
+      await expect(notice).toBeVisible();
+      await expect(notice.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/en/login');
     } finally {
-      await admin.dispose();
+      await removeTestUser(email);
+    }
+  });
+
+  test('says to sign in again, and stays on the page, when the sign-in providers can’t be loaded (#397)', async ({
+    page,
+  }) => {
+    const email = uniqueEmail('pwproviders');
+    try {
+      await register(page, 'PW Providers User', email, 'testpass123');
+      await page.goto('/en/settings');
+      // Auth.js's signIn would leave the page here, even with redirect: false
+      await page.route('**/api/auth/providers', (route) => route.fulfill({ status: 500, body: '' }));
+      await page.locator('#currentPassword').fill('testpass123');
+      await page.locator('#newPassword').fill('newpass456');
+      await page.locator('#confirmPassword').fill('newpass456');
+      await page.getByRole('button', { name: 'Change password' }).click();
+
+      await expect(page.getByTestId('password-changed')).toBeVisible();
+      await expect(page.getByTestId('password-sign-in-again')).toBeVisible();
+      await expect(page).toHaveURL(/\/en\/settings$/);
+    } finally {
+      await removeTestUser(email);
+    }
+  });
+
+  test('an admin impersonating someone changes their password and stays signed in as the admin (#397)', async ({
+    page,
+    browser,
+  }) => {
+    const email = uniqueEmail('pwimpersonated');
+    let admin: Awaited<ReturnType<typeof authedContext>> | undefined;
+    try {
+      const signUp = await browser.newContext({ baseURL: process.env.BASE_URL || 'http://localhost:3001' });
+      try {
+        await register(await signUp.newPage(), 'PW Impersonated', email, 'testpass123');
+      } finally {
+        await signUp.close();
+      }
+      admin = await authedContext(users.alice.email, users.alice.password);
+      const listed = await trpcResult(await trpcQuery(admin, 'admin.listUsers', { search: email, limit: 1 }));
+      const userId = listed.users[0].id;
+
+      await login(page, users.alice.email, users.alice.password);
+      const start = await page.request.post('/api/admin/impersonate', { data: { userId } });
+      expect(start.ok()).toBe(true);
+      try {
+        await page.goto('/en/settings');
+        // The impersonated user's Settings
+        await expect(page.locator('#email')).toHaveValue(email);
+        await page.locator('#currentPassword').fill('testpass123');
+        await page.locator('#newPassword').fill('newpass456');
+        await page.locator('#confirmPassword').fill('newpass456');
+        await page.getByRole('button', { name: 'Change password' }).click();
+
+        await expect(page.getByTestId('password-changed')).toBeVisible();
+        await expect(page.getByTestId('password-sign-in-again')).toHaveCount(0);
+        // Still the admin's own session: the change ended the user's sessions, not this one
+        const session = await (await page.request.get('/api/auth/session')).json();
+        expect(session?.user?.email).toBe(users.alice.email);
+      } finally {
+        await page.request.delete('/api/admin/impersonate');
+      }
+      // The user's password is the new one
+      const asUser = await authedContext(email, 'newpass456');
+      try {
+        expect((await trpcResult(await trpcQuery(asUser, 'auth.getProfile')))?.email).toBe(email);
+      } finally {
+        await asUser.dispose();
+      }
+    } finally {
+      await admin?.dispose();
+      await removeTestUser(email);
     }
   });
 });

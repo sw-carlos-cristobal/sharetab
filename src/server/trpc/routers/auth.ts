@@ -198,10 +198,11 @@ export const authRouter = createTRPCRouter({
       await passwordTransaction(ctx.db, async (tx) => {
         // Only while the password is still the one just checked: a reset link used meanwhile
         // wins, and this change is refused. Writes the user row before the token row, the lock
-        // order resetPasswordWithToken uses
+        // order resetPasswordWithToken uses. passwordChangedAt ends every session signed in
+        // under the old password, this one included (auth.ts); the Settings page signs in again
         const { count } = await tx.user.updateMany({
           where: { id: ctx.user.id, passwordHash: user.passwordHash },
-          data: { passwordHash },
+          data: { passwordHash, passwordChangedAt: new Date() },
         });
         if (count === 0) {
           throw new AppError('CONFLICT', 'passwordChangedElsewhere');
@@ -211,8 +212,11 @@ export const authRouter = createTRPCRouter({
       });
 
       // The current password was just proven: failed sign-ins before don't keep the new one out
+      // (the Settings page signs in again with it)
       clearRateLimit(loginRateLimitKey(user.email));
-      return { success: true };
+      // Who the page signs in again as, with the new password: the user, whose sessions this
+      // change ended. No one while an admin impersonates: the session is the admin's, and stays
+      return { success: true, signInAs: ctx.impersonating ? null : user.email };
     }),
 
   // "Forgot password?" (#397). The answer is the same whether or not the address has an

@@ -99,5 +99,13 @@ export async function authorizePasswordLogin(credentials: unknown, headers: Head
   }
 
   logger.info('auth.login', { userId: user.id, email: user.email });
-  return { id: user.id, name: user.name, email: user.email, image: user.image, locale: user.locale };
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    image: user.image,
+    locale: user.locale,
+    // Read with the hash just verified: a reset that commits meanwhile ends this session (auth.ts)
+    passwordChangedAt: user.passwordChangedAt,
+  };
 }

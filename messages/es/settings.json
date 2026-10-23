@@ -21,6 +21,7 @@
     "mismatch": "Las contraseñas no coinciden",
     "submit": "Cambiar contraseña",
     "submitting": "Cambiando...",
-    "success": "¡Contraseña cambiada!"
+    "success": "¡Contraseña cambiada! Se cerró la sesión en los demás dispositivos conectados a esta cuenta.",
+    "signInAgain": "Se cambió tu contraseña, pero este dispositivo no pudo volver a iniciar sesión con ella. Inicia sesión con tu contraseña nueva."
   }
 }

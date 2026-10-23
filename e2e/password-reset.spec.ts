@@ -7,6 +7,7 @@ import {
   trpcMutation,
   trpcQuery,
   trpcResult,
+  trpcError,
   removeTestUser,
 } from './helpers';
 import { outbox, mailTo, readResetLink } from './mock-smtp-outbox';
@@ -256,11 +257,20 @@ test.describe('Password reset', () => {
   });
 
   test('an admin makes a reset link for a locked-out user, who sets a password with it', async ({ page, browser }) => {
-    // Several sign-ins, an extra browser and the admin page
+    // Several sign-ins, two extra browsers and the admin page
     test.setTimeout(120_000);
     const email = uniqueEmail('pwadmin');
     await registerUser(email);
+    let earlierSession: Awaited<ReturnType<typeof authedContext>> | undefined;
+    let earlierBrowser: Awaited<ReturnType<Browser['newContext']>> | undefined;
     try {
+      // Sessions signed in before the reset, e.g. someone else's: the reset ends them
+      earlierSession = await authedContext(email, OLD_PASSWORD);
+      earlierBrowser = await browser.newContext({ baseURL: BASE });
+      expect((await trpcResult(await trpcQuery(earlierSession, 'auth.getProfile')))?.email).toBe(email);
+      const earlierPage = await earlierBrowser.newPage();
+      await login(earlierPage, email, OLD_PASSWORD);
+
       // As on an instance without email, where this is the way back in
       const stubbed = await withLoginOptions(page, { passwordLogin: true, passwordReset: false });
       await login(page, users.alice.email, users.alice.password);
@@ -287,6 +297,12 @@ test.describe('Password reset', () => {
       await setPasswordWithLink(browser, link, NEW_PASSWORD);
       expect(await signsIn(email, NEW_PASSWORD)).toBe(true);
       expect(await signsIn(email, OLD_PASSWORD)).toBe(false);
+      // Ended: refused as signed out, not some other failure
+      const ended = await trpcQuery(earlierSession, 'auth.getProfile');
+      expect((await trpcError(ended))?.data?.code).toBe('UNAUTHORIZED');
+      // The browser signed in before is sent to the sign-in page
+      await earlierPage.goto('/en/dashboard');
+      await expect(earlierPage).toHaveURL(/\/en\/login/);
 
       // Recorded in the audit log, with the user it was for
       const admin = await authedContext(users.alice.email, users.alice.password);
@@ -303,6 +319,8 @@ test.describe('Password reset', () => {
         await admin.dispose();
       }
     } finally {
+      await earlierSession?.dispose();
+      await earlierBrowser?.close();
       await removeTestUser(email);
     }
   });

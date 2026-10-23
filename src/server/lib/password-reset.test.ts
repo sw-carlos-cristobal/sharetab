@@ -202,7 +202,7 @@ describe('passwordTransaction', () => {
 });
 
 describe('resetPasswordWithToken', () => {
-  test('sets the password, in one transaction', async () => {
+  test('sets the password and a new password version, in one transaction', async () => {
     expect(await resetPasswordWithToken(db, 'tok', 'new-password', NOW)).toEqual({
       userId: 'token-owner',
       email: 'owner@example.com',
@@ -214,10 +214,26 @@ describe('resetPasswordWithToken', () => {
       expect.objectContaining({ where: { tokenHash: hashResetToken('tok') } }),
     );
     expect(bcrypt.hash).toHaveBeenCalledWith('new-password', 12);
+    const update = tx.user.update.mock.calls[0]![0] as { where: unknown; data: { passwordChangedAt: Date } };
     // The user the lock returned, which is the one the token belongs to
-    expect(tx.user.update).toHaveBeenCalledWith({ where: { id: 'token-owner' }, data: { passwordHash: 'new-hash' } });
+    expect(update.where).toEqual({ id: 'token-owner' });
+    expect(update.data).toEqual({ passwordHash: 'new-hash', passwordChangedAt: expect.any(Date) });
     expect(mockDb.$transaction).toHaveBeenCalledWith(expect.any(Function), { maxWait: 5_000, timeout: 15_000 });
     expectNothingOutsideTransaction();
+  });
+
+  test('stamps the new password version after the hash, not when the request arrived', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2030-01-01T00:00:00Z'));
+    vi.mocked(bcrypt.hash).mockImplementation(async () => {
+      vi.setSystemTime(new Date('2030-01-01T00:00:01Z'));
+      return 'new-hash' as never;
+    });
+
+    await resetPasswordWithToken(db, 'tok', 'new-password', NOW);
+
+    const update = tx.user.update.mock.calls[0]![0] as { data: { passwordChangedAt: Date } };
+    expect(update.data.passwordChangedAt).toEqual(new Date('2030-01-01T00:00:01Z'));
   });
 
   test('locks the token owner’s row, then claims the link, before any bcrypt work', async () => {

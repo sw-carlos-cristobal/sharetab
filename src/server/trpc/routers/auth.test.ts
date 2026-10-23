@@ -42,9 +42,13 @@ const OIDC_ENV = {
   OIDC_DISPLAY_NAME: 'Authentik',
 };
 
-async function caller(session: { user: { id: string } } | null = null, headers = new Headers()) {
+async function caller(
+  session: { user: { id: string } } | null = null,
+  headers = new Headers(),
+  impersonating: { adminId: string } | null = null,
+) {
   const { authRouter } = await import('./auth');
-  const ctx = { session, db: mockDb, headers, impersonating: null };
+  const ctx = { session, db: mockDb, headers, impersonating };
   return authRouter.createCaller(ctx as unknown as Parameters<typeof authRouter.createCaller>[0]);
 }
 
@@ -341,7 +345,7 @@ describe('auth.changePassword', () => {
     tx.user.updateMany.mockResolvedValue({ count: 1 });
   });
 
-  test('sets the password and ends the reset link, in one transaction', async () => {
+  test('sets the password and a new password version, and ends the reset link, in one transaction', async () => {
     const api = await caller({ user: { id: 'user-1' } });
 
     await api.changePassword({ currentPassword: 'password123', newPassword: 'new-password' });
@@ -352,13 +356,32 @@ describe('auth.changePassword', () => {
     expect(tx.user.updateMany).toHaveBeenCalledWith({
       // Only while the password is still the one just checked
       where: { id: 'user-1', passwordHash: 'old-hash' },
-      data: { passwordHash: 'hashed' },
+      data: { passwordHash: 'hashed', passwordChangedAt: expect.any(Date) },
     });
     expect(tx.passwordResetToken.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-1' } });
     expect(tx.user.updateMany.mock.invocationCallOrder[0]).toBeLessThan(
       tx.passwordResetToken.deleteMany.mock.invocationCallOrder[0]!,
     );
     expect(mockDb.user.update).not.toHaveBeenCalled();
+  });
+
+  test('says who to sign in again as: the user, whose sessions this change ended', async () => {
+    const api = await caller({ user: { id: 'user-1' } });
+    expect(await api.changePassword({ currentPassword: 'password123', newPassword: 'new-password' })).toEqual({
+      success: true,
+      signInAs: owner.email,
+    });
+  });
+
+  test('says no one to sign in again as while an admin impersonates: the session is the admin’s, and stays', async () => {
+    mockDb.user.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
+      where.id === 'admin-1' ? { suspendedAt: null, passwordChangedAt: null } : owner,
+    );
+    const api = await caller({ user: { id: 'user-1' } }, new Headers(), { adminId: 'admin-1' });
+    expect(await api.changePassword({ currentPassword: 'password123', newPassword: 'new-password' })).toEqual({
+      success: true,
+      signInAs: null,
+    });
   });
 
   test('a full connection pool or a timed-out transaction is reported as busy', async () => {

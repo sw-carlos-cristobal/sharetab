@@ -6,7 +6,9 @@
  * A link carries a random 256-bit token (src/lib/password-reset-link.ts); only its SHA-256 hash
  * is stored, so a database leak gives no working links. A user has at most one link (one
  * PasswordResetToken row per user): issuing a new one replaces it. Using it, changing the
- * password in Settings, suspending or deleting the user deletes it.
+ * password in Settings, suspending or deleting the user deletes it. Setting the password records
+ * a new `passwordChangedAt`, which ends every session signed in under the old one (the jwt
+ * callback in auth.ts).
  *
  * Lock order: the user row, then their token row, as in `auth.changePassword` and
  * `admin.deleteUser`/`suspendUser` (which write the user, then delete the token).
@@ -144,7 +146,8 @@ export async function resetPasswordWithToken(db: PrismaClient, token: string, pa
 
     // Cost as at registration
     const passwordHash = await bcrypt.hash(password, 12);
-    await tx.user.update({ where: { id: user.id }, data: { passwordHash } });
+    // Stamped now, after the lock wait and the hash: the new password version (auth.ts)
+    await tx.user.update({ where: { id: user.id }, data: { passwordHash, passwordChangedAt: new Date() } });
     return { userId: user.id, email: user.email, locale: localeOf(user) };
   });
 }

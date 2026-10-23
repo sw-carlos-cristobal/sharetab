@@ -5,6 +5,7 @@ import { PrismaAdapter } from '@auth/prisma-adapter';
 import Credentials from 'next-auth/providers/credentials';
 import Google from 'next-auth/providers/google';
 import Nodemailer from 'next-auth/providers/nodemailer';
+import { headers } from 'next/headers';
 import { db } from './db';
 import { logger } from './lib/logger';
 import { mailFrom, smtpOptions } from './lib/mailer';
@@ -12,6 +13,7 @@ import { parseAuthConfig } from './lib/auth-config';
 import { GOOGLE_PROVIDER_ID, checkGoogleSignIn, googleProviderOptions } from './lib/google-sign-in';
 import { OIDC_PROVIDER_ID, checkOidcSignIn, mapOidcProfile } from './lib/oidc-sign-in';
 import { authorizePasswordLogin } from './lib/password-login';
+import { sessionCookieSubject } from './lib/session-cookie';
 import { readEmailVerified } from './lib/sign-in-identity';
 import { findUserByEmail } from './lib/user-email';
 
@@ -81,6 +83,15 @@ if (authConfig.oidc) {
   });
 }
 
+/**
+ * A password version (#397): when the user's password last changed, in milliseconds, 0 if it never
+ * has. A session carries the version it signed in under; one whose version is no longer the user's
+ * has ended.
+ */
+function passwordStamp(changedAt: Date | null | undefined): number {
+  return changedAt?.getTime() ?? 0;
+}
+
 const LOGIN_EVENTS: Record<string, string> = {
   [OIDC_PROVIDER_ID]: 'auth.oidc_login',
   [GOOGLE_PROVIDER_ID]: 'auth.google_login',
@@ -91,7 +102,13 @@ const LOGIN_EVENTS: Record<string, string> = {
  * never attach a new identity to someone else's account.
  */
 async function sessionCookieUserId(): Promise<string | null> {
-  return (await auth())?.user?.id ?? null;
+  const signedIn = (await auth())?.user?.id;
+  if (signedIn) return signedIn;
+  // auth() reports nobody once the jwt callback has ended the session (a password reset or
+  // change, or a version it couldn't read, #397), but the cookie stays until the browser next
+  // reads /api/auth/session, and Auth.js links a new identity to the cookie's user (it decodes
+  // the cookie itself)
+  return sessionCookieSubject(await headers());
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -145,21 +162,37 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.id = user.id;
         if (user.name !== undefined) token.name = user.name;
         if (user.locale !== undefined) token.locale = user.locale;
+        // The password version this sign-in was checked against: password login passes the one
+        // it read with the hash it verified, the other providers the user row they signed in to
+        token.passwordStamp = passwordStamp(user.passwordChangedAt);
       }
       // Always refresh profile fields from DB to pick up profile changes.
       if (token.id) {
         try {
           const fresh = await db.user.findUnique({
             where: { id: token.id as string },
-            select: { name: true, locale: true },
+            select: { name: true, locale: true, passwordChangedAt: true },
           });
+          // A password reset or change ends every session signed in under an earlier password
+          // (#397), including a sign-in that checked the old password while the change committed.
+          // Null makes auth() report no session and the session endpoint clear the cookie.
+          // Sessions from before the version was recorded count as 0: they end once the
+          // password changes.
+          if (fresh && passwordStamp(fresh.passwordChangedAt) !== (token.passwordStamp ?? 0)) {
+            return null;
+          }
           if (fresh?.name) token.name = fresh.name;
           if (fresh?.locale) token.locale = fresh.locale;
         } catch (error) {
-          // Keep the session with the fields it has. A throw here makes auth()
-          // return no session, and the OIDC and Google policies would then
-          // miss that someone is signed in while Auth.js itself still sees them.
           logger.warn('auth.session_refresh_failed', { error: error instanceof Error ? error.name : 'unknown' });
+          // A sign-in keeps its session: its provider just read the version, and the next check
+          // reads it again. Otherwise the version can't be checked, so the session counts as
+          // ended (#397) and every caller of auth() refuses it for this request. Only the
+          // session endpoint would clear the cookie, and there keepSessionWhileDatabaseDown
+          // (lib/session-endpoint.ts) answers 503 instead when the database is down, so the
+          // session works again once it's back. The OIDC and Google policies still see who is
+          // signed in: sessionCookieUserId reads the cookie itself.
+          return user?.id ? token : null;
         }
       }
       return token;

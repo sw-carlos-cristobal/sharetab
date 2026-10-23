@@ -21,6 +21,7 @@
     "mismatch": "Les mots de passe ne correspondent pas",
     "submit": "Changer le mot de passe",
     "submitting": "Modification...",
-    "success": "Mot de passe modifié !"
+    "success": "Mot de passe modifié ! Les autres appareils connectés à ce compte ont été déconnectés.",
+    "signInAgain": "Votre mot de passe a été modifié, mais cet appareil n’a pas pu se reconnecter avec. Connectez-vous avec votre nouveau mot de passe."
   }
 }

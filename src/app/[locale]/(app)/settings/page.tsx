@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useSession } from 'next-auth/react';
+import { getProviders, signIn, useSession } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
 import { Link, useRouter } from '@/i18n/navigation';
 import { trpc } from '@/lib/trpc';
@@ -75,6 +75,7 @@ function ProfileForm({
 
 export default function SettingsPage() {
   const t = useTranslations('settings');
+  const tLogin = useTranslations('auth.login');
   const { data: session } = useSession();
 
   const profile = trpc.auth.getProfile.useQuery();
@@ -89,12 +90,36 @@ export default function SettingsPage() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [signInAgainFailed, setSignInAgainFailed] = useState(false);
 
   const changePassword = trpc.auth.changePassword.useMutation({
-    onSuccess: () => {
+    onSuccess: async ({ signInAs }, variables) => {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
+      setSignInAgainFailed(false);
+      // The change ends every session signed in under the old password, this one too (#397):
+      // sign in again with the new one so this device stays signed in. The server says as whom:
+      // no one while an admin impersonates, whose own session the change doesn't touch
+      if (signInAs === null) return;
+      try {
+        // signIn leaves the page, even with redirect: false, when it can't load the providers or
+        // finds no password provider; checked first, so the page says to sign in again instead
+        const providers = await getProviders();
+        if (!providers?.credentials) {
+          setSignInAgainFailed(true);
+          return;
+        }
+        const result = await signIn('credentials', {
+          email: signInAs,
+          password: variables.newPassword,
+          redirect: false,
+        });
+        if (!result || result.error) setSignInAgainFailed(true);
+      } catch {
+        // The password did change; only the sign-in failed
+        setSignInAgainFailed(true);
+      }
     },
   });
 
@@ -196,7 +221,23 @@ export default function SettingsPage() {
               >
                 {changePassword.isPending ? t('password.submitting') : t('password.submit')}
               </Button>
-              {changePassword.isSuccess && <p className="text-sm text-green-600">{t('password.success')}</p>}
+              {changePassword.isSuccess && (
+                <p data-testid="password-changed" className="text-sm text-green-600">
+                  {t('password.success')}
+                </p>
+              )}
+              {changePassword.isSuccess && signInAgainFailed && (
+                <p
+                  role="alert"
+                  data-testid="password-sign-in-again"
+                  className="text-sm text-amber-700 dark:text-amber-400"
+                >
+                  {t('password.signInAgain')}{' '}
+                  <Link href="/login" className="font-medium underline">
+                    {tLogin('submit')}
+                  </Link>
+                </p>
+              )}
               {changePassword.error && <p className="text-sm text-red-600">{changePassword.error.message}</p>}
             </form>
           </CardContent>

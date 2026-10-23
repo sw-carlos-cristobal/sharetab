@@ -71,6 +71,8 @@ model User {
   email           String    @unique
   emailVerified   DateTime?
   passwordHash    String?
+  // Set when the password is reset or changed: sessions signed in before it end (auth.ts jwt callback)
+  passwordChangedAt DateTime?
   image           String?
   defaultCurrency String    @default("USD")
   locale          String    @default("en")
