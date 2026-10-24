@@ -139,7 +139,7 @@ ShareTab is a free, self-hosted alternative to Splitwise for tracking shared exp
 
 ## Quick Start
 
-ShareTab ships as an all-in-one Docker container with PostgreSQL bundled inside. No external database needed. The bundled Compose file builds the image from your checkout of this repo:
+ShareTab ships as an all-in-one Docker container with PostgreSQL bundled inside. No external database needed, though you can use your own (see [Using an external PostgreSQL](#external-postgres)). The bundled Compose file builds the image from your checkout of this repo:
 
 ```bash
 git clone https://github.com/sw-carlos-cristobal/sharetab.git
@@ -198,9 +198,48 @@ docker exec sharetab su-exec postgres pg_dump -U sharetab sharetab > backup.sql
 docker compose exec sharetab su-exec postgres pg_dump -U sharetab sharetab > backup.sql
 ```
 
-These commands use the default database user and name, `sharetab`; if you changed `DB_USER` or `DB_NAME`, use your values here and in the `psql` commands below. The dump covers the database only. A full backup also needs the receipt images (`/app/uploads`), the AI provider logins if you use `meridian` or `openai-codex` (`/app/claude`, `/app/chatgpt`), and your settings. On Unraid the data folders are under `/mnt/user/appdata/sharetab/` and the template settings are on the flash drive (`/boot/config/plugins/dockerMan/templates-user/`); with Compose the data is in the `docker_uploads`, `docker_claude`, and `docker_chatgpt` named volumes (Compose prefixes volume names with the project name, `docker` by default; `docker volume ls` lists them) and the settings are in `docker/.env` (also keep a copy of `docker/docker-compose.yml` if you edited it, for example to use a prebuilt image).
+These commands use the default database user and name, `sharetab`; if you changed `DB_USER` or `DB_NAME`, use your values here and in the `psql` commands below. With an [external database](#external-postgres), back it up with `pg_dump` against that server instead. The dump covers the database only. A full backup also needs the receipt images (`/app/uploads`), the AI provider logins if you use `meridian` or `openai-codex` (`/app/claude`, `/app/chatgpt`), and your settings. On Unraid the data folders are under `/mnt/user/appdata/sharetab/` and the template settings are on the flash drive (`/boot/config/plugins/dockerMan/templates-user/`); with Compose the data is in the `docker_uploads`, `docker_claude`, and `docker_chatgpt` named volumes (Compose prefixes volume names with the project name, `docker` by default; `docker volume ls` lists them) and the settings are in `docker/.env` (also keep a copy of `docker/docker-compose.yml` if you edited it, for example to use a prebuilt image).
 
 Files can change between the dump and the copy while people use ShareTab. For a backup where everything matches, stop the container and copy all of its data while it is stopped: on Unraid the whole `/mnt/user/appdata/sharetab/` folder (it includes the database files in `db/`), with Compose the `docker_pgdata`, `docker_uploads`, `docker_claude`, and `docker_chatgpt` volumes. Keep file ownership when you copy (`cp -a` or `rsync -a`), or PostgreSQL can't read its files after a restore.
+
+<a id="external-postgres"></a>
+
+## Using an external PostgreSQL
+
+To run PostgreSQL yourself (its own container, a Kubernetes operator, a managed service), set `DATABASE_URL` on the ShareTab container. With it set, the container doesn't initialize or start its bundled database, and ignores `DB_USER`, `DB_PASSWORD` and `DB_NAME`. Leave it unset (or empty) to keep the bundled one.
+
+```
+DATABASE_URL=postgresql://sharetab:<password>@<host>:5432/sharetab
+```
+
+- **The database must exist.** ShareTab creates its tables, an enum type and an index on first start, not the database. The user needs to own the database, or have `CREATE` on its `public` schema (PostgreSQL 15 and newer don't grant that to everyone). Docker and CI use PostgreSQL 16.
+- **Startup waits for the server**, up to `DB_WAIT_SECONDS` (default 60), while it is unreachable or still starting, so starting both at once is fine. A wrong password, a missing database, a `pg_hba.conf` rejection or an untrusted certificate stops startup at once, with the reason and what to change in the log.
+- **TLS:** no `sslmode` (or `sslmode=disable`) connects without TLS. For a server with a self-signed certificate, add `?sslmode=no-verify`: the connection is encrypted but the certificate isn't checked. To check it, mount the CA certificate into the container, set `NODE_EXTRA_CA_CERTS` to its path, and use `?sslmode=verify-full` with the host name the certificate was issued for (an IP address doesn't work). `sslmode=require` checks the certificate too, unlike in `psql`, so it fails on a self-signed one.
+- **Docker Compose:** `docker/docker-compose.external-db.yml` runs `postgres:16-alpine` in its own container and sets `DATABASE_URL` for you. Add this line to `docker/.env` so every `docker compose` command, including upgrades, uses it (on Windows, separate the files with `;`):
+
+  ```
+  COMPOSE_FILE=docker-compose.yml:docker-compose.external-db.yml
+  ```
+
+- **Unraid:** fill in **Database URL** (under advanced settings).
+- **Kubernetes with CloudNativePG:** use the `uri` key of the cluster's `<cluster>-app` secret.
+
+While an external database is in use, the container keeps a file named `.sharetab-external-database` in the bundled database's folder (`/var/lib/postgresql/data`; on Unraid `/mnt/user/appdata/sharetab/db`). If the container is later started without `DATABASE_URL` (say, a Compose command run without the overlay file, or a cleared Unraid field), it refuses to start rather than run on an empty bundled database. To go back to the bundled database on purpose, delete that file.
+
+<a id="moving-to-external"></a>
+
+### Moving to an external database
+
+Setting `DATABASE_URL` doesn't copy anything: an install that used the bundled database starts empty on the new server, and its log warns that the bundled data is unused. To keep your data, copy it before ShareTab first starts on the new server:
+
+1. Take a full backup (see [Backups](#backups)).
+2. Create the database and its user on the new server.
+3. Dump the bundled database, leaving out ownership and permissions, which belong to the old user. On Unraid: `docker exec sharetab su-exec postgres pg_dump -U sharetab --no-owner --no-privileges sharetab > sharetab.sql`. With Compose, from `docker/`: `docker compose exec -T sharetab su-exec postgres pg_dump -U sharetab --no-owner --no-privileges sharetab > sharetab.sql`.
+4. Stop ShareTab.
+5. Load the dump into the new database as its user, with any `psql`: `psql "postgresql://sharetab:<password>@<host>:5432/sharetab" -v ON_ERROR_STOP=1 -f sharetab.sql`. With the Compose overlay, set `COMPOSE_FILE` as above, start only the database, then load it: `docker compose up -d postgres`, then `docker compose exec -T postgres psql -U sharetab -d sharetab -v ON_ERROR_STOP=1 < sharetab.sql`.
+6. Set `DATABASE_URL` (or `COMPOSE_FILE`) and start ShareTab.
+
+Loading the dump after ShareTab has started on the new database fails, because ShareTab has already created empty tables there. Once everything is there, you can delete the old database files, but keep `.sharetab-external-database`.
 
 ## Upgrading
 
@@ -232,6 +271,11 @@ Each push to `main` starts an image build; each build that passes its smoke test
 | `ghcr.io/sw-carlos-cristobal/sharetab:<sha>`  | One specific commit (short SHA, e.g. `870a80e`), for pinning. A push that lands while the previous build is still running cancels that build, so not every commit has an image.                                                 |
 
 Each push to `main` also gets a GitHub release named `Build YYYY.MM.DD.N-<sha>` listing the changes since the previous build; see [Releases](../../releases). The `stable` git tag normally marks the commit `:stable` was built from ([browse it](../../tree/stable)); after a failed promotion (see [Releases](#releases)) the tag and the image can point at different commits. ShareTab no longer publishes numbered (semver) versions; the last was v0.8.0.
+
+### External PostgreSQL (#464)
+
+- `DATABASE_URL` set on the container now turns the bundled database off (see [Using an external PostgreSQL](#external-postgres)). Before, the container used the URL but started the bundled server anyway. If you set `DATABASE_URL` to point at the bundled server (`localhost:5432`), remove it: nothing listens there now, and startup stops with a hint saying so.
+- The entrypoint runs the SQL in `prisma/migrations/` and `prisma/after-push/` through the app's own database driver instead of `psql`, so the URL is read the same way at startup as by the app.
 
 ### Password reset (#397)
 
@@ -280,6 +324,9 @@ docker exec sharetab su-exec postgres psql -U sharetab -d sharetab \
 # Docker Compose (run from the docker/ directory)
 docker compose exec sharetab su-exec postgres psql -U sharetab -d sharetab \
   -f /app/prisma/migrations/guest_split_status_enum.sql
+
+# External database (uses the container's DATABASE_URL; with Compose, `docker compose exec sharetab`)
+docker exec sharetab node /app/db.mjs run "manual SQL" /app/prisma/migrations/guest_split_status_enum.sql
 ```
 
 This is idempotent — safe to run more than once.
@@ -304,6 +351,9 @@ docker exec sharetab su-exec postgres psql -U sharetab -d sharetab \
 # Docker Compose (run from the docker/ directory)
 docker compose exec sharetab su-exec postgres psql -U sharetab -d sharetab \
   -f /app/prisma/after-push/user_email_lower_unique.sql
+
+# External database (uses the container's DATABASE_URL; with Compose, `docker compose exec sharetab`)
+docker exec sharetab node /app/db.mjs run "manual SQL" /app/prisma/after-push/user_email_lower_unique.sql
 ```
 
 ## Configuration
@@ -332,7 +382,7 @@ All configuration is done through environment variables. Copy `.env.example` to 
 | `OLLAMA_BASE_URL`        | Ollama server URL. Defaults to `http://localhost:11434`.                                                                                                                                                           |
 | `OLLAMA_MODEL`           | Ollama model name. Defaults to `llava`.                                                                                                                                                                            |
 
-The defaults above are what ShareTab uses when a variable is unset. The Unraid template's `OLLAMA_BASE_URL` is a placeholder (`http://192.168.1.x:11434`) to replace with your Ollama host. With Docker Compose, the values in `docker/.env` win for the variables `docker-compose.yml` passes to the container (a variable exported in your shell wins over `.env`; others in `.env`, such as `DATABASE_URL`, are ignored); the fallbacks in `docker-compose.yml` apply only to variables left unset or empty. `UPLOAD_DIR` is the exception: the Compose file fixes it at `/app/uploads`.
+The defaults above are what ShareTab uses when a variable is unset. The Unraid template's `OLLAMA_BASE_URL` is a placeholder (`http://192.168.1.x:11434`) to replace with your Ollama host. With Docker Compose, the values in `docker/.env` win for the variables `docker-compose.yml` passes to the container (a variable exported in your shell wins over `.env`; others in `.env`, such as `DATABASE_URL`, are ignored, and the [external-database overlay](#external-postgres) sets its own); the fallbacks in `docker-compose.yml` apply only to variables left unset or empty. `UPLOAD_DIR` is the exception: the Compose file fixes it at `/app/uploads`.
 
 **Using `ollama` in Docker:** `localhost` inside the container is the container itself, so set `OLLAMA_BASE_URL` to the address of the machine running Ollama.
 
@@ -493,9 +543,11 @@ Setting a new password with a link signs the account out everywhere: every sessi
 | ----------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `NEXTAUTH_URL`          | `http://localhost:3000` | Public URL of your instance. The links in password reset, password changed and auth-expiry emails are built from it. Split and personal links are copied from the browser's address bar, not built from this setting, so open ShareTab at its public URL before sharing one. |
 | `AUTH_TRUST_HOST`       | `false`                 | Set to `true` when running on a local network or behind a reverse proxy.                                                                                                                                                                                                     |
-| `DB_USER`               | `sharetab`              | PostgreSQL username (Docker bundled DB).                                                                                                                                                                                                                                     |
-| `DB_PASSWORD`           | `sharetab`              | PostgreSQL password (Docker bundled DB).                                                                                                                                                                                                                                     |
-| `DB_NAME`               | `sharetab`              | PostgreSQL database name (Docker bundled DB).                                                                                                                                                                                                                                |
+| `DATABASE_URL`          | (unset)                 | Docker: set it to use your own PostgreSQL server instead of the bundled one (see [Using an external PostgreSQL](#external-postgres)). Local development: the database `npm run dev` uses.                                                                                    |
+| `DB_WAIT_SECONDS`       | `60`                    | Docker: how long startup waits for the database to accept connections.                                                                                                                                                                                                       |
+| `DB_USER`               | `sharetab`              | PostgreSQL username (Docker bundled DB; ignored when `DATABASE_URL` is set).                                                                                                                                                                                                 |
+| `DB_PASSWORD`           | `sharetab`              | PostgreSQL password (Docker bundled DB; ignored when `DATABASE_URL` is set).                                                                                                                                                                                                 |
+| `DB_NAME`               | `sharetab`              | PostgreSQL database name (Docker bundled DB; ignored when `DATABASE_URL` is set).                                                                                                                                                                                            |
 | `UPLOAD_DIR`            | `./uploads`             | Directory for receipt image uploads. The Docker image uses `/app/uploads`, and the Compose file fixes it there.                                                                                                                                                              |
 | `MAX_UPLOAD_SIZE_MB`    | `10`                    | Maximum upload file size.                                                                                                                                                                                                                                                    |
 | `DISABLE_GUEST_UPLOADS` | `false`                 | Lock guest receipt uploads and AI scans off; overrides the admin toggle.                                                                                                                                                                                                     |
