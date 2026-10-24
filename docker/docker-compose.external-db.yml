@@ -1,0 +1,45 @@
+# Runs PostgreSQL in its own container instead of the one bundled in the
+# ShareTab image. Use it on top of docker-compose.yml by adding this line to
+# docker/.env, so every `docker compose` command (including the README's
+# upgrade, `docker compose up -d --build`) includes it:
+#
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.external-db.yml
+#
+# (on Windows, separate the files with ; instead of :). A command run without
+# it starts ShareTab without DATABASE_URL, and the container refuses to start
+# rather than use an empty bundled database.
+#
+# Setting DATABASE_URL tells the image not to start its bundled database. It
+# is built here from DB_USER/DB_PASSWORD/DB_NAME rather than read from .env,
+# since the .env copied from .env.example holds a DATABASE_URL for local
+# development that would point the container at nothing.
+#
+# This starts a new, empty database. To keep the data of an install that used
+# the bundled one, follow the README's "Moving to an external database" first.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=${DB_USER:-sharetab}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-sharetab}
+      - POSTGRES_DB=${DB_NAME:-sharetab}
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      # Over TCP: while the image creates the database on first start, its
+      # temporary server listens on the Unix socket only
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  sharetab:
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-sharetab}:${DB_PASSWORD:-sharetab}@postgres:5432/${DB_NAME:-sharetab}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres:

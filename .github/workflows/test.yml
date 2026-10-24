@@ -90,7 +90,7 @@ jobs:
           DATABASE_URL: postgresql://sharetab:sharetab@localhost:5432/sharetab
         run: |
           for sqlfile in prisma/after-push/*.sql; do
-            npx prisma db execute --file "$sqlfile"
+            node docker/db.mjs run "post-schema SQL" "$sqlfile"
           done
 
       - name: Seed database
