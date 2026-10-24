@@ -14,7 +14,7 @@
   <Overview>
     ShareTab is an open-source, self-hosted Splitwise alternative with AI-powered receipt scanning.
 
-    All-in-one container: PostgreSQL is bundled inside — no external database required.
+    All-in-one container: PostgreSQL is bundled inside — no external database required. To use your own PostgreSQL server instead, set Database URL.
 
     Features:
     - Group expense tracking with multiple split modes
@@ -37,7 +37,7 @@
   <Icon>https://raw.githubusercontent.com/sw-carlos-cristobal/sharetab/main/public/icons/icon-512.png</Icon>
   <ExtraParams>--restart=unless-stopped</ExtraParams>
   <Description>
-    Self-hosted Splitwise alternative with AI receipt scanning. All-in-one container with bundled PostgreSQL — no external database needed. Split expenses with friends using multiple modes (equal, percentage, shares, exact, item-level from receipts). Supports OpenAI, OpenAI-Codex (ChatGPT OAuth), Claude, Meridian (Claude Max), Ollama for receipt extraction.
+    Self-hosted Splitwise alternative with AI receipt scanning. All-in-one container with bundled PostgreSQL — no external database needed (or set Database URL to use your own). Split expenses with friends using multiple modes (equal, percentage, shares, exact, item-level from receipts). Supports OpenAI, OpenAI-Codex (ChatGPT OAuth), Claude, Meridian (Claude Max), Ollama for receipt extraction.
   </Description>
 
   <!-- Ports -->
@@ -57,7 +57,7 @@
     Name="Database Data"
     Target="/var/lib/postgresql/data"
     Default="/mnt/user/appdata/sharetab/db"
-    Description="Path to store PostgreSQL data (persists across restarts)"
+    Description="Path to store the bundled PostgreSQL data (persists across restarts). With Database URL set, it holds only a marker that stops the bundled database starting if Database URL is cleared."
     Type="Path"
     Display="always"
     Required="true"
@@ -133,7 +133,7 @@
     Name="DB Password"
     Target="DB_PASSWORD"
     Default="sharetab"
-    Description="Password for the bundled PostgreSQL user"
+    Description="Password for the bundled PostgreSQL user (ignored when Database URL is set)"
     Type="Variable"
     Display="advanced"
     Required="false"
@@ -142,7 +142,7 @@
     Name="DB User"
     Target="DB_USER"
     Default="sharetab"
-    Description="Username for the bundled PostgreSQL database"
+    Description="Username for the bundled PostgreSQL database (ignored when Database URL is set)"
     Type="Variable"
     Display="advanced"
     Required="false"
@@ -151,11 +151,29 @@
     Name="DB Name"
     Target="DB_NAME"
     Default="sharetab"
-    Description="Name of the bundled PostgreSQL database"
+    Description="Name of the bundled PostgreSQL database (ignored when Database URL is set)"
     Type="Variable"
     Display="advanced"
     Required="false"
     Mask="false">sharetab</Config>
+  <Config
+    Name="Database URL"
+    Target="DATABASE_URL"
+    Default=""
+    Description="Leave empty to use the bundled database. Set to postgresql://user:password@host:5432/database to use your own PostgreSQL server instead; the bundled one then doesn't start. Its data isn't moved: see the README's Moving to an external database. Add ?sslmode=no-verify for a server with a self-signed TLS certificate."
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="true"></Config>
+  <Config
+    Name="Database wait (seconds)"
+    Target="DB_WAIT_SECONDS"
+    Default="60"
+    Description="How long startup waits for the database to accept connections before giving up"
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false">60</Config>
 
   <!-- AI -->
   <Config

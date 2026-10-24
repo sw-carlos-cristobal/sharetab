@@ -26,17 +26,73 @@ DB_USER="${DB_USER:-sharetab}"
 DB_PASSWORD="${DB_PASSWORD:-sharetab}"
 DB_NAME="${DB_NAME:-sharetab}"
 
-# ── Start PostgreSQL ────────────────────────────────────────
+# A DATABASE_URL means an external PostgreSQL server: the bundled one isn't
+# initialized or started, and DB_USER/DB_PASSWORD/DB_NAME are ignored.
+if [ -n "$DATABASE_URL" ]; then
+  DB_MODE=external
+else
+  DB_MODE=bundled
+fi
 
-# Ensure data directory exists and is owned by postgres (needed for host bind-mounts)
-mkdir -p "$PGDATA"
-chown postgres:postgres "$PGDATA"
-chmod 700 "$PGDATA"
+# Written into the bundled database's folder while an external one is in use,
+# so a start that loses DATABASE_URL (a Compose upgrade without the overlay
+# file, a cleared Unraid field) refuses instead of running on an empty or
+# stale bundled database.
+MODE_MARKER="$PGDATA/.sharetab-external-database"
+
+# ── Signals ─────────────────────────────────────────────────
+# Set before anything slow, so 'docker stop' is handled during startup too.
+# 'docker stop' must reach Postgres: otherwise it gets SIGKILLed when the
+# grace period expires and is forced into crash recovery on every restart
+# (the stale postmaster.pid this script used to clean up).
+
+CHILD_PID=""
+
+# Stops the bundled server if it's running; safe to call more than once.
+stop_postgres() {
+  [ "$DB_MODE" = bundled ] || return 0
+  [ -s "$PGDATA/PG_VERSION" ] || return 0
+  su-exec postgres pg_ctl -D "$PGDATA" status >/dev/null 2>&1 || return 0
+  echo "Stopping PostgreSQL..."
+  su-exec postgres pg_ctl -D "$PGDATA" -m fast -w stop || true
+}
+
+shutdown() {
+  echo "Received stop signal, shutting down..."
+  if [ -n "$CHILD_PID" ]; then
+    kill -TERM "$CHILD_PID" 2>/dev/null || true
+    wait "$CHILD_PID" 2>/dev/null || true
+  fi
+  stop_postgres
+  exit 0
+}
+trap shutdown TERM INT
+# A failing startup step (set -e) and Node exiting leave through here too
+trap stop_postgres EXIT
+
+# Runs a step in the background and waits for it, so a stop signal is handled
+# at once instead of when the step finishes.
+run_step() {
+  "$@" &
+  CHILD_PID=$!
+  step_status=0
+  wait "$CHILD_PID" || step_status=$?
+  CHILD_PID=""
+  return "$step_status"
+}
 
 # Ensure uploads directory exists and is writable by the app user (needed for host bind-mounts)
 UPLOAD_DIR="${UPLOAD_DIR:-/app/uploads}"
 mkdir -p "$UPLOAD_DIR/receipts"
 chown -R nextjs:nodejs "$UPLOAD_DIR"
+
+# ── Start PostgreSQL (bundled mode) ─────────────────────────
+
+start_bundled_postgres() {
+# Ensure data directory exists and is owned by postgres (needed for host bind-mounts)
+mkdir -p "$PGDATA"
+chown postgres:postgres "$PGDATA"
+chmod 700 "$PGDATA"
 
 # Initialize database if needed
 if [ ! -s "$PGDATA/PG_VERSION" ]; then
@@ -78,36 +134,59 @@ until su-exec postgres pg_isready -h localhost -q; do
 done
 echo "PostgreSQL is ready."
 
-# ── Set DATABASE_URL if not already pointing externally ─────
+export DATABASE_URL="postgresql://$DB_USER:$DB_PASSWORD@localhost:5432/$DB_NAME"
+}
 
-export DATABASE_URL="${DATABASE_URL:-postgresql://$DB_USER:$DB_PASSWORD@localhost:5432/$DB_NAME}"
+if [ "$DB_MODE" = bundled ]; then
+  if [ -f "$MODE_MARKER" ]; then
+    echo "ERROR: This install was last started with an external database (DATABASE_URL),"
+    echo "ERROR: so its data is there, not in the bundled database. Set DATABASE_URL again."
+    echo "ERROR: To use the bundled database instead, delete $MODE_MARKER"
+    echo "ERROR: (in the folder or volume mounted at $PGDATA) and restart."
+    exit 1
+  fi
+  start_bundled_postgres
+else
+  if [ -s "$PGDATA/PG_VERSION" ]; then
+    # Switching to an external server doesn't move the data. Say so, or an
+    # install pointed at a new, empty database just looks like it lost everything.
+    echo "WARNING: DATABASE_URL points to an external database, so the bundled database in"
+    echo "WARNING: $PGDATA is not used. Its data was not copied; see the README's"
+    echo "WARNING: \"Moving to an external database\"."
+  fi
+  if [ ! -f "$MODE_MARKER" ] &&
+    ! { mkdir -p "$PGDATA" &&
+      echo "ShareTab uses an external database (DATABASE_URL). While this file exists, it won't start the bundled one." >"$MODE_MARKER"; } 2>/dev/null; then
+    echo "WARNING: could not write $MODE_MARKER; a start without DATABASE_URL won't be stopped."
+  fi
+fi
+
+# Both modes. For an external server, waits for it to come up; for the bundled
+# one, checks the URL the app will use signs in (pg_isready above doesn't).
+run_step su-exec nextjs node /app/db.mjs wait
 
 # ── Run Migrations ──────────────────────────────────────────
 
 # Run manual SQL migrations (for changes prisma db push can't handle, e.g. enum conversions).
 # They run before `prisma db push` on every start, including a fresh install's
 # first, so each file must be idempotent and a no-op on an empty database.
-if [ -d "/app/prisma/migrations" ]; then
-  for sqlfile in /app/prisma/migrations/*.sql; do
-    [ -f "$sqlfile" ] || continue
-    echo "Running migration: $(basename "$sqlfile")..."
-    su-exec postgres psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$sqlfile" 2>&1
-  done
-fi
+# docker/db.mjs runs them rather than psql, which reads DATABASE_URL
+# differently from the app (see the top of db.mjs).
+for sqlfile in /app/prisma/migrations/*.sql; do
+  [ -f "$sqlfile" ] || continue
+  run_step su-exec nextjs node /app/db.mjs run migration "$sqlfile"
+done
 
 echo "Running database migrations..."
-NODE_PATH=/prisma-cli/node_modules node /prisma-cli/node_modules/prisma/build/index.js db push
+run_step env NODE_PATH=/prisma-cli/node_modules node /prisma-cli/node_modules/prisma/build/index.js db push
 
 # Run SQL that needs the schema to exist and that prisma db push can't express
 # (e.g. an index on lower(email)). Each file must be idempotent; any failure
 # stops startup, so files log a warning instead for anything optional.
-if [ -d "/app/prisma/after-push" ]; then
-  for sqlfile in /app/prisma/after-push/*.sql; do
-    [ -f "$sqlfile" ] || continue
-    echo "Running post-schema SQL: $(basename "$sqlfile")..."
-    su-exec postgres psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$sqlfile" 2>&1
-  done
-fi
+for sqlfile in /app/prisma/after-push/*.sql; do
+  [ -f "$sqlfile" ] || continue
+  run_step su-exec nextjs node /app/db.mjs run "post-schema SQL" "$sqlfile"
+done
 
 # ── Claude credentials: persistent shared dir for meridian provider ──
 export CLAUDE_DIR="${CLAUDE_DIR:-/app/claude}"
@@ -130,9 +209,11 @@ echo "  ShareTab Configuration"
 echo "============================================"
 echo "  Version:        $(node -e "console.log(require('./package.json').version)" 2>/dev/null || echo 'unknown')"
 echo "  Commit:         $(cat .commit-sha 2>/dev/null || echo 'unknown')"
-echo "  Database:       $(echo "$DATABASE_URL" | sed -E 's#//[^@]+@#//***:***@#')"
-echo "  DB User:        ${DB_USER:-sharetab}"
-echo "  DB Name:        ${DB_NAME:-sharetab}"
+echo "  Database:       $DB_MODE, $(echo "$DATABASE_URL" | sed -E 's#//[^@]+@#//***:***@#; s#\?.*##')"
+if [ "$DB_MODE" = bundled ]; then
+  echo "  DB User:        ${DB_USER:-sharetab}"
+  echo "  DB Name:        ${DB_NAME:-sharetab}"
+fi
 echo "  Auth URL:       ${NEXTAUTH_URL:-not set}"
 echo "  Auth Trust:     ${AUTH_TRUST_HOST:-false}"
 AI_PROVIDER_PRIORITY="${AI_PROVIDER_PRIORITY:-openai}"
@@ -232,29 +313,10 @@ echo ""
 echo "Starting ShareTab..."
 export HOME=/home/nextjs
 
-# Run Node in the background so this script (PID 1) can forward signals.
-# 'docker stop' must reach Postgres too — otherwise it gets SIGKILLed when
-# the grace period expires and is forced into crash recovery on every
-# restart (the stale postmaster.pid this script used to clean up).
-stop_postgres() {
-  echo "Stopping PostgreSQL..."
-  su-exec postgres pg_ctl -D "$PGDATA" -m fast -w stop || true
-}
-
-shutdown() {
-  echo "Received stop signal, shutting down..."
-  if [ -n "$APP_PID" ]; then
-    kill -TERM "$APP_PID" 2>/dev/null || true
-    wait "$APP_PID" 2>/dev/null || true
-  fi
-  stop_postgres
-  exit 0
-}
-trap shutdown TERM INT
-
+# Run Node in the background so this script (PID 1) can forward signals
+# (see Signals above). The EXIT trap stops the bundled server after Node exits.
 su-exec nextjs node server.js &
-APP_PID=$!
+CHILD_PID=$!
 APP_EXIT=0
-wait "$APP_PID" || APP_EXIT=$?
-stop_postgres
+wait "$CHILD_PID" || APP_EXIT=$?
 exit "$APP_EXIT"

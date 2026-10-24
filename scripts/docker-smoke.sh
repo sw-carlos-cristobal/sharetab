@@ -6,7 +6,9 @@
 # install does on upgrade, and checks what the Test workflow's
 # `npm run start` never exercises: the entrypoint, the pre-push SQL
 # migrations, and the packages the Dockerfile adds beside the standalone
-# build (Meridian and what it loads at runtime).
+# build (Meridian and what it loads at runtime). Then it runs the image
+# against PostgreSQL in its own container (DATABASE_URL set, the bundled
+# server off), over TLS with a self-signed certificate.
 #
 # CI runs it on every pull request and before publishing an image. Run it
 # before pushing a Docker, entrypoint, or dependency change:
@@ -64,6 +66,14 @@ done
 cd "$(dirname "$0")/.."
 
 CONTAINER="sharetab-smoke-$$-$RANDOM"
+# The external-database checks: a network, a PostgreSQL container, ShareTab
+# on it, a container for the starts expected to fail, and a data volume
+EXT_NET="$CONTAINER-net"
+EXT_PG="$CONTAINER-pg"
+EXT_APP="$CONTAINER-ext"
+EXT_ONESHOT="$CONTAINER-oneshot"
+EXT_PGDATA="$CONTAINER-pgdata"
+TLS_DIR=""
 AUTH_VOLUME=""
 AUTH_TOKEN_HASH=""
 FAILED=true
@@ -109,6 +119,17 @@ cleanup() {
     printf '\n== Container logs (last 200 lines)\n'
     docker logs --tail 200 "$CONTAINER" 2>&1 || true
   fi
+  if [[ "$FAILED" == true ]] && docker inspect "$EXT_APP" >/dev/null 2>&1; then
+    printf '\n== External-database container logs (last 100 lines)\n'
+    docker logs --tail 100 "$EXT_APP" 2>&1 || true
+  fi
+  # --keep keeps only the main container
+  docker rm -f -v "$EXT_APP" "$EXT_ONESHOT" "$EXT_PG" >/dev/null 2>&1 || true
+  docker volume rm "$EXT_PGDATA" >/dev/null 2>&1 || true
+  docker network rm "$EXT_NET" >/dev/null 2>&1 || true
+  if [[ -n "$TLS_DIR" ]]; then
+    rm -rf "$TLS_DIR"
+  fi
   if [[ "$KEEP" == true ]]; then
     echo "Kept container $CONTAINER (admin: $ADMIN_EMAIL / $ADMIN_PASSWORD)"
     return
@@ -123,14 +144,14 @@ trap cleanup EXIT
 # ── Helpers ────────────────────────────────────────────────────
 
 # Wait until /api/health answers inside the container, failing fast if the
-# container exits. Usage: wait_healthy <label>
+# container exits. Usage: wait_healthy <label> [container]
 wait_healthy() {
-  local label="$1"
+  local label="$1" container="${2:-$CONTAINER}"
   for _ in $(seq 1 90); do
-    if [[ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER")" != "true" ]]; then
+    if [[ "$(docker inspect -f '{{.State.Running}}' "$container")" != "true" ]]; then
       fail "The container exited during startup ($label)."
     fi
-    if docker exec "$CONTAINER" wget -qO- http://127.0.0.1:3000/api/health 2>/dev/null; then
+    if docker exec "$container" wget -qO- http://127.0.0.1:3000/api/health 2>/dev/null; then
       echo
       return 0
     fi
@@ -360,6 +381,161 @@ if [[ -n "$MERIDIAN_AUTH" ]]; then
   # The restarts above ran with the login mounted too.
   check_login_unchanged
 fi
+
+# ── External database ──────────────────────────────────────────
+
+# SQL against the external database over its Unix socket; output as db().
+ext_db() {
+  docker exec "$EXT_PG" psql -U sharetab -d sharetab -v ON_ERROR_STOP=1 -tA "$@"
+}
+
+# Start ShareTab on the external database's network, with DATABASE_URL set
+# unless <url> is empty. Usage: run_external <name> <url> [docker run args...]
+run_external() {
+  local name="$1" url="$2"
+  shift 2
+  local env=(-e NEXTAUTH_SECRET="$secret" -e AUTH_SECRET="$secret" -e AUTH_TRUST_HOST=true)
+  if [[ -n "$url" ]]; then
+    env+=(-e DATABASE_URL="$url")
+  fi
+  docker rm -f -v "$name" >/dev/null 2>&1 || true
+  docker run -d --name "$name" --label sharetab-smoke --network "$EXT_NET" \
+    "${env[@]}" "$@" "$IMAGE" >/dev/null
+}
+
+# Wait up to <seconds> for a container to exit, then print its exit code;
+# returns 1 if it's still running. (Not fail(): it's called in $(...), where
+# fail's ::error:: line would be captured instead of shown.)
+# Usage: wait_exited <container> <seconds>
+wait_exited() {
+  local container="$1" seconds="$2"
+  for _ in $(seq 1 "$seconds"); do
+    if [[ "$(docker inspect -f '{{.State.Running}}' "$container")" != "true" ]]; then
+      docker inspect -f '{{.State.ExitCode}}' "$container"
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+# Start ShareTab with <url> and expect it to stop at once, with a non-zero
+# exit and <text> in its log.
+# Usage: expect_refused <label> <url> <text> [docker run args...]
+expect_refused() {
+  local label="$1" url="$2" text="$3" code log
+  shift 3
+  run_external "$EXT_ONESHOT" "$url" "$@"
+  code=$(wait_exited "$EXT_ONESHOT" 30) || fail "$label: still running after 30s."
+  log=$(docker logs "$EXT_ONESHOT" 2>&1)
+  [[ "$code" != 0 ]] || fail "$label: the container exited 0."
+  grep -qF "$text" <<<"$log" || fail "$label: no \"$text\" in its log."
+  grep -E '^ERROR' <<<"$log" | head -2
+}
+
+section "External database: start beside PostgreSQL, TLS only"
+# A self-signed certificate, as on most home servers, and a server that
+# accepts TLS connections only, so db.mjs, the image's Prisma CLI and the app
+# all have to use TLS with the one DATABASE_URL (sslmode=no-verify).
+TLS_DIR=$(mktemp -d)
+openssl req -new -x509 -days 1 -nodes -subj "/CN=$EXT_PG" \
+  -keyout "$TLS_DIR/server.key" -out "$TLS_DIR/server.crt" 2>/dev/null
+printf 'local all all trust\nhostssl all all all scram-sha-256\n' >"$TLS_DIR/pg_hba.conf"
+docker network create --label sharetab-smoke "$EXT_NET" >/dev/null
+# postgres:16-alpine has no openssl, so the files are copied in before it
+# starts, and moved where the server user can own them.
+docker create --name "$EXT_PG" --label sharetab-smoke --network "$EXT_NET" \
+  -e POSTGRES_USER=sharetab -e POSTGRES_PASSWORD=pw -e POSTGRES_DB=sharetab \
+  --entrypoint sh postgres:16-alpine -c '
+    install -o postgres -g postgres -m 600 /tls/server.key /tls/server.crt /tls/pg_hba.conf /var/lib/postgresql/ &&
+    exec docker-entrypoint.sh postgres -c ssl=on \
+      -c ssl_cert_file=/var/lib/postgresql/server.crt \
+      -c ssl_key_file=/var/lib/postgresql/server.key \
+      -c hba_file=/var/lib/postgresql/pg_hba.conf' >/dev/null
+docker cp "$TLS_DIR/." "$EXT_PG:/tls"
+# A data folder that looks like it holds a bundled database, for the warning
+docker volume create --label sharetab-smoke "$EXT_PGDATA" >/dev/null
+docker run --rm --entrypoint sh -v "$EXT_PGDATA:/d" "$IMAGE" -c 'echo 16 > /d/PG_VERSION'
+# Started together, as Compose and Kubernetes do, so ShareTab has to wait
+docker start "$EXT_PG" >/dev/null
+EXT_URL="postgresql://sharetab:pw@$EXT_PG:5432/sharetab?sslmode=no-verify"
+run_external "$EXT_APP" "$EXT_URL" -v "$EXT_PGDATA:/var/lib/postgresql/data"
+wait_healthy "external database, first start" "$EXT_APP"
+
+section "External database: the bundled server stays off"
+ext_log=$(docker logs "$EXT_APP" 2>&1)
+if grep -qE 'Initializing PostgreSQL|Starting PostgreSQL' <<<"$ext_log"; then
+  fail "The bundled PostgreSQL was started although DATABASE_URL is set."
+fi
+docker exec "$EXT_APP" sh -c '! pg_isready -h localhost -q' ||
+  fail "Something answers on localhost:5432 inside the container."
+grep -qE '^  Database: +external, postgresql://\*\*\*:\*\*\*@' <<<"$ext_log" ||
+  fail "The startup summary doesn't say the database is external."
+grep -qF 'WARNING: DATABASE_URL points to an external database' <<<"$ext_log" ||
+  fail "No warning that the bundled database in the data folder isn't used."
+docker exec "$EXT_APP" test -f /var/lib/postgresql/data/.sharetab-external-database ||
+  fail "The external-database marker wasn't written."
+
+section "External database: schema, SQL phases and email index"
+ext_db -c 'SELECT count(*) FROM "User"' -c 'SELECT count(*) FROM "GuestSplit"' >/dev/null
+[[ "$(ext_db -c "SELECT count(*) FROM pg_type WHERE typname = 'GuestSplitStatus'")" == 1 ]] ||
+  fail "The GuestSplitStatus enum from prisma/migrations is missing."
+[[ "$(ext_db -c "SELECT to_regclass('\"User_email_lower_key\"') IS NOT NULL")" == t ]] ||
+  fail "The email index from prisma/after-push is missing."
+
+section "External database: a connection without TLS is refused"
+# So the app working at all shows its connections used TLS.
+if no_tls=$(docker exec -e DATABASE_URL="postgresql://sharetab:pw@$EXT_PG:5432/sharetab?sslmode=disable" \
+  "$EXT_APP" node /app/db.mjs wait 2>&1); then
+  fail "A connection without TLS was accepted."
+fi
+grep -qF 'pg_hba.conf' <<<"$no_tls" || fail "Unexpected answer to a connection without TLS: $no_tls"
+echo "$no_tls"
+
+section "External database: restart keeps the email index"
+before=$(ext_db -c "SELECT '\"User_email_lower_key\"'::regclass::oid")
+docker restart "$EXT_APP" >/dev/null
+wait_healthy "external database, restart" "$EXT_APP"
+after=$(ext_db -c "SELECT '\"User_email_lower_key\"'::regclass::oid")
+[[ "$before" == "$after" ]] || fail "prisma db push dropped User_email_lower_key (oid $before -> $after)."
+
+section "External database: docker stop"
+docker stop "$EXT_APP" >/dev/null
+[[ "$(docker inspect -f '{{.State.ExitCode}}' "$EXT_APP")" == 0 ]] || fail "ShareTab exited non-zero on docker stop."
+if grep -qF 'Stopping PostgreSQL' <<<"$(docker logs --tail 20 "$EXT_APP" 2>&1)"; then
+  fail "docker stop tried to stop a bundled PostgreSQL that wasn't running."
+fi
+
+section "External database: a start without DATABASE_URL refuses"
+# As after a Compose upgrade run without the overlay file
+expect_refused "bundled start on an external install's data folder" "" \
+  "last started with an external database" -v "$EXT_PGDATA:/var/lib/postgresql/data"
+docker run --rm --entrypoint sh -v "$EXT_PGDATA:/d" "$IMAGE" -c 'test ! -e /d/base' ||
+  fail "The bundled database was initialized in the external install's data folder."
+
+section "External database: errors waiting won't fix stop startup at once"
+expect_refused "wrong password" "postgresql://sharetab:wrong@$EXT_PG:5432/sharetab?sslmode=no-verify" \
+  "password authentication failed"
+expect_refused "sslmode=require with a self-signed certificate" \
+  "postgresql://sharetab:pw@$EXT_PG:5432/sharetab?sslmode=require" "sslmode=require verifies the certificate"
+
+section "External database: docker stop during the wait"
+run_external "$EXT_ONESHOT" "postgresql://sharetab:pw@sharetab-smoke-nowhere.invalid:5432/sharetab" \
+  -e DB_WAIT_SECONDS=300
+for _ in $(seq 1 30); do
+  if grep -qF 'Waiting for the database' <<<"$(docker logs "$EXT_ONESHOT" 2>&1)"; then
+    break
+  fi
+  sleep 1
+done
+grep -qF 'Waiting for the database' <<<"$(docker logs "$EXT_ONESHOT" 2>&1)" ||
+  fail "ShareTab never started waiting for the unresolvable database."
+stop_start=$SECONDS
+docker stop -t 30 "$EXT_ONESHOT" >/dev/null
+((SECONDS - stop_start < 10)) || fail "docker stop took $((SECONDS - stop_start))s during the wait."
+[[ "$(docker inspect -f '{{.State.ExitCode}}' "$EXT_ONESHOT")" == 0 ]] ||
+  fail "ShareTab exited non-zero on docker stop during the wait."
+echo "Stopped in $((SECONDS - stop_start))s."
 
 FAILED=false
 section "Done"

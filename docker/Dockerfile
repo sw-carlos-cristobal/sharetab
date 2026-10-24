@@ -61,6 +61,7 @@ RUN npm init -y && \
 WORKDIR /app
 
 COPY docker/entrypoint.sh /app/entrypoint.sh
+COPY docker/db.mjs /app/db.mjs
 COPY docker/claude /usr/local/bin/claude
 
 # Create directories
