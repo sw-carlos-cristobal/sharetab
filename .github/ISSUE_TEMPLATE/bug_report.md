@@ -29,6 +29,7 @@ What actually happened.
 - Browser (if UI bug):
 - AI provider (if receipt scanning bug):
 - How you run ShareTab: Unraid template / Docker Compose built from this repo / Docker Compose with a prebuilt image / other container setup / bare metal / dev server
+- Database: bundled / external (`DATABASE_URL` set), and the external server's PostgreSQL version:
 - Host OS / platform:
 - Reverse proxy / CDN, if any (e.g. nginx, Traefik, Cloudflare, none):
 

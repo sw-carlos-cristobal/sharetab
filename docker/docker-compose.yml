@@ -12,7 +12,8 @@ services:
       - DB_USER=${DB_USER:-sharetab}
       - DB_PASSWORD=${DB_PASSWORD:-sharetab}
       - DB_NAME=${DB_NAME:-sharetab}
-      - DB_WAIT_SECONDS=${DB_WAIT_SECONDS:-60}
+      - DB_WAIT_SECONDS=${DB_WAIT_SECONDS:-}
+      - ALLOW_EMPTY_EXTERNAL_DB=${ALLOW_EMPTY_EXTERNAL_DB:-}
       - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-}
       - AUTH_SECRET=${AUTH_SECRET:-}

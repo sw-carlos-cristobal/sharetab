@@ -35,7 +35,7 @@
   <WebUI>http://[IP]:[PORT:3000]</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/sw-carlos-cristobal/sharetab/main/unraid/sharetab.xml</TemplateURL>
   <Icon>https://raw.githubusercontent.com/sw-carlos-cristobal/sharetab/main/public/icons/icon-512.png</Icon>
-  <ExtraParams>--restart=unless-stopped</ExtraParams>
+  <ExtraParams>--restart=unless-stopped --stop-timeout=30</ExtraParams>
   <Description>
     Self-hosted Splitwise alternative with AI receipt scanning. All-in-one container with bundled PostgreSQL — no external database needed (or set Database URL to use your own). Split expenses with friends using multiple modes (equal, percentage, shares, exact, item-level from receipts). Supports OpenAI, OpenAI-Codex (ChatGPT OAuth), Claude, Meridian (Claude Max), Ollama for receipt extraction.
   </Description>
@@ -57,7 +57,7 @@
     Name="Database Data"
     Target="/var/lib/postgresql/data"
     Default="/mnt/user/appdata/sharetab/db"
-    Description="Path to store the bundled PostgreSQL data (persists across restarts). With Database URL set, it holds only a marker that stops the bundled database starting if Database URL is cleared."
+    Description="Path to store the bundled PostgreSQL data (persists across restarts). With Database URL set, the bundled database isn't used: the folder keeps any old bundled data, and a marker that stops the bundled database starting if Database URL is later cleared."
     Type="Path"
     Display="always"
     Required="true"
@@ -160,7 +160,7 @@
     Name="Database URL"
     Target="DATABASE_URL"
     Default=""
-    Description="Leave empty to use the bundled database. Set to postgresql://user:password@host:5432/database to use your own PostgreSQL server instead; the bundled one then doesn't start. Its data isn't moved: see the README's Moving to an external database. Add ?sslmode=no-verify for a server with a self-signed TLS certificate."
+    Description="Leave empty to use the bundled database. Set to postgresql://user:password@host:5432/database to use your own PostgreSQL server instead; the bundled one then doesn't start. Its data isn't moved: see the README's Moving to an external database. Percent-encode : / ? # @ [ ] % in the password (/ is %2F). For a self-signed TLS certificate, see the README; on a network you trust, ?sslmode=no-verify encrypts without checking the server."
     Type="Variable"
     Display="advanced"
     Required="false"
@@ -174,6 +174,15 @@
     Display="advanced"
     Required="false"
     Mask="false">60</Config>
+  <Config
+    Name="Allow empty external database"
+    Target="ALLOW_EMPTY_EXTERNAL_DB"
+    Default=""
+    Description="On the first start with Database URL, while the database folder still holds a bundled database, an empty external database is refused, in case the URL is wrong or the data hasn't been moved. Set to true to start on it anyway, with no data."
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false"></Config>
 
   <!-- AI -->
   <Config

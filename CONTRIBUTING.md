@@ -59,7 +59,7 @@ This creates three demo users you can log in with:
 npm test
 ```
 
-Runs over 1,100 fast Vitest tests (under 10 seconds). Tests sit next to the code they cover (`src/**/*.test.ts`, plus `docker/**/*.test.mjs` for the Docker build scripts and `scripts/**/*.test.ts` for the repo scripts): money and split math, balance computation, rate limiting, exchange rates, sign-in, OIDC and Google policy, guest sessions, AI providers, the admin, auth, balances, expenses, guest, groups, and receipts routers, and the translation checks.
+Runs over 1,100 fast Vitest tests (under 10 seconds). Tests sit next to the code they cover (`src/**/*.test.ts`, plus `docker/**/*.test.mjs` for the Docker scripts and `scripts/**/*.test.ts` for the repo scripts): money and split math, balance computation, rate limiting, exchange rates, sign-in, OIDC and Google policy, guest sessions, AI providers, the admin, auth, balances, expenses, guest, groups, and receipts routers, and the translation checks.
 
 ### E2E tests
 
@@ -123,6 +123,10 @@ npx prisma generate     # regenerate the client
 
 Database objects that Prisma's schema can't express (for example the unique index on `lower(email)`) go in `prisma/after-push/`, which the entrypoint runs **after** `prisma db push`. These must be idempotent too. An error in either directory stops the container from starting, so for anything optional, log a warning (`RAISE WARNING`) instead of raising an error. CI's `docker-fresh-install.yml` workflow boots the image on an empty volume to check both directories.
 
+**Removing or renaming a model** leaves its table in every existing external database, and the entrypoint's schema check (`docker/db-lib.mjs`, `check-schema`) refuses a database with a table ShareTab doesn't have, before any SQL file runs. Add the old table name to `RETIRED_TABLES` there in the same change, and leave it in the list of shipped models in `docker/db.test.mjs`, which fails until you do. A new model goes in that list too (the test fails until it is), and models can't use `@@map`, since the check takes model names as table names.
+
+The entrypoint runs each file through `docker/db.mjs` as one query, so a file's statements run in one transaction and an error rolls back the whole file. So a file can't add an enum value and use it (that fails with 55P04: put them in two files), can't hold `CREATE INDEX CONCURRENTLY` or `VACUUM` alongside other statements, and can't use `psql` meta-commands or `:variables`.
+
 ### Adding a tRPC route
 
 Routers live in `src/server/trpc/routers/`. Add your procedure there and wire it into `src/server/trpc/router.ts`.
@@ -146,7 +150,7 @@ src/
   lib/           # Shared utilities (money, splits, etc.)
 prisma/
   schema.prisma  # Database schema
-docker/          # Dockerfile + docker-compose
+docker/          # Dockerfile, Compose files, entrypoint and its database steps (db.mjs)
 ```
 
 See [CLAUDE.md](CLAUDE.md) for a full architecture reference.

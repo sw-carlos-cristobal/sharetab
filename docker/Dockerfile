@@ -61,7 +61,7 @@ RUN npm init -y && \
 WORKDIR /app
 
 COPY docker/entrypoint.sh /app/entrypoint.sh
-COPY docker/db.mjs /app/db.mjs
+COPY docker/db.mjs docker/db-lib.mjs /app/
 COPY docker/claude /usr/local/bin/claude
 
 # Create directories
@@ -78,7 +78,8 @@ ENV PGDATA=/var/lib/postgresql/data
 
 VOLUME ["/var/lib/postgresql/data", "/app/uploads", "/app/claude", "/app/chatgpt"]
 
-# start-period covers first-boot initdb + user creation + schema push
+# start-period covers first-boot initdb + user creation + schema push; a long
+# wait for an external database (DB_WAIT_SECONDS) can run past it
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=60s \
   CMD wget -qO- http://127.0.0.1:3000/api/health || exit 1
 

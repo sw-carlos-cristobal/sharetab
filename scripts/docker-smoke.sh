@@ -17,12 +17,19 @@
 #   DOCKER_HOST=ssh://user@host scripts/docker-smoke.sh --build  # remote Docker
 #
 # Access to a Docker daemon is root-equivalent on its host; point DOCKER_HOST
-# only at a host where that is acceptable. The container gets a unique name
-# and publishes no ports, so it can run on a host that already runs ShareTab.
+# only at a host where that is acceptable. Its containers, volumes and network
+# get unique names and publish no ports, so it can run on a host that already
+# runs ShareTab.
 # Everything it creates is labeled sharetab-smoke and removed on exit; if a
 # run is killed (SIGKILL skips the cleanup), remove the leftovers with:
 #   docker rm -f -v $(docker ps -aq --filter label=sharetab-smoke)
 #   docker volume rm $(docker volume ls -q --filter label=sharetab-smoke)
+#   docker network rm $(docker network ls -q --filter label=sharetab-smoke)
+# and the Compose project of the overlay check, which Compose labels its own
+# way: docker compose ls -a | grep sharetab-smoke, then
+#   docker compose -p <name> down -v
+# (or, without Compose, docker ps -a / docker volume ls / docker network ls
+# --filter label=com.docker.compose.project=<name>)
 #
 # Options:
 #   --build           build docker/Dockerfile from this checkout first
@@ -45,6 +52,11 @@
 #                     (credentials printed on exit) that other containers on
 #                     its Docker network can reach; remove it when done.
 set -euo pipefail
+# In CI, name the line of a command that stops the script outside fail()
+if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+  set -E
+  trap 'echo "::error::docker-smoke.sh line $LINENO: $BASH_COMMAND"' ERR
+fi
 
 IMAGE="sharetab:smoke"
 BUILD=false
@@ -73,6 +85,22 @@ EXT_PG="$CONTAINER-pg"
 EXT_APP="$CONTAINER-ext"
 EXT_ONESHOT="$CONTAINER-oneshot"
 EXT_PGDATA="$CONTAINER-pgdata"
+EXT_PGDATA_NEW="$CONTAINER-pgdata-new"
+# A data folder that still holds a bundled database, for the empty-database refusal
+EXT_PGDATA_OLD="$CONTAINER-pgdata-old"
+# A fresh bundled install, for the first-start checks
+BOOT="$CONTAINER-boot"
+# ShareTab on the overlay's database
+OVERLAY_APP="$CONTAINER-overlay"
+# Temporary files and folders made on this machine, removed on exit
+TEMP_PATHS=()
+# The overlay's Compose project
+COMPOSE_PROJECT="$CONTAINER-compose"
+# Distinctive, so the logs can be searched for it
+EXT_PW="smoke-pw-7f3a"
+# The external server's image (SMOKE_PG_IMAGE=postgres:18-alpine, say, to try
+# a newer major); the Compose overlay always uses its own
+EXT_PG_IMAGE="${SMOKE_PG_IMAGE:-postgres:16-alpine}"
 TLS_DIR=""
 AUTH_VOLUME=""
 AUTH_TOKEN_HASH=""
@@ -119,13 +147,31 @@ cleanup() {
     printf '\n== Container logs (last 200 lines)\n'
     docker logs --tail 200 "$CONTAINER" 2>&1 || true
   fi
-  if [[ "$FAILED" == true ]] && docker inspect "$EXT_APP" >/dev/null 2>&1; then
-    printf '\n== External-database container logs (last 100 lines)\n'
-    docker logs --tail 100 "$EXT_APP" 2>&1 || true
+  if [[ "$FAILED" == true ]]; then
+    for c in "$EXT_APP" "$EXT_ONESHOT" "$EXT_PG" "$BOOT" "$OVERLAY_APP"; do
+      if docker inspect "$c" >/dev/null 2>&1; then
+        printf '\n== %s logs (last 200 lines)\n' "$c"
+        docker logs --tail 200 "$c" 2>&1 || true
+      fi
+    done
   fi
   # --keep keeps only the main container
-  docker rm -f -v "$EXT_APP" "$EXT_ONESHOT" "$EXT_PG" >/dev/null 2>&1 || true
-  docker volume rm "$EXT_PGDATA" >/dev/null 2>&1 || true
+  docker rm -f -v "$EXT_APP" "$EXT_ONESHOT" "$EXT_PG" "$BOOT" "$OVERLAY_APP" >/dev/null 2>&1 || true
+  if ((${#TEMP_PATHS[@]})); then
+    rm -rf "${TEMP_PATHS[@]}"
+  fi
+  if docker compose version >/dev/null 2>&1; then
+    if [[ "$FAILED" == true ]]; then
+      docker compose -p "$COMPOSE_PROJECT" logs --tail 100 2>&1 || true
+    fi
+    docker compose -p "$COMPOSE_PROJECT" down -v >/dev/null 2>&1 || true
+  fi
+  # What Compose left, or made before it went missing, by its project label
+  local compose_label="label=com.docker.compose.project=$COMPOSE_PROJECT"
+  docker ps -aq --filter "$compose_label" | xargs -r docker rm -f -v >/dev/null 2>&1 || true
+  docker volume ls -q --filter "$compose_label" | xargs -r docker volume rm >/dev/null 2>&1 || true
+  docker network ls -q --filter "$compose_label" | xargs -r docker network rm >/dev/null 2>&1 || true
+  docker volume rm "$EXT_PGDATA" "$EXT_PGDATA_NEW" "$EXT_PGDATA_OLD" >/dev/null 2>&1 || true
   docker network rm "$EXT_NET" >/dev/null 2>&1 || true
   if [[ -n "$TLS_DIR" ]]; then
     rm -rf "$TLS_DIR"
@@ -292,6 +338,8 @@ wait_healthy "first start"
 # The tables exist, not just a reachable database (psql fails if either is
 # missing).
 db -c 'SELECT count(*) FROM "User"' -c 'SELECT count(*) FROM "GuestSplit"'
+grep -qxF '  Database:       bundled, localhost:5432/sharetab' <<<"$(docker logs "$CONTAINER" 2>&1)" ||
+  fail "The startup summary doesn't show the bundled database."
 
 section "Meridian proxy starts"
 # `claude --version` checks the Claude Code binary runs. Starting the proxy on
@@ -377,14 +425,164 @@ if [[ "$(has_email_index)" != "t" ]]; then
   fail "The email index wasn't created after the duplicate was removed."
 fi
 
+# Wait up to <seconds> for a container to exit, then print its exit code;
+# returns 1 if it's still running. (Not fail(): it's called in $(...), where
+# fail's ::error:: line would be captured instead of shown.)
+# Usage: wait_exited <container> <seconds>
+wait_exited() {
+  local container="$1" seconds="$2"
+  for _ in $(seq 1 "$seconds"); do
+    if [[ "$(docker inspect -f '{{.State.Running}}' "$container")" != "true" ]]; then
+      docker inspect -f '{{.State.ExitCode}}' "$container"
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+# Wait up to <seconds> for <text> to appear in a container's log, after its
+# first <skip> lines (default 0).
+# Usage: wait_for_log <container> <text> <seconds> [skip]
+wait_for_log() {
+  local container="$1" text="$2" seconds="$3" skip="${4:-0}"
+  for _ in $(seq 1 "$seconds"); do
+    if grep -qF "$text" <<<"$(docker logs "$container" 2>&1 | tail -n +"$((skip + 1))")"; then
+      return 0
+    fi
+    if [[ "$(docker inspect -f '{{.State.Running}}' "$container")" != "true" ]]; then
+      # It may have printed the text just before exiting
+      grep -qF "$text" <<<"$(docker logs "$container" 2>&1 | tail -n +"$((skip + 1))")" && return 0
+      fail "$container exited before \"$text\" appeared in its log."
+    fi
+    sleep 1
+  done
+  fail "No \"$text\" in $container's log after ${seconds}s."
+}
+
+section "docker stop shuts the bundled PostgreSQL down cleanly"
+# The entrypoint's traps must stop Postgres before the grace period ends;
+# otherwise it is killed and every start begins with crash recovery.
+lines_before=$(docker logs "$CONTAINER" 2>&1 | wc -l)
+docker stop -t 30 "$CONTAINER" >/dev/null
+[[ "$(docker inspect -f '{{.State.ExitCode}}' "$CONTAINER")" == 0 ]] ||
+  fail "ShareTab exited non-zero on docker stop."
+stop_log=$(docker logs "$CONTAINER" 2>&1 | tail -n +"$((lines_before + 1))")
+grep -qF 'Stopping PostgreSQL' <<<"$stop_log" || fail "docker stop didn't stop the bundled PostgreSQL."
+lines_before=$(docker logs "$CONTAINER" 2>&1 | wc -l)
+docker start "$CONTAINER" >/dev/null
+wait_healthy "start after docker stop"
+restart_log=$(docker logs "$CONTAINER" 2>&1 | tail -n +"$((lines_before + 1))")
+if grep -E 'not properly shut down|automatic recovery' <<<"$restart_log"; then
+  fail "PostgreSQL recovered from a crash after a clean docker stop."
+fi
+# PostgreSQL's own record of a clean stop: the check above can't pass by
+# not seeing the server's log
+grep -qF 'database system was shut down at' <<<"$restart_log" ||
+  fail "No clean-shutdown record from PostgreSQL after docker stop."
+
+section "docker stop during the first start, and during pg_ctl start"
+# Wrappers make both windows wide and the stop land inside them every run:
+# initdb and pg_ctl start each sleep 8s first. During the first start the
+# entrypoint must hold the stop until the cluster has ShareTab's user and
+# database; during pg_ctl start it must still stop the server. The password
+# makes the entrypoint percent-encode the bundled URL.
+wrap_dir=$(mktemp -d)
+TEMP_PATHS+=("$wrap_dir")
+printf '#!/bin/sh\nsleep 8\nexec /usr/bin/initdb "$@"\n' >"$wrap_dir/initdb"
+printf '#!/bin/sh\ncase " $* " in *" start "*) sleep 8 ;; esac\nexec /usr/bin/pg_ctl "$@"\n' >"$wrap_dir/pg_ctl"
+chmod 755 "$wrap_dir/initdb" "$wrap_dir/pg_ctl"
+docker create --name "$BOOT" --label sharetab-smoke \
+  -e NEXTAUTH_SECRET="$secret" -e AUTH_SECRET="$secret" -e AUTH_TRUST_HOST=true \
+  -e DB_PASSWORD='p/w#1@%x' "$IMAGE" >/dev/null
+docker cp "$wrap_dir/initdb" "$BOOT:/usr/local/bin/initdb"
+docker cp "$wrap_dir/pg_ctl" "$BOOT:/usr/local/bin/pg_ctl"
+docker start "$BOOT" >/dev/null
+wait_for_log "$BOOT" "Initializing PostgreSQL" 60
+# -t 60: the hold plus the wrappers' sleeps must fit in the grace period
+docker stop -t 60 "$BOOT" >/dev/null
+[[ "$(docker inspect -f '{{.State.ExitCode}}' "$BOOT")" == 0 ]] || fail "ShareTab exited non-zero on a docker stop during its first start."
+boot_log=$(docker logs "$BOOT" 2>&1)
+# The first line holding <text>, or nothing (awk, unlike grep, doesn't fail then)
+line_of() { awk -v text="$1" 'index($0, text) { print NR; exit }' <<<"$boot_log"; }
+initialized=$(line_of 'PostgreSQL initialized.')
+stopping=$(line_of 'Received stop signal')
+started=$(line_of 'Starting PostgreSQL')
+[[ -n "$initialized" && -n "$stopping" && "$initialized" -lt "$stopping" ]] ||
+  fail "The stop during the first start wasn't held until the cluster was complete."
+[[ -z "$started" || "$started" -gt "$stopping" ]] ||
+  fail "The first start went on to start the server after a stop."
+docker start "$BOOT" >/dev/null
+wait_healthy "start after a stop during the first start" "$BOOT"
+
+docker stop -t 60 "$BOOT" >/dev/null
+lines_before=$(docker logs "$BOOT" 2>&1 | wc -l)
+docker start "$BOOT" >/dev/null
+wait_for_log "$BOOT" "Starting PostgreSQL" 60 "$lines_before"
+docker stop -t 60 "$BOOT" >/dev/null
+[[ "$(docker inspect -f '{{.State.ExitCode}}' "$BOOT")" == 0 ]] ||
+  fail "ShareTab exited non-zero on a docker stop during pg_ctl start."
+stop_log=$(docker logs "$BOOT" 2>&1 | tail -n +"$((lines_before + 1))")
+grep -qF 'Received stop signal' <<<"$stop_log" || fail "The entrypoint didn't handle the stop during pg_ctl start."
+grep -qF 'Stopping PostgreSQL' <<<"$stop_log" || fail "A docker stop during pg_ctl start left the server running."
+# The stop landed inside pg_ctl start, not after the server was up
+if grep -qF 'Database is ready' <<<"$stop_log"; then
+  fail "The stop came after pg_ctl start, so it wasn't exercised during it."
+fi
+lines_before=$(docker logs "$BOOT" 2>&1 | wc -l)
+docker start "$BOOT" >/dev/null
+wait_healthy "start after a stop during pg_ctl start" "$BOOT"
+restart_log=$(docker logs "$BOOT" 2>&1 | tail -n +"$((lines_before + 1))")
+if grep -E 'not properly shut down|automatic recovery' <<<"$restart_log"; then
+  fail "PostgreSQL recovered from a crash after a stop during pg_ctl start."
+fi
+grep -qF 'database system was shut down at' <<<"$restart_log" ||
+  fail "No clean-shutdown record from PostgreSQL after a stop during pg_ctl start."
+boot_log=$(docker logs "$BOOT" 2>&1)
+if grep -qF 'p/w#1@%x' <<<"$boot_log" || grep -qF 'p%2Fw%231%40%25x' <<<"$boot_log"; then
+  fail "The log shows the bundled database's password."
+fi
+docker rm -f -v "$BOOT" >/dev/null
+
 if [[ -n "$MERIDIAN_AUTH" ]]; then
   # The restarts above ran with the login mounted too.
   check_login_unchanged
 fi
 
+section "A bundled step that fails stops the server cleanly"
+# A migration that fails after the server is up: the EXIT trap must stop the
+# server, so the next start (with the file fixed) needs no crash recovery.
+step_sql=$(mktemp)
+TEMP_PATHS+=("$step_sql")
+printf 'SELECT no_such_function();\n' >"$step_sql"
+chmod 644 "$step_sql"
+docker create --name "$BOOT" --label sharetab-smoke \
+  -e NEXTAUTH_SECRET="$secret" -e AUTH_SECRET="$secret" -e AUTH_TRUST_HOST=true "$IMAGE" >/dev/null
+docker cp "$step_sql" "$BOOT:/app/prisma/migrations/zz_smoke.sql"
+docker start "$BOOT" >/dev/null
+code=$(wait_exited "$BOOT" 120) || fail "A failing migration didn't stop startup within 120s."
+[[ "$code" != 0 ]] || fail "A failing migration let startup finish."
+boot_log=$(docker logs "$BOOT" 2>&1)
+grep -qF 'ERROR: migrations/zz_smoke.sql' <<<"$boot_log" || fail "Startup stopped, but not at the failing migration."
+grep -qF 'Stopping PostgreSQL' <<<"$boot_log" || fail "A failing step left the bundled server running."
+printf 'SELECT 1;\n' >"$step_sql"
+docker cp "$step_sql" "$BOOT:/app/prisma/migrations/zz_smoke.sql"
+rm -f "$step_sql"
+lines_before=$(docker logs "$BOOT" 2>&1 | wc -l)
+docker start "$BOOT" >/dev/null
+wait_healthy "start after a failed step" "$BOOT"
+restart_log=$(docker logs "$BOOT" 2>&1 | tail -n +"$((lines_before + 1))")
+if grep -E 'not properly shut down|automatic recovery' <<<"$restart_log"; then
+  fail "PostgreSQL recovered from a crash after a failed step."
+fi
+grep -qF 'database system was shut down at' <<<"$restart_log" ||
+  fail "No clean-shutdown record from PostgreSQL after a failed step."
+docker rm -f -v "$BOOT" >/dev/null
+
 # ── External database ──────────────────────────────────────────
 
-# SQL against the external database over its Unix socket; output as db().
+# SQL against the external database over its Unix socket, as its superuser;
+# output as db(). Usage: ext_db [-d <database>] -c '<sql>' ...
 ext_db() {
   docker exec "$EXT_PG" psql -U sharetab -d sharetab -v ON_ERROR_STOP=1 -tA "$@"
 }
@@ -403,50 +601,123 @@ run_external() {
     "${env[@]}" "$@" "$IMAGE" >/dev/null
 }
 
-# Wait up to <seconds> for a container to exit, then print its exit code;
-# returns 1 if it's still running. (Not fail(): it's called in $(...), where
-# fail's ::error:: line would be captured instead of shown.)
-# Usage: wait_exited <container> <seconds>
-wait_exited() {
-  local container="$1" seconds="$2"
-  for _ in $(seq 1 "$seconds"); do
-    if [[ "$(docker inspect -f '{{.State.Running}}' "$container")" != "true" ]]; then
-      docker inspect -f '{{.State.ExitCode}}' "$container"
-      return 0
-    fi
-    sleep 1
-  done
-  return 1
-}
-
-# Start ShareTab with <url> and expect it to stop at once, with a non-zero
-# exit and <text> in its log.
-# Usage: expect_refused <label> <url> <text> [docker run args...]
+# Start ShareTab with <url> and expect it to stop within REFUSE_SECONDS
+# (default 30; more for a refusal after prisma db push), with a non-zero
+# exit and <text> in its log, which is left in REFUSED_LOG.
+# Usage: [REFUSE_SECONDS=<n>] expect_refused <label> <url> <text> [docker run args...]
+REFUSED_LOG=""
 expect_refused() {
-  local label="$1" url="$2" text="$3" code log
+  local label="$1" url="$2" text="$3" seconds="${REFUSE_SECONDS:-30}" code log
   shift 3
   run_external "$EXT_ONESHOT" "$url" "$@"
-  code=$(wait_exited "$EXT_ONESHOT" 30) || fail "$label: still running after 30s."
+  code=$(wait_exited "$EXT_ONESHOT" "$seconds") || {
+    docker logs --tail 30 "$EXT_ONESHOT" 2>&1 || true
+    fail "$label: still running after ${seconds}s."
+  }
   log=$(docker logs "$EXT_ONESHOT" 2>&1)
-  [[ "$code" != 0 ]] || fail "$label: the container exited 0."
-  grep -qF "$text" <<<"$log" || fail "$label: no \"$text\" in its log."
-  grep -E '^ERROR' <<<"$log" | head -2
+  REFUSED_LOG=$log
+  if [[ "$code" == 0 ]] || ! grep -qF "$text" <<<"$log"; then
+    echo "$log" | tail -30
+    fail "$label: expected a non-zero exit with \"$text\" in the log (exit $code)."
+  fi
+  if grep -qF "$EXT_PW" <<<"$log"; then
+    fail "$label: the log shows the database password."
+  fi
+  grep -E '^ERROR' <<<"$log" | head -2 || true
 }
+
+# Prints "yes" when a volume holds the external-database marker, else "no".
+has_marker() {
+  docker run --rm --entrypoint sh -v "$1:/d" "$IMAGE" -c \
+    'if [ -f /d/.sharetab-external-database ]; then echo yes; else echo no; fi'
+}
+
+section "External database: the Compose overlay"
+# A Docker Hub hiccup shouldn't fail the run (it gates publishing the image)
+for pg_image in postgres:16-alpine "$EXT_PG_IMAGE"; do
+  for attempt in 1 2 3; do
+    docker pull -q "$pg_image" >/dev/null && break
+    [[ "$attempt" == 3 ]] && fail "Could not pull $pg_image."
+    sleep 10
+  done
+done
+if docker compose version >/dev/null 2>&1; then
+  # --env-file /dev/null: a docker/.env on this machine must not change the result
+  compose_overlay() {
+    DB_USER=smoke DB_PASSWORD=smokepw DB_NAME=smokedb docker compose -p "$COMPOSE_PROJECT" --env-file /dev/null \
+      -f docker/docker-compose.yml -f docker/docker-compose.external-db.yml "$@"
+  }
+  overlay_config=$(compose_overlay config)
+  grep -qF 'DATABASE_URL: postgresql://smoke:smokepw@postgres:5432/smokedb' <<<"$overlay_config" ||
+    fail "The overlay doesn't set DATABASE_URL for the sharetab service."
+  # As the README sets it up: COMPOSE_FILE in docker/.env, plain docker compose
+  compose_dir=$(mktemp -d)
+  TEMP_PATHS+=("$compose_dir")
+  mkdir "$compose_dir/docker"
+  cp docker/docker-compose.yml docker/docker-compose.external-db.yml "$compose_dir/docker/"
+  printf 'COMPOSE_FILE=docker-compose.yml:docker-compose.external-db.yml\nDB_PASSWORD=smokepw\nALLOW_EMPTY_EXTERNAL_DB=true\n' \
+    >"$compose_dir/docker/.env"
+  env_config=$(cd "$compose_dir/docker" &&
+    env -u COMPOSE_FILE -u DB_USER -u DB_PASSWORD -u DB_NAME -u ALLOW_EMPTY_EXTERNAL_DB docker compose config) ||
+    fail "docker compose config failed with COMPOSE_FILE in docker/.env."
+  grep -qF 'DATABASE_URL: postgresql://sharetab:smokepw@postgres:5432/sharetab' <<<"$env_config" ||
+    fail "COMPOSE_FILE in docker/.env doesn't bring in the overlay."
+  # The refusal of an empty database names it, so a docker/.env value must arrive
+  grep -qE 'ALLOW_EMPTY_EXTERNAL_DB: "?true"?$' <<<"$env_config" ||
+    fail "ALLOW_EMPTY_EXTERNAL_DB in docker/.env doesn't reach the container."
+  # Without the overlay, a DATABASE_URL in docker/.env (as .env.example has)
+  # must not reach the container: it would switch it to external mode
+  printf 'DATABASE_URL=postgresql://u:p@db:5432/x\n' >"$compose_dir/docker/.env"
+  base_config=$(cd "$compose_dir/docker" && env -u COMPOSE_FILE -u DATABASE_URL docker compose config) ||
+    fail "docker compose config failed on docker-compose.yml alone."
+  grep -qF 'image: sharetab:latest' <<<"$base_config" || fail "Unexpected docker compose config output."
+  if grep -qF 'DATABASE_URL' <<<"$base_config"; then
+    fail "docker-compose.yml passes a DATABASE_URL from docker/.env to the container."
+  fi
+  grep -qF 'condition: service_healthy' <<<"$overlay_config" ||
+    fail "The overlay doesn't make ShareTab wait for a healthy database."
+  # Its database starts, passes its own health check, and takes the
+  # credentials the URL carries (only the postgres service: ShareTab's image
+  # and ports are left alone). Over the service's network name, as ShareTab
+  # connects: the image trusts 127.0.0.1 without a password.
+  compose_overlay up -d --wait --quiet-pull postgres
+  [[ "$(compose_overlay exec -T postgres psql 'postgresql://smoke:smokepw@postgres:5432/smokedb' -tAc 'SELECT 1')" == 1 ]] ||
+    fail "The overlay's database doesn't take the credentials in its DATABASE_URL."
+  if compose_overlay exec -T postgres psql 'postgresql://smoke:wrong@postgres:5432/smokedb' -tAc 'SELECT 1' >/dev/null 2>&1; then
+    fail "The overlay's database took a wrong password, so the check above proves nothing."
+  fi
+  # ShareTab itself, on the overlay's network and URL
+  docker run -d --name "$OVERLAY_APP" --label sharetab-smoke --network "${COMPOSE_PROJECT}_default" \
+    -e NEXTAUTH_SECRET="$secret" -e AUTH_SECRET="$secret" -e AUTH_TRUST_HOST=true \
+    -e DATABASE_URL='postgresql://smoke:smokepw@postgres:5432/smokedb' "$IMAGE" >/dev/null
+  wait_healthy "ShareTab on the overlay's database" "$OVERLAY_APP"
+  if grep -qF 'smokepw' <<<"$(docker logs "$OVERLAY_APP" 2>&1)"; then
+    fail "The log shows the overlay's database password."
+  fi
+  docker rm -f -v "$OVERLAY_APP" >/dev/null
+  compose_overlay down -v >/dev/null 2>&1 || true
+  echo "ShareTab runs on the overlay's database, which takes its URL's credentials and not others."
+elif [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+  fail "docker compose isn't available on this runner, so the overlay can't be checked."
+else
+  echo "docker compose isn't available here; skipped."
+fi
 
 section "External database: start beside PostgreSQL, TLS only"
 # A self-signed certificate, as on most home servers, and a server that
-# accepts TLS connections only, so db.mjs, the image's Prisma CLI and the app
-# all have to use TLS with the one DATABASE_URL (sslmode=no-verify).
+# accepts TLS connections only, so db.mjs and the app have to use TLS with
+# the one DATABASE_URL (sslmode=no-verify).
 TLS_DIR=$(mktemp -d)
-openssl req -new -x509 -days 1 -nodes -subj "/CN=$EXT_PG" \
+openssl req -new -x509 -days 1 -nodes -subj "/CN=$EXT_PG" -addext "subjectAltName=DNS:$EXT_PG" \
   -keyout "$TLS_DIR/server.key" -out "$TLS_DIR/server.crt" 2>/dev/null
+chmod 644 "$TLS_DIR/server.crt"
 printf 'local all all trust\nhostssl all all all scram-sha-256\n' >"$TLS_DIR/pg_hba.conf"
 docker network create --label sharetab-smoke "$EXT_NET" >/dev/null
 # postgres:16-alpine has no openssl, so the files are copied in before it
 # starts, and moved where the server user can own them.
 docker create --name "$EXT_PG" --label sharetab-smoke --network "$EXT_NET" \
-  -e POSTGRES_USER=sharetab -e POSTGRES_PASSWORD=pw -e POSTGRES_DB=sharetab \
-  --entrypoint sh postgres:16-alpine -c '
+  -e POSTGRES_USER=sharetab -e POSTGRES_PASSWORD="$EXT_PW" -e POSTGRES_DB=sharetab \
+  --entrypoint sh "$EXT_PG_IMAGE" -c '
     install -o postgres -g postgres -m 600 /tls/server.key /tls/server.crt /tls/pg_hba.conf /var/lib/postgresql/ &&
     exec docker-entrypoint.sh postgres -c ssl=on \
       -c ssl_cert_file=/var/lib/postgresql/server.crt \
@@ -456,85 +727,225 @@ docker cp "$TLS_DIR/." "$EXT_PG:/tls"
 # A data folder that looks like it holds a bundled database, for the warning
 docker volume create --label sharetab-smoke "$EXT_PGDATA" >/dev/null
 docker run --rm --entrypoint sh -v "$EXT_PGDATA:/d" "$IMAGE" -c 'echo 16 > /d/PG_VERSION'
-# Started together, as Compose and Kubernetes do, so ShareTab has to wait
+# ShareTab first, PostgreSQL only once it's waiting, so the wait is exercised
+EXT_URL="postgresql://sharetab:$EXT_PW@$EXT_PG:5432/sharetab?sslmode=no-verify"
+# A longer wait than the default: PostgreSQL creates its database first. The
+# data folder looks bundled, so an empty database is refused without
+# ALLOW_EMPTY_EXTERNAL_DB (checked below).
+run_external "$EXT_APP" "$EXT_URL" -v "$EXT_PGDATA:/var/lib/postgresql/data" -e DB_WAIT_SECONDS=180 \
+  -e ALLOW_EMPTY_EXTERNAL_DB=true
+wait_for_log "$EXT_APP" "Waiting for the database" 60
 docker start "$EXT_PG" >/dev/null
-EXT_URL="postgresql://sharetab:pw@$EXT_PG:5432/sharetab?sslmode=no-verify"
-run_external "$EXT_APP" "$EXT_URL" -v "$EXT_PGDATA:/var/lib/postgresql/data"
 wait_healthy "external database, first start" "$EXT_APP"
 
 section "External database: the bundled server stays off"
 ext_log=$(docker logs "$EXT_APP" 2>&1)
+grep -qF 'Starting ShareTab...' <<<"$ext_log" || fail "No \"Starting ShareTab...\" in the log, so the checks below see nothing."
 if grep -qE 'Initializing PostgreSQL|Starting PostgreSQL' <<<"$ext_log"; then
   fail "The bundled PostgreSQL was started although DATABASE_URL is set."
 fi
-docker exec "$EXT_APP" sh -c '! pg_isready -h localhost -q' ||
-  fail "Something answers on localhost:5432 inside the container."
-grep -qE '^  Database: +external, postgresql://\*\*\*:\*\*\*@' <<<"$ext_log" ||
-  fail "The startup summary doesn't say the database is external."
+ready=0
+docker exec "$EXT_APP" pg_isready -h localhost -q || ready=$?
+# 2: no response (0 would be a server, 127 a missing pg_isready)
+[[ "$ready" == 2 ]] || fail "pg_isready on localhost inside the container returned $ready, not 2 (no server)."
+grep -qxF "  Database:       external, $EXT_PG:5432/sharetab" <<<"$ext_log" ||
+  fail "The startup summary doesn't show the external database's host and name."
+if grep -qF "$EXT_PW" <<<"$ext_log"; then
+  fail "The startup log shows the database password."
+fi
 grep -qF 'WARNING: DATABASE_URL points to an external database' <<<"$ext_log" ||
   fail "No warning that the bundled database in the data folder isn't used."
-docker exec "$EXT_APP" test -f /var/lib/postgresql/data/.sharetab-external-database ||
-  fail "The external-database marker wasn't written."
+[[ "$(has_marker "$EXT_PGDATA")" == yes ]] || fail "The external-database marker wasn't written."
 
 section "External database: schema, SQL phases and email index"
-ext_db -c 'SELECT count(*) FROM "User"' -c 'SELECT count(*) FROM "GuestSplit"' >/dev/null
+for sqlfile in prisma/migrations/*.sql prisma/after-push/*.sql; do
+  phase="Running $(basename "$(dirname "$sqlfile")")/$(basename "$sqlfile")..."
+  grep -qF "$phase" <<<"$ext_log" || fail "No \"$phase\" in the startup log."
+done
 [[ "$(ext_db -c "SELECT count(*) FROM pg_type WHERE typname = 'GuestSplitStatus'")" == 1 ]] ||
-  fail "The GuestSplitStatus enum from prisma/migrations is missing."
+  fail "The GuestSplitStatus enum is missing."
+ext_db -c 'SELECT count(*) FROM "User"' -c 'SELECT count(*) FROM "GuestSplit"' >/dev/null
 [[ "$(ext_db -c "SELECT to_regclass('\"User_email_lower_key\"') IS NOT NULL")" == t ]] ||
   fail "The email index from prisma/after-push is missing."
 
 section "External database: a connection without TLS is refused"
 # So the app working at all shows its connections used TLS.
-if no_tls=$(docker exec -e DATABASE_URL="postgresql://sharetab:pw@$EXT_PG:5432/sharetab?sslmode=disable" \
+no_tls_start=$SECONDS
+if no_tls=$(docker exec -e DATABASE_URL="postgresql://sharetab:$EXT_PW@$EXT_PG:5432/sharetab?sslmode=disable" \
   "$EXT_APP" node /app/db.mjs wait 2>&1); then
   fail "A connection without TLS was accepted."
 fi
-grep -qF 'pg_hba.conf' <<<"$no_tls" || fail "Unexpected answer to a connection without TLS: $no_tls"
+grep -qF 'no encryption' <<<"$no_tls" || fail "Unexpected answer to a connection without TLS: $no_tls"
+if grep -qF "$EXT_PW" <<<"$no_tls"; then
+  fail "The refusal shows the database password."
+fi
+((SECONDS - no_tls_start < 15)) || fail "A pg_hba.conf rejection was retried instead of failing at once."
 echo "$no_tls"
+
+section "External database: TLS with the certificate checked (verify-full)"
+# The README's way: the CA in the container, NODE_EXTRA_CA_CERTS, sslmode=verify-full
+# and the host name the certificate names. Copied in, not mounted, so a
+# remote DOCKER_HOST works; readable by the app's user.
+docker rm -f -v "$EXT_ONESHOT" >/dev/null 2>&1 || true
+docker create --name "$EXT_ONESHOT" --label sharetab-smoke --network "$EXT_NET" \
+  -e NEXTAUTH_SECRET="$secret" -e AUTH_SECRET="$secret" -e AUTH_TRUST_HOST=true \
+  -e NODE_EXTRA_CA_CERTS=/etc/sharetab-smoke-ca.crt \
+  -e DATABASE_URL="postgresql://sharetab:$EXT_PW@$EXT_PG:5432/sharetab?sslmode=verify-full" "$IMAGE" >/dev/null
+docker cp "$TLS_DIR/server.crt" "$EXT_ONESHOT:/etc/sharetab-smoke-ca.crt"
+docker start "$EXT_ONESHOT" >/dev/null
+wait_healthy "external database, verify-full" "$EXT_ONESHOT"
+docker rm -f -v "$EXT_ONESHOT" >/dev/null
 
 section "External database: restart keeps the email index"
 before=$(ext_db -c "SELECT '\"User_email_lower_key\"'::regclass::oid")
-docker restart "$EXT_APP" >/dev/null
+lines_before=$(docker logs "$EXT_APP" 2>&1 | wc -l)
+docker restart -t 30 "$EXT_APP" >/dev/null
 wait_healthy "external database, restart" "$EXT_APP"
 after=$(ext_db -c "SELECT '\"User_email_lower_key\"'::regclass::oid")
 [[ "$before" == "$after" ]] || fail "prisma db push dropped User_email_lower_key (oid $before -> $after)."
+# Captured first: grep -q exiting early would SIGPIPE the pipeline (see above)
+restart_log=$(docker logs "$EXT_APP" 2>&1 | tail -n +"$((lines_before + 1))")
+grep -qF 'Starting ShareTab...' <<<"$restart_log" || fail "No \"Starting ShareTab...\" after the restart, so the checks below see nothing."
+if grep -qF 'WARNING: DATABASE_URL points to an external database' <<<"$restart_log"; then
+  fail "The unused-bundled-database warning repeats once the marker is written."
+fi
+if grep -qF "$EXT_PW" <<<"$restart_log"; then
+  fail "The restart log shows the database password."
+fi
 
 section "External database: docker stop"
-docker stop "$EXT_APP" >/dev/null
+docker stop -t 30 "$EXT_APP" >/dev/null
 [[ "$(docker inspect -f '{{.State.ExitCode}}' "$EXT_APP")" == 0 ]] || fail "ShareTab exited non-zero on docker stop."
+grep -qF 'Received stop signal' <<<"$(docker logs --tail 20 "$EXT_APP" 2>&1)" ||
+  fail "The entrypoint didn't handle docker stop."
+if grep -qF "$EXT_PW" <<<"$(docker logs "$EXT_APP" 2>&1)"; then
+  fail "ShareTab's log shows the database password."
+fi
 if grep -qF 'Stopping PostgreSQL' <<<"$(docker logs --tail 20 "$EXT_APP" 2>&1)"; then
   fail "docker stop tried to stop a bundled PostgreSQL that wasn't running."
 fi
 
 section "External database: a start without DATABASE_URL refuses"
-# As after a Compose upgrade run without the overlay file
+# As after a Compose upgrade run without the overlay file. Without
+# PG_VERSION, as in an install that was external from the start, a bundled
+# start would otherwise create a new, empty database here.
+docker run --rm --entrypoint sh -v "$EXT_PGDATA:/d" "$IMAGE" -c 'rm -f /d/PG_VERSION'
+# DATABASE_URL set but empty, as a cleared Unraid field sends it
 expect_refused "bundled start on an external install's data folder" "" \
-  "last started with an external database" -v "$EXT_PGDATA:/var/lib/postgresql/data"
-docker run --rm --entrypoint sh -v "$EXT_PGDATA:/d" "$IMAGE" -c 'test ! -e /d/base' ||
+  "has run on an external database" -v "$EXT_PGDATA:/var/lib/postgresql/data" -e DATABASE_URL=
+docker run --rm --entrypoint sh -v "$EXT_PGDATA:/d" "$IMAGE" -c \
+  'test ! -e /d/base && test ! -e /d/postgresql.conf' ||
   fail "The bundled database was initialized in the external install's data folder."
 
-section "External database: errors waiting won't fix stop startup at once"
+section "External database: an empty database is refused while the container has bundled data"
+# A wrong DATABASE_URL, or data not moved yet, would otherwise start a new,
+# empty ShareTab beside the old data
+docker volume create --label sharetab-smoke "$EXT_PGDATA_OLD" >/dev/null
+docker run --rm --entrypoint sh -v "$EXT_PGDATA_OLD:/d" "$IMAGE" -c 'echo 16 > /d/PG_VERSION'
+ext_db -c 'CREATE DATABASE emptydb OWNER sharetab' >/dev/null
+expect_refused "an empty database beside bundled data" \
+  "postgresql://sharetab:$EXT_PW@$EXT_PG:5432/emptydb?sslmode=no-verify" "ALLOW_EMPTY_EXTERNAL_DB=true" \
+  -v "$EXT_PGDATA_OLD:/var/lib/postgresql/data"
+[[ "$(has_marker "$EXT_PGDATA_OLD")" == no ]] || fail "The refused start wrote the marker."
+[[ "$(docker exec "$EXT_PG" psql -U sharetab -d emptydb -tAc "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'")" == 0 ]] ||
+  fail "The refused start created tables."
+
+section "External database: moving the bundled data, as the README does"
+# The main container's bundled database, dumped and loaded the README's way,
+# then started beside the old data folder without ALLOW_EMPTY_EXTERNAL_DB
+ext_db -c 'CREATE DATABASE moved OWNER sharetab' >/dev/null
+users_before=$(db -c 'SELECT count(*) FROM "User"')
+docker exec "$CONTAINER" su-exec postgres pg_dump -U sharetab --no-owner --no-privileges sharetab |
+  docker exec -i "$EXT_PG" psql -U sharetab -d moved -1 -v ON_ERROR_STOP=1 -q >/dev/null
+run_external "$EXT_ONESHOT" "postgresql://sharetab:$EXT_PW@$EXT_PG:5432/moved?sslmode=no-verify" \
+  -v "$EXT_PGDATA_OLD:/var/lib/postgresql/data"
+wait_healthy "external database, moved data" "$EXT_ONESHOT"
+[[ "$(docker exec "$EXT_PG" psql -U sharetab -d moved -tAc 'SELECT count(*) FROM "User"')" == "$users_before" ]] ||
+  fail "The moved database lost users."
+[[ "$(has_marker "$EXT_PGDATA_OLD")" == yes ]] || fail "The start on the moved data didn't write the marker."
+docker rm -f -v "$EXT_ONESHOT" >/dev/null
+
+section "External database: a failed external start leaves no marker"
+# Otherwise a mistyped URL would lock the bundled database out. A new data
+# folder: the first already holds the marker from the start above. Failing
+# at the wait, and later, in the SQL phase: a user without CREATE on the
+# public schema (PostgreSQL 15 and newer) gets past the wait and the schema
+# check, and fails at the migration's CREATE TYPE.
+docker volume create --label sharetab-smoke "$EXT_PGDATA_NEW" >/dev/null
 expect_refused "wrong password" "postgresql://sharetab:wrong@$EXT_PG:5432/sharetab?sslmode=no-verify" \
-  "password authentication failed"
+  "password authentication failed" -v "$EXT_PGDATA_NEW:/var/lib/postgresql/data"
+[[ "$(has_marker "$EXT_PGDATA_NEW")" == no ]] || fail "A start that failed at the wait wrote the marker."
+ext_db -c "CREATE ROLE limited LOGIN PASSWORD '$EXT_PW'" -c 'CREATE DATABASE limiteddb' >/dev/null
+expect_refused "a user that can't create in the public schema" \
+  "postgresql://limited:$EXT_PW@$EXT_PG:5432/limiteddb?sslmode=no-verify" "permission denied" \
+  -v "$EXT_PGDATA_NEW:/var/lib/postgresql/data"
+[[ "$(has_marker "$EXT_PGDATA_NEW")" == no ]] || fail "A start that failed in the SQL phase wrote the marker."
+# A ShareTab-named table with the wrong columns and a row: the schema check and
+# the migrations pass, and prisma db push refuses
+ext_db -c 'CREATE DATABASE pushfail OWNER sharetab' >/dev/null
+docker exec "$EXT_PG" psql -U sharetab -d pushfail -v ON_ERROR_STOP=1 -q \
+  -c 'CREATE TABLE "Settlement" (x int)' -c 'INSERT INTO "Settlement" VALUES (1)'
+REFUSE_SECONDS=120 expect_refused "a failing schema step" \
+  "postgresql://sharetab:$EXT_PW@$EXT_PG:5432/pushfail?sslmode=no-verify" \
+  "Running database migrations..." -v "$EXT_PGDATA_NEW:/var/lib/postgresql/data"
+if grep -qF 'Running after-push/' <<<"$REFUSED_LOG"; then
+  fail "Startup went on past a failed prisma db push."
+fi
+[[ "$(has_marker "$EXT_PGDATA_NEW")" == no ]] || fail "A start that failed at the schema step wrote the marker."
+# Everything succeeds but the marker can't be written: startup stops
+REFUSE_SECONDS=120 expect_refused "a data folder it can't write" "$EXT_URL" "could not write" \
+  -v "$EXT_PGDATA_NEW:/var/lib/postgresql/data:ro"
+# ...nor written through a symlink, which could point anywhere
+docker run --rm --entrypoint sh -v "$EXT_PGDATA_NEW:/d" "$IMAGE" -c 'ln -s /nonexistent /d/.sharetab-external-database'
+REFUSE_SECONDS=120 expect_refused "a marker that is a symlink" "$EXT_URL" "it is a symlink" \
+  -v "$EXT_PGDATA_NEW:/var/lib/postgresql/data"
+docker run --rm --entrypoint sh -v "$EXT_PGDATA_NEW:/d" "$IMAGE" -c 'rm /d/.sharetab-external-database'
+
+section "External database: errors waiting won't fix stop startup at once"
 expect_refused "sslmode=require with a self-signed certificate" \
-  "postgresql://sharetab:pw@$EXT_PG:5432/sharetab?sslmode=require" "sslmode=require verifies the certificate"
+  "postgresql://sharetab:$EXT_PW@$EXT_PG:5432/sharetab?sslmode=require" "sslmode=require checks the certificate"
+expect_refused "a password needing percent-encoding" \
+  "postgresql://sharetab:ab/cd@$EXT_PG:5432/sharetab?sslmode=no-verify" "percent-encode"
+# Another app's database: prisma db push would drop its tables
+ext_db -c 'CREATE DATABASE otherapp OWNER sharetab' >/dev/null
+docker exec "$EXT_PG" psql -U sharetab -d otherapp -v ON_ERROR_STOP=1 -qc 'CREATE TABLE notes (id int)'
+expect_refused "a database holding another app's tables" \
+  "postgresql://sharetab:$EXT_PW@$EXT_PG:5432/otherapp?sslmode=no-verify" "tables ShareTab doesn't have (notes)" \
+  -v "$EXT_PGDATA_NEW:/var/lib/postgresql/data"
+[[ "$(has_marker "$EXT_PGDATA_NEW")" == no ]] || fail "A start refused by the schema check wrote the marker."
+[[ "$(docker exec "$EXT_PG" psql -U sharetab -d otherapp -tAc "SELECT to_regclass('notes') IS NOT NULL")" == t ]] ||
+  fail "The other app's table was dropped."
+# A table an extension owns, as PostGIS's spatial_ref_sys: prisma db push
+# would try to drop it and fail, so the schema check refuses it up front
+ext_db -c 'CREATE DATABASE extdb OWNER sharetab' >/dev/null
+docker exec "$EXT_PG" psql -U sharetab -d extdb -v ON_ERROR_STOP=1 -q \
+  -c 'CREATE TABLE smoke_ext_owned (id int)' -c 'ALTER EXTENSION plpgsql ADD TABLE smoke_ext_owned'
+expect_refused "a database with an extension's table" \
+  "postgresql://sharetab:$EXT_PW@$EXT_PG:5432/extdb?sslmode=no-verify" "tables ShareTab doesn't have (smoke_ext_owned)"
+
+section "External database: a percent-encoded password works end to end"
+# db.mjs, Prisma's schema step and the app each decode it
+ext_db -c "CREATE ROLE enc LOGIN PASSWORD 'p/w#1@%x'" -c 'CREATE DATABASE encdb OWNER enc' >/dev/null
+run_external "$EXT_ONESHOT" "postgresql://enc:p%2Fw%231%40%25x@$EXT_PG:5432/encdb?sslmode=no-verify"
+wait_healthy "external database, a percent-encoded password" "$EXT_ONESHOT"
+enc_log=$(docker logs "$EXT_ONESHOT" 2>&1)
+if grep -qF 'p/w#1@%x' <<<"$enc_log" || grep -qF 'p%2Fw%231%40%25x' <<<"$enc_log"; then
+  fail "The log shows the percent-encoded database password."
+fi
+docker rm -f -v "$EXT_ONESHOT" >/dev/null
 
 section "External database: docker stop during the wait"
-run_external "$EXT_ONESHOT" "postgresql://sharetab:pw@sharetab-smoke-nowhere.invalid:5432/sharetab" \
+run_external "$EXT_ONESHOT" "postgresql://sharetab:$EXT_PW@sharetab-smoke-nowhere.invalid:5432/sharetab" \
   -e DB_WAIT_SECONDS=300
-for _ in $(seq 1 30); do
-  if grep -qF 'Waiting for the database' <<<"$(docker logs "$EXT_ONESHOT" 2>&1)"; then
-    break
-  fi
-  sleep 1
-done
-grep -qF 'Waiting for the database' <<<"$(docker logs "$EXT_ONESHOT" 2>&1)" ||
-  fail "ShareTab never started waiting for the unresolvable database."
+wait_for_log "$EXT_ONESHOT" "Waiting for the database" 30
 stop_start=$SECONDS
 docker stop -t 30 "$EXT_ONESHOT" >/dev/null
 ((SECONDS - stop_start < 10)) || fail "docker stop took $((SECONDS - stop_start))s during the wait."
 [[ "$(docker inspect -f '{{.State.ExitCode}}' "$EXT_ONESHOT")" == 0 ]] ||
   fail "ShareTab exited non-zero on docker stop during the wait."
+if grep -qF "$EXT_PW" <<<"$(docker logs "$EXT_ONESHOT" 2>&1)"; then
+  fail "The wait's log shows the database password."
+fi
 echo "Stopped in $((SECONDS - stop_start))s."
 
 FAILED=false

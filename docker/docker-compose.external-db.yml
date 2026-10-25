@@ -5,14 +5,26 @@
 #
 #   COMPOSE_FILE=docker-compose.yml:docker-compose.external-db.yml
 #
-# (on Windows, separate the files with ; instead of :). A command run without
-# it starts ShareTab without DATABASE_URL, and the container refuses to start
-# rather than use an empty bundled database.
+# (on Windows, separate the files with ; instead of :). Once ShareTab has
+# started on this database, a command run without it starts ShareTab without
+# DATABASE_URL, and the container refuses to start rather than use an empty or
+# older bundled database.
 #
 # Setting DATABASE_URL tells the image not to start its bundled database. It
 # is built here from DB_USER/DB_PASSWORD/DB_NAME rather than read from .env,
 # since the .env copied from .env.example holds a DATABASE_URL for local
 # development that would point the container at nothing.
+#
+# Set DB_PASSWORD in docker/.env, and keep DB_USER, DB_PASSWORD and DB_NAME to
+# letters, digits and _ (DB_PASSWORD from `openssl rand -hex 24`, say):
+# Compose passes them as they are both to PostgreSQL and into the URL, and
+# can't percent-encode them there. A / ? or # in DB_USER or DB_PASSWORD, or an
+# @ or / in DB_NAME, makes ShareTab stop at startup with a hint; a ? or # in
+# DB_NAME cuts the name short, so the database isn't found; a % can leave the
+# two passwords different, so the sign-in fails. They take effect when the database is
+# first created: changing them later doesn't change it (for a new password,
+# ALTER ROLE ... PASSWORD; for a new user or database name, start over with
+# an empty postgres volume).
 #
 # This starts a new, empty database. To keep the data of an install that used
 # the bundled one, follow the README's "Moving to an external database" first.
@@ -21,11 +33,13 @@ services:
     image: postgres:16-alpine
     environment:
       - POSTGRES_USER=${DB_USER:-sharetab}
-      - POSTGRES_PASSWORD=${DB_PASSWORD:-sharetab}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:?set DB_PASSWORD in docker/.env (letters and digits)}
       - POSTGRES_DB=${DB_NAME:-sharetab}
     volumes:
       - postgres:/var/lib/postgresql/data
     restart: unless-stopped
+    # Time to shut down cleanly instead of being killed into crash recovery
+    stop_grace_period: 30s
     healthcheck:
       # Over TCP: while the image creates the database on first start, its
       # temporary server listens on the Unix socket only
@@ -33,10 +47,12 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+      # The first start creates the database first, slowly on a spinning disk
+      start_period: 60s
 
   sharetab:
     environment:
-      - DATABASE_URL=postgresql://${DB_USER:-sharetab}:${DB_PASSWORD:-sharetab}@postgres:5432/${DB_NAME:-sharetab}
+      - DATABASE_URL=postgresql://${DB_USER:-sharetab}:${DB_PASSWORD:?set DB_PASSWORD in docker/.env (letters and digits)}@postgres:5432/${DB_NAME:-sharetab}
     depends_on:
       postgres:
         condition: service_healthy

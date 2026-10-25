@@ -16,6 +16,9 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    # The smoke test takes about 20 minutes; a hung docker call shouldn't hold
+    # the runner for six hours
+    timeout-minutes: 60
     permissions:
       contents: read
       packages: write
