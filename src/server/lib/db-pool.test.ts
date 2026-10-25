@@ -1,6 +1,7 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import type pg from 'pg';
 import { createPool, SEARCH_PATH_SQL } from './db-pool';
+import { logger } from './logger';
 
 let pool: pg.Pool | undefined;
 
@@ -24,4 +25,15 @@ test('a failed SET does not crash the process (the query after it fails instead)
   // An unhandled rejection would fail the run
   await new Promise((resolve) => setTimeout(resolve, 10));
   expect(query).toHaveBeenCalledOnce();
+});
+
+test('an idle connection dropped by the server is logged, not an unhandled error event', () => {
+  pool = createPool('postgresql://u:p@db.invalid:5432/sharetab');
+  const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+  // With no 'error' listener, EventEmitter throws (and the server would exit)
+  expect(() => pool?.emit('error', new Error('terminating connection due to administrator command'))).not.toThrow();
+  expect(warn).toHaveBeenCalledWith('db.pool.idleClientError', {
+    error: 'terminating connection due to administrator command',
+  });
+  warn.mockRestore();
 });
