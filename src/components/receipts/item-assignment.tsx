@@ -64,7 +64,7 @@ export function ItemAssignment({
   const [splitQuantity, setSplitQuantity] = useState('');
   const [removeItem, setRemoveItem] = useState<{ id: string; name: string } | null>(null);
 
-  // A refused Create or Save for later may mean the receipt changed since the page loaded it (an
+  // A refused Create, Save for later or item delete may mean the receipt changed since the page loaded it (an
   // item added, deleted or repriced), so load it again to show what's there now. Not awaited: the
   // mutation reports its error once onError returns
   function reloadAfterError() {
@@ -91,7 +91,11 @@ export function ItemAssignment({
       });
       utils.receipts.getReceiptItems.invalidate({ receiptId });
     },
-    onError: (e) => toast.error(e.message),
+    // Deleted on another device, say: show the receipt as it is now
+    onError: (e) => {
+      toast.error(e.message);
+      reloadAfterError();
+    },
   });
   const addItem = trpc.receipts.addItem.useMutation({
     onSuccess: () => {

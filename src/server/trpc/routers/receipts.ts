@@ -14,9 +14,10 @@ import { calculateReceiptSplitTotals } from '@/lib/split-calculator';
 
 const uniqueIds = (ids: string[]) => new Set(ids).size === ids.length;
 
-const sameShares = (totals: { userId: string; total: number }[], expected: { userId: string; amount: number }[]) =>
-  totals.length === expected.length &&
-  totals.every(({ userId, total }) => expected.some((share) => share.userId === userId && share.amount === total));
+const sameShares = (totals: { userId: string; total: number }[], expected: { userId: string; amount: number }[]) => {
+  const expectedByUser = new Map(expected.map((share) => [share.userId, share.amount]));
+  return totals.length === expected.length && totals.every(({ userId, total }) => expectedByUser.get(userId) === total);
+};
 
 /**
  * Verify that a receipt exists and the user has access to it (via group membership).
@@ -477,26 +478,27 @@ export const receiptsRouter = createTRPCRouter({
         }
 
         // The items as they are now, which the receipt page may have added to, deleted from or
-        // repriced since the scan (an edit committed after this read lands after the expense,
-        // which is still the split checked below). Every one must be in the request: the
-        // expense's tax and tip are the whole receipt's, so an item left out would drop its price
-        // from the expense but not its share of them, which the split would spread over everyone else
+        // repriced since the scan. A new price or a new item committed after this read isn't in the
+        // expense, which is still the split checked below; an item deleted before its assignments
+        // are written fails them (see there), and one deleted later waits for the expense. Every item must be in the request: the expense's tax and tip
+        // are the whole receipt's, so an item left out would drop its price from the expense but
+        // not its share of them, which the split would spread over everyone else
         const items = await tx.receiptItem.findMany({
           where: { receiptId: input.receiptId },
           select: { id: true, totalPrice: true },
         });
-        // The page sends only the items it shows, each with someone: an item it doesn't know or
-        // left out was deleted or added since it loaded the receipt
-        const changedSincePageLoaded = input.expectedShares !== undefined;
+        // The page sends only the items it shows, each with someone: an item it sends that the
+        // receipt no longer has was deleted, and one it left out was added, since it loaded it
+        const fromPage = input.expectedShares !== undefined;
         const itemIds = new Set(items.map((item) => item.id));
         if (input.assignments.some((a) => !itemIds.has(a.receiptItemId))) {
-          throw changedSincePageLoaded
+          throw fromPage
             ? new AppError('CONFLICT', 'receiptChangedElsewhere')
             : new AppError('BAD_REQUEST', 'itemNotOnReceipt');
         }
         const assigned = new Set(input.assignments.map((a) => a.receiptItemId));
         if (items.length === 0 || items.some((item) => !assigned.has(item.id))) {
-          throw changedSincePageLoaded && items.length > 0
+          throw fromPage
             ? new AppError('CONFLICT', 'receiptChangedElsewhere')
             : new AppError('PRECONDITION_FAILED', 'receiptItemsUnassigned');
         }
@@ -554,10 +556,19 @@ export const receiptsRouter = createTRPCRouter({
         await tx.receiptItemAssignment.deleteMany({
           where: { receiptItemId: { in: [...itemIds] } },
         });
-        await tx.receiptItemAssignment.createMany({
-          data: assignmentData,
-          skipDuplicates: true,
-        });
+        try {
+          await tx.receiptItemAssignment.createMany({
+            data: assignmentData,
+            skipDuplicates: true,
+          });
+        } catch (error) {
+          // An item deleted on another device after the items were read: its assignments can't
+          // be written, and the expense rolls back with them
+          if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+            throw new AppError('CONFLICT', 'receiptChangedElsewhere', undefined, { cause: error });
+          }
+          throw error;
+        }
 
         await tx.activityLog.create({
           data: {

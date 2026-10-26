@@ -1,6 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { calculateReceiptSplitTotals } from '@/lib/split-calculator';
 import { getExchangeRate } from '@/server/lib/exchange-rates';
+import { Prisma } from '@/generated/prisma/client';
 
 vi.mock('next/headers', () => ({
   cookies: vi.fn().mockResolvedValue({ get: vi.fn().mockReturnValue(null) }),
@@ -825,6 +826,29 @@ describe("a receipt's saved split matches the receipt page's preview (#364)", ()
   test('a receipt with no items is refused, writing nothing', async () => {
     scanned([], { subtotal: 4000, tax: 400, tip: 0 });
     await expectRefused([], { code: 'PRECONDITION_FAILED', messageKey: 'receiptItemsUnassigned' });
+  });
+
+  // The items were read, then one was deleted on another device before its assignments were
+  // written: the insert fails on its foreign key, and in Postgres the whole expense rolls back
+  // (this mock transaction can't show that)
+  test('an item deleted before its assignments are written says the receipt changed', async () => {
+    scanned([{ id: 'i1', totalPrice: 2000 }], { subtotal: 2000, tax: 0, tip: 0 });
+    mockDb.receiptItemAssignment.createMany.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError('Foreign key constraint violated', {
+        code: 'P2003',
+        clientVersion: 'test',
+      }),
+    );
+    const api = await caller();
+    await expect(
+      api.assignItemsAndCreateExpense(finishWith([{ receiptItemId: 'i1', userIds: ['alice'] }])),
+    ).rejects.toMatchObject({ code: 'CONFLICT', messageKey: 'receiptChangedElsewhere' });
+    expect(mockDb.activityLog.create).not.toHaveBeenCalled();
+  });
+
+  test('with expectedShares, a receipt with no items says the receipt changed', async () => {
+    scanned([], { subtotal: 2000, tax: 0, tip: 0 });
+    await expectRefused([], { code: 'CONFLICT', messageKey: 'receiptChangedElsewhere' }, { expectedShares: [] });
   });
 
   test('an item listed with nobody on it is refused, writing nothing', async () => {
