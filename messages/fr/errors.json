@@ -96,7 +96,7 @@
   "processingRateLimited": "Trop de tentatives de traitement. Veuillez réessayer plus tard.",
   "itemNotOnReceipt": "L’article n’appartient pas à ce reçu",
   "receiptItemsUnassigned": "Chaque article du reçu doit être attribué à quelqu’un avant de pouvoir créer la dépense.",
-  "receiptChangedElsewhere": "Ce reçu a été modifié sur un autre appareil. Vérifiez les totaux et réessayez.",
+  "receiptChangedElsewhere": "Ce reçu a été modifié depuis le chargement de cette page. Vérifiez les totaux et réessayez.",
   "assigneeNotMember": "La personne assignée n’est pas membre de ce groupe",
   "splitQuantityOverItem": "La quantité à séparer doit être inférieure à la quantité de l’article",
   "splitQuantityOverTotal": "La quantité à séparer doit être inférieure à la quantité totale",

@@ -64,12 +64,11 @@ export function ItemAssignment({
   const [splitQuantity, setSplitQuantity] = useState('');
   const [removeItem, setRemoveItem] = useState<{ id: string; name: string } | null>(null);
 
-  // A refused Create or Save for later may mean the receipt or the group changed on another device
-  // (an item added, deleted or repriced, someone removed), so load them again to show what's there
-  // now. Not awaited: the mutation reports its error once onError returns
+  // A refused Create or Save for later may mean the receipt changed since the page loaded it (an
+  // item added, deleted or repriced), so load it again to show what's there now. Not awaited: the
+  // mutation reports its error once onError returns
   function reloadAfterError() {
     void utils.receipts.getReceiptItems.invalidate({ receiptId });
-    void utils.groups.get.invalidate({ groupId });
   }
   const createExpense = trpc.receipts.assignItemsAndCreateExpense.useMutation({
     onSuccess: onComplete,
@@ -83,7 +82,15 @@ export function ItemAssignment({
     onError: (e) => toast.error(e.message),
   });
   const deleteItem = trpc.receipts.deleteItem.useMutation({
-    onSuccess: () => utils.receipts.getReceiptItems.invalidate({ receiptId }),
+    onSuccess: (_, { itemId }) => {
+      // Its people go with it (#411)
+      setAssignments((prev) => {
+        const next = { ...prev };
+        delete next[itemId];
+        return next;
+      });
+      utils.receipts.getReceiptItems.invalidate({ receiptId });
+    },
     onError: (e) => toast.error(e.message),
   });
   const addItem = trpc.receipts.addItem.useMutation({
@@ -251,9 +258,8 @@ export function ItemAssignment({
   }
 
   // What the totals below show, and what Create Expense and Save for later send: the current items
-  // that have someone. An item deleted from the receipt keeps its key in `assignments` (#411).
+  // that have someone. Read through `items`, so an item deleted on another device doesn't count (#411).
   const assignmentList = useMemo(() => receiptAssignmentList(items, assignments), [items, assignments]);
-  const assignedItemIds = useMemo(() => new Set(assignmentList.map((a) => a.receiptItemId)), [assignmentList]);
   // The server calculates the expense with the same function and the same list, and saves it only
   // if each person's total is the one shown here (#364). Memoized to avoid recomputation on every
   // render (Finding #36).
@@ -609,7 +615,7 @@ export function ItemAssignment({
           return (
             <Card
               key={item.id}
-              className={assignedItemIds.has(item.id) ? '' : 'border-amber-300'}
+              className={assigned.size === 0 ? 'border-amber-300' : ''}
               data-testid={`item-card-${item.id}`}
             >
               <CardContent className="py-3">

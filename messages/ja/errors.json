@@ -96,7 +96,7 @@
   "processingRateLimited": "処理の試行回数が多すぎます。時間をおいてもう一度お試しください。",
   "itemNotOnReceipt": "この品目はこのレシートのものではありません",
   "receiptItemsUnassigned": "支出を作成するには、レシートのすべての品目に担当者が必要です。",
-  "receiptChangedElsewhere": "このレシートは別の端末で変更されました。合計を確認して、もう一度お試しください。",
+  "receiptChangedElsewhere": "このページを読み込んだ後にレシートが変更されました。合計を確認して、もう一度お試しください。",
   "assigneeNotMember": "割り当て先はこのグループのメンバーではありません",
   "splitQuantityOverItem": "分割する数量は品目の数量より少なくしてください",
   "splitQuantityOverTotal": "分割する数量は合計数量より少なくしてください",

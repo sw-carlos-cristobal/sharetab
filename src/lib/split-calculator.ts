@@ -56,6 +56,9 @@ export function calculateSplitTotals(params: {
   return results;
 }
 
+/** A receipt item and the people on it, in the order the split uses them */
+export type ReceiptAssignment = { receiptItemId: string; userIds: string[] };
+
 /**
  * Per-person totals for a group receipt whose items are assigned by id to people by user id:
  * what the group scan page previews and what `receipts.assignItemsAndCreateExpense` saves (#364).
@@ -98,9 +101,6 @@ export function calculateReceiptSplitTotals(params: {
   });
   return totals.map(({ personIndex, ...rest }) => ({ userId: userIds[personIndex]!, ...rest }));
 }
-
-/** A receipt item and the people on it, in the order the split uses them */
-export type ReceiptAssignment = { receiptItemId: string; userIds: string[] };
 
 /**
  * The list the group scan page previews `calculateReceiptSplitTotals` with and sends to Create

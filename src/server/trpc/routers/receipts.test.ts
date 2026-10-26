@@ -28,13 +28,10 @@ const mockDb = {
   },
   receiptItem: {
     findUnique: vi.fn(),
-    findUniqueOrThrow: vi.fn(),
     findFirst: vi.fn(),
     findMany: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
-    updateMany: vi.fn(),
-    delete: vi.fn(),
     deleteMany: vi.fn(),
   },
   receiptItemAssignment: { deleteMany: vi.fn(), createMany: vi.fn() },
@@ -96,7 +93,7 @@ describe('a group archived while a receipt was being finished (#289)', () => {
     paidById: 'u1',
     assignments: [{ receiptItemId: 'i1', userIds: ['u1'] }],
   };
-  // What the transaction's row locks read: the group, and the receipt (still in the group)
+  // What the transaction's row locks read: the group, and the receipt (still in the group, scanned)
   const locksRead = (group: object, receipt: object | null = { groupId: 'g1', status: 'COMPLETED' }) =>
     mockDb.$queryRaw.mockImplementation(async (strings: TemplateStringsArray) =>
       strings.join('?').includes('FROM "Receipt"') ? (receipt ? [receipt] : []) : [group],
@@ -434,7 +431,8 @@ describe("a receipt's saved split matches the receipt page's preview (#364)", ()
       groupId: 'g1',
       uploadedById: 'u1',
       extractedData: { currency: 'USD', ...extractedData, total: extractedData.subtotal + extractedData.tax },
-      // Where the mutation read them before #364, so the old code fails these tests on its numbers
+      // Unused now: the mutation read the items here before #364, so a revert runs to its own numbers
+      // (and fails the tests whose items don't add up to the scanned subtotal)
       items,
     });
     // The items as they are when the expense is made, read under the receipt's lock
@@ -654,6 +652,27 @@ describe("a receipt's saved split matches the receipt page's preview (#364)", ()
         { userId: 'carol', amount: 0 },
       ],
     ],
+    [
+      'the two people swapped',
+      [
+        { userId: 'alice', amount: 3300 },
+        { userId: 'bob', amount: 2200 },
+      ],
+    ],
+    [
+      'a cent off',
+      [
+        { userId: 'alice', amount: 2201 },
+        { userId: 'bob', amount: 3299 },
+      ],
+    ],
+    [
+      'one person twice',
+      [
+        { userId: 'alice', amount: 2200 },
+        { userId: 'alice', amount: 2200 },
+      ],
+    ],
   ])('totals that differ from the split (%s) are refused, writing nothing', async (_, expectedShares) => {
     scanned(
       [
@@ -669,6 +688,43 @@ describe("a receipt's saved split matches the receipt page's preview (#364)", ()
       ],
       { code: 'CONFLICT', messageKey: 'receiptChangedElsewhere' },
       { expectedShares },
+    );
+  });
+
+  // The page only sends items it shows, and only once each has someone: an item it doesn't know,
+  // or one it left out, was deleted or added on another device since it loaded the receipt
+  test.each([
+    [
+      'an item deleted elsewhere',
+      [{ id: 'i1', totalPrice: 2000 }],
+      [
+        { receiptItemId: 'i1', userIds: ['alice'] },
+        { receiptItemId: 'i2', userIds: ['bob'] },
+      ],
+    ],
+    [
+      'an item added elsewhere',
+      [
+        { id: 'i1', totalPrice: 2000 },
+        { id: 'i2', totalPrice: 3000 },
+        { id: 'i3', totalPrice: 1000 },
+      ],
+      [
+        { receiptItemId: 'i1', userIds: ['alice'] },
+        { receiptItemId: 'i2', userIds: ['bob'] },
+      ],
+    ],
+  ])('from the page, %s says the receipt changed, writing nothing', async (_, items, assignments) => {
+    scanned(items, { subtotal: 5000, tax: 0, tip: 0 });
+    await expectRefused(
+      assignments,
+      { code: 'CONFLICT', messageKey: 'receiptChangedElsewhere' },
+      {
+        expectedShares: [
+          { userId: 'alice', amount: 2000 },
+          { userId: 'bob', amount: 3000 },
+        ],
+      },
     );
   });
 
@@ -722,6 +778,8 @@ describe("a receipt's saved split matches the receipt page's preview (#364)", ()
       (strings as string[]).join('?').includes('FROM "Receipt" WHERE "id" = ? FOR SHARE'),
     );
     expect(txQueryRaw.mock.calls[receiptLock]!.slice(1)).toEqual(['r1']);
+    // It reads the status it checks
+    expect((txQueryRaw.mock.calls[receiptLock]![0] as string[]).join('?')).toMatch(/"groupId", "status" FROM/);
     const [itemsRead] = txFindMany.mock.invocationCallOrder;
     expect(itemsRead).toBeGreaterThan(txQueryRaw.mock.invocationCallOrder[receiptLock]!);
     expect(itemsRead).toBeLessThan(mockDb.expense.create.mock.invocationCallOrder[0]!);
@@ -767,6 +825,23 @@ describe("a receipt's saved split matches the receipt page's preview (#364)", ()
   test('a receipt with no items is refused, writing nothing', async () => {
     scanned([], { subtotal: 4000, tax: 400, tip: 0 });
     await expectRefused([], { code: 'PRECONDITION_FAILED', messageKey: 'receiptItemsUnassigned' });
+  });
+
+  test('an item listed with nobody on it is refused, writing nothing', async () => {
+    scanned(
+      [
+        { id: 'i1', totalPrice: 2000 },
+        { id: 'i2', totalPrice: 2000 },
+      ],
+      { subtotal: 4000, tax: 400, tip: 0 },
+    );
+    await expectRefused(
+      [
+        { receiptItemId: 'i1', userIds: ['alice'] },
+        { receiptItemId: 'i2', userIds: [] },
+      ],
+      { code: 'BAD_REQUEST' },
+    );
   });
 
   test.each([

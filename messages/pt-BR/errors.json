@@ -96,7 +96,7 @@
   "processingRateLimited": "Muitas tentativas de processamento. Tente novamente mais tarde.",
   "itemNotOnReceipt": "O item não pertence a este recibo",
   "receiptItemsUnassigned": "Cada item do recibo precisa de alguém antes que a despesa possa ser criada.",
-  "receiptChangedElsewhere": "Este recibo foi alterado em outro dispositivo. Confira os totais e tente novamente.",
+  "receiptChangedElsewhere": "Este recibo foi alterado desde que esta página foi carregada. Confira os totais e tente novamente.",
   "assigneeNotMember": "A pessoa atribuída não é membro deste grupo",
   "splitQuantityOverItem": "A quantidade a separar deve ser menor que a quantidade do item",
   "splitQuantityOverTotal": "A quantidade a separar deve ser menor que a quantidade total",

@@ -387,9 +387,9 @@ export const receiptsRouter = createTRPCRouter({
         title: z.string().min(1).max(200),
         paidById: z.string(),
         tipOverride: z.number().int().min(0).optional(),
-        // Each item once, each person once on it: a repeated item would count its price twice,
-        // and a repeated person would take two shares of it. The order is the receipt page's,
-        // which decides who takes the leftover cents, as in its preview
+        // Each item once, each with someone, each person once on it: a repeated item would count
+        // its price twice, and a repeated person would take two shares of it. The order is the
+        // receipt page's, which decides who takes the leftover cents, as in its preview
         assignments: z
           .array(
             z.object({
@@ -398,12 +398,10 @@ export const receiptsRouter = createTRPCRouter({
             }),
           )
           .refine((assignments) => uniqueIds(assignments.map((a) => a.receiptItemId))),
-        // Each person's total as the receipt page showed it; the expense is saved only if it's
-        // the same split (#364)
-        expectedShares: z
-          .array(z.object({ userId: z.string(), amount: z.number().int() }))
-          .max(200)
-          .optional(),
+        // Each person's total as the receipt page showed it; when it's sent, the expense is saved
+        // only if it's the same split (#364). The page always sends it; API callers, which showed
+        // no split, may leave it out
+        expectedShares: z.array(z.object({ userId: z.string(), amount: z.number().int() })).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -467,7 +465,8 @@ export const receiptsRouter = createTRPCRouter({
         // Deleting the receipt from the pending list takes it off the group, and keeps it while
         // a claim session uses it (#318). Under its lock, that either waits for this expense
         // (and is refused) or finished first and is seen here. A scan starting again, which
-        // replaces the items, marks the receipt PROCESSING the same way
+        // replaces the items, marks the receipt PROCESSING under the same lock, so it's either
+        // seen here or waits for this expense
         const [current] = await tx.$queryRaw<{ groupId: string | null; status: string }[]>`
           SELECT "groupId", "status" FROM "Receipt" WHERE "id" = ${input.receiptId} FOR SHARE`;
         if (!current || current.groupId !== receipt.groupId) {
@@ -478,25 +477,33 @@ export const receiptsRouter = createTRPCRouter({
         }
 
         // The items as they are now, which the receipt page may have added to, deleted from or
-        // repriced since the scan. Every one must be in the request: the expense's tax and tip
-        // are the whole receipt's, so an item left out would drop its price from the expense but
-        // not its share of them, which the split would spread over everyone else
+        // repriced since the scan (an edit committed after this read lands after the expense,
+        // which is still the split checked below). Every one must be in the request: the
+        // expense's tax and tip are the whole receipt's, so an item left out would drop its price
+        // from the expense but not its share of them, which the split would spread over everyone else
         const items = await tx.receiptItem.findMany({
           where: { receiptId: input.receiptId },
           select: { id: true, totalPrice: true },
         });
+        // The page sends only the items it shows, each with someone: an item it doesn't know or
+        // left out was deleted or added since it loaded the receipt
+        const changedSincePageLoaded = input.expectedShares !== undefined;
         const itemIds = new Set(items.map((item) => item.id));
         if (input.assignments.some((a) => !itemIds.has(a.receiptItemId))) {
-          throw new AppError('BAD_REQUEST', 'itemNotOnReceipt');
+          throw changedSincePageLoaded
+            ? new AppError('CONFLICT', 'receiptChangedElsewhere')
+            : new AppError('BAD_REQUEST', 'itemNotOnReceipt');
         }
         const assigned = new Set(input.assignments.map((a) => a.receiptItemId));
         if (items.length === 0 || items.some((item) => !assigned.has(item.id))) {
-          throw new AppError('PRECONDITION_FAILED', 'receiptItemsUnassigned');
+          throw changedSincePageLoaded && items.length > 0
+            ? new AppError('CONFLICT', 'receiptChangedElsewhere')
+            : new AppError('PRECONDITION_FAILED', 'receiptItemsUnassigned');
         }
 
         // The receipt page previews these totals with the same function and the same list (#364).
-        // It sends the totals it showed: when they differ, the receipt changed on another device
-        // since the page loaded it (an item repriced, say), and the person didn't confirm this split
+        // It sends the totals it showed: when they differ, the receipt changed since the page
+        // loaded it (an item repriced, say), and the person didn't confirm this split
         const userTotals = calculateReceiptSplitTotals({ items, assignments: input.assignments, tax, tip });
         if (input.expectedShares && !sameShares(userTotals, input.expectedShares)) {
           throw new AppError('CONFLICT', 'receiptChangedElsewhere');

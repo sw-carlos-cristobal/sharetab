@@ -96,7 +96,7 @@
   "processingRateLimited": "Too many processing attempts. Please try again later.",
   "itemNotOnReceipt": "Item does not belong to this receipt",
   "receiptItemsUnassigned": "Every item on the receipt needs someone before the expense can be created.",
-  "receiptChangedElsewhere": "This receipt changed on another device. Check the totals and try again.",
+  "receiptChangedElsewhere": "This receipt changed since this page loaded it. Check the totals and try again.",
   "assigneeNotMember": "Assignee is not a member of this group",
   "splitQuantityOverItem": "Split quantity must be less than item quantity",
   "splitQuantityOverTotal": "Split quantity must be less than total quantity",

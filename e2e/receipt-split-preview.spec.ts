@@ -58,6 +58,8 @@ async function newGroup(name: string) {
 // #364: the receipt page previews each person's total sharing tax and tip over the items, but the
 // expense was saved sharing them over the subtotal the scan read. Once the items no longer add up
 // to that subtotal (one added, deleted or repriced), the saved split wasn't the one shown.
+// The scans use the mock AI provider (AI_PROVIDER_PRIORITY=mock, as CI runs), which reads 18 items
+// and an 8% tax from any image.
 test.describe('Receipt scan: the split saved is the one previewed (#364)', () => {
   test('after items are added, repriced and deleted, with a tip override', async ({ page }) => {
     const { owner, groupId, memberIds, dispose } = await newGroup('Scan Preview');
@@ -90,7 +92,7 @@ test.describe('Receipt scan: the split saved is the one previewed (#364)', () =>
       await page.getByTestId(`item-card-${added.id}`).getByTestId(`member-toggle-${alice}`).click();
       await page.getByTestId(`item-card-${repriced!.id}`).getByTestId(`member-toggle-${bob}`).click();
       await page.getByLabel('Tip override (optional)').fill('7.77');
-      await expect(page.getByText('$7.77')).toBeVisible();
+      await expect(page.getByText('$7.77', { exact: true })).toBeVisible();
 
       const preview = await shownTotals(page, [alice, bob]);
       await page.getByTestId('create-expense-btn').click();
@@ -128,7 +130,7 @@ test.describe('Receipt scan: the split saved is the one previewed (#364)', () =>
       expect(updateRes.ok(), await updateRes.text()).toBe(true);
 
       await page.getByTestId('create-expense-btn').click();
-      await expect(page.getByText('This receipt changed on another device')).toBeVisible();
+      await expect(page.getByText('This receipt changed since this page loaded it')).toBeVisible();
       await expect
         .poll(async () => (await shownTotals(page, [alice]))[alice], { message: 'the new price is shown' })
         .toBeGreaterThan(before[alice]!);
@@ -143,7 +145,31 @@ test.describe('Receipt scan: the split saved is the one previewed (#364)', () =>
   });
 
   // #411: a removed item kept its place in the page's selections, so it was counted as assigned
-  // and Save for later sent its id
+  // and Create and Save for later sent its id
+  test('Create works after an assigned item is removed', async ({ page }) => {
+    const { owner, groupId, memberIds, dispose } = await newGroup('Scan Remove Create');
+    const alice = memberIds[users.alice.email]!;
+    const bob = memberIds[users.bob.email]!;
+    try {
+      const { receiptId, items, tax } = await scanReceipt(owner, groupId);
+
+      await openReceipt(page, groupId, receiptId);
+      await page.getByTestId('split-all-btn').click();
+      await page.getByTestId(`item-card-${items[1]!.id}`).getByTestId(`member-toggle-${bob}`).click();
+      await removeItem(page, items[0]!);
+
+      const preview = await shownTotals(page, [alice, bob]);
+      await page.getByTestId('create-expense-btn').click();
+      await page.waitForURL(`**/groups/${groupId}`);
+
+      const saved = await savedExpense(owner, groupId);
+      expect(saved.shares).toEqual(preview);
+      expect(saved.amount).toBe(items.slice(1).reduce((sum, item) => sum + item.totalPrice, 0) + tax);
+    } finally {
+      await dispose();
+    }
+  });
+
   test('removing an assigned item leaves the count, Create and Save for later right', async ({ page }) => {
     const { owner, groupId, memberIds, dispose } = await newGroup('Scan Save Later');
     const alice = memberIds[users.alice.email]!;
