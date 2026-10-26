@@ -96,6 +96,7 @@
   "processingRateLimited": "처리 시도가 너무 많습니다. 나중에 다시 시도해 주세요.",
   "itemNotOnReceipt": "이 항목은 이 영수증에 속하지 않습니다",
   "itemIdNotOnReceipt": "항목 {id}은(는) 이 영수증에 속하지 않습니다",
+  "receiptItemsUnassigned": "비용을 만들려면 영수증의 모든 항목에 담당자가 있어야 합니다.",
   "assigneeNotMember": "배정 대상이 이 그룹의 멤버가 아닙니다",
   "splitQuantityOverItem": "분할 수량은 항목 수량보다 적어야 합니다",
   "splitQuantityOverTotal": "분할 수량은 전체 수량보다 적어야 합니다",

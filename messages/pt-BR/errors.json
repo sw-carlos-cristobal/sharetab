@@ -96,6 +96,7 @@
   "processingRateLimited": "Muitas tentativas de processamento. Tente novamente mais tarde.",
   "itemNotOnReceipt": "O item não pertence a este recibo",
   "itemIdNotOnReceipt": "O item {id} não pertence a este recibo",
+  "receiptItemsUnassigned": "Cada item do recibo precisa de alguém antes que a despesa possa ser criada.",
   "assigneeNotMember": "A pessoa atribuída não é membro deste grupo",
   "splitQuantityOverItem": "A quantidade a separar deve ser menor que a quantidade do item",
   "splitQuantityOverTotal": "A quantidade a separar deve ser menor que a quantidade total",

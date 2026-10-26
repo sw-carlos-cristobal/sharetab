@@ -57,6 +57,46 @@ export function calculateSplitTotals(params: {
 }
 
 /**
+ * Per-person totals for a group receipt whose items are assigned by id to people by user id:
+ * what the receipt page previews and what `receipts.assignItemsAndCreateExpense` saves (#364).
+ * Tax and tip are shared over the items given, the receipt's items as they are now, not the
+ * subtotal the scan read, which no longer adds up once an item is added, deleted or repriced.
+ * People come back in `calculateSplitTotals`' order; an assignment to an item that isn't in
+ * `items` is left out.
+ */
+export function calculateReceiptSplitTotals(params: {
+  items: { id: string; totalPrice: number }[];
+  assignments: { receiptItemId: string; userIds: string[] }[];
+  tax: number;
+  tip: number;
+}): { userId: string; itemTotal: number; tax: number; tip: number; total: number }[] {
+  const itemIndices = new Map(params.items.map((item, i) => [item.id, i]));
+  const userIds: string[] = [];
+  const userIndices = new Map<string, number>();
+  const userIndex = (userId: string) => {
+    let index = userIndices.get(userId);
+    if (index === undefined) {
+      index = userIds.push(userId) - 1;
+      userIndices.set(userId, index);
+    }
+    return index;
+  };
+
+  const assignments = params.assignments.flatMap(({ receiptItemId, userIds: assigned }) => {
+    const itemIndex = itemIndices.get(receiptItemId);
+    return itemIndex === undefined ? [] : [{ itemIndex, personIndices: assigned.map(userIndex) }];
+  });
+  const totals = calculateSplitTotals({
+    items: params.items,
+    assignments,
+    tax: params.tax,
+    tip: params.tip,
+    peopleCount: userIds.length,
+  });
+  return totals.map(({ personIndex, ...rest }) => ({ userId: userIds[personIndex]!, ...rest }));
+}
+
+/**
  * How one item's price is divided among the people on it, in cents, in `personIndices` order.
  * `calculateSplitTotals` adds these up into each person's item total.
  */

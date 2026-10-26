@@ -1,4 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { calculateReceiptSplitTotals } from '@/lib/split-calculator';
 
 vi.mock('next/headers', () => ({
   cookies: vi.fn().mockResolvedValue({ get: vi.fn().mockReturnValue(null) }),
@@ -379,5 +380,188 @@ describe('processing a receipt while it is deleted from the pending list (#318)'
       code: 'CONFLICT',
       message: 'Receipt is already being processed',
     });
+  });
+});
+
+// #364: the receipt page previews each person's total sharing tax and tip over the sum of the
+// items, but the save shared them over the subtotal the scan read, the last person taking what
+// was left. Once the items stopped adding up to that subtotal (an item added, deleted or
+// repriced), the saved split wasn't the one the user confirmed.
+describe("a receipt's saved split matches the receipt page's preview (#364)", () => {
+  type Item = { id: string; totalPrice: number };
+  type Assignment = { receiptItemId: string; userIds: string[] };
+
+  function scanned(items: Item[], extractedData: { subtotal: number; tax: number; tip: number }) {
+    mockDb.receipt.findUnique.mockResolvedValue({
+      id: 'r1',
+      status: 'COMPLETED',
+      groupId: 'g1',
+      uploadedById: 'u1',
+      extractedData: { ...extractedData, total: extractedData.subtotal + extractedData.tax, currency: 'USD' },
+      items,
+    });
+  }
+
+  async function save(assignments: Assignment[], tipOverride?: number) {
+    const api = await caller();
+    await api.assignItemsAndCreateExpense({
+      groupId: 'g1',
+      receiptId: 'r1',
+      title: 'Dinner',
+      paidById: 'alice',
+      assignments,
+      ...(tipOverride !== undefined ? { tipOverride } : {}),
+    });
+    const { data } = mockDb.expense.create.mock.calls[0]![0] as {
+      data: { amount: number; shares: { create: { userId: string; amount: number }[] } };
+    };
+    return { amount: data.amount, shares: Object.fromEntries(data.shares.create.map((s) => [s.userId, s.amount])) };
+  }
+
+  // What the receipt page shows each person before they save
+  function preview(items: Item[], assignments: Assignment[], tax: number, tip: number) {
+    return Object.fromEntries(
+      calculateReceiptSplitTotals({ items, assignments, tax, tip }).map((person) => [person.userId, person.total]),
+    );
+  }
+
+  beforeEach(() => {
+    mockDb.groupMember.findUnique.mockResolvedValue({ role: 'MEMBER', userId: 'u1', groupId: 'g1' });
+    mockDb.groupMember.findMany.mockResolvedValue([{ userId: 'alice' }, { userId: 'bob' }, { userId: 'carol' }]);
+    mockDb.group.findUnique.mockResolvedValue({ archivedAt: null, currency: 'USD' });
+    mockDb.$queryRaw.mockImplementation(async (strings: TemplateStringsArray) =>
+      strings.join('?').includes('FROM "Receipt"') ? [{ groupId: 'g1' }] : [{ archivedAt: null }],
+    );
+    mockDb.$transaction.mockImplementation(async (fn: (tx: typeof mockDb) => unknown) => fn(mockDb));
+    mockDb.expense.create.mockResolvedValue({ id: 'e1' });
+  });
+
+  test('an item the scan missed, added by hand (the steps in the issue)', async () => {
+    // Scanned: two $20.00 items, subtotal $40.00, tax $4.00. Then a $10.00 item is added.
+    const items = [
+      { id: 'i1', totalPrice: 2000 },
+      { id: 'i2', totalPrice: 2000 },
+      { id: 'i3', totalPrice: 1000 },
+    ];
+    scanned(items, { subtotal: 4000, tax: 400, tip: 0 });
+    const assignments = [
+      { receiptItemId: 'i1', userIds: ['alice'] },
+      { receiptItemId: 'i2', userIds: ['bob'] },
+      { receiptItemId: 'i3', userIds: ['carol'] },
+    ];
+
+    expect(preview(items, assignments, 400, 0)).toEqual({ alice: 2160, bob: 2160, carol: 1080 });
+    expect(await save(assignments)).toEqual({ amount: 5400, shares: { alice: 2160, bob: 2160, carol: 1080 } });
+  });
+
+  test('a duplicate line deleted', async () => {
+    // Scanned: three $20.00 items (one read twice), subtotal $60.00, tax $6.00
+    const items = [
+      { id: 'i1', totalPrice: 2000 },
+      { id: 'i2', totalPrice: 2000 },
+    ];
+    scanned(items, { subtotal: 6000, tax: 600, tip: 0 });
+    const assignments = [
+      { receiptItemId: 'i1', userIds: ['alice'] },
+      { receiptItemId: 'i2', userIds: ['bob'] },
+    ];
+
+    expect(preview(items, assignments, 600, 0)).toEqual({ alice: 2300, bob: 2300 });
+    expect(await save(assignments)).toEqual({ amount: 4600, shares: { alice: 2300, bob: 2300 } });
+  });
+
+  test('a misread price corrected', async () => {
+    // Scanned: two $20.00 items, subtotal $40.00, tax $4.00, tip $5.00; the second was $30.00
+    const items = [
+      { id: 'i1', totalPrice: 2000 },
+      { id: 'i2', totalPrice: 3000 },
+    ];
+    scanned(items, { subtotal: 4000, tax: 400, tip: 500 });
+    const assignments = [
+      { receiptItemId: 'i1', userIds: ['alice'] },
+      { receiptItemId: 'i2', userIds: ['bob'] },
+    ];
+
+    expect(preview(items, assignments, 400, 500)).toEqual({ alice: 2360, bob: 3540 });
+    expect(await save(assignments)).toEqual({ amount: 5900, shares: { alice: 2360, bob: 3540 } });
+  });
+
+  test('items shared unevenly, with a tip override', async () => {
+    const items = [
+      { id: 'i1', totalPrice: 1001 },
+      { id: 'i2', totalPrice: 333 },
+      { id: 'i3', totalPrice: 2999 },
+    ];
+    scanned(items, { subtotal: 4000, tax: 347, tip: 0 });
+    const assignments = [
+      { receiptItemId: 'i1', userIds: ['carol', 'alice', 'bob'] },
+      { receiptItemId: 'i2', userIds: ['bob', 'alice'] },
+      { receiptItemId: 'i3', userIds: ['alice'] },
+    ];
+
+    const shown = preview(items, assignments, 347, 611);
+    const { amount, shares } = await save(assignments, 611);
+    expect(shares).toEqual(shown);
+    expect(amount).toBe(1001 + 333 + 2999 + 347 + 611);
+  });
+
+  test('a request that leaves an item with nobody is refused, writing nothing', async () => {
+    scanned(
+      [
+        { id: 'i1', totalPrice: 2000 },
+        { id: 'i2', totalPrice: 2000 },
+      ],
+      { subtotal: 4000, tax: 400, tip: 0 },
+    );
+    const api = await caller();
+    await expect(
+      api.assignItemsAndCreateExpense({
+        groupId: 'g1',
+        receiptId: 'r1',
+        title: 'Dinner',
+        paidById: 'alice',
+        assignments: [{ receiptItemId: 'i1', userIds: ['alice'] }],
+      }),
+    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED', messageKey: 'receiptItemsUnassigned' });
+    expect(mockDb.expense.create).not.toHaveBeenCalled();
+  });
+
+  test('a receipt with no items is refused, writing nothing', async () => {
+    scanned([], { subtotal: 4000, tax: 400, tip: 0 });
+    const api = await caller();
+    await expect(
+      api.assignItemsAndCreateExpense({
+        groupId: 'g1',
+        receiptId: 'r1',
+        title: 'Dinner',
+        paidById: 'alice',
+        assignments: [],
+      }),
+    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
+    expect(mockDb.expense.create).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    [
+      'an item listed twice',
+      [
+        { receiptItemId: 'i1', userIds: ['alice'] },
+        { receiptItemId: 'i1', userIds: ['bob'] },
+      ],
+    ],
+    ['someone listed twice on an item', [{ receiptItemId: 'i1', userIds: ['alice', 'alice'] }]],
+  ])('%s is refused, writing nothing', async (_, assignments) => {
+    scanned([{ id: 'i1', totalPrice: 2000 }], { subtotal: 2000, tax: 200, tip: 0 });
+    const api = await caller();
+    await expect(
+      api.assignItemsAndCreateExpense({
+        groupId: 'g1',
+        receiptId: 'r1',
+        title: 'Dinner',
+        paidById: 'alice',
+        assignments,
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockDb.expense.create).not.toHaveBeenCalled();
   });
 });

@@ -10,6 +10,9 @@ import { getExchangeRate, convertCents } from '../../lib/exchange-rates';
 import { stripUndefined } from '../../lib/strip-undefined';
 import { lockActiveGroup } from '../../lib/group-balances';
 import { deleteUnusedSplitReceipts, removeReceiptFiles } from '../../lib/receipt-cleanup';
+import { calculateReceiptSplitTotals } from '@/lib/split-calculator';
+
+const uniqueIds = (ids: string[]) => new Set(ids).size === ids.length;
 
 /**
  * Verify that a receipt exists and the user has access to it (via group membership).
@@ -380,12 +383,15 @@ export const receiptsRouter = createTRPCRouter({
         title: z.string().min(1).max(200),
         paidById: z.string(),
         tipOverride: z.number().int().min(0).optional(),
-        assignments: z.array(
-          z.object({
-            receiptItemId: z.string(),
-            userIds: z.array(z.string()).min(1),
-          }),
-        ),
+        // Each item once, each person once on it: a repeat would count its price twice
+        assignments: z
+          .array(
+            z.object({
+              receiptItemId: z.string(),
+              userIds: z.array(z.string()).min(1).refine(uniqueIds),
+            }),
+          )
+          .refine((assignments) => uniqueIds(assignments.map((a) => a.receiptItemId))),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -422,60 +428,30 @@ export const receiptsRouter = createTRPCRouter({
       const tax = extractedData.tax;
       const tip = input.tipOverride ?? extractedData.tip;
 
-      // Build item map and verify all referenced items belong to this receipt
-      const itemMap = new Map(receipt.items.map((item) => [item.id, item]));
+      // Verify all referenced items belong to this receipt
+      const itemIds = new Set(receipt.items.map((item) => item.id));
       for (const a of input.assignments) {
-        if (!itemMap.has(a.receiptItemId)) {
+        if (!itemIds.has(a.receiptItemId)) {
           throw new AppError('BAD_REQUEST', 'itemNotOnReceipt');
         }
       }
-
-      // Calculate per-user item subtotals
-      const userSubtotals = new Map<string, number>();
-
-      for (const assignment of input.assignments) {
-        const item = itemMap.get(assignment.receiptItemId)!;
-
-        const perPerson = Math.floor(item.totalPrice / assignment.userIds.length);
-        const remainder = item.totalPrice - perPerson * assignment.userIds.length;
-
-        for (const [i, userId] of assignment.userIds.entries()) {
-          const amount = perPerson + (i < remainder ? 1 : 0);
-          userSubtotals.set(userId, (userSubtotals.get(userId) ?? 0) + amount);
-        }
+      // And that every item has someone, as the receipt page requires before it submits: the
+      // expense's tax and tip are the whole receipt's, so an item left out would hand its share
+      // of them to whoever the split puts last (#364)
+      const assigned = new Set(input.assignments.map((a) => a.receiptItemId));
+      if (receipt.items.length === 0 || receipt.items.some((item) => !assigned.has(item.id))) {
+        throw new AppError('PRECONDITION_FAILED', 'receiptItemsUnassigned');
       }
 
-      // Proportionally distribute tax and tip using receipt subtotal as denominator.
-      // This ensures each assigned item gets its fair share of tax/tip relative to
-      // the full receipt subtotal, even when not all items are assigned.
-      const actualSubtotal = Array.from(userSubtotals.values()).reduce((a, b) => a + b, 0);
-      const receiptSubtotal = extractedData.subtotal > 0 ? extractedData.subtotal : actualSubtotal;
-      const totalAmount = actualSubtotal + tax + tip;
-
-      const userTotals = new Map<string, number>();
-      let allocatedTotal = 0;
-      const userEntries = Array.from(userSubtotals.entries());
-
-      for (const [i, [userId, itemTotal]] of userEntries.entries()) {
-        const proportion = receiptSubtotal > 0 ? itemTotal / receiptSubtotal : 0;
-
-        let userTax: number;
-        let userTip: number;
-
-        if (i === userEntries.length - 1) {
-          // Last user gets remainder to prevent off-by-one
-          const alreadyAllocated = allocatedTotal;
-          const userTotal = totalAmount - alreadyAllocated;
-          userTotals.set(userId, userTotal);
-          allocatedTotal += userTotal;
-        } else {
-          userTax = Math.round(tax * proportion);
-          userTip = Math.round(tip * proportion);
-          const userTotal = itemTotal + userTax + userTip;
-          userTotals.set(userId, userTotal);
-          allocatedTotal += userTotal;
-        }
-      }
+      // The receipt page previews these totals with the same function, so the split saved is
+      // the one shown: tax and tip shared over the receipt's items as they are now (#364)
+      const userTotals = calculateReceiptSplitTotals({
+        items: receipt.items,
+        assignments: input.assignments,
+        tax,
+        tip,
+      });
+      const totalAmount = userTotals.reduce((sum, user) => sum + user.total, 0);
 
       // Save assignments in a single batch (replaces N×M individual upserts)
       const assignmentData = input.assignments.flatMap((a) =>
@@ -547,9 +523,9 @@ export const receiptsRouter = createTRPCRouter({
             addedById: ctx.user.id,
             receiptId: input.receiptId,
             shares: {
-              create: Array.from(userTotals.entries()).map(([userId, amount]) => ({
+              create: userTotals.map(({ userId, total }) => ({
                 userId,
-                amount,
+                amount: total,
               })),
             },
           },

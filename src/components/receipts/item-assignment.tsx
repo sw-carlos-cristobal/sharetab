@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { trpc } from '@/lib/trpc';
 import { formatCents, centsToDecimal, parseToCents } from '@/lib/money';
-import { calculateSplitTotals } from '@/lib/split-calculator';
+import { calculateReceiptSplitTotals } from '@/lib/split-calculator';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -239,43 +239,29 @@ export function ItemAssignment({
     });
   }
 
-  // Calculate per-person totals using shared calculateSplitTotals (Finding #30).
-  // Memoized to avoid recomputation on every render (Finding #36).
-  const perPersonTotals = useMemo(() => {
-    // Build member-id -> index mapping for calculateSplitTotals
-    const memberIdToIndex = new Map<string, number>();
-    members.forEach((m, i) => memberIdToIndex.set(m.id, i));
-
-    const assignmentList = Object.entries(assignments)
-      .filter(([, userIds]) => userIds.size > 0)
-      .map(([receiptItemId, userIds]) => {
-        const itemIdx = items.findIndex((it) => it.id === receiptItemId);
-        return {
-          itemIndex: itemIdx,
-          personIndices: Array.from(userIds)
-            .map((uid) => memberIdToIndex.get(uid))
-            .filter((idx): idx is number => idx !== undefined),
-        };
-      })
-      .filter((a) => a.itemIndex >= 0 && a.personIndices.length > 0);
-
-    const results = calculateSplitTotals({
-      items,
-      assignments: assignmentList,
-      tax: extracted?.tax ?? 0,
-      tip,
-      peopleCount: members.length,
-    });
-
-    // Map back from person indices to member IDs
-    const totals = new Map<string, number>();
-    for (const r of results) {
-      const member = members[r.personIndex];
-      if (member) totals.set(member.id, r.total);
-    }
-    return totals;
-  }, [items, assignments, members, extracted, tip]);
-  const assignedItemCount = Object.values(assignments).filter((s) => s.size > 0).length;
+  // The receipt's current items that have someone, in receipt order: what the totals below show,
+  // and what Create Expense and Save for later send. An item deleted from the receipt keeps its
+  // key in `assignments`, so it's read through `items`, not the keys.
+  const assignmentList = useMemo(
+    () =>
+      items.flatMap((item) => {
+        const userIds = assignments[item.id];
+        return userIds && userIds.size > 0 ? [{ receiptItemId: item.id, userIds: Array.from(userIds) }] : [];
+      }),
+    [items, assignments],
+  );
+  // The server saves the expense from the same function and the same list, so the totals shown
+  // are the ones saved (#364). Memoized to avoid recomputation on every render (Finding #36).
+  const perPersonTotals = useMemo(
+    () =>
+      new Map(
+        calculateReceiptSplitTotals({ items, assignments: assignmentList, tax: extracted?.tax ?? 0, tip }).map(
+          (person) => [person.userId, person.total],
+        ),
+      ),
+    [items, assignmentList, extracted, tip],
+  );
+  const assignedItemCount = assignmentList.length;
   const allAssigned = items.length > 0 && assignedItemCount === items.length;
 
   // Precompute member initials to avoid recalculation every render (Finding #37)
@@ -327,12 +313,7 @@ export function ItemAssignment({
       paidById: effectivePaidById,
       tipOverride:
         tipOverride !== '' && isFinite(parseFloat(tipOverride)) ? Math.round(parseFloat(tipOverride) * 100) : undefined,
-      assignments: Object.entries(assignments)
-        .filter(([, userIds]) => userIds.size > 0)
-        .map(([receiptItemId, userIds]) => ({
-          receiptItemId,
-          userIds: Array.from(userIds),
-        })),
+      assignments: assignmentList,
     });
   }
 
@@ -341,12 +322,7 @@ export function ItemAssignment({
       groupId,
       receiptId,
       paidById: effectivePaidById || null,
-      assignments: Object.entries(assignments)
-        .filter(([, userIds]) => userIds.size > 0)
-        .map(([receiptItemId, userIds]) => ({
-          receiptItemId,
-          userIds: Array.from(userIds),
-        })),
+      assignments: assignmentList,
     });
   }
 
@@ -806,7 +782,9 @@ export function ItemAssignment({
               return (
                 <div key={m.id} className="flex justify-between text-sm">
                   <span>{m.name ?? t('unnamed')}</span>
-                  <span className="font-medium">{formatCents(total, safeExtracted.currency, locale)}</span>
+                  <span className="font-medium" data-testid={`person-total-${m.id}`}>
+                    {formatCents(total, safeExtracted.currency, locale)}
+                  </span>
                 </div>
               );
             })}
