@@ -95,7 +95,6 @@
   "reprocessingFailed": "Ombearbetningen misslyckades",
   "processingRateLimited": "För många bearbetningsförsök. Försök igen senare.",
   "itemNotOnReceipt": "Artikeln hör inte till det här kvittot",
-  "itemIdNotOnReceipt": "Artikel {id} hör inte till det här kvittot",
   "receiptItemsUnassigned": "Varje artikel på kvittot måste tilldelas någon innan utgiften kan skapas.",
   "assigneeNotMember": "Den tilldelade personen är inte medlem i den här gruppen",
   "splitQuantityOverItem": "Antalet att dela av måste vara mindre än artikelns antal",

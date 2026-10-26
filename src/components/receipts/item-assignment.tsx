@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { trpc } from '@/lib/trpc';
 import { formatCents, centsToDecimal, parseToCents } from '@/lib/money';
-import { calculateReceiptSplitTotals } from '@/lib/split-calculator';
+import { calculateReceiptSplitTotals, receiptAssignmentList } from '@/lib/split-calculator';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -66,6 +66,8 @@ export function ItemAssignment({
 
   const createExpense = trpc.receipts.assignItemsAndCreateExpense.useMutation({
     onSuccess: onComplete,
+    // Refused because the items changed on another device, say: show them as they are now
+    onError: () => utils.receipts.getReceiptItems.invalidate({ receiptId }),
   });
   const updateItem = trpc.receipts.updateItem.useMutation({
     onSuccess: () => {
@@ -239,19 +241,17 @@ export function ItemAssignment({
     });
   }
 
-  // The receipt's current items that have someone, in receipt order: what the totals below show,
-  // and what Create Expense and Save for later send. An item deleted from the receipt keeps its
-  // key in `assignments`, so it's read through `items`, not the keys.
+  // What the totals below show, and what Create Expense and Save for later send: the current
+  // items that have someone in the group. An item deleted from the receipt keeps its key in
+  // `assignments`, and a restored assignee may have left the group.
   const assignmentList = useMemo(
-    () =>
-      items.flatMap((item) => {
-        const userIds = assignments[item.id];
-        return userIds && userIds.size > 0 ? [{ receiptItemId: item.id, userIds: Array.from(userIds) }] : [];
-      }),
-    [items, assignments],
+    () => receiptAssignmentList(items, assignments, new Set(members.map((m) => m.id))),
+    [items, assignments, members],
   );
+  const assignedItemIds = useMemo(() => new Set(assignmentList.map((a) => a.receiptItemId)), [assignmentList]);
   // The server saves the expense from the same function and the same list, so the totals shown
-  // are the ones saved (#364). Memoized to avoid recomputation on every render (Finding #36).
+  // are the ones saved while the items shown are current (#364). Memoized to avoid recomputation
+  // on every render (Finding #36).
   const perPersonTotals = useMemo(
     () =>
       new Map(
@@ -604,7 +604,7 @@ export function ItemAssignment({
           return (
             <Card
               key={item.id}
-              className={assigned.size === 0 ? 'border-amber-300' : ''}
+              className={assignedItemIds.has(item.id) ? '' : 'border-amber-300'}
               data-testid={`item-card-${item.id}`}
             >
               <CardContent className="py-3">

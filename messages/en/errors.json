@@ -95,7 +95,6 @@
   "reprocessingFailed": "Reprocessing failed",
   "processingRateLimited": "Too many processing attempts. Please try again later.",
   "itemNotOnReceipt": "Item does not belong to this receipt",
-  "itemIdNotOnReceipt": "Item {id} does not belong to this receipt",
   "receiptItemsUnassigned": "Every item on the receipt needs someone before the expense can be created.",
   "assigneeNotMember": "Assignee is not a member of this group",
   "splitQuantityOverItem": "Split quantity must be less than item quantity",

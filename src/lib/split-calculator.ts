@@ -1,6 +1,6 @@
 /**
  * Pure function to calculate per-person totals with proportional tax/tip distribution.
- * Used by both the authenticated receipt flow and the guest split flow.
+ * Used by the guest split flow, and by the group receipt flow through `calculateReceiptSplitTotals`.
  */
 export function calculateSplitTotals(params: {
   items: { totalPrice: number }[];
@@ -58,11 +58,13 @@ export function calculateSplitTotals(params: {
 
 /**
  * Per-person totals for a group receipt whose items are assigned by id to people by user id:
- * what the receipt page previews and what `receipts.assignItemsAndCreateExpense` saves (#364).
- * Tax and tip are shared over the items given, the receipt's items as they are now, not the
- * subtotal the scan read, which no longer adds up once an item is added, deleted or repriced.
- * People come back in `calculateSplitTotals`' order; an assignment to an item that isn't in
- * `items` is left out.
+ * what the group scan page previews and what `receipts.assignItemsAndCreateExpense` saves (#364).
+ * Tax and tip are shared in proportion to the prices of the items assigned, not the subtotal the
+ * scan read, which no longer adds up once an item is added, deleted or repriced. All of the tax
+ * and tip goes to the people assigned, so the mutation requires every item to be. People come
+ * back in the order they first appear in `assignments`, and the last takes the leftover cents, so
+ * the page and the server must use the same list in the same order; an assignment to an item
+ * that isn't in `items` is left out.
  */
 export function calculateReceiptSplitTotals(params: {
   items: { id: string; totalPrice: number }[];
@@ -94,6 +96,24 @@ export function calculateReceiptSplitTotals(params: {
     peopleCount: userIds.length,
   });
   return totals.map(({ personIndex, ...rest }) => ({ userId: userIds[personIndex]!, ...rest }));
+}
+
+/**
+ * The list the group scan page previews `calculateReceiptSplitTotals` with and sends to Create
+ * Expense and Save for later (#364): the receipt's items that have someone, in receipt order, each
+ * with its people in the order they were picked. The page's selections can still hold an item
+ * deleted from the receipt or someone who left the group, so they're read through `items` and
+ * `memberIds`.
+ */
+export function receiptAssignmentList(
+  items: { id: string }[],
+  selected: Record<string, Iterable<string>>,
+  memberIds: ReadonlySet<string>,
+): { receiptItemId: string; userIds: string[] }[] {
+  return items.flatMap((item) => {
+    const userIds = Array.from(selected[item.id] ?? []).filter((userId) => memberIds.has(userId));
+    return userIds.length > 0 ? [{ receiptItemId: item.id, userIds }] : [];
+  });
 }
 
 /**

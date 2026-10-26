@@ -95,7 +95,6 @@
   "reprocessingFailed": "No se pudo volver a procesar",
   "processingRateLimited": "Demasiados intentos de procesamiento. Inténtalo de nuevo más tarde.",
   "itemNotOnReceipt": "El artículo no pertenece a este recibo",
-  "itemIdNotOnReceipt": "El artículo {id} no pertenece a este recibo",
   "receiptItemsUnassigned": "Cada artículo del recibo necesita a alguien antes de poder crear el gasto.",
   "assigneeNotMember": "La persona asignada no es miembro de este grupo",
   "splitQuantityOverItem": "La cantidad a separar debe ser menor que la cantidad del artículo",

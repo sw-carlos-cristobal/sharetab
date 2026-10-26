@@ -15,6 +15,15 @@ import { calculateReceiptSplitTotals } from '@/lib/split-calculator';
 const uniqueIds = (ids: string[]) => new Set(ids).size === ids.length;
 
 /**
+ * Takes the receipt's row lock before its items change. `assignItemsAndCreateExpense` reads the
+ * items under a FOR SHARE lock on the same row, so an edit either lands before the expense's
+ * split is calculated or waits for it (#364).
+ */
+async function lockReceiptForItemEdit(tx: Prisma.TransactionClient, receiptId: string) {
+  await tx.$queryRaw`SELECT 1 FROM "Receipt" WHERE "id" = ${receiptId} FOR NO KEY UPDATE`;
+}
+
+/**
  * Verify that a receipt exists and the user has access to it (via group membership).
  * When additional `include` fields are passed, the return type is widened since
  * Prisma cannot statically infer dynamic includes -- callers should cast as needed.
@@ -192,9 +201,12 @@ export const receiptsRouter = createTRPCRouter({
       await verifyReceiptAccess(ctx.db, item.receiptId, ctx.user.id);
 
       const { itemId, ...data } = input;
-      return ctx.db.receiptItem.update({
-        where: { id: itemId },
-        data: stripUndefined(data),
+      return ctx.db.$transaction(async (tx) => {
+        await lockReceiptForItemEdit(tx, item.receiptId);
+        return tx.receiptItem.update({
+          where: { id: itemId },
+          data: stripUndefined(data),
+        });
       });
     }),
 
@@ -211,20 +223,23 @@ export const receiptsRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       await verifyReceiptAccess(ctx.db, input.receiptId, ctx.user.id);
 
-      const maxSort = await ctx.db.receiptItem.findFirst({
-        where: { receiptId: input.receiptId },
-        orderBy: { sortOrder: 'desc' },
-        select: { sortOrder: true },
-      });
-      return ctx.db.receiptItem.create({
-        data: {
-          receiptId: input.receiptId,
-          name: input.name,
-          quantity: input.quantity,
-          unitPrice: input.unitPrice,
-          totalPrice: input.totalPrice,
-          sortOrder: (maxSort?.sortOrder ?? 0) + 1,
-        },
+      return ctx.db.$transaction(async (tx) => {
+        await lockReceiptForItemEdit(tx, input.receiptId);
+        const maxSort = await tx.receiptItem.findFirst({
+          where: { receiptId: input.receiptId },
+          orderBy: { sortOrder: 'desc' },
+          select: { sortOrder: true },
+        });
+        return tx.receiptItem.create({
+          data: {
+            receiptId: input.receiptId,
+            name: input.name,
+            quantity: input.quantity,
+            unitPrice: input.unitPrice,
+            totalPrice: input.totalPrice,
+            sortOrder: (maxSort?.sortOrder ?? 0) + 1,
+          },
+        });
       });
     }),
 
@@ -235,10 +250,13 @@ export const receiptsRouter = createTRPCRouter({
     if (!item) throw new AppError('NOT_FOUND');
     await verifyReceiptAccess(ctx.db, item.receiptId, ctx.user.id);
 
-    await ctx.db.receiptItemAssignment.deleteMany({
-      where: { receiptItemId: input.itemId },
+    await ctx.db.$transaction(async (tx) => {
+      await lockReceiptForItemEdit(tx, item.receiptId);
+      await tx.receiptItemAssignment.deleteMany({
+        where: { receiptItemId: input.itemId },
+      });
+      await tx.receiptItem.delete({ where: { id: input.itemId } });
     });
-    await ctx.db.receiptItem.delete({ where: { id: input.itemId } });
     return { success: true };
   }),
 
@@ -261,6 +279,7 @@ export const receiptsRouter = createTRPCRouter({
       }
 
       return ctx.db.$transaction(async (tx) => {
+        await lockReceiptForItemEdit(tx, item.receiptId);
         const current = await tx.receiptItem.findUniqueOrThrow({
           where: { id: input.itemId },
         });
@@ -383,7 +402,9 @@ export const receiptsRouter = createTRPCRouter({
         title: z.string().min(1).max(200),
         paidById: z.string(),
         tipOverride: z.number().int().min(0).optional(),
-        // Each item once, each person once on it: a repeat would count its price twice
+        // Each item once, each person once on it: a repeated item would count its price twice,
+        // and a repeated person would take two shares of it. The order is the receipt page's,
+        // which decides who takes the leftover cents, as in its preview
         assignments: z
           .array(
             z.object({
@@ -402,10 +423,7 @@ export const receiptsRouter = createTRPCRouter({
         throw new AppError('BAD_REQUEST', 'archivedCreateExpense');
       }
 
-      const receipt = await ctx.db.receipt.findUnique({
-        where: { id: input.receiptId },
-        include: { items: true },
-      });
+      const receipt = await ctx.db.receipt.findUnique({ where: { id: input.receiptId } });
       if (!receipt || receipt.status !== 'COMPLETED') {
         throw new AppError('BAD_REQUEST', 'receiptNotReady');
       }
@@ -428,31 +446,6 @@ export const receiptsRouter = createTRPCRouter({
       const tax = extractedData.tax;
       const tip = input.tipOverride ?? extractedData.tip;
 
-      // Verify all referenced items belong to this receipt
-      const itemIds = new Set(receipt.items.map((item) => item.id));
-      for (const a of input.assignments) {
-        if (!itemIds.has(a.receiptItemId)) {
-          throw new AppError('BAD_REQUEST', 'itemNotOnReceipt');
-        }
-      }
-      // And that every item has someone, as the receipt page requires before it submits: the
-      // expense's tax and tip are the whole receipt's, so an item left out would hand its share
-      // of them to whoever the split puts last (#364)
-      const assigned = new Set(input.assignments.map((a) => a.receiptItemId));
-      if (receipt.items.length === 0 || receipt.items.some((item) => !assigned.has(item.id))) {
-        throw new AppError('PRECONDITION_FAILED', 'receiptItemsUnassigned');
-      }
-
-      // The receipt page previews these totals with the same function, so the split saved is
-      // the one shown: tax and tip shared over the receipt's items as they are now (#364)
-      const userTotals = calculateReceiptSplitTotals({
-        items: receipt.items,
-        assignments: input.assignments,
-        tax,
-        tip,
-      });
-      const totalAmount = userTotals.reduce((sum, user) => sum + user.total, 0);
-
       // Save assignments in a single batch (replaces N×M individual upserts)
       const assignmentData = input.assignments.flatMap((a) =>
         a.userIds.map((userId) => ({
@@ -467,7 +460,6 @@ export const receiptsRouter = createTRPCRouter({
       const receiptCurrency = (isValidIso ? rawCurrency : group!.currency).toUpperCase();
       const groupCurrency = group!.currency.toUpperCase();
       let exchangeRate: number | null = null;
-      let baseCurrencyAmount: number | null = null;
 
       if (receiptCurrency !== groupCurrency) {
         const receiptDate = extractedData.date?.slice(0, 10);
@@ -475,7 +467,6 @@ export const receiptsRouter = createTRPCRouter({
         if (exchangeRate === null) {
           throw new AppError('BAD_REQUEST', 'receiptExchangeRateUnavailable');
         }
-        baseCurrencyAmount = convertCents(totalAmount, exchangeRate);
       }
 
       // All writes in a single transaction for atomicity
@@ -484,12 +475,39 @@ export const receiptsRouter = createTRPCRouter({
 
         // Deleting the receipt from the pending list takes it off the group, and keeps it while
         // a claim session uses it (#318). Under its lock, that either waits for this expense
-        // (and is refused) or finished first and is seen here
-        const [current] = await tx.$queryRaw<{ groupId: string | null }[]>`
-          SELECT "groupId" FROM "Receipt" WHERE "id" = ${input.receiptId} FOR SHARE`;
+        // (and is refused) or finished first and is seen here. So does a scan starting again,
+        // which replaces the items, and an item edit (`lockReceiptForItemEdit`, #364)
+        const [current] = await tx.$queryRaw<{ groupId: string | null; status: string }[]>`
+          SELECT "groupId", "status" FROM "Receipt" WHERE "id" = ${input.receiptId} FOR SHARE`;
         if (!current || current.groupId !== receipt.groupId) {
           throw new AppError('CONFLICT', 'receiptRemovedFromGroup');
         }
+        if (current.status !== 'COMPLETED') {
+          throw new AppError('BAD_REQUEST', 'receiptNotReady');
+        }
+
+        // The items as they are now, which the receipt page may have added to, deleted from or
+        // repriced since the scan. Every one must be in the request: the expense's tax and tip
+        // are the whole receipt's, so an item left out would drop its price from the expense but
+        // not its share of them, which the split would spread over everyone else
+        const items = await tx.receiptItem.findMany({
+          where: { receiptId: input.receiptId },
+          select: { id: true, totalPrice: true },
+        });
+        const itemIds = new Set(items.map((item) => item.id));
+        if (input.assignments.some((a) => !itemIds.has(a.receiptItemId))) {
+          throw new AppError('BAD_REQUEST', 'itemNotOnReceipt');
+        }
+        const assigned = new Set(input.assignments.map((a) => a.receiptItemId));
+        if (items.length === 0 || items.some((item) => !assigned.has(item.id))) {
+          throw new AppError('PRECONDITION_FAILED', 'receiptItemsUnassigned');
+        }
+
+        // The receipt page previews these totals with the same function and the same list, so
+        // the split saved is the one shown when the page's items are current (#364)
+        const userTotals = calculateReceiptSplitTotals({ items, assignments: input.assignments, tax, tip });
+        const totalAmount = userTotals.reduce((sum, user) => sum + user.total, 0);
+        const baseCurrencyAmount = exchangeRate === null ? null : convertCents(totalAmount, exchangeRate);
 
         // Verify paidBy and all assignees are members of this group (after the lock,
         // so someone leaving meanwhile is either gone or waits for this, #279). A
@@ -531,9 +549,8 @@ export const receiptsRouter = createTRPCRouter({
           },
         });
 
-        const itemIds = [...new Set(input.assignments.map((a) => a.receiptItemId))];
         await tx.receiptItemAssignment.deleteMany({
-          where: { receiptItemId: { in: itemIds } },
+          where: { receiptItemId: { in: [...itemIds] } },
         });
         await tx.receiptItemAssignment.createMany({
           data: assignmentData,
@@ -641,7 +658,7 @@ export const receiptsRouter = createTRPCRouter({
             const validIds = new Set(validItems.map((i) => i.id));
             for (const id of itemIds) {
               if (!validIds.has(id)) {
-                throw new AppError('BAD_REQUEST', 'itemIdNotOnReceipt', { id });
+                throw new AppError('BAD_REQUEST', 'itemNotOnReceipt');
               }
             }
           }

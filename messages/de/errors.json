@@ -95,7 +95,6 @@
   "reprocessingFailed": "Erneute Verarbeitung fehlgeschlagen",
   "processingRateLimited": "Zu viele Verarbeitungsversuche. Bitte versuchen Sie es später erneut.",
   "itemNotOnReceipt": "Der Artikel gehört nicht zu diesem Beleg",
-  "itemIdNotOnReceipt": "Artikel {id} gehört nicht zu diesem Beleg",
   "receiptItemsUnassigned": "Jeder Artikel auf dem Beleg muss jemandem zugeordnet sein, bevor die Ausgabe erstellt werden kann.",
   "assigneeNotMember": "Die zugeordnete Person ist kein Mitglied dieser Gruppe",
   "splitQuantityOverItem": "Die abzutrennende Menge muss kleiner als die Artikelmenge sein",

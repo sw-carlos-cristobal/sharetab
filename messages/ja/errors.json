@@ -95,7 +95,6 @@
   "reprocessingFailed": "再処理に失敗しました",
   "processingRateLimited": "処理の試行回数が多すぎます。時間をおいてもう一度お試しください。",
   "itemNotOnReceipt": "この品目はこのレシートのものではありません",
-  "itemIdNotOnReceipt": "品目{id}はこのレシートのものではありません",
   "receiptItemsUnassigned": "支出を作成するには、レシートのすべての品目に担当者が必要です。",
   "assigneeNotMember": "割り当て先はこのグループのメンバーではありません",
   "splitQuantityOverItem": "分割する数量は品目の数量より少なくしてください",
