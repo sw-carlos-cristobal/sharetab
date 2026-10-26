@@ -96,6 +96,7 @@
   "processingRateLimited": "För många bearbetningsförsök. Försök igen senare.",
   "itemNotOnReceipt": "Artikeln hör inte till det här kvittot",
   "receiptItemsUnassigned": "Varje artikel på kvittot måste tilldelas någon innan utgiften kan skapas.",
+  "receiptChangedElsewhere": "Kvittot har ändrats på en annan enhet. Kontrollera summorna och försök igen.",
   "assigneeNotMember": "Den tilldelade personen är inte medlem i den här gruppen",
   "splitQuantityOverItem": "Antalet att dela av måste vara mindre än artikelns antal",
   "splitQuantityOverTotal": "Antalet att dela av måste vara mindre än det totala antalet",

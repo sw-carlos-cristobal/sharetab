@@ -434,23 +434,26 @@ describe("a receipt's saved split matches the receipt page's preview (#364)", ()
       groupId: 'g1',
       uploadedById: 'u1',
       extractedData: { currency: 'USD', ...extractedData, total: extractedData.subtotal + extractedData.tax },
+      // Where the mutation read them before #364, so the old code fails these tests on its numbers
+      items,
     });
     // The items as they are when the expense is made, read under the receipt's lock
     mockDb.receiptItem.findMany.mockResolvedValue(items);
   }
 
-  const finishWith = (assignments: Assignment[], tipOverride?: number) => ({
+  type Options = { tipOverride?: number; expectedShares?: { userId: string; amount: number }[] };
+  const finishWith = (assignments: Assignment[], options: Options = {}) => ({
     groupId: 'g1',
     receiptId: 'r1',
     title: 'Dinner',
     paidById: 'alice',
     assignments,
-    ...(tipOverride !== undefined ? { tipOverride } : {}),
+    ...options,
   });
 
-  async function save(assignments: Assignment[], tipOverride?: number) {
+  async function save(assignments: Assignment[], options?: Options) {
     const api = await caller();
-    await api.assignItemsAndCreateExpense(finishWith(assignments, tipOverride));
+    await api.assignItemsAndCreateExpense(finishWith(assignments, options));
     const { data } = mockDb.expense.create.mock.calls[0]![0] as {
       data: {
         amount: number;
@@ -473,9 +476,9 @@ describe("a receipt's saved split matches the receipt page's preview (#364)", ()
     );
   }
 
-  async function expectRefused(assignments: Assignment[], error: object) {
+  async function expectRefused(assignments: Assignment[], error: object, options?: Options) {
     const api = await caller();
-    await expect(api.assignItemsAndCreateExpense(finishWith(assignments))).rejects.toMatchObject(error);
+    await expect(api.assignItemsAndCreateExpense(finishWith(assignments, options))).rejects.toMatchObject(error);
     expect(mockDb.expense.create).not.toHaveBeenCalled();
     expect(mockDb.receiptItemAssignment.deleteMany).not.toHaveBeenCalled();
     expect(mockDb.receiptItemAssignment.createMany).not.toHaveBeenCalled();
@@ -490,6 +493,7 @@ describe("a receipt's saved split matches the receipt page's preview (#364)", ()
     );
     mockDb.$transaction.mockImplementation(async (fn: (tx: typeof mockDb) => unknown) => fn(mockDb));
     mockDb.expense.create.mockResolvedValue({ id: 'e1' });
+    vi.mocked(getExchangeRate).mockReset();
   });
 
   test('an item the scan missed, added by hand (the steps in the issue)', async () => {
@@ -508,6 +512,20 @@ describe("a receipt's saved split matches the receipt page's preview (#364)", ()
 
     expect(preview(items, assignments, 400, 0)).toEqual({ alice: 2160, bob: 2160, carol: 1080 });
     expect(await save(assignments)).toEqual({ amount: 5400, shares: { alice: 2160, bob: 2160, carol: 1080 } });
+    // The assignments saved are the ones the split was calculated from
+    expect(mockDb.receiptItemAssignment.deleteMany).toHaveBeenCalledWith({
+      where: { receiptItemId: { in: ['i1', 'i2', 'i3'] } },
+    });
+    expect(mockDb.receiptItemAssignment.createMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: [
+          { receiptItemId: 'i1', userId: 'alice' },
+          { receiptItemId: 'i2', userId: 'bob' },
+          { receiptItemId: 'i3', userId: 'carol' },
+        ],
+      }),
+    );
+    expect(mockDb.activityLog.create.mock.calls[0]![0].data.metadata).toMatchObject({ amount: 5400 });
   });
 
   test('a duplicate line deleted', async () => {
@@ -558,7 +576,10 @@ describe("a receipt's saved split matches the receipt page's preview (#364)", ()
     // By hand: carol 334 + 27 tax + 47 tip; alice 3499 + 280 + 493; bob, last, the 611 left
     const expected = { carol: 408, alice: 4272, bob: 611 };
     expect(preview(items, assignments, 347, 611)).toEqual(expected);
-    expect(await save(assignments, 611)).toEqual({ amount: 1001 + 333 + 2999 + 347 + 611, shares: expected });
+    expect(await save(assignments, { tipOverride: 611 })).toEqual({
+      amount: 1001 + 333 + 2999 + 347 + 611,
+      shares: expected,
+    });
   });
 
   test('a tip override of zero replaces the scanned tip', async () => {
@@ -572,33 +593,83 @@ describe("a receipt's saved split matches the receipt page's preview (#364)", ()
       { receiptItemId: 'i2', userIds: ['bob'] },
     ];
 
-    expect(await save(assignments, 0)).toEqual({ amount: 4400, shares: { alice: 1100, bob: 3300 } });
+    expect(await save(assignments, { tipOverride: 0 })).toEqual({ amount: 4400, shares: { alice: 1100, bob: 3300 } });
   });
 
-  test("the last person in the page's order takes the leftover cent, as in the preview", async () => {
-    // Three $10.00 items, tax $1.00: 33.33 cents each, rounded down for all but the last
+  // Three $10.00 items, tax $1.00: 33.33 cents each, rounded (to 33) for all but the last. The
+  // server keeps the order it was sent, not the order it reads the items in
+  test.each([
+    [['i1', 'i2', 'i3'], { alice: 1033, bob: 1033, carol: 1034 }],
+    [['i3', 'i1', 'i2'], { carol: 1033, alice: 1033, bob: 1034 }],
+  ])("the last person in the page's order takes the leftover cent, as in the preview (%j)", async (order, expected) => {
     const items = [
       { id: 'i1', totalPrice: 1000 },
       { id: 'i2', totalPrice: 1000 },
       { id: 'i3', totalPrice: 1000 },
     ];
     scanned(items, { subtotal: 3000, tax: 100, tip: 0 });
-    const inOrder = [
+    const people: Record<string, string> = { i1: 'alice', i2: 'bob', i3: 'carol' };
+    const assignments = order.map((id) => ({ receiptItemId: id, userIds: [people[id]!] }));
+
+    expect(preview(items, assignments, 100, 0)).toEqual(expected);
+    expect((await save(assignments)).shares).toEqual(expected);
+  });
+
+  // #364: the page sends the totals it showed, so a receipt changed on another device after the
+  // page loaded it (an item repriced, the tax edited) isn't saved as a split nobody saw
+  test('the totals the page showed are saved when they are still the split', async () => {
+    scanned(
+      [
+        { id: 'i1', totalPrice: 2000 },
+        { id: 'i2', totalPrice: 3000 },
+      ],
+      { subtotal: 5000, tax: 500, tip: 0 },
+    );
+    const assignments = [
       { receiptItemId: 'i1', userIds: ['alice'] },
       { receiptItemId: 'i2', userIds: ['bob'] },
-      { receiptItemId: 'i3', userIds: ['carol'] },
     ];
-    expect(preview(items, inOrder, 100, 0)).toEqual({ alice: 1033, bob: 1033, carol: 1034 });
-    expect((await save(inOrder)).shares).toEqual({ alice: 1033, bob: 1033, carol: 1034 });
+    const expectedShares = [
+      { userId: 'bob', amount: 3300 },
+      { userId: 'alice', amount: 2200 },
+    ];
 
-    // The server keeps the order it was sent, not the order it reads the items in
-    vi.clearAllMocks();
-    mockDb.user.findUnique.mockResolvedValue({ suspendedAt: null });
-    mockDb.expense.create.mockResolvedValue({ id: 'e2' });
-    scanned(items, { subtotal: 3000, tax: 100, tip: 0 });
-    const reordered = [inOrder[2]!, inOrder[0]!, inOrder[1]!];
-    expect(preview(items, reordered, 100, 0)).toEqual({ carol: 1033, alice: 1033, bob: 1034 });
-    expect((await save(reordered)).shares).toEqual({ carol: 1033, alice: 1033, bob: 1034 });
+    expect((await save(assignments, { expectedShares })).shares).toEqual({ alice: 2200, bob: 3300 });
+  });
+
+  test.each([
+    [
+      'an item repriced',
+      [
+        { userId: 'alice', amount: 2200 },
+        { userId: 'bob', amount: 2200 },
+      ],
+    ],
+    ['someone missing', [{ userId: 'alice', amount: 2200 }]],
+    [
+      'someone extra',
+      [
+        { userId: 'alice', amount: 2200 },
+        { userId: 'bob', amount: 3300 },
+        { userId: 'carol', amount: 0 },
+      ],
+    ],
+  ])('totals that differ from the split (%s) are refused, writing nothing', async (_, expectedShares) => {
+    scanned(
+      [
+        { id: 'i1', totalPrice: 2000 },
+        { id: 'i2', totalPrice: 3000 },
+      ],
+      { subtotal: 5000, tax: 500, tip: 0 },
+    );
+    await expectRefused(
+      [
+        { receiptItemId: 'i1', userIds: ['alice'] },
+        { receiptItemId: 'i2', userIds: ['bob'] },
+      ],
+      { code: 'CONFLICT', messageKey: 'receiptChangedElsewhere' },
+      { expectedShares },
+    );
   });
 
   test("a receipt in another currency converts the total of the shares at the receipt's date", async () => {
@@ -634,18 +705,27 @@ describe("a receipt's saved split matches the receipt page's preview (#364)", ()
   });
 
   // An item added, deleted or repriced on another device just before the expense is made: the
-  // split is calculated from the items read under the receipt's lock, which item edits take too
+  // split is calculated from the items as the transaction reads them, after the receipt's lock
   test('the items are read inside the transaction, after the receipt is locked', async () => {
-    scanned([{ id: 'i1', totalPrice: 2000 }], { subtotal: 2000, tax: 0, tip: 0 });
+    const items = [{ id: 'i1', totalPrice: 2000 }];
+    scanned(items, { subtotal: 2000, tax: 0, tip: 0 });
+    // The transaction's own client, so a read or lock made outside it is seen
+    const txQueryRaw = vi.fn(mockDb.$queryRaw.getMockImplementation());
+    const txFindMany = vi.fn().mockResolvedValue(items);
+    const tx = { ...mockDb, $queryRaw: txQueryRaw, receiptItem: { ...mockDb.receiptItem, findMany: txFindMany } };
+    mockDb.$transaction.mockImplementation(async (fn: (client: typeof tx) => unknown) => fn(tx));
     await save([{ receiptItemId: 'i1', userIds: ['alice'] }]);
 
-    const receiptLock = mockDb.$queryRaw.mock.calls.findIndex(([strings]) =>
-      (strings as string[]).join('?').includes('FROM "Receipt"'),
+    expect(mockDb.$queryRaw).not.toHaveBeenCalled();
+    expect(mockDb.receiptItem.findMany).not.toHaveBeenCalled();
+    const receiptLock = txQueryRaw.mock.calls.findIndex(([strings]) =>
+      (strings as string[]).join('?').includes('FROM "Receipt" WHERE "id" = ? FOR SHARE'),
     );
-    const [itemsRead] = mockDb.receiptItem.findMany.mock.invocationCallOrder;
-    expect(itemsRead).toBeGreaterThan(mockDb.$queryRaw.mock.invocationCallOrder[receiptLock]!);
+    expect(txQueryRaw.mock.calls[receiptLock]!.slice(1)).toEqual(['r1']);
+    const [itemsRead] = txFindMany.mock.invocationCallOrder;
+    expect(itemsRead).toBeGreaterThan(txQueryRaw.mock.invocationCallOrder[receiptLock]!);
     expect(itemsRead).toBeLessThan(mockDb.expense.create.mock.invocationCallOrder[0]!);
-    expect(mockDb.receiptItem.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { receiptId: 'r1' } }));
+    expect(txFindMany).toHaveBeenCalledWith({ where: { receiptId: 'r1' }, select: { id: true, totalPrice: true } });
   });
 
   test('an item added meanwhile that nobody has is refused, writing nothing', async () => {
@@ -702,62 +782,5 @@ describe("a receipt's saved split matches the receipt page's preview (#364)", ()
     scanned([{ id: 'i1', totalPrice: 2000 }], { subtotal: 2000, tax: 200, tip: 0 });
     await expectRefused(assignments, { code: 'BAD_REQUEST' });
     expect(mockDb.$transaction).not.toHaveBeenCalled();
-  });
-});
-
-// #364: an expense reads the receipt's items under a FOR SHARE lock on the receipt's row. Each
-// item edit locks that row first, so it either lands before the expense reads the items or waits
-// for the expense, and the split saved is calculated from the items as they are.
-describe("editing a receipt's items while an expense is made from it (#364)", () => {
-  const receiptLocks = () =>
-    mockDb.$queryRaw.mock.calls
-      .map(([strings]) => (strings as string[]).join('?'))
-      .filter((sql) => /FROM "Receipt" WHERE "id" = \? FOR NO KEY UPDATE/.test(sql));
-
-  // The receipt row is locked inside the transaction, before `write` is called
-  function expectLockedBefore(write: { mock: { invocationCallOrder: number[] } }) {
-    expect(receiptLocks()).toHaveLength(1);
-    const [locked] = mockDb.$queryRaw.mock.invocationCallOrder;
-    expect(locked).toBeGreaterThan(mockDb.$transaction.mock.invocationCallOrder[0]!);
-    expect(locked).toBeLessThan(write.mock.invocationCallOrder[0]!);
-  }
-
-  beforeEach(() => {
-    mockDb.receipt.findUnique.mockResolvedValue({
-      id: 'r1',
-      groupId: 'g1',
-      uploadedById: 'u1',
-      group: { members: [{ userId: 'u1' }] },
-    });
-    const item = { id: 'i1', receiptId: 'r1', quantity: 3, unitPrice: 500, totalPrice: 1500, sortOrder: 1 };
-    mockDb.receiptItem.findUnique.mockResolvedValue(item);
-    mockDb.receiptItem.findUniqueOrThrow.mockResolvedValue(item);
-    mockDb.$queryRaw.mockResolvedValue([{ '?column?': 1 }]);
-    mockDb.$transaction.mockImplementation(async (fn: (tx: typeof mockDb) => unknown) => fn(mockDb));
-  });
-
-  test('addItem', async () => {
-    const api = await caller();
-    await api.addItem({ receiptId: 'r1', name: 'Missed', unitPrice: 1000, totalPrice: 1000 });
-    expectLockedBefore(mockDb.receiptItem.create);
-  });
-
-  test('updateItem', async () => {
-    const api = await caller();
-    await api.updateItem({ itemId: 'i1', totalPrice: 2000 });
-    expectLockedBefore(mockDb.receiptItem.update);
-  });
-
-  test('deleteItem', async () => {
-    const api = await caller();
-    await api.deleteItem({ itemId: 'i1' });
-    expectLockedBefore(mockDb.receiptItemAssignment.deleteMany);
-    expect(mockDb.receiptItem.delete).toHaveBeenCalledWith({ where: { id: 'i1' } });
-  });
-
-  test('splitItem', async () => {
-    const api = await caller();
-    await api.splitItem({ itemId: 'i1', splitQuantity: 1 });
-    expectLockedBefore(mockDb.receiptItem.updateMany);
   });
 });

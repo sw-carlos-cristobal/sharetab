@@ -14,14 +14,9 @@ import { calculateReceiptSplitTotals } from '@/lib/split-calculator';
 
 const uniqueIds = (ids: string[]) => new Set(ids).size === ids.length;
 
-/**
- * Takes the receipt's row lock before its items change. `assignItemsAndCreateExpense` reads the
- * items under a FOR SHARE lock on the same row, so an edit either lands before the expense's
- * split is calculated or waits for it (#364).
- */
-async function lockReceiptForItemEdit(tx: Prisma.TransactionClient, receiptId: string) {
-  await tx.$queryRaw`SELECT 1 FROM "Receipt" WHERE "id" = ${receiptId} FOR NO KEY UPDATE`;
-}
+const sameShares = (totals: { userId: string; total: number }[], expected: { userId: string; amount: number }[]) =>
+  totals.length === expected.length &&
+  totals.every(({ userId, total }) => expected.some((share) => share.userId === userId && share.amount === total));
 
 /**
  * Verify that a receipt exists and the user has access to it (via group membership).
@@ -201,12 +196,9 @@ export const receiptsRouter = createTRPCRouter({
       await verifyReceiptAccess(ctx.db, item.receiptId, ctx.user.id);
 
       const { itemId, ...data } = input;
-      return ctx.db.$transaction(async (tx) => {
-        await lockReceiptForItemEdit(tx, item.receiptId);
-        return tx.receiptItem.update({
-          where: { id: itemId },
-          data: stripUndefined(data),
-        });
+      return ctx.db.receiptItem.update({
+        where: { id: itemId },
+        data: stripUndefined(data),
       });
     }),
 
@@ -223,23 +215,20 @@ export const receiptsRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       await verifyReceiptAccess(ctx.db, input.receiptId, ctx.user.id);
 
-      return ctx.db.$transaction(async (tx) => {
-        await lockReceiptForItemEdit(tx, input.receiptId);
-        const maxSort = await tx.receiptItem.findFirst({
-          where: { receiptId: input.receiptId },
-          orderBy: { sortOrder: 'desc' },
-          select: { sortOrder: true },
-        });
-        return tx.receiptItem.create({
-          data: {
-            receiptId: input.receiptId,
-            name: input.name,
-            quantity: input.quantity,
-            unitPrice: input.unitPrice,
-            totalPrice: input.totalPrice,
-            sortOrder: (maxSort?.sortOrder ?? 0) + 1,
-          },
-        });
+      const maxSort = await ctx.db.receiptItem.findFirst({
+        where: { receiptId: input.receiptId },
+        orderBy: { sortOrder: 'desc' },
+        select: { sortOrder: true },
+      });
+      return ctx.db.receiptItem.create({
+        data: {
+          receiptId: input.receiptId,
+          name: input.name,
+          quantity: input.quantity,
+          unitPrice: input.unitPrice,
+          totalPrice: input.totalPrice,
+          sortOrder: (maxSort?.sortOrder ?? 0) + 1,
+        },
       });
     }),
 
@@ -250,13 +239,10 @@ export const receiptsRouter = createTRPCRouter({
     if (!item) throw new AppError('NOT_FOUND');
     await verifyReceiptAccess(ctx.db, item.receiptId, ctx.user.id);
 
-    await ctx.db.$transaction(async (tx) => {
-      await lockReceiptForItemEdit(tx, item.receiptId);
-      await tx.receiptItemAssignment.deleteMany({
-        where: { receiptItemId: input.itemId },
-      });
-      await tx.receiptItem.delete({ where: { id: input.itemId } });
+    await ctx.db.receiptItemAssignment.deleteMany({
+      where: { receiptItemId: input.itemId },
     });
+    await ctx.db.receiptItem.delete({ where: { id: input.itemId } });
     return { success: true };
   }),
 
@@ -279,7 +265,6 @@ export const receiptsRouter = createTRPCRouter({
       }
 
       return ctx.db.$transaction(async (tx) => {
-        await lockReceiptForItemEdit(tx, item.receiptId);
         const current = await tx.receiptItem.findUniqueOrThrow({
           where: { id: input.itemId },
         });
@@ -413,6 +398,12 @@ export const receiptsRouter = createTRPCRouter({
             }),
           )
           .refine((assignments) => uniqueIds(assignments.map((a) => a.receiptItemId))),
+        // Each person's total as the receipt page showed it; the expense is saved only if it's
+        // the same split (#364)
+        expectedShares: z
+          .array(z.object({ userId: z.string(), amount: z.number().int() }))
+          .max(200)
+          .optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -475,8 +466,8 @@ export const receiptsRouter = createTRPCRouter({
 
         // Deleting the receipt from the pending list takes it off the group, and keeps it while
         // a claim session uses it (#318). Under its lock, that either waits for this expense
-        // (and is refused) or finished first and is seen here. So does a scan starting again,
-        // which replaces the items, and an item edit (`lockReceiptForItemEdit`, #364)
+        // (and is refused) or finished first and is seen here. A scan starting again, which
+        // replaces the items, marks the receipt PROCESSING the same way
         const [current] = await tx.$queryRaw<{ groupId: string | null; status: string }[]>`
           SELECT "groupId", "status" FROM "Receipt" WHERE "id" = ${input.receiptId} FOR SHARE`;
         if (!current || current.groupId !== receipt.groupId) {
@@ -503,9 +494,13 @@ export const receiptsRouter = createTRPCRouter({
           throw new AppError('PRECONDITION_FAILED', 'receiptItemsUnassigned');
         }
 
-        // The receipt page previews these totals with the same function and the same list, so
-        // the split saved is the one shown when the page's items are current (#364)
+        // The receipt page previews these totals with the same function and the same list (#364).
+        // It sends the totals it showed: when they differ, the receipt changed on another device
+        // since the page loaded it (an item repriced, say), and the person didn't confirm this split
         const userTotals = calculateReceiptSplitTotals({ items, assignments: input.assignments, tax, tip });
+        if (input.expectedShares && !sameShares(userTotals, input.expectedShares)) {
+          throw new AppError('CONFLICT', 'receiptChangedElsewhere');
+        }
         const totalAmount = userTotals.reduce((sum, user) => sum + user.total, 0);
         const baseCurrencyAmount = exchangeRate === null ? null : convertCents(totalAmount, exchangeRate);
 

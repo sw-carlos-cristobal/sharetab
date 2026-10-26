@@ -606,16 +606,17 @@ describe('calculateReceiptSplitTotals', () => {
       assignments: [
         { receiptItemId: 'i3', userIds: ['carol'] },
         { receiptItemId: 'i1', userIds: ['alice'] },
-        { receiptItemId: 'i2', userIds: ['bob', 'carol'] },
+        { receiptItemId: 'i2', userIds: ['bob'] },
       ],
       tax: 100,
       tip: 0,
     });
 
+    // 33.33 cents of tax each: 33 for all but the last, who takes the 34 left
     expect(totals.map((p) => [p.userId, p.total])).toEqual([
-      ['carol', 1550],
+      ['carol', 1033],
       ['alice', 1033],
-      ['bob', 517],
+      ['bob', 1034],
     ]);
   });
 
@@ -626,24 +627,18 @@ describe('calculateReceiptSplitTotals', () => {
 
 describe('receiptAssignmentList', () => {
   const items = [{ id: 'i1' }, { id: 'i2' }, { id: 'i3' }];
-  const members = new Set(['alice', 'bob']);
 
-  test('lists the items that have someone in receipt order, each with its people in the order picked', () => {
-    expect(receiptAssignmentList(items, { i3: new Set(['bob', 'alice']), i1: new Set(['alice']) }, members)).toEqual([
+  test('lists the items that have someone in receipt order, each with its people in the order held', () => {
+    expect(receiptAssignmentList(items, { i3: new Set(['bob', 'alice']), i1: new Set(['alice']) })).toEqual([
       { receiptItemId: 'i1', userIds: ['alice'] },
       { receiptItemId: 'i3', userIds: ['bob', 'alice'] },
     ]);
   });
 
+  // #411: removing an item kept its key, which was counted as assigned and sent
   test('leaves out an item deleted from the receipt and an item with nobody', () => {
-    expect(
-      receiptAssignmentList(items, { deleted: new Set(['alice']), i2: new Set(), i3: new Set(['bob']) }, members),
-    ).toEqual([{ receiptItemId: 'i3', userIds: ['bob'] }]);
-  });
-
-  test('leaves out someone no longer in the group, and an item only they had', () => {
-    expect(receiptAssignmentList(items, { i1: new Set(['gone', 'alice']), i2: new Set(['gone']) }, members)).toEqual([
-      { receiptItemId: 'i1', userIds: ['alice'] },
+    expect(receiptAssignmentList(items, { deleted: new Set(['alice']), i2: new Set(), i3: new Set(['bob']) })).toEqual([
+      { receiptItemId: 'i3', userIds: ['bob'] },
     ]);
   });
 });

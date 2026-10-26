@@ -64,10 +64,16 @@ export function ItemAssignment({
   const [splitQuantity, setSplitQuantity] = useState('');
   const [removeItem, setRemoveItem] = useState<{ id: string; name: string } | null>(null);
 
+  // A refused Create or Save for later may mean the receipt or the group changed on another device
+  // (an item added, deleted or repriced, someone removed), so load them again to show what's there
+  // now. Not awaited: the mutation reports its error once onError returns
+  function reloadAfterError() {
+    void utils.receipts.getReceiptItems.invalidate({ receiptId });
+    void utils.groups.get.invalidate({ groupId });
+  }
   const createExpense = trpc.receipts.assignItemsAndCreateExpense.useMutation({
     onSuccess: onComplete,
-    // Refused because the items changed on another device, say: show them as they are now
-    onError: () => utils.receipts.getReceiptItems.invalidate({ receiptId }),
+    onError: reloadAfterError,
   });
   const updateItem = trpc.receipts.updateItem.useMutation({
     onSuccess: () => {
@@ -94,7 +100,10 @@ export function ItemAssignment({
   });
   const saveForLater = trpc.receipts.saveForLater.useMutation({
     onSuccess: () => onSaveForLater?.(),
-    onError: (e) => toast.error(e.message),
+    onError: (e) => {
+      toast.error(e.message);
+      reloadAfterError();
+    },
   });
 
   // Toggle the image. Zoom/pan reset on every toggle (fresh view when
@@ -241,25 +250,20 @@ export function ItemAssignment({
     });
   }
 
-  // What the totals below show, and what Create Expense and Save for later send: the current
-  // items that have someone in the group. An item deleted from the receipt keeps its key in
-  // `assignments`, and a restored assignee may have left the group.
-  const assignmentList = useMemo(
-    () => receiptAssignmentList(items, assignments, new Set(members.map((m) => m.id))),
-    [items, assignments, members],
-  );
+  // What the totals below show, and what Create Expense and Save for later send: the current items
+  // that have someone. An item deleted from the receipt keeps its key in `assignments` (#411).
+  const assignmentList = useMemo(() => receiptAssignmentList(items, assignments), [items, assignments]);
   const assignedItemIds = useMemo(() => new Set(assignmentList.map((a) => a.receiptItemId)), [assignmentList]);
-  // The server saves the expense from the same function and the same list, so the totals shown
-  // are the ones saved while the items shown are current (#364). Memoized to avoid recomputation
-  // on every render (Finding #36).
-  const perPersonTotals = useMemo(
-    () =>
-      new Map(
-        calculateReceiptSplitTotals({ items, assignments: assignmentList, tax: extracted?.tax ?? 0, tip }).map(
-          (person) => [person.userId, person.total],
-        ),
-      ),
+  // The server calculates the expense with the same function and the same list, and saves it only
+  // if each person's total is the one shown here (#364). Memoized to avoid recomputation on every
+  // render (Finding #36).
+  const shownTotals = useMemo(
+    () => calculateReceiptSplitTotals({ items, assignments: assignmentList, tax: extracted?.tax ?? 0, tip }),
     [items, assignmentList, extracted, tip],
+  );
+  const perPersonTotals = useMemo(
+    () => new Map(shownTotals.map((person) => [person.userId, person.total])),
+    [shownTotals],
   );
   const assignedItemCount = assignmentList.length;
   const allAssigned = items.length > 0 && assignedItemCount === items.length;
@@ -314,6 +318,7 @@ export function ItemAssignment({
       tipOverride:
         tipOverride !== '' && isFinite(parseFloat(tipOverride)) ? Math.round(parseFloat(tipOverride) * 100) : undefined,
       assignments: assignmentList,
+      expectedShares: shownTotals.map((person) => ({ userId: person.userId, amount: person.total })),
     });
   }
 
