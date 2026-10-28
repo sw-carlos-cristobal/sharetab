@@ -23,25 +23,38 @@ const expenseSharesArraySchema = z
 
 const exchangeRateSchema = z.number().positive().finite().max(1_000_000);
 
+// Prisma's `contains` becomes `ILIKE '%' || term || '%'` with the term as given, so
+// escape LIKE's pattern characters for a search to match them literally (#479).
+function escapeLikePattern(term: string) {
+  return term.replace(/[\\%_]/g, '\\$&');
+}
+
 export const expensesRouter = createTRPCRouter({
   list: groupMemberProcedure
     .input(
       z.object({
         groupId: z.string(),
         cursor: z.string().optional(),
-        search: z.string().trim().max(1000).optional(),
+        // PostgreSQL text can't hold a NUL byte, so the query would fail with a 500.
+        search: z
+          .string()
+          .trim()
+          .max(1000)
+          .refine((search) => !search.includes('\0'), 'Search contains a NUL byte')
+          .optional(),
         limit: z.number().int().min(1).max(100).default(20),
       }),
     )
     .query(async ({ ctx, input }) => {
+      const pattern = input.search ? escapeLikePattern(input.search) : undefined;
       const expenses = await ctx.db.expense.findMany({
         where: {
           groupId: input.groupId,
-          ...(input.search
+          ...(pattern
             ? {
                 OR: [
-                  { title: { contains: input.search, mode: 'insensitive' as const } },
-                  { description: { contains: input.search, mode: 'insensitive' as const } },
+                  { title: { contains: pattern, mode: 'insensitive' as const } },
+                  { description: { contains: pattern, mode: 'insensitive' as const } },
                 ],
               }
             : {}),

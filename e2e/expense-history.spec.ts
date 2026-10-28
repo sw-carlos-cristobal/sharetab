@@ -156,6 +156,25 @@ test.describe('Expense history (#326)', () => {
     }
   });
 
+  test('API search matches %, _ and \\ literally and refuses a NUL byte (#479)', async ({ history }) => {
+    const percent = await createExpense(history, { title: 'Sale 50% off' });
+    await createExpense(history, { title: '50 dollars' });
+    const underscore = await createExpense(history, { title: 'tax_rate' });
+    const backslash = await createExpense(history, { title: 'C:\\receipts' });
+    const ids = async (search: string) =>
+      (await listExpenses(history, { search })).expenses.map((expense) => expense.id);
+
+    expect(await ids('50%')).toEqual([percent.id]);
+    expect(await ids('%')).toEqual([percent.id]);
+    expect(await ids('_')).toEqual([underscore.id]);
+    expect(await ids('\\')).toEqual([backslash.id]);
+    expect(await ids(':\\R')).toEqual([backslash.id]);
+
+    const nul = await trpcQuery(history.owner, 'expenses.list', { groupId: history.groupId, search: 'a\u0000b' });
+    expect(nul.ok()).toBe(false);
+    expect((await trpcError(nul))?.data?.code).toBe('BAD_REQUEST');
+  });
+
   test('UI pages the full history and keeps search results isolated when changing or clearing the search', async ({
     page,
     history,

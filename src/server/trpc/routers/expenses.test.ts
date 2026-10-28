@@ -81,6 +81,28 @@ describe('expenses.list (#326)', () => {
     );
   });
 
+  test('escapes %, _ and \\ so a search matches them literally (#479)', async () => {
+    const api = await caller();
+    await api.list({ groupId: 'g1', search: '50%_\\' });
+    expect(mockDb.expense.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          groupId: 'g1',
+          OR: [
+            { title: { contains: '50\\%\\_\\\\', mode: 'insensitive' } },
+            { description: { contains: '50\\%\\_\\\\', mode: 'insensitive' } },
+          ],
+        },
+      }),
+    );
+  });
+
+  test('rejects a NUL byte in the search before querying expenses (#479)', async () => {
+    const api = await caller();
+    await expect(api.list({ groupId: 'g1', search: 'a\u0000b' })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockDb.expense.findMany).not.toHaveBeenCalled();
+  });
+
   test.each(['', '   '])('treats a blank search (%j) as no filter', async (search) => {
     const api = await caller();
     await api.list({ groupId: 'g1', search });
