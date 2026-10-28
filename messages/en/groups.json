@@ -15,6 +15,11 @@
   },
   "detail": {
     "expenses": "Expenses",
+    "searchExpenses": "Search expenses",
+    "searchExpensesPlaceholder": "Search titles and notes...",
+    "noExpenseSearchResults": "No expenses match your search.",
+    "showMoreExpenses": "Show more",
+    "retryExpenses": "Retry",
     "balances": "Balances",
     "addExpense": "Add Expense",
     "scanReceipt": "Scan Receipt",

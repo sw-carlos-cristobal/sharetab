@@ -29,15 +29,27 @@ export const expensesRouter = createTRPCRouter({
       z.object({
         groupId: z.string(),
         cursor: z.string().optional(),
+        search: z.string().trim().max(1000).optional(),
         limit: z.number().int().min(1).max(100).default(20),
       }),
     )
     .query(async ({ ctx, input }) => {
       const expenses = await ctx.db.expense.findMany({
-        where: { groupId: input.groupId },
+        where: {
+          groupId: input.groupId,
+          ...(input.search
+            ? {
+                OR: [
+                  { title: { contains: input.search, mode: 'insensitive' as const } },
+                  { description: { contains: input.search, mode: 'insensitive' as const } },
+                ],
+              }
+            : {}),
+        },
         take: input.limit + 1,
+        // nextCursor is the first unseen row, so don't skip it.
         ...(input.cursor ? { cursor: { id: input.cursor } } : {}),
-        orderBy: { expenseDate: 'desc' },
+        orderBy: [{ expenseDate: 'desc' }, { id: 'desc' }],
         include: {
           paidBy: { select: { id: true, name: true, email: true, image: true } },
           shares: {

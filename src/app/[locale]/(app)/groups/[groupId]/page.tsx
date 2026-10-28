@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useState, useRef, useEffect } from 'react';
+import { use, useState, useRef, useEffect, useCallback } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { trpc } from '@/lib/trpc';
 import { formatCents } from '@/lib/money';
@@ -8,10 +8,24 @@ import { buildVenmoPayUrl, isValidVenmoHandle } from '@/lib/venmo';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { Plus, Settings, UserPlus, ArrowRight, Receipt, Handshake, Camera, Tag, Archive, Trash2 } from 'lucide-react';
+import {
+  Plus,
+  Settings,
+  UserPlus,
+  ArrowRight,
+  Receipt,
+  Handshake,
+  Camera,
+  Tag,
+  Archive,
+  Trash2,
+  Search,
+  Loader2,
+} from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { toast } from 'sonner';
 import { InviteDialog } from '@/components/groups/invite-dialog';
@@ -41,7 +55,53 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
   const profile = trpc.auth.getProfile.useQuery();
   const myId = profile.data?.id;
   const group = trpc.groups.get.useQuery({ groupId });
-  const expenses = trpc.expenses.list.useQuery({ groupId, limit: 10 });
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+  const searchPending = search.trim() !== debouncedSearch;
+  const expenses = trpc.expenses.list.useInfiniteQuery(
+    { groupId, limit: 10, search: debouncedSearch },
+    { getNextPageParam: (lastPage) => lastPage.nextCursor },
+  );
+  const { fetchNextPage, hasNextPage, isFetching, isFetchNextPageError } = expenses;
+  const expenseSentinelRef = useRef<HTMLDivElement>(null);
+  const loadMore = useCallback(
+    (automatic = false) => {
+      if (!hasNextPage || isFetching || searchPending) return;
+      if (automatic && isFetchNextPageError) return;
+      void fetchNextPage();
+    },
+    [fetchNextPage, hasNextPage, isFetchNextPageError, isFetching, searchPending],
+  );
+  const loadMoreRef = useRef(loadMore);
+  useEffect(() => {
+    loadMoreRef.current = loadMore;
+  }, [loadMore]);
+  useEffect(() => {
+    const sentinel = expenseSentinelRef.current;
+    if (!sentinel || !expenses.hasNextPage || searchPending || typeof IntersectionObserver === 'undefined') return;
+
+    let armed = true;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) {
+            armed = true;
+          } else if (armed) {
+            armed = false;
+            loadMoreRef.current(true);
+          }
+        }
+      },
+      { rootMargin: '0px 0px 300px 0px', threshold: 0 },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [expenses.hasNextPage, searchPending]);
+  const expenseItems = expenses.data?.pages.flatMap((page) => page.expenses) ?? [];
   const debts = trpc.balances.getSimplifiedDebts.useQuery({ groupId });
   const pendingReceipts = trpc.receipts.listPending.useQuery({ groupId });
   const venmoSetting = trpc.admin.getVenmoEnabled.useQuery();
@@ -331,7 +391,7 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
       )}
 
       {/* Expenses */}
-      <div>
+      <div data-testid="expenses-section" aria-busy={searchPending || expenses.isFetching}>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">{t('detail.expenses')}</h2>
           {!g.archivedAt && (
@@ -353,14 +413,46 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
           )}
         </div>
 
+        <div className="relative mb-4">
+          <Search
+            aria-hidden="true"
+            className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input
+            type="search"
+            aria-label={t('detail.searchExpenses')}
+            placeholder={t('detail.searchExpensesPlaceholder')}
+            maxLength={1000}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className="pl-9"
+          />
+        </div>
+
         {expenses.isLoading && <LoadingSpinner />}
 
-        {expenses.data?.expenses.length === 0 && (
+        {expenses.isError && (
+          <div role="alert" className="mb-4 flex flex-wrap items-center gap-2 text-sm text-destructive">
+            <p>{expenses.error.message}</p>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={expenses.isFetching || searchPending}
+              onClick={() => void (expenses.isFetchNextPageError ? expenses.fetchNextPage() : expenses.refetch())}
+            >
+              {t('detail.retryExpenses')}
+            </Button>
+          </div>
+        )}
+
+        {expenses.data && !expenses.isError && !searchPending && expenseItems.length === 0 && (
           <Card>
             <CardContent className="py-8 text-center">
               <Receipt className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
-              <p className="text-muted-foreground">{t('detail.noExpenses')}</p>
-              {!g.archivedAt && (
+              <p className="text-muted-foreground">
+                {debouncedSearch ? t('detail.noExpenseSearchResults') : t('detail.noExpenses')}
+              </p>
+              {!debouncedSearch && !g.archivedAt && (
                 <Button
                   className="mt-4"
                   size="sm"
@@ -375,10 +467,15 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
           </Card>
         )}
 
-        {expenses.data && expenses.data.expenses.length > 0 && (
+        {expenseItems.length > 0 && (
           <Card className="divide-y divide-border overflow-hidden">
-            {expenses.data.expenses.map((expense, index) => (
-              <Link key={expense.id} href={`/groups/${groupId}/expenses/${expense.id}`} className="block">
+            {expenseItems.map((expense, index) => (
+              <Link
+                key={expense.id}
+                href={`/groups/${groupId}/expenses/${expense.id}`}
+                className="block"
+                data-testid="expense-row"
+              >
                 <div
                   className={`flex items-center justify-between px-4 py-3 transition-colors hover:bg-muted/50 ${
                     index % 2 === 1 ? 'bg-muted/20' : ''
@@ -416,6 +513,21 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
               </Link>
             ))}
           </Card>
+        )}
+        {expenses.hasNextPage && (
+          <>
+            <div ref={expenseSentinelRef} className="h-px" aria-hidden="true" data-testid="expense-history-sentinel" />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-2"
+              disabled={expenses.isFetching || searchPending}
+              onClick={() => loadMore(false)}
+            >
+              {expenses.isFetchingNextPage && <Loader2 aria-hidden="true" className="mr-2 h-4 w-4 animate-spin" />}
+              {t('detail.showMoreExpenses')}
+            </Button>
+          </>
         )}
       </div>
 

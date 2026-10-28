@@ -15,6 +15,11 @@
   },
   "detail": {
     "expenses": "支出",
+    "searchExpenses": "支出を検索",
+    "searchExpensesPlaceholder": "タイトルとメモを検索...",
+    "noExpenseSearchResults": "検索に一致する支出がありません。",
+    "showMoreExpenses": "さらに表示",
+    "retryExpenses": "再試行",
     "balances": "残高",
     "addExpense": "支出を追加",
     "scanReceipt": "レシートをスキャン",

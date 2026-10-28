@@ -15,6 +15,11 @@
   },
   "detail": {
     "expenses": "Ausgaben",
+    "searchExpenses": "Ausgaben durchsuchen",
+    "searchExpensesPlaceholder": "Titel und Notizen durchsuchen...",
+    "noExpenseSearchResults": "Keine Ausgaben entsprechen Ihrer Suche.",
+    "showMoreExpenses": "Mehr anzeigen",
+    "retryExpenses": "Erneut versuchen",
     "balances": "Salden",
     "addExpense": "Ausgabe hinzufügen",
     "scanReceipt": "Beleg scannen",

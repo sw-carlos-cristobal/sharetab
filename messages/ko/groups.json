@@ -15,6 +15,11 @@
   },
   "detail": {
     "expenses": "비용",
+    "searchExpenses": "비용 검색",
+    "searchExpensesPlaceholder": "제목과 메모 검색...",
+    "noExpenseSearchResults": "검색과 일치하는 비용이 없습니다.",
+    "showMoreExpenses": "더 보기",
+    "retryExpenses": "다시 시도",
     "balances": "잔액",
     "addExpense": "비용 추가",
     "scanReceipt": "영수증 스캔",

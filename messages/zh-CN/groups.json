@@ -15,6 +15,11 @@
   },
   "detail": {
     "expenses": "费用",
+    "searchExpenses": "搜索费用",
+    "searchExpensesPlaceholder": "搜索标题和备注...",
+    "noExpenseSearchResults": "没有符合搜索条件的费用。",
+    "showMoreExpenses": "显示更多",
+    "retryExpenses": "重试",
     "balances": "余额",
     "addExpense": "添加费用",
     "scanReceipt": "扫描小票",

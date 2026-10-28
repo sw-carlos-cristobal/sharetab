@@ -15,6 +15,11 @@
   },
   "detail": {
     "expenses": "Gastos",
+    "searchExpenses": "Buscar gastos",
+    "searchExpensesPlaceholder": "Buscar en títulos y notas...",
+    "noExpenseSearchResults": "Ningún gasto coincide con tu búsqueda.",
+    "showMoreExpenses": "Mostrar más",
+    "retryExpenses": "Reintentar",
     "balances": "Saldos",
     "addExpense": "Agregar gasto",
     "scanReceipt": "Escanear recibo",

@@ -9,7 +9,7 @@ const mockDb = {
   user: { findUnique: vi.fn() },
   group: { findUnique: vi.fn() },
   groupMember: { findUnique: vi.fn(), findFirst: vi.fn(), count: vi.fn() },
-  expense: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
+  expense: { findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
   expenseShare: { findMany: vi.fn(), deleteMany: vi.fn(), createMany: vi.fn() },
   activityLog: { create: vi.fn() },
   $transaction: vi.fn(),
@@ -46,6 +46,94 @@ beforeEach(() => {
       ...(args.include?.receipt || args.select?.receipt ? { receipt: scannedReceipt } : {}),
     }),
   );
+});
+
+describe('expenses.list (#326)', () => {
+  beforeEach(() => {
+    mockDb.expense.findMany.mockReset().mockResolvedValue([]);
+  });
+
+  test('orders by date and then id, including when dates are equal', async () => {
+    const api = await caller();
+    await api.list({ groupId: 'g1' });
+    expect(mockDb.expense.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { groupId: 'g1' },
+        take: 21,
+        orderBy: [{ expenseDate: 'desc' }, { id: 'desc' }],
+      }),
+    );
+  });
+
+  test('searches titles and notes case-insensitively in this group only, trimming spaces', async () => {
+    const api = await caller();
+    await api.list({ groupId: 'g1', search: '  PiZzA  ' });
+    expect(mockDb.expense.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          groupId: 'g1',
+          OR: [
+            { title: { contains: 'PiZzA', mode: 'insensitive' } },
+            { description: { contains: 'PiZzA', mode: 'insensitive' } },
+          ],
+        },
+      }),
+    );
+  });
+
+  test.each(['', '   '])('treats a blank search (%j) as no filter', async (search) => {
+    const api = await caller();
+    await api.list({ groupId: 'g1', search });
+    expect(mockDb.expense.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { groupId: 'g1' } }));
+  });
+
+  test('returns the lookahead id and includes it on the next filtered page, without skipping', async () => {
+    mockDb.expense.findMany
+      .mockResolvedValueOnce([{ id: 'e5' }, { id: 'e4' }, { id: 'e3' }])
+      .mockResolvedValueOnce([{ id: 'e3' }, { id: 'e2' }, { id: 'e1' }])
+      .mockResolvedValueOnce([{ id: 'e1' }]);
+    const api = await caller();
+    const first = await api.list({ groupId: 'g1', search: 'pizza', limit: 2 });
+    expect(first).toEqual({ expenses: [{ id: 'e5' }, { id: 'e4' }], nextCursor: 'e3' });
+    const second = await api.list({ groupId: 'g1', search: 'pizza', limit: 2, cursor: first.nextCursor! });
+    expect(second).toEqual({ expenses: [{ id: 'e3' }, { id: 'e2' }], nextCursor: 'e1' });
+    const last = await api.list({ groupId: 'g1', search: 'pizza', limit: 2, cursor: second.nextCursor! });
+    expect(last).toEqual({ expenses: [{ id: 'e1' }], nextCursor: undefined });
+    const query = mockDb.expense.findMany.mock.calls[1]![0];
+    expect(query).toMatchObject({
+      cursor: { id: 'e3' },
+      take: 3,
+      orderBy: [{ expenseDate: 'desc' }, { id: 'desc' }],
+      where: { groupId: 'g1', OR: expect.any(Array) },
+    });
+    expect(query).not.toHaveProperty('skip');
+  });
+
+  test('an exact full page and no matches both end pagination', async () => {
+    mockDb.expense.findMany.mockResolvedValueOnce([{ id: 'e2' }, { id: 'e1' }]);
+    const api = await caller();
+    expect(await api.list({ groupId: 'g1', limit: 2 })).toEqual({
+      expenses: [{ id: 'e2' }, { id: 'e1' }],
+      nextCursor: undefined,
+    });
+    expect(await api.list({ groupId: 'g1', search: 'missing' })).toEqual({
+      expenses: [],
+      nextCursor: undefined,
+    });
+  });
+
+  test('rejects an oversized search before querying expenses', async () => {
+    const api = await caller();
+    await expect(api.list({ groupId: 'g1', search: 'x'.repeat(1001) })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockDb.expense.findMany).not.toHaveBeenCalled();
+  });
+
+  test('a search does not bypass group membership', async () => {
+    mockDb.groupMember.findUnique.mockResolvedValueOnce(null);
+    const api = await caller();
+    await expect(api.list({ groupId: 'g2', search: 'pizza' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(mockDb.expense.findMany).not.toHaveBeenCalled();
+  });
 });
 
 describe('expenses.get (#280)', () => {
