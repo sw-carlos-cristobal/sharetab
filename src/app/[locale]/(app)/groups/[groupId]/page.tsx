@@ -1,6 +1,7 @@
 'use client';
 
-import { use, useState, useRef, useEffect, useCallback } from 'react';
+import { use, useState, useRef, useEffect } from 'react';
+import { keepPreviousData } from '@tanstack/react-query';
 import { useLocale, useTranslations } from 'next-intl';
 import { trpc } from '@/lib/trpc';
 import { formatCents } from '@/lib/money';
@@ -62,45 +63,14 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
     return () => clearTimeout(timer);
   }, [search]);
   const searchPending = search.trim() !== debouncedSearch;
+  // Older pages load only from Show more: loading them on scroll put the whole history
+  // between the user and Payments, which sits below the list (#477).
   const expenses = trpc.expenses.list.useInfiniteQuery(
     { groupId, limit: 10, search: debouncedSearch },
-    { getNextPageParam: (lastPage) => lastPage.nextCursor },
+    // Keep the last result on screen while a new search loads, rather than a spinner.
+    { getNextPageParam: (lastPage) => lastPage.nextCursor, placeholderData: keepPreviousData },
   );
-  const { fetchNextPage, hasNextPage, isFetching, isFetchNextPageError } = expenses;
-  const expenseSentinelRef = useRef<HTMLDivElement>(null);
-  const loadMore = useCallback(
-    (automatic = false) => {
-      if (!hasNextPage || isFetching || searchPending) return;
-      if (automatic && isFetchNextPageError) return;
-      void fetchNextPage();
-    },
-    [fetchNextPage, hasNextPage, isFetchNextPageError, isFetching, searchPending],
-  );
-  const loadMoreRef = useRef(loadMore);
-  useEffect(() => {
-    loadMoreRef.current = loadMore;
-  }, [loadMore]);
-  useEffect(() => {
-    const sentinel = expenseSentinelRef.current;
-    if (!sentinel || !expenses.hasNextPage || searchPending || typeof IntersectionObserver === 'undefined') return;
-
-    let armed = true;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (!entry.isIntersecting) {
-            armed = true;
-          } else if (armed) {
-            armed = false;
-            loadMoreRef.current(true);
-          }
-        }
-      },
-      { rootMargin: '0px 0px 300px 0px', threshold: 0 },
-    );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [expenses.hasNextPage, searchPending]);
+  const expensesBusy = searchPending || expenses.isFetching;
   // An expense re-dated between page loads can come back on a later page as well (#478).
   const expenseItems = [
     ...new Map(
@@ -396,7 +366,7 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
       )}
 
       {/* Expenses */}
-      <div data-testid="expenses-section" aria-busy={searchPending || expenses.isFetching}>
+      <div data-testid="expenses-section" aria-busy={expensesBusy}>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">{t('detail.expenses')}</h2>
           {!g.archivedAt && (
@@ -436,44 +406,48 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
 
         {expenses.isLoading && <LoadingSpinner />}
 
-        {expenses.isError && (
+        {/* A failed older page is reported next to Show more, where the user is. */}
+        {expenses.isError && !expenses.isFetchNextPageError && (
           <div role="alert" className="mb-4 flex flex-wrap items-center gap-2 text-sm text-destructive">
             <p>{expenses.error.message}</p>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={expenses.isFetching || searchPending}
-              onClick={() => void (expenses.isFetchNextPageError ? expenses.fetchNextPage() : expenses.refetch())}
-            >
+            <Button variant="outline" size="sm" disabled={expensesBusy} onClick={() => void expenses.refetch()}>
               {t('detail.retryExpenses')}
             </Button>
           </div>
         )}
 
-        {expenses.data && !expenses.isError && !searchPending && expenseItems.length === 0 && (
-          <Card>
-            <CardContent className="py-8 text-center">
-              <Receipt className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
-              <p className="text-muted-foreground">
-                {debouncedSearch ? t('detail.noExpenseSearchResults') : t('detail.noExpenses')}
-              </p>
-              {!debouncedSearch && !g.archivedAt && (
-                <Button
-                  className="mt-4"
-                  size="sm"
-                  nativeButton={false}
-                  render={<Link href={`/groups/${groupId}/expenses/new`} />}
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  {t('detail.addFirstExpense')}
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-        )}
+        {expenses.data &&
+          !expenses.isError &&
+          !expenses.isPlaceholderData &&
+          !searchPending &&
+          expenseItems.length === 0 && (
+            <Card>
+              <CardContent className="py-8 text-center">
+                <Receipt className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
+                <p className="text-muted-foreground">
+                  {debouncedSearch ? t('detail.noExpenseSearchResults') : t('detail.noExpenses')}
+                </p>
+                {!debouncedSearch && !g.archivedAt && (
+                  <Button
+                    className="mt-4"
+                    size="sm"
+                    nativeButton={false}
+                    render={<Link href={`/groups/${groupId}/expenses/new`} />}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    {t('detail.addFirstExpense')}
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
         {expenseItems.length > 0 && (
-          <Card className="divide-y divide-border overflow-hidden">
+          <Card
+            className={`divide-y divide-border overflow-hidden transition-opacity ${
+              expenses.isPlaceholderData ? 'opacity-60' : ''
+            }`}
+          >
             {expenseItems.map((expense, index) => (
               <Link
                 key={expense.id}
@@ -520,19 +494,23 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
           </Card>
         )}
         {expenses.hasNextPage && (
-          <>
-            <div ref={expenseSentinelRef} className="h-px" aria-hidden="true" data-testid="expense-history-sentinel" />
+          <div className="mt-2 flex flex-wrap items-center gap-2">
             <Button
               variant="ghost"
               size="sm"
-              className="mt-2"
-              disabled={expenses.isFetching || searchPending}
-              onClick={() => loadMore(false)}
+              // The pages shown while a new search loads belong to the previous search.
+              disabled={expensesBusy || expenses.isPlaceholderData}
+              onClick={() => void expenses.fetchNextPage()}
             >
               {expenses.isFetchingNextPage && <Loader2 aria-hidden="true" className="mr-2 h-4 w-4 animate-spin" />}
               {t('detail.showMoreExpenses')}
             </Button>
-          </>
+            {expenses.isFetchNextPageError && (
+              <p role="alert" className="text-sm text-destructive">
+                {expenses.error.message}
+              </p>
+            )}
+          </div>
         )}
       </div>
 

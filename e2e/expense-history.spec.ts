@@ -220,17 +220,29 @@ test.describe('Expense history (#326)', () => {
     const all = newestFirst(fixtures);
     const filtered = newestFirst(matches);
 
+    const cursorRequests: string[] = [];
+    page.on('request', (request) => {
+      const input = expenseListInput(new URL(request.url()));
+      if (input && input.groupId === history.groupId && input.cursor) cursorRequests.push(input.cursor);
+    });
     await login(page, users.alice.email, users.alice.password);
     await page.goto(`/en/groups/${history.groupId}`);
     const section = page.getByTestId('expenses-section');
     const search = section.getByRole('searchbox', { name: 'Search expenses', exact: true });
-    const more = section.getByRole('button', { name: 'Show more', exact: true });
+    const more = section.getByRole('button', { name: 'Show more expenses', exact: true });
     await expect(search).toHaveAttribute('placeholder', 'Search titles and notes...');
     await expectRows(page, history.groupId, all.slice(0, 10));
-    const sentinel = section.getByTestId('expense-history-sentinel');
-    await sentinel.scrollIntoViewIfNeeded();
+
+    // Scrolling down to Payments, below the list, loads nothing more: only Show more does (#477).
+    // On desktop <main> scrolls, on mobile the window does.
+    await page.locator('main').evaluate((main) => main.scrollTo(0, main.scrollHeight));
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await page.waitForTimeout(500); // nothing to wait for when nothing should happen
+    expect(cursorRequests).toEqual([]);
+    await expectRows(page, history.groupId, all.slice(0, 10));
+
+    await more.click();
     await expectRows(page, history.groupId, all.slice(0, 20));
-    await expect(more).toBeVisible();
     await more.click();
     await expectRows(page, history.groupId, all);
     await expect(more).toHaveCount(0);
@@ -253,107 +265,47 @@ test.describe('Expense history (#326)', () => {
     await expect(more).toHaveCount(0);
   });
 
-  test('a tall viewport does not cascade-load while the sentinel remains in the prefetch margin', async ({
+  test('a failed older page keeps the rows and reports the error next to Show more, which retries', async ({
     page,
     history,
   }) => {
     const fixtures: ExpenseFixture[] = [];
-    for (let i = 0; i < 25; i++) {
-      fixtures.push(await createExpense(history, { title: `Tall viewport ${i}` }));
-    }
-    const all = newestFirst(fixtures);
-    await page.setViewportSize({ width: 1280, height: 1800 });
-    const cursorRequests: string[] = [];
-    page.on('request', (request) => {
-      const input = expenseListInput(new URL(request.url()));
-      if (!input || input.groupId !== history.groupId || !input.cursor) return;
-      cursorRequests.push(input.cursor);
-    });
-    await login(page, users.alice.email, users.alice.password);
-    await page.goto(`/en/groups/${history.groupId}`);
-    const section = page.getByTestId('expenses-section');
-    const sentinel = section.getByTestId('expense-history-sentinel');
-    const more = section.getByRole('button', { name: 'Show more', exact: true });
-
-    await expectRows(page, history.groupId, all.slice(0, 20));
-    expect(cursorRequests).toHaveLength(1);
-    const remainsInPrefetchMargin = await sentinel.evaluate((element) => {
-      const rect = element.getBoundingClientRect();
-      return rect.top <= window.innerHeight + 300 && rect.bottom >= -300;
-    });
-    expect(remainsInPrefetchMargin).toBe(true);
-    await page.waitForTimeout(350);
-    await expectRows(page, history.groupId, all.slice(0, 20));
-    expect(cursorRequests).toHaveLength(1);
-    await expect(more).toBeVisible();
-
-    await more.click();
-    await expectRows(page, history.groupId, all);
-    expect(cursorRequests).toHaveLength(2);
-    await expect(more).toHaveCount(0);
-  });
-
-  test('manual Show more works when IntersectionObserver is unavailable', async ({ page, history }) => {
-    const fixtures: ExpenseFixture[] = [];
     for (let i = 0; i < 12; i++) {
-      fixtures.push(await createExpense(history, { title: `Manual fallback ${i}` }));
-    }
-    const all = newestFirst(fixtures);
-    await page.addInitScript(() => {
-      Object.defineProperty(window, 'IntersectionObserver', { configurable: true, value: undefined });
-    });
-    await login(page, users.alice.email, users.alice.password);
-    await page.goto(`/en/groups/${history.groupId}`);
-    const section = page.getByTestId('expenses-section');
-    await expectRows(page, history.groupId, all.slice(0, 10));
-    await section.getByTestId('expense-history-sentinel').scrollIntoViewIfNeeded();
-    await expectRows(page, history.groupId, all.slice(0, 10));
-    const more = section.getByRole('button', { name: 'Show more', exact: true });
-    await more.click();
-    await expectRows(page, history.groupId, all);
-    await expect(more).toHaveCount(0);
-  });
-
-  test('failed scroll page keeps existing rows and retries deliberately', async ({ page, history }) => {
-    const fixtures: ExpenseFixture[] = [];
-    for (let i = 0; i < 12; i++) {
-      fixtures.push(await createExpense(history, { title: `Retry scroll ${i}` }));
+      fixtures.push(await createExpense(history, { title: `Retry page ${i}` }));
     }
     const all = newestFirst(fixtures);
     await login(page, users.alice.email, users.alice.password);
     await page.goto(`/en/groups/${history.groupId}`);
     const section = page.getByTestId('expenses-section');
+    const more = section.getByRole('button', { name: 'Show more expenses', exact: true });
     await expectRows(page, history.groupId, all.slice(0, 10));
 
+    // Make only the older page fail, with a real server validation error.
     const isExpenseList = (url: URL) => expenseListIndex(url) !== -1;
-    let cursorRequests = 0;
     await page.route(isExpenseList, async (route) => {
       const url = new URL(route.request().url());
-      const listInput = expenseListInput(url);
-      if (!listInput?.cursor) return route.continue();
+      if (!expenseListInput(url)?.cursor) return route.continue();
       const body = JSON.parse(url.searchParams.get('input')!);
       const index = url.searchParams.get('batch') === '1' ? expenseListIndex(url) : 0;
       body[index].json.search = 'x'.repeat(1001);
-      cursorRequests++;
       url.searchParams.set('input', JSON.stringify(body));
       await route.continue({ url: url.toString() });
     });
 
-    await section.getByTestId('expense-history-sentinel').scrollIntoViewIfNeeded();
-    const alert = section.getByRole('alert');
-    await expect(alert).toBeVisible();
+    await more.click();
+    // Beside the button the user just pressed, not above the list (#477). React Query
+    // retries a failed request three times (about 7 s) before reporting it.
+    const alert = more.locator('xpath=..').getByRole('alert');
+    await expect(alert).toHaveText("That request wasn't valid. Reload the page and try again.", { timeout: 30_000 });
+    await expect(section.getByRole('alert')).toHaveCount(1);
+    await expect(section.getByRole('button', { name: 'Retry', exact: true })).toHaveCount(0);
     await expectRows(page, history.groupId, all.slice(0, 10));
-    await expect.poll(() => cursorRequests).toBeGreaterThan(0);
-    // React Query may retry the failed request; after the error alert appears,
-    // scrolling must not trigger another page load until the user retries.
-    const attemptsAfterFailure = cursorRequests;
-    await page.waitForTimeout(350);
-    expect(cursorRequests).toBe(attemptsAfterFailure);
 
     await page.unroute(isExpenseList);
-    await alert.getByRole('button', { name: 'Retry', exact: true }).click();
+    await more.click();
     await expectRows(page, history.groupId, all);
     await expect(section.getByRole('alert')).toHaveCount(0);
+    await expect(more).toHaveCount(0);
   });
 
   test('UI distinguishes an empty history from a search with no matches', async ({ page, history }) => {
@@ -363,7 +315,7 @@ test.describe('Expense history (#326)', () => {
     await expect(section.getByText('No expenses yet.', { exact: true })).toBeVisible();
     await expect(section.getByText('No expenses match your search.', { exact: true })).toHaveCount(0);
     await expect(section.getByTestId('expense-row')).toHaveCount(0);
-    await expect(section.getByRole('button', { name: 'Show more', exact: true })).toHaveCount(0);
+    await expect(section.getByRole('button', { name: 'Show more expenses', exact: true })).toHaveCount(0);
 
     const expense = await createExpense(history, { title: 'Coffee break' });
     await page.reload();
@@ -373,7 +325,7 @@ test.describe('Expense history (#326)', () => {
     await expect(section.getByText('No expenses match your search.', { exact: true })).toBeVisible();
     await expect(section.getByText('No expenses yet.', { exact: true })).toHaveCount(0);
     await expect(section.getByTestId('expense-row')).toHaveCount(0);
-    await expect(section.getByRole('button', { name: 'Show more', exact: true })).toHaveCount(0);
+    await expect(section.getByRole('button', { name: 'Show more expenses', exact: true })).toHaveCount(0);
     await search.fill('');
     await expectRows(page, history.groupId, [expense]);
     await expect(section.getByText('No expenses match your search.', { exact: true })).toHaveCount(0);
