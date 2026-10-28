@@ -104,9 +104,7 @@ test.describe('Expense history (#326)', () => {
         expected.slice(offset, offset + 10).map((expense) => expense.id),
       );
       expect(data.expenses.every((expense) => expense.groupId === history.groupId)).toBe(true);
-      // nextCursor names the first UNSEEN row, not the last returned row: do not skip it.
-      if (cursor) expect(data.expenses[0]?.id).toBe(cursor);
-      expect(data.nextCursor).toBe(expected[offset + 10]?.id);
+      expect(data.nextCursor === undefined).toBe(offset + 10 >= expected.length);
       visited.push(...data.expenses.map((expense) => expense.id));
       cursor = data.nextCursor;
     }
@@ -154,6 +152,38 @@ test.describe('Expense history (#326)', () => {
     } finally {
       await other.dispose();
     }
+  });
+
+  test('API paging survives the next expense being deleted or re-dated between pages (#478)', async ({ history }) => {
+    const fixtures: ExpenseFixture[] = [];
+    for (let i = 0; i < 8; i++) fixtures.push(await createExpense(history, { title: `Cursor row ${i}` }));
+    const ids = newestFirst(fixtures).map((expense) => expense.id);
+    const page = async (cursor?: string) => {
+      const data = await listExpenses(history, { limit: 2, ...(cursor ? { cursor } : {}) });
+      return { ids: data.expenses.map((expense) => expense.id), nextCursor: data.nextCursor };
+    };
+
+    const first = await page();
+    expect(first.ids).toEqual(ids.slice(0, 2));
+    // The cursor stands for ids[2], the first expense not shown yet: delete it.
+    const deleted = await trpcMutation(history.owner, 'expenses.delete', {
+      groupId: history.groupId,
+      expenseId: ids[2],
+    });
+    expect(deleted.ok(), await deleted.text()).toBe(true);
+    const second = await page(first.nextCursor);
+    expect(second.ids).toEqual(ids.slice(3, 5));
+
+    // Now it stands for ids[5]: move that expense to the oldest date.
+    const moved = await trpcMutation(history.owner, 'expenses.update', {
+      groupId: history.groupId,
+      expenseId: ids[5],
+      expenseDate: '2025-01-01T12:00:00.000Z',
+    });
+    expect(moved.ok(), await moved.text()).toBe(true);
+    const third = await page(second.nextCursor);
+    expect(third.ids).toEqual(ids.slice(6, 8));
+    expect(await page(third.nextCursor)).toEqual({ ids: [ids[5]], nextCursor: undefined });
   });
 
   test('API search matches %, _ and \\ literally and refuses a NUL byte (#479)', async ({ history }) => {

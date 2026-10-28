@@ -29,12 +29,46 @@ function escapeLikePattern(term: string) {
   return term.replace(/[\\%_]/g, '\\$&');
 }
 
+// expenses.list's cursor carries the first unseen expense's sort values rather than its
+// id, so the next page doesn't depend on that expense still existing or keeping its date:
+// looking it up by id ended the history when it was deleted and skipped expenses when it
+// was re-dated (#478).
+type ExpenseCursor = { expenseDate: Date; id: string };
+
+const expenseCursorSchema = z.tuple([z.iso.datetime(), z.string().min(1)]);
+
+function encodeExpenseCursor({ expenseDate, id }: ExpenseCursor) {
+  return Buffer.from(JSON.stringify([expenseDate.toISOString(), id])).toString('base64url');
+}
+
+function decodeExpenseCursor(token: string): ExpenseCursor | null {
+  let value: unknown;
+  try {
+    value = JSON.parse(Buffer.from(token, 'base64url').toString('utf8'));
+  } catch {
+    return null;
+  }
+  const parsed = expenseCursorSchema.safeParse(value);
+  return parsed.success ? { expenseDate: new Date(parsed.data[0]), id: parsed.data[1] } : null;
+}
+
 export const expensesRouter = createTRPCRouter({
   list: groupMemberProcedure
     .input(
       z.object({
         groupId: z.string(),
-        cursor: z.string().optional(),
+        cursor: z
+          .string()
+          .max(200)
+          .transform((token, ctx) => {
+            const cursor = decodeExpenseCursor(token);
+            if (!cursor) {
+              ctx.addIssue({ code: 'custom', message: 'Invalid cursor' });
+              return z.NEVER;
+            }
+            return cursor;
+          })
+          .optional(),
         // PostgreSQL text can't hold a NUL byte, so the query would fail with a 500.
         search: z
           .string()
@@ -47,21 +81,33 @@ export const expensesRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const pattern = input.search ? escapeLikePattern(input.search) : undefined;
-      const expenses = await ctx.db.expense.findMany({
-        where: {
-          groupId: input.groupId,
-          ...(pattern
-            ? {
+      const { cursor } = input;
+      const filters = [
+        ...(pattern
+          ? [
+              {
                 OR: [
                   { title: { contains: pattern, mode: 'insensitive' as const } },
                   { description: { contains: pattern, mode: 'insensitive' as const } },
                 ],
-              }
-            : {}),
-        },
+              },
+            ]
+          : []),
+        // The cursor's own expense comes first on its page: it wasn't shown yet.
+        ...(cursor
+          ? [
+              {
+                OR: [
+                  { expenseDate: { lt: cursor.expenseDate } },
+                  { expenseDate: cursor.expenseDate, id: { lte: cursor.id } },
+                ],
+              },
+            ]
+          : []),
+      ];
+      const expenses = await ctx.db.expense.findMany({
+        where: { groupId: input.groupId, ...(filters.length > 0 ? { AND: filters } : {}) },
         take: input.limit + 1,
-        // nextCursor is the first unseen row, so don't skip it.
-        ...(input.cursor ? { cursor: { id: input.cursor } } : {}),
         orderBy: [{ expenseDate: 'desc' }, { id: 'desc' }],
         include: {
           paidBy: { select: { id: true, name: true, email: true, image: true } },
@@ -71,13 +117,9 @@ export const expensesRouter = createTRPCRouter({
         },
       });
 
-      let nextCursor: string | undefined;
-      if (expenses.length > input.limit) {
-        const next = expenses.pop();
-        nextCursor = next?.id;
-      }
-
-      return { expenses, nextCursor };
+      // The extra row fetched is the first unseen one.
+      const next = expenses.length > input.limit ? expenses.pop() : undefined;
+      return { expenses, nextCursor: next ? encodeExpenseCursor(next) : undefined };
     }),
 
   get: groupMemberProcedure

@@ -101,7 +101,12 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
     observer.observe(sentinel);
     return () => observer.disconnect();
   }, [expenses.hasNextPage, searchPending]);
-  const expenseItems = expenses.data?.pages.flatMap((page) => page.expenses) ?? [];
+  // An expense re-dated between page loads can come back on a later page as well (#478).
+  const expenseItems = [
+    ...new Map(
+      (expenses.data?.pages.flatMap((page) => page.expenses) ?? []).map((expense) => [expense.id, expense]),
+    ).values(),
+  ];
   const debts = trpc.balances.getSimplifiedDebts.useQuery({ groupId });
   const pendingReceipts = trpc.receipts.listPending.useQuery({ groupId });
   const venmoSetting = trpc.admin.getVenmoEnabled.useQuery();
