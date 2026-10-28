@@ -72,13 +72,43 @@ describe('expenses.list (#326)', () => {
       expect.objectContaining({
         where: {
           groupId: 'g1',
-          OR: [
-            { title: { contains: 'PiZzA', mode: 'insensitive' } },
-            { description: { contains: 'PiZzA', mode: 'insensitive' } },
+          AND: [
+            {
+              OR: [
+                { title: { contains: 'PiZzA', mode: 'insensitive' } },
+                { description: { contains: 'PiZzA', mode: 'insensitive' } },
+              ],
+            },
           ],
         },
       }),
     );
+  });
+
+  test('escapes %, _ and \\ so a search matches them literally (#479)', async () => {
+    const api = await caller();
+    await api.list({ groupId: 'g1', search: '50%_\\' });
+    expect(mockDb.expense.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          groupId: 'g1',
+          AND: [
+            {
+              OR: [
+                { title: { contains: '50\\%\\_\\\\', mode: 'insensitive' } },
+                { description: { contains: '50\\%\\_\\\\', mode: 'insensitive' } },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+  });
+
+  test('rejects a NUL byte in the search before querying expenses (#479)', async () => {
+    const api = await caller();
+    await expect(api.list({ groupId: 'g1', search: 'a\u0000b' })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockDb.expense.findMany).not.toHaveBeenCalled();
   });
 
   test.each(['', '   '])('treats a blank search (%j) as no filter', async (search) => {
@@ -87,27 +117,60 @@ describe('expenses.list (#326)', () => {
     expect(mockDb.expense.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { groupId: 'g1' } }));
   });
 
-  test('returns the lookahead id and includes it on the next filtered page, without skipping', async () => {
+  test("pages from the first unseen expense's date and id, without looking that expense up (#478)", async () => {
+    const day = new Date('2025-06-15T12:00:00.000Z');
+    const earlier = new Date('2025-06-01T12:00:00.000Z');
     mockDb.expense.findMany
-      .mockResolvedValueOnce([{ id: 'e5' }, { id: 'e4' }, { id: 'e3' }])
-      .mockResolvedValueOnce([{ id: 'e3' }, { id: 'e2' }, { id: 'e1' }])
-      .mockResolvedValueOnce([{ id: 'e1' }]);
+      .mockResolvedValueOnce([
+        { id: 'e5', expenseDate: day },
+        { id: 'e4', expenseDate: day },
+        { id: 'e3', expenseDate: day },
+      ])
+      .mockResolvedValueOnce([
+        { id: 'e3', expenseDate: day },
+        { id: 'e2', expenseDate: earlier },
+      ]);
     const api = await caller();
     const first = await api.list({ groupId: 'g1', search: 'pizza', limit: 2 });
-    expect(first).toEqual({ expenses: [{ id: 'e5' }, { id: 'e4' }], nextCursor: 'e3' });
+    expect(first.expenses).toEqual([
+      { id: 'e5', expenseDate: day },
+      { id: 'e4', expenseDate: day },
+    ]);
+    expect(first.nextCursor).toEqual(expect.any(String));
+    expect(mockDb.expense.findMany.mock.calls[0]![0].where.AND).toHaveLength(1);
+
     const second = await api.list({ groupId: 'g1', search: 'pizza', limit: 2, cursor: first.nextCursor! });
-    expect(second).toEqual({ expenses: [{ id: 'e3' }, { id: 'e2' }], nextCursor: 'e1' });
-    const last = await api.list({ groupId: 'g1', search: 'pizza', limit: 2, cursor: second.nextCursor! });
-    expect(last).toEqual({ expenses: [{ id: 'e1' }], nextCursor: undefined });
+    expect(second).toEqual({
+      expenses: [
+        { id: 'e3', expenseDate: day },
+        { id: 'e2', expenseDate: earlier },
+      ],
+      nextCursor: undefined,
+    });
     const query = mockDb.expense.findMany.mock.calls[1]![0];
     expect(query).toMatchObject({
-      cursor: { id: 'e3' },
       take: 3,
       orderBy: [{ expenseDate: 'desc' }, { id: 'desc' }],
-      where: { groupId: 'g1', OR: expect.any(Array) },
+      where: {
+        groupId: 'g1',
+        AND: [
+          { OR: expect.any(Array) },
+          { OR: [{ expenseDate: { lt: day } }, { expenseDate: day, id: { lte: 'e3' } }] },
+        ],
+      },
     });
+    expect(query).not.toHaveProperty('cursor');
     expect(query).not.toHaveProperty('skip');
   });
+
+  test.each(['e3', 'not base64 at all', Buffer.from('["not a date","e3"]').toString('base64url')])(
+    "refuses a cursor it didn't issue (%j) before querying expenses (#478)",
+    async (cursor) => {
+      const api = await caller();
+      await expect(api.list({ groupId: 'g1', cursor })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect(mockDb.expense.findMany).not.toHaveBeenCalled();
+    },
+  );
 
   test('an exact full page and no matches both end pagination', async () => {
     mockDb.expense.findMany.mockResolvedValueOnce([{ id: 'e2' }, { id: 'e1' }]);
