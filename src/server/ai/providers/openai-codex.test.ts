@@ -50,9 +50,9 @@ describe('resolveCodexModel', () => {
   });
 
   test('falls back to the default when unset, blank or only spaces (e.g. a blanked Unraid field, #222)', () => {
-    expect(resolveCodexModel(undefined)).toBe('gpt-5.5');
-    expect(resolveCodexModel('')).toBe('gpt-5.5');
-    expect(resolveCodexModel('   ')).toBe('gpt-5.5');
+    expect(resolveCodexModel(undefined)).toBe('gpt-6.1-sol');
+    expect(resolveCodexModel('')).toBe('gpt-6.1-sol');
+    expect(resolveCodexModel('   ')).toBe('gpt-6.1-sol');
   });
 
   test('trims the spaces around a configured model', () => {

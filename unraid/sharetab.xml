@@ -215,12 +215,12 @@
   <Config
     Name="OpenAI Codex Model"
     Target="OPENAI_CODEX_MODEL"
-    Default="gpt-5.5"
-    Description="Model for receipt scanning when openai-codex is in AI_PROVIDER_PRIORITY. Defaults to gpt-5.5."
+    Default="gpt-6.1-sol"
+    Description="Model for receipt scanning when openai-codex is in AI_PROVIDER_PRIORITY. Defaults to gpt-6.1-sol."
     Type="Variable"
     Display="advanced"
     Required="false"
-    Mask="false">gpt-5.5</Config>
+    Mask="false">gpt-6.1-sol</Config>
   <Config
     Name="Anthropic API Key"
     Target="ANTHROPIC_API_KEY"

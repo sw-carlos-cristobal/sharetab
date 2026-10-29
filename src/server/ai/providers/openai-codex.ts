@@ -4,7 +4,7 @@ import { receiptExtractionSchema } from '../schema';
 import { RECEIPT_EXTRACTION_PROMPT } from '../prompts/receipt-extraction';
 import { checkOpenAICodexHealth, getAccessTokenForApi, retryAfterUnauthorized } from '@/server/lib/openai-codex-login';
 
-const DEFAULT_MODEL = 'gpt-5.5';
+const DEFAULT_MODEL = 'gpt-6.1-sol';
 const CODEX_BASE_URL = 'https://chatgpt.com/backend-api/codex';
 const ORIGINATOR = 'codex_cli_rs';
 

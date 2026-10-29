@@ -282,6 +282,11 @@ Each push to `main` starts an image build; each build that passes its smoke test
 
 Each push to `main` also gets a GitHub release named `Build YYYY.MM.DD.N-<sha>` listing the changes since the previous build; see [Releases](../../releases). The `stable` git tag normally marks the commit `:stable` was built from ([browse it](../../tree/stable)); after a failed promotion (see [Releases](#releases)) the tag and the image can point at different commits. ShareTab no longer publishes numbered (semver) versions; the last was v0.8.0.
 
+### Codex model default (#481)
+
+- `OPENAI_CODEX_MODEL` now defaults to `gpt-6.1-sol`. OpenAI retired `gpt-5.5`, the previous default, from Codex for ChatGPT sign-in on 2026-10-14 ([Codex models](https://learn.chatgpt.com/docs/models)), and the backend refuses it with `400 model_not_found`, so receipt scans through `openai-codex` fall through to the next provider, or fail outright when it is the only one. A value saved in your `.env` or Unraid template is kept on upgrade, so change a saved value the backend refuses (such as `gpt-5.4`, `gpt-5.5` or `gpt-6.1`) to `gpt-6.1-sol`, or blank it to use the default.
+- `gpt-6.1-sol` isn't open to every ChatGPT plan, and ShareTab has only been tested with it on Plus. Enterprise and Edu workspaces keep it off until an administrator enables it ([workspace model availability](https://learn.chatgpt.com/docs/enterprise/workspace-model-availability)). On Free and Go, OpenAI documents Codex only in its desktop app ([pricing](https://learn.chatgpt.com/docs/pricing)), so the `openai-codex` provider may not work there at all; use another provider.
+
 ### External PostgreSQL (#464)
 
 - `DATABASE_URL` set on the container now turns the bundled database off (see [Using an external PostgreSQL](#external-postgres)). Before, the container used the URL but started the bundled server anyway. If you set `DATABASE_URL` to point at the bundled server (`localhost:5432`), remove it: nothing listens there now. Startup says so at once, and stops after `DB_WAIT_SECONDS`.
@@ -313,7 +318,7 @@ Each push to `main` also gets a GitHub release named `Build YYYY.MM.DD.N-<sha>` 
 
 ### AI model defaults and Meridian (builds from 2026.09.26)
 
-- `OPENAI_CODEX_MODEL` now defaults to `gpt-5.5` (build `2026.09.26.2`, #211): the Codex backend rejects `gpt-5.4` for ChatGPT accounts. The old `.env.example` and Unraid template set `gpt-5.4` explicitly, and a saved value is kept on upgrade, so change it to `gpt-5.5` in your `.env` or template, or blank it to use the default (#222; builds before that fix sent a blank value as the model name instead of falling back).
+- `OPENAI_CODEX_MODEL` now defaults to `gpt-5.5` (build `2026.09.26.2`, #211): the Codex backend rejects `gpt-5.4` for ChatGPT accounts. The old `.env.example` and Unraid template set `gpt-5.4` explicitly, and a saved value is kept on upgrade, so change it in your `.env` or template, or blank it to use the default (#222; builds before that fix sent a blank value as the model name instead of falling back). `gpt-5.5` has since been refused too: see _Codex model default_ above for the current value.
 - `ANTHROPIC_MODEL` now defaults to `claude-sonnet-5` for both the `claude` and `meridian` providers (build `2026.09.26.3`, #215). A value saved in your `.env` or template (the old defaults were `claude-sonnet-4-6` and, on Unraid, `claude-opus-4-6`) still wins; change it if you want the new default.
 - Meridian receipt scanning was broken in the Docker image in builds `2026.09.19.4` through `2026.09.26.1` and is fixed in `2026.09.26.2` (#211). If Meridian stopped working in that period, upgrading fixes it.
 
@@ -387,7 +392,7 @@ All configuration is done through environment variables. Copy `.env.example` to 
 | `AI_PROVIDER_PRIORITY`   | Comma-separated provider priority list (for example `openai-codex,meridian,openai`). ShareTab checks providers in order, uses the first available one, and falls through to the next provider if extraction fails. |
 | `OPENAI_API_KEY`         | Required when `openai` is included in `AI_PROVIDER_PRIORITY`.                                                                                                                                                      |
 | `OPENAI_MODEL`           | OpenAI model for receipt scanning. Defaults to `gpt-4o`.                                                                                                                                                           |
-| `OPENAI_CODEX_MODEL`     | Model for ChatGPT OAuth / Codex backend receipt scanning. Defaults to `gpt-5.5`.                                                                                                                                   |
+| `OPENAI_CODEX_MODEL`     | Model for ChatGPT OAuth / Codex backend receipt scanning. Defaults to `gpt-6.1-sol`; not every ChatGPT plan can use it, see _Codex model default_ under Upgrading.                                                 |
 | `ANTHROPIC_API_KEY`      | Required when `claude` is included in `AI_PROVIDER_PRIORITY`.                                                                                                                                                      |
 | `ANTHROPIC_MODEL`        | Claude model for receipt scanning (claude and meridian providers). Defaults to `claude-sonnet-5`.                                                                                                                  |
 | `ANTHROPIC_HEALTH_MODEL` | Model for health-check probes (auth verification). Defaults to `claude-haiku-4-5-20251001`.                                                                                                                        |
@@ -425,7 +430,7 @@ The bundled Docker Compose setup persists `/app/claude` automatically. If you us
 
 ### AI Provider Performance
 
-Benchmarked on a set of receipt photos (grocery, coffee shop, restaurant) in April 2026, before the current model defaults (`gpt-5.5` for Codex, `claude-sonnet-5` for Claude). Results represent typical single-receipt extraction. The Meridian row is from #215, which measured the current default, `claude-sonnet-5`.
+Benchmarked on a set of receipt photos (grocery, coffee shop, restaurant) in April 2026, before the current model defaults (`gpt-6.1-sol` for Codex, `claude-sonnet-5` for Claude). Results represent typical single-receipt extraction. The Meridian row is from #215, which measured the current default, `claude-sonnet-5`.
 
 | Provider                         | Speed        | Item Accuracy                  | Cost                                | Notes                                                                 |
 | -------------------------------- | ------------ | ------------------------------ | ----------------------------------- | --------------------------------------------------------------------- |
