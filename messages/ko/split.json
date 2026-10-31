@@ -149,7 +149,9 @@
     "finalizeDescription": "모든 사람의 금액이 계산되고 분할이 잠기며, 이후에는 아무도 선택을 변경할 수 없습니다.",
     "splitFinalized": "분할이 확정되었습니다!",
     "groupSize": "그룹 인원수",
-    "groupSizeHint": "커플 또는 그룹인 경우 2 이상 입력"
+    "groupSizeHint": "커플 또는 그룹인 경우 2 이상 입력",
+    "groupSizeInvalid": "{min}에서 {max} 사이의 정수를 입력해주세요",
+    "groupSizePreview": "{count, plural, other {나와 다른 #명}}"
   },
   "result": {
     "loading": "분할 내역 로딩 중...",

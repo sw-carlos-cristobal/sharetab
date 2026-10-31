@@ -51,6 +51,7 @@ const COUNT_MESSAGES: [namespace: string, key: string, values: (n: number) => Va
   ['admin', 'serverLogs.entries', (n) => ({ count: n })],
   ['admin', 'audit.filesDeleted', (n) => ({ count: n })],
   ['split', 'claim.claimConflict', (n) => ({ count: n, names: 'Ana' })],
+  ['split', 'claim.groupSizePreview', (n) => ({ count: n })],
   ['split', 'assign.assignAllItems', (n) => ({ remaining: n })],
   ['expenses', 'receipt.assignAllItems', (n) => ({ remaining: n })],
   ['dashboard', 'members', (n) => ({ count: n })],
