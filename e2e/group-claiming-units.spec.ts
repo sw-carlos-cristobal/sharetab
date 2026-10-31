@@ -514,7 +514,7 @@ test.describe('Group size fields keep what is typed', () => {
     return { page, browserCtx };
   }
 
-  // What a person does by hand: put the cursor after the 1, delete it, type the new size
+  // What a person does by hand: put the cursor at the end, delete the last digit, type the new size
   async function retype(field: Locator, text: string) {
     await field.click();
     await field.press('End');
@@ -542,15 +542,22 @@ test.describe('Group size fields keep what is typed', () => {
   test('a join form size outside 1 to 20 is refused with a message, not changed', async ({ browser }) => {
     const { page, browserCtx } = await openClaimPage(browser, 'Refuse Join');
 
+    const joinRequests: string[] = [];
+    page.on('request', (req) => {
+      if (req.url().includes('guest.joinSession')) joinRequests.push(req.url());
+    });
+
     await page.getByTestId('claim-name-input').fill('Crowd');
     const groupSize = page.getByTestId('group-size-input');
     await groupSize.fill('25');
-    await page.getByTestId('claim-join-btn').click();
+    // Enter joins without the field losing focus, so the message comes from the check on Join
+    await groupSize.press('Enter');
 
     await expect(page.getByTestId('group-size-error')).toHaveText('Enter a whole number from 1 to 20');
     await expect(groupSize).toHaveValue('25');
     await expect(groupSize).toHaveAttribute('aria-invalid', 'true');
     await expect(page.getByTestId('claim-join-form')).toBeVisible();
+    expect(joinRequests).toEqual([]);
 
     // An empty field is refused too once it loses focus, and typing clears the message
     await groupSize.fill('');
@@ -574,15 +581,25 @@ test.describe('Group size fields keep what is typed', () => {
     await page.getByTestId('claim-join-btn').click();
     await expect(page.locator('[data-testid^="claim-item-"]').first()).toBeVisible({ timeout: 15000 });
 
+    const editRequests: string[] = [];
+    page.on('request', (req) => {
+      if (req.url().includes('guest.editPersonName')) editRequests.push(req.url());
+    });
+
     await page.getByTestId('edit-person-1').click();
     const groupSize = page.getByTestId('edit-group-size-1');
     await expect(groupSize).toHaveValue('1');
+    // #410's steps: Backspace on the 1, then 2
+    await retype(groupSize, '2');
+    await expect(groupSize).toHaveValue('2');
 
-    // Out of range: the message shows and the form stays open with the value as typed
+    // Out of range: the message shows and the form stays open with the value as typed. Enter submits
+    // the form without the field losing focus, so the message comes from the check on submit
     await groupSize.fill('0');
-    await page.getByRole('button', { name: 'Save name' }).click();
+    await groupSize.press('Enter');
     await expect(page.getByTestId('edit-group-size-error-1')).toHaveText('Enter a whole number from 1 to 20');
     await expect(groupSize).toHaveValue('0');
+    expect(editRequests).toEqual([]);
 
     await retype(groupSize, '2');
     await expect(groupSize).toHaveValue('2');

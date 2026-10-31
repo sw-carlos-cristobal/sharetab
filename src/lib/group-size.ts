@@ -5,12 +5,12 @@ export const MAX_GROUP_SIZE = 20;
 
 /**
  * The group size typed into a claim-page field, or null when the text isn't a whole number from
- * MIN_GROUP_SIZE to MAX_GROUP_SIZE. An empty field is null too: the pages keep the text as typed,
+ * MIN_GROUP_SIZE to MAX_GROUP_SIZE. An empty field is null too: the claim page's join and edit forms keep the text as typed,
  * so it can be cleared and retyped (#410), and refuse a value out of range rather than changing it.
  */
 export function parseGroupSize(text: string): number | null {
   const trimmed = text.trim();
-  if (!/^\d{1,3}$/.test(trimmed)) return null;
+  if (!/^\d+$/.test(trimmed)) return null;
   const value = Number(trimmed);
   return value >= MIN_GROUP_SIZE && value <= MAX_GROUP_SIZE ? value : null;
 }

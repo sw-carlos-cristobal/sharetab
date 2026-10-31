@@ -109,8 +109,8 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   // --- State ---
   const [name, setName] = useState('');
   // The group size as typed (#410): kept as text, so the field can be cleared and typed again, and
-  // checked (parseGroupSize) when it loses focus and on Join, where a size out of range is refused
-  // with a message rather than changed
+  // checked (parseGroupSize) when it loses focus and on Join, where an empty or out-of-range value
+  // is refused with a message rather than changed
   const [groupSizeText, setGroupSizeText] = useState('1');
   const [groupSizeError, setGroupSizeError] = useState(false);
   const groupSizeRef = useRef<HTMLInputElement>(null);
@@ -1260,12 +1260,17 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
                   className="w-20"
                   data-testid="group-size-input"
                 />
-                {/* One note beside the field, so the message doesn't move the buttons below it (a
-                    click on Join right after typing lands after the field's blur): the hint, the
-                    message for a size out of range, or who a size over 1 stands for, so a typo
-                    shows before joining */}
+                {/* One note beside the field, so the message doesn't add a line and push the
+                    buttons below it (a click on Join right after typing lands after the field's
+                    blur): the hint, the message for an empty or out-of-range value, or who a size
+                    over 1 stands for, so a typo shows before joining */}
                 {groupSizeError ? (
-                  <span id="group-size-note" className="text-xs text-destructive" data-testid="group-size-error">
+                  <span
+                    id="group-size-note"
+                    role="alert"
+                    className="text-xs text-destructive"
+                    data-testid="group-size-error"
+                  >
                     {t('groupSizeInvalid', { min: MIN_GROUP_SIZE, max: MAX_GROUP_SIZE })}
                   </span>
                 ) : joinGroupSize !== null && joinGroupSize > 1 ? (
@@ -1496,6 +1501,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
                     {editingGroupSizeError && (
                       <p
                         id={`edit-group-size-error-${idx}`}
+                        role="alert"
                         className="basis-full text-xs text-destructive"
                         data-testid={`edit-group-size-error-${idx}`}
                       >

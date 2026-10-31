@@ -11,6 +11,7 @@ describe('parseGroupSize', () => {
   it('allows spaces around the number and leading zeros', () => {
     expect(parseGroupSize(' 3 ')).toBe(3);
     expect(parseGroupSize('02')).toBe(2);
+    expect(parseGroupSize('0020')).toBe(20);
   });
 
   // #410: the field may be empty while someone types; that's not a group size of 1
@@ -27,7 +28,7 @@ describe('parseGroupSize', () => {
     expect(parseGroupSize('99999999999999999999')).toBeNull();
   });
 
-  it('refuses anything but a whole number', () => {
+  it('refuses anything but plain digits', () => {
     expect(parseGroupSize('1.5')).toBeNull();
     expect(parseGroupSize('2.0')).toBeNull();
     expect(parseGroupSize('1e1')).toBeNull();
