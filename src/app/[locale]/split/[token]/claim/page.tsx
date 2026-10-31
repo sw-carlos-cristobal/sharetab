@@ -48,6 +48,7 @@ import {
   type SaveReload,
 } from '@/lib/claim-save';
 import { calculateClaimTotals, groupSizeWeights } from '@/lib/split-calculator';
+import { MAX_GROUP_SIZE, MIN_GROUP_SIZE, parseGroupSize } from '@/lib/group-size';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -107,7 +108,12 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
 
   // --- State ---
   const [name, setName] = useState('');
-  const [groupSize, setGroupSize] = useState(1);
+  // The group size as typed (#410): kept as text, so the field can be cleared and typed again, and
+  // checked (parseGroupSize) when it loses focus and on Join, where a size out of range is refused
+  // with a message rather than changed
+  const [groupSizeText, setGroupSizeText] = useState('1');
+  const [groupSizeError, setGroupSizeError] = useState(false);
+  const groupSizeRef = useRef<HTMLInputElement>(null);
   // People are tracked by id, not index: someone's index changes when anyone listed before them
   // is removed, on any device. Indexes are looked up in the session as last loaded (below).
   // This device's person, once it joined or resumed
@@ -155,7 +161,9 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   const [showImage, setShowImage] = useState(false);
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
-  const [editingGroupSize, setEditingGroupSize] = useState(1);
+  // The edit form's group size, as text like the join form's
+  const [editingGroupSizeText, setEditingGroupSizeText] = useState('1');
+  const [editingGroupSizeError, setEditingGroupSizeError] = useState(false);
   const [splittingItemIdx, setSplittingItemIdx] = useState<number | null>(null);
   const [splitQty, setSplitQty] = useState('');
   const [removeFor, setRemoveFor] = useState<{ id: string; name: string } | null>(null);
@@ -666,6 +674,12 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
       toast.error(t('pleaseEnterName'));
       return;
     }
+    const groupSize = parseGroupSize(groupSizeText);
+    if (groupSize === null) {
+      setGroupSizeError(true);
+      groupSizeRef.current?.focus();
+      return;
+    }
     startJoin({ name: trimmed, ...(groupSize > 1 ? { groupSize } : {}) });
   }
 
@@ -1108,6 +1122,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
 
   // --- Step 1: Enter name ---
   if (!hasJoined) {
+    const joinGroupSize = parseGroupSize(groupSizeText);
     return (
       <div className="space-y-6 pb-8">
         {/* Header */}
@@ -1225,16 +1240,43 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
               </label>
               <div className="flex items-center gap-2">
                 <Input
+                  ref={groupSizeRef}
                   id="group-size"
                   type="number"
-                  min={1}
-                  max={20}
-                  value={groupSize}
-                  onChange={(e) => setGroupSize(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
+                  min={MIN_GROUP_SIZE}
+                  max={MAX_GROUP_SIZE}
+                  step={1}
+                  value={groupSizeText}
+                  onChange={(e) => {
+                    setGroupSizeText(e.target.value);
+                    setGroupSizeError(false);
+                  }}
+                  onBlur={(e) => setGroupSizeError(parseGroupSize(e.currentTarget.value) === null)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleJoin();
+                  }}
+                  aria-invalid={groupSizeError || undefined}
+                  aria-describedby="group-size-note"
                   className="w-20"
                   data-testid="group-size-input"
                 />
-                <span className="text-xs text-muted-foreground">{t('groupSizeHint')}</span>
+                {/* One note beside the field, so the message doesn't move the buttons below it (a
+                    click on Join right after typing lands after the field's blur): the hint, the
+                    message for a size out of range, or who a size over 1 stands for, so a typo
+                    shows before joining */}
+                {groupSizeError ? (
+                  <span id="group-size-note" className="text-xs text-destructive" data-testid="group-size-error">
+                    {t('groupSizeInvalid', { min: MIN_GROUP_SIZE, max: MAX_GROUP_SIZE })}
+                  </span>
+                ) : joinGroupSize !== null && joinGroupSize > 1 ? (
+                  <span id="group-size-note" className="text-xs text-muted-foreground" data-testid="group-size-preview">
+                    {t('groupSizePreview', { count: joinGroupSize - 1 })}
+                  </span>
+                ) : (
+                  <span id="group-size-note" className="text-xs text-muted-foreground">
+                    {t('groupSizeHint')}
+                  </span>
+                )}
               </div>
             </div>
             {/* Join as a listed person nobody has joined as yet (e.g. the payer); people who
@@ -1384,16 +1426,23 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
                 </Avatar>
                 {editingPersonId === person.id ? (
                   <form
-                    className="flex flex-1 items-center gap-1"
+                    className="flex flex-1 flex-wrap items-center gap-1"
+                    // The group size is checked below, with a translated message, not by the browser
+                    noValidate
                     onSubmit={(e) => {
                       e.preventDefault();
                       if (!editingName.trim() || !personToken) return;
+                      const groupSize = parseGroupSize(editingGroupSizeText);
+                      if (groupSize === null) {
+                        setEditingGroupSizeError(true);
+                        return;
+                      }
                       editPersonName.mutate({
                         token,
                         personToken,
                         targetId: person.id,
                         newName: editingName.trim(),
-                        groupSize: editingGroupSize,
+                        groupSize,
                       });
                     }}
                   >
@@ -1407,10 +1456,17 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
                     />
                     <Input
                       type="number"
-                      min={1}
-                      max={20}
-                      value={editingGroupSize}
-                      onChange={(e) => setEditingGroupSize(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
+                      min={MIN_GROUP_SIZE}
+                      max={MAX_GROUP_SIZE}
+                      step={1}
+                      value={editingGroupSizeText}
+                      onChange={(e) => {
+                        setEditingGroupSizeText(e.target.value);
+                        setEditingGroupSizeError(false);
+                      }}
+                      onBlur={(e) => setEditingGroupSizeError(parseGroupSize(e.currentTarget.value) === null)}
+                      aria-invalid={editingGroupSizeError || undefined}
+                      aria-describedby={editingGroupSizeError ? `edit-group-size-error-${idx}` : undefined}
                       className="h-7 w-14 text-sm"
                       aria-label={t('groupSize')}
                       data-testid={`edit-group-size-${idx}`}
@@ -1437,6 +1493,15 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
                     >
                       <X className="h-3.5 w-3.5" />
                     </Button>
+                    {editingGroupSizeError && (
+                      <p
+                        id={`edit-group-size-error-${idx}`}
+                        className="basis-full text-xs text-destructive"
+                        data-testid={`edit-group-size-error-${idx}`}
+                      >
+                        {t('groupSizeInvalid', { min: MIN_GROUP_SIZE, max: MAX_GROUP_SIZE })}
+                      </p>
+                    )}
                   </form>
                 ) : (
                   <>
@@ -1452,7 +1517,8 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
                       onClick={() => {
                         setEditingPersonId(person.id);
                         setEditingName(person.name);
-                        setEditingGroupSize(person.groupSize ?? 1);
+                        setEditingGroupSizeText(String(person.groupSize ?? 1));
+                        setEditingGroupSizeError(false);
                       }}
                       className="text-muted-foreground hover:text-foreground p-1"
                       aria-label={t('editName')}

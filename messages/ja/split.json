@@ -149,7 +149,9 @@
     "finalizeDescription": "全員の金額が計算されて分割がロックされ、以降は誰も選択を変更できなくなります。",
     "splitFinalized": "分割が確定されました！",
     "groupSize": "グループの人数",
-    "groupSizeHint": "カップルやグループの場合は2以上を入力"
+    "groupSizeHint": "カップルやグループの場合は2以上を入力",
+    "groupSizeInvalid": "{min}〜{max}の整数を入力してください",
+    "groupSizePreview": "{count, plural, other {あなたと他#人}}"
   },
   "result": {
     "loading": "割り勘を読み込み中...",

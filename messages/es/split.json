@@ -149,7 +149,9 @@
     "finalizeDescription": "Se calcularán los totales de cada persona y la división se bloqueará, así que nadie podrá cambiar sus selecciones después.",
     "splitFinalized": "¡División finalizada!",
     "groupSize": "Personas en tu grupo",
-    "groupSizeHint": "Ingresa 2+ si te unes como pareja o grupo"
+    "groupSizeHint": "Ingresa 2+ si te unes como pareja o grupo",
+    "groupSizeInvalid": "Ingresa un número entero del {min} al {max}",
+    "groupSizePreview": "{count, plural, one {Tú y # persona más} other {Tú y # personas más}}"
   },
   "result": {
     "loading": "Cargando división...",

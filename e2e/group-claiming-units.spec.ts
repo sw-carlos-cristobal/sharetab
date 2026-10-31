@@ -1,4 +1,4 @@
-import { test, expect, request } from '@playwright/test';
+import { test, expect, request, type Browser, type Locator } from '@playwright/test';
 import { joinGuestSession, trpcMutation } from './helpers';
 
 const BASE = process.env.BASE_URL || 'http://localhost:3001';
@@ -488,5 +488,108 @@ test.describe('Group claiming units', () => {
     expect(session.people[0].groupSize).toBe(3);
 
     await ctx.dispose();
+  });
+});
+
+// #410: the group-size fields turned an empty value straight back into 1, so Backspace then 2 gave 12
+test.describe('Group size fields keep what is typed', () => {
+  async function openClaimPage(browser: Browser, merchantName: string) {
+    const ctx = await request.newContext({ baseURL: BASE });
+    const createRes = await trpcMutation(ctx, 'guest.createClaimSession', {
+      receiptData: { merchantName, subtotal: 2000, tax: 0, tip: 0, total: 2000, currency: 'USD' },
+      items: [
+        { name: 'Shared Plate', quantity: 1, unitPrice: 1000, totalPrice: 1000 },
+        { name: 'Drink', quantity: 1, unitPrice: 1000, totalPrice: 1000 },
+      ],
+      creatorName: 'Host',
+      paidByName: 'Host',
+    });
+    const shareToken = (await createRes.json()).result?.data?.json?.shareToken;
+    await ctx.dispose();
+
+    const browserCtx = await browser.newContext();
+    const page = await browserCtx.newPage();
+    await page.goto(`/en/split/${shareToken}/claim`);
+    await expect(page.getByTestId('claim-join-form')).toBeVisible({ timeout: 15000 });
+    return { page, browserCtx };
+  }
+
+  // What a person does by hand: put the cursor after the 1, delete it, type the new size
+  async function retype(field: Locator, text: string) {
+    await field.click();
+    await field.press('End');
+    await field.press('Backspace');
+    await field.pressSequentially(text);
+  }
+
+  test('clearing the join form field and typing 2 joins as 2', async ({ browser }) => {
+    const { page, browserCtx } = await openClaimPage(browser, 'Retype Join');
+
+    await page.getByTestId('claim-name-input').fill('Ana & Ben');
+    const groupSize = page.getByTestId('group-size-input');
+    await retype(groupSize, '2');
+    await expect(groupSize).toHaveValue('2');
+    // Who the size stands for shows before joining, so a typo would too
+    await expect(page.getByTestId('group-size-preview')).toHaveText('You and 1 other person');
+
+    await page.getByTestId('claim-join-btn').click();
+    await expect(page.locator('[data-testid^="claim-item-"]').first()).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId('group-badge-1')).toHaveText(' (×2)');
+
+    await browserCtx.close();
+  });
+
+  test('a join form size outside 1 to 20 is refused with a message, not changed', async ({ browser }) => {
+    const { page, browserCtx } = await openClaimPage(browser, 'Refuse Join');
+
+    await page.getByTestId('claim-name-input').fill('Crowd');
+    const groupSize = page.getByTestId('group-size-input');
+    await groupSize.fill('25');
+    await page.getByTestId('claim-join-btn').click();
+
+    await expect(page.getByTestId('group-size-error')).toHaveText('Enter a whole number from 1 to 20');
+    await expect(groupSize).toHaveValue('25');
+    await expect(groupSize).toHaveAttribute('aria-invalid', 'true');
+    await expect(page.getByTestId('claim-join-form')).toBeVisible();
+
+    // An empty field is refused too once it loses focus, and typing clears the message
+    await groupSize.fill('');
+    await page.getByTestId('claim-name-input').focus();
+    await expect(page.getByTestId('group-size-error')).toBeVisible();
+    await groupSize.fill('3');
+    await expect(page.getByTestId('group-size-error')).toHaveCount(0);
+    await expect(page.getByTestId('group-size-preview')).toHaveText('You and 2 other people');
+
+    await page.getByTestId('claim-join-btn').click();
+    await expect(page.locator('[data-testid^="claim-item-"]').first()).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId('group-badge-1')).toHaveText(' (×3)');
+
+    await browserCtx.close();
+  });
+
+  test('the edit form takes a retyped size and refuses one out of range', async ({ browser }) => {
+    const { page, browserCtx } = await openClaimPage(browser, 'Retype Edit');
+
+    await page.getByTestId('claim-name-input').fill('Dee');
+    await page.getByTestId('claim-join-btn').click();
+    await expect(page.locator('[data-testid^="claim-item-"]').first()).toBeVisible({ timeout: 15000 });
+
+    await page.getByTestId('edit-person-1').click();
+    const groupSize = page.getByTestId('edit-group-size-1');
+    await expect(groupSize).toHaveValue('1');
+
+    // Out of range: the message shows and the form stays open with the value as typed
+    await groupSize.fill('0');
+    await page.getByRole('button', { name: 'Save name' }).click();
+    await expect(page.getByTestId('edit-group-size-error-1')).toHaveText('Enter a whole number from 1 to 20');
+    await expect(groupSize).toHaveValue('0');
+
+    await retype(groupSize, '2');
+    await expect(groupSize).toHaveValue('2');
+    await expect(page.getByTestId('edit-group-size-error-1')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Save name' }).click();
+    await expect(page.getByTestId('group-badge-1')).toHaveText(' (×2)');
+
+    await browserCtx.close();
   });
 });
