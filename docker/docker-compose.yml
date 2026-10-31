@@ -14,6 +14,8 @@ services:
       - DB_NAME=${DB_NAME:-sharetab}
       - DB_WAIT_SECONDS=${DB_WAIT_SECONDS:-}
       - ALLOW_EMPTY_EXTERNAL_DB=${ALLOW_EMPTY_EXTERNAL_DB:-}
+      # true starts only the bundled database, for a restore (README "Restoring a backup")
+      - SHARETAB_MAINTENANCE=${SHARETAB_MAINTENANCE:-}
       - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-}
       - AUTH_SECRET=${AUTH_SECRET:-}

@@ -8,7 +8,8 @@
 # migrations, and the packages the Dockerfile adds beside the standalone
 # build (Meridian and what it loads at runtime). Then it runs the image
 # against PostgreSQL in its own container (DATABASE_URL set, the bundled
-# server off), over TLS with a self-signed certificate.
+# server off), over TLS with a self-signed certificate. Backups are restored
+# the README's way, in maintenance mode (SHARETAB_MAINTENANCE).
 #
 # CI runs it on every pull request and before publishing an image. Run it
 # before pushing a Docker, entrypoint, or dependency change:
@@ -92,6 +93,9 @@ EXT_PGDATA_OLD="$CONTAINER-pgdata-old"
 BOOT="$CONTAINER-boot"
 # ShareTab on the overlay's database
 OVERLAY_APP="$CONTAINER-overlay"
+# Maintenance mode for a restore, and a fresh install a backup is restored into
+MAINT="$CONTAINER-maint"
+FRESH="$CONTAINER-fresh"
 # Temporary files and folders made on this machine, removed on exit
 TEMP_PATHS=()
 # The overlay's Compose project
@@ -148,7 +152,7 @@ cleanup() {
     docker logs --tail 200 "$CONTAINER" 2>&1 || true
   fi
   if [[ "$FAILED" == true ]]; then
-    for c in "$EXT_APP" "$EXT_ONESHOT" "$EXT_PG" "$BOOT" "$OVERLAY_APP"; do
+    for c in "$EXT_APP" "$EXT_ONESHOT" "$EXT_PG" "$BOOT" "$OVERLAY_APP" "$MAINT" "$FRESH"; do
       if docker inspect "$c" >/dev/null 2>&1; then
         printf '\n== %s logs (last 200 lines)\n' "$c"
         docker logs --tail 200 "$c" 2>&1 || true
@@ -156,7 +160,9 @@ cleanup() {
     done
   fi
   # --keep keeps only the main container
-  docker rm -f -v "$EXT_APP" "$EXT_ONESHOT" "$EXT_PG" "$BOOT" "$OVERLAY_APP" >/dev/null 2>&1 || true
+  # $FRESH before $MAINT, whose volumes it uses
+  docker rm -f "$FRESH" >/dev/null 2>&1 || true
+  docker rm -f -v "$EXT_APP" "$EXT_ONESHOT" "$EXT_PG" "$BOOT" "$OVERLAY_APP" "$MAINT" >/dev/null 2>&1 || true
   if ((${#TEMP_PATHS[@]})); then
     rm -rf "${TEMP_PATHS[@]}"
   fi
@@ -222,6 +228,21 @@ add_user() {
 # Prints "t" when the case-insensitive email index exists, "f" otherwise.
 has_email_index() {
   db -c "SELECT to_regclass('\"User_email_lower_key\"') IS NOT NULL"
+}
+
+# Prints a digest of the bundled database's public schema: each table's name
+# and rows (in a fixed order), and every index. Equal digests mean the same
+# tables, rows and indexes. Usage: db_digest [container]
+db_digest() {
+  docker exec "${1:-$CONTAINER}" su-exec postgres psql -h /run/postgresql -d sharetab \
+    -v ON_ERROR_STOP=1 -tA -c "
+    SELECT md5(coalesce(string_agg(c.relname || ':' || (xpath('/row/h/text()', query_to_xml(
+      format('SELECT md5(coalesce(string_agg(t::text, %L ORDER BY t::text), %L)) AS h FROM %I t',
+        '|', '', c.relname), false, true, '')))[1]::text, ',' ORDER BY c.relname), ''))
+      || ' ' || (SELECT md5(coalesce(string_agg(indexdef, ';' ORDER BY indexname), ''))
+                 FROM pg_indexes WHERE schemaname = 'public')
+    FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' AND c.relkind = 'r'"
 }
 
 # Copy the Claude login in $MERIDIAN_AUTH into a scratch volume owned by the
@@ -579,6 +600,123 @@ grep -qF 'database system was shut down at' <<<"$restart_log" ||
   fail "No clean-shutdown record from PostgreSQL after a failed step."
 docker rm -f -v "$BOOT" >/dev/null
 
+# ── Backups ────────────────────────────────────────────────────
+
+# Wait until a container prints its maintenance-mode banner, and check that
+# nothing past it ran. Usage: wait_maintenance <container> <seconds>
+wait_maintenance() {
+  wait_for_log "$1" "ShareTab maintenance mode" "$2"
+  local log
+  log=$(docker logs "$1" 2>&1)
+  if grep -qF 'Running database migrations' <<<"$log" || grep -qF 'Starting ShareTab...' <<<"$log"; then
+    fail "$1 ran the schema step or started ShareTab in maintenance mode."
+  fi
+  if docker exec "$1" wget -qO- http://127.0.0.1:3000/api/health >/dev/null 2>&1; then
+    fail "ShareTab answers in maintenance mode ($1)."
+  fi
+}
+
+# The README's restore, in a container in maintenance mode: replace the
+# database with an empty one, load the dump (sharetab.dump with pg_restore, or
+# with "sql" the plain-SQL backup.sql, as older backups are, with psql), and
+# replace the uploads with the backup's (docker cp, as docker compose cp does).
+# Usage: restore_backup <container> <backup dir> [sql]
+restore_backup() {
+  docker exec "$1" su-exec postgres psql -v ON_ERROR_STOP=1 \
+    -c 'DROP DATABASE sharetab WITH (FORCE)' -c 'CREATE DATABASE sharetab OWNER sharetab' >/dev/null
+  if [[ "${3:-}" == sql ]]; then
+    docker exec -i "$1" su-exec postgres psql -U sharetab -d sharetab -1 -v ON_ERROR_STOP=1 -q \
+      <"$2/backup.sql" >/dev/null
+  else
+    docker exec -i "$1" su-exec postgres pg_restore -U sharetab -d sharetab \
+      --no-owner --no-privileges --single-transaction <"$2/sharetab.dump"
+  fi
+  docker exec "$1" sh -c 'rm -rf /app/uploads/*'
+  docker cp "$2/uploads/." "$1:/app/uploads/"
+}
+
+# Fails unless the uploads in <container> are the backup's: the file from
+# before the backup and not the one from after it.
+check_uploads_restored() {
+  docker exec "$1" test -f /app/uploads/receipts/smoke-before.txt ||
+    fail "The restore didn't bring back the backup's uploads ($1)."
+  if docker exec "$1" test -e /app/uploads/receipts/smoke-after.txt; then
+    fail "An upload from after the backup survived the restore ($1)."
+  fi
+}
+
+section "Backup and restore an existing install, in maintenance mode"
+# Backed up the README's way (pg_dump -Fc and a copy of the uploads), then
+# changed the way a later build or later use would: a user deleted and one
+# added, a new table with a row (pg_restore --clean would keep it, and the
+# schema step would then refuse to drop it), and a new upload.
+backup_dir=$(mktemp -d)
+TEMP_PATHS+=("$backup_dir")
+add_user bk-1 'before-backup@example.com'
+docker exec "$CONTAINER" sh -c 'echo before > /app/uploads/receipts/smoke-before.txt'
+digest_at_backup=$(db_digest)
+docker exec "$CONTAINER" su-exec postgres pg_dump -U sharetab -Fc sharetab >"$backup_dir/sharetab.dump"
+# The plain-SQL dump the README documented before -Fc, restored below too
+docker exec "$CONTAINER" su-exec postgres pg_dump -U sharetab sharetab >"$backup_dir/backup.sql"
+docker cp "$CONTAINER:/app/uploads" "$backup_dir/uploads"
+db -c "DELETE FROM \"User\" WHERE id = 'bk-1'" \
+  -c 'CREATE TABLE "SmokeNewer" (id int)' -c 'INSERT INTO "SmokeNewer" VALUES (1)'
+add_user bk-2 'after-backup@example.com'
+docker exec "$CONTAINER" sh -c 'echo after > /app/uploads/receipts/smoke-after.txt'
+[[ "$(db_digest)" != "$digest_at_backup" ]] || fail "The changes after the backup didn't change the digest."
+
+# The same data folders, with SHARETAB_MAINTENANCE set (as a Compose or
+# Unraid restart with the variable set does)
+docker stop -t 30 "$CONTAINER" >/dev/null
+docker run -d --name "$MAINT" --label sharetab-smoke --volumes-from "$CONTAINER" \
+  -e NEXTAUTH_SECRET="$secret" -e AUTH_SECRET="$secret" -e SHARETAB_MAINTENANCE=true "$IMAGE" >/dev/null
+wait_maintenance "$MAINT" 60
+restore_backup "$MAINT" "$backup_dir"
+[[ "$(db_digest "$MAINT")" == "$digest_at_backup" ]] || fail "The restored database isn't the backup's."
+check_uploads_restored "$MAINT"
+stop_start=$SECONDS
+docker stop -t 30 "$MAINT" >/dev/null
+((SECONDS - stop_start < 10)) || fail "docker stop took $((SECONDS - stop_start))s in maintenance mode."
+[[ "$(docker inspect -f '{{.State.ExitCode}}' "$MAINT")" == 0 ]] ||
+  fail "Maintenance mode exited non-zero on docker stop."
+grep -qF 'Stopping PostgreSQL' <<<"$(docker logs --tail 20 "$MAINT" 2>&1)" ||
+  fail "docker stop in maintenance mode didn't stop PostgreSQL."
+# Not -v: its volumes are the main container's
+docker rm "$MAINT" >/dev/null
+
+# Back to normal, on the restored data: the schema step must accept it
+lines_before=$(docker logs "$CONTAINER" 2>&1 | wc -l)
+docker start "$CONTAINER" >/dev/null
+wait_healthy "start after a restore"
+restart_log=$(docker logs "$CONTAINER" 2>&1 | tail -n +"$((lines_before + 1))")
+if grep -E 'not properly shut down|automatic recovery' <<<"$restart_log"; then
+  fail "PostgreSQL recovered from a crash after a stop in maintenance mode."
+fi
+[[ "$(db_digest)" == "$digest_at_backup" ]] || fail "After the restart, the database isn't the backup's."
+check_uploads_restored "$CONTAINER"
+
+section "Restore an older plain-SQL backup into a fresh install"
+# Maintenance mode on empty data folders creates the empty database first
+docker run -d --name "$MAINT" --label sharetab-smoke \
+  -e NEXTAUTH_SECRET="$secret" -e AUTH_SECRET="$secret" -e SHARETAB_MAINTENANCE=true "$IMAGE" >/dev/null
+wait_maintenance "$MAINT" 90
+grep -qF 'PostgreSQL initialized.' <<<"$(docker logs "$MAINT" 2>&1)" ||
+  fail "Maintenance mode on an empty folder didn't initialize the database."
+restore_backup "$MAINT" "$backup_dir" sql
+docker stop -t 30 "$MAINT" >/dev/null
+docker run -d --name "$FRESH" --label sharetab-smoke --volumes-from "$MAINT" \
+  -e NEXTAUTH_SECRET="$secret" -e AUTH_SECRET="$secret" -e AUTH_TRUST_HOST=true "$IMAGE" >/dev/null
+wait_healthy "fresh install after a restore" "$FRESH"
+[[ "$(db_digest "$FRESH")" == "$digest_at_backup" ]] || fail "The fresh install's database isn't the backup's."
+check_uploads_restored "$FRESH"
+docker rm -f "$FRESH" >/dev/null
+docker rm -f -v "$MAINT" >/dev/null
+
+if [[ -n "$MERIDIAN_AUTH" ]]; then
+  # The restore ran with the login mounted (maintenance mode shares it).
+  check_login_unchanged
+fi
+
 # ── External database ──────────────────────────────────────────
 
 # SQL against the external database over its Unix socket, as its superuser;
@@ -694,6 +832,23 @@ if docker compose version >/dev/null 2>&1; then
   if grep -qF 'smokepw' <<<"$(docker logs "$OVERLAY_APP" 2>&1)"; then
     fail "The log shows the overlay's database password."
   fi
+  # The README's backup and restore for the overlay's database, with ShareTab
+  # stopped: a user added after the backup must be gone afterwards
+  overlay_dump=$(mktemp)
+  TEMP_PATHS+=("$overlay_dump")
+  compose_overlay exec -T postgres pg_dump -U smoke -Fc smokedb >"$overlay_dump"
+  overlay_users=$(compose_overlay exec -T postgres psql -U smoke -d smokedb -tAc 'SELECT count(*) FROM "User"')
+  compose_overlay exec -T postgres psql -U smoke -d smokedb -v ON_ERROR_STOP=1 -qc \
+    "INSERT INTO \"User\" (id, email, \"updatedAt\") VALUES ('ov-1', 'overlay@example.com', now())"
+  docker stop -t 30 "$OVERLAY_APP" >/dev/null
+  compose_overlay exec -T postgres psql -U smoke -d postgres -v ON_ERROR_STOP=1 \
+    -c 'DROP DATABASE smokedb WITH (FORCE)' -c 'CREATE DATABASE smokedb' >/dev/null
+  compose_overlay exec -T postgres pg_restore -U smoke -d smokedb \
+    --no-owner --no-privileges --single-transaction <"$overlay_dump"
+  docker start "$OVERLAY_APP" >/dev/null
+  wait_healthy "ShareTab on the overlay's database, after a restore" "$OVERLAY_APP"
+  [[ "$(compose_overlay exec -T postgres psql -U smoke -d smokedb -tAc 'SELECT count(*) FROM "User"')" == "$overlay_users" ]] ||
+    fail "The restore of the overlay's database didn't bring back the backed-up users."
   docker rm -f -v "$OVERLAY_APP" >/dev/null
   compose_overlay down -v >/dev/null 2>&1 || true
   echo "ShareTab runs on the overlay's database, which takes its URL's credentials and not others."
@@ -824,6 +979,19 @@ fi
 if grep -qF 'Stopping PostgreSQL' <<<"$(docker logs --tail 20 "$EXT_APP" 2>&1)"; then
   fail "docker stop tried to stop a bundled PostgreSQL that wasn't running."
 fi
+
+section "External database: maintenance mode starts nothing"
+run_external "$EXT_ONESHOT" "$EXT_URL" -e SHARETAB_MAINTENANCE=true
+wait_maintenance "$EXT_ONESHOT" 30
+if grep -qF 'Waiting for the database' <<<"$(docker logs "$EXT_ONESHOT" 2>&1)"; then
+  fail "Maintenance mode connected to the external database."
+fi
+stop_start=$SECONDS
+docker stop -t 30 "$EXT_ONESHOT" >/dev/null
+((SECONDS - stop_start < 10)) || fail "docker stop took $((SECONDS - stop_start))s in external maintenance mode."
+[[ "$(docker inspect -f '{{.State.ExitCode}}' "$EXT_ONESHOT")" == 0 ]] ||
+  fail "External maintenance mode exited non-zero on docker stop."
+docker rm -f -v "$EXT_ONESHOT" >/dev/null
 
 section "External database: a start without DATABASE_URL refuses"
 # As after a Compose upgrade run without the overlay file. Without

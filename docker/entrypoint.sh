@@ -79,6 +79,33 @@ db_step() {
   run_step su-exec nextjs node /app/db.mjs "$@"
 }
 
+# SHARETAB_MAINTENANCE=true starts the bundled database and nothing else, so
+# a restore (README "Restoring a backup") has it to itself: the app's
+# connections would make DROP DATABASE fail, and its schema step would create
+# tables a restore then collides with.
+case "$(echo "${SHARETAB_MAINTENANCE:-}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | tr '[:upper:]' '[:lower:]')" in
+  true|1|yes|on)    MAINTENANCE=true ;;
+  ''|false|0|no|off) MAINTENANCE=false ;;
+  *)
+    echo "WARNING: SHARETAB_MAINTENANCE is set to something other than true or false; starting ShareTab normally."
+    MAINTENANCE=false
+    ;;
+esac
+
+# Steps for maintenance mode, run with run_step so a stop is handled at once.
+# shellcheck disable=SC2317 # called through run_step
+wait_while_postgres_runs() {
+  while su-exec postgres pg_ctl -D "$PGDATA" status >/dev/null 2>&1; do
+    sleep 5
+  done
+}
+# shellcheck disable=SC2317 # called through run_step
+wait_for_stop() {
+  while :; do
+    sleep 3600
+  done
+}
+
 # A DATABASE_URL means an external PostgreSQL server: the bundled one isn't
 # initialized or started, and DB_USER/DB_PASSWORD/DB_NAME are ignored.
 if [ -n "$DATABASE_URL" ]; then
@@ -183,6 +210,33 @@ elif [ ! -f "$MODE_MARKER" ] && [ -s "$PGDATA/PG_VERSION" ]; then
   echo "WARNING: DATABASE_URL points to an external database, so the bundled database in"
   echo "WARNING: $PGDATA is not used. If it holds data you want, see the README's"
   echo "WARNING: \"Moving to an external database\"."
+fi
+
+if [ "$MAINTENANCE" = true ]; then
+  echo ""
+  echo "============================================"
+  echo "  ShareTab maintenance mode"
+  echo "============================================"
+  if [ "$DB_MODE" = bundled ]; then
+    echo "  PostgreSQL is running; ShareTab is not started."
+    echo "  Database:       $DB_NAME, user $DB_USER"
+  else
+    echo "  ShareTab is not started. The database is external (DATABASE_URL),"
+    echo "  so nothing else runs here: restore into that server directly."
+  fi
+  echo "  To start ShareTab, unset SHARETAB_MAINTENANCE and restart the container."
+  echo "============================================"
+  echo ""
+  if [ "$DB_MODE" = bundled ]; then
+    run_step wait_while_postgres_runs
+    # Not stopped by this script, so the EXIT trap has nothing to stop (and a
+    # stale postmaster.pid must not make it signal another process)
+    PG_STARTED=false
+    echo "ERROR: PostgreSQL stopped on its own in maintenance mode; see its log above."
+    exit 1
+  fi
+  run_step wait_for_stop
+  exit 0
 fi
 
 # Both modes. For an external server, waits for it to come up; for the bundled

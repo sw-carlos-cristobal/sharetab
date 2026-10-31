@@ -183,6 +183,15 @@
     Display="advanced"
     Required="false"
     Mask="false"></Config>
+  <Config
+    Name="Maintenance mode"
+    Target="SHARETAB_MAINTENANCE"
+    Default=""
+    Description="Set to true to start only the bundled database, without ShareTab, while you restore a backup (see the README's Restoring a backup). The container shows as unhealthy meanwhile. Clear it to run ShareTab again."
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false"></Config>
 
   <!-- AI -->
   <Config
