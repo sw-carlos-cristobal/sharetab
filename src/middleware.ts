@@ -4,6 +4,7 @@ import { getToken } from 'next-auth/jwt';
 import createIntlMiddleware from 'next-intl/middleware';
 import { routing } from '@/i18n/routing';
 import { isSupportedLocale, withLocalePrefix } from '@/lib/locale-paths';
+import { sessionSecrets, usesSecureCookie } from '@/server/lib/session-cookie';
 
 const intlMiddleware = createIntlMiddleware(routing);
 
@@ -30,18 +31,15 @@ export async function middleware(request: NextRequest) {
   );
   const strippedPathname = localePrefix ? pathname.replace(`/${localePrefix}`, '') || '/' : pathname;
 
-  const isSecure = request.nextUrl.protocol === 'https:';
-  const cookieName = isSecure ? '__Secure-authjs.session-token' : 'authjs.session-token';
-
+  // The cookie Auth.js set: named by AUTH_URL/NEXTAUTH_URL's scheme, not this request's (#409)
+  const secret = sessionSecrets();
   let token;
-  try {
-    token = await getToken({
-      req: request,
-      cookieName,
-      ...(process.env.AUTH_SECRET !== undefined ? { secret: process.env.AUTH_SECRET } : {}),
-    });
-  } catch {
-    // Malformed or forged JWT — treat as unauthenticated
+  if (secret.length > 0) {
+    try {
+      token = await getToken({ req: request, secret, secureCookie: usesSecureCookie(request.headers) });
+    } catch {
+      // Malformed or forged JWT — treat as unauthenticated
+    }
   }
 
   const cookieLocale = request.cookies.get('NEXT_LOCALE')?.value;
