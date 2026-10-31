@@ -96,6 +96,8 @@ OVERLAY_APP="$CONTAINER-overlay"
 # Maintenance mode for a restore, and a fresh install a backup is restored into
 MAINT="$CONTAINER-maint"
 FRESH="$CONTAINER-fresh"
+# The overlay's ShareTab in maintenance mode, for its restore
+OVERLAY_MAINT="$CONTAINER-overlay-maint"
 # Temporary files and folders made on this machine, removed on exit
 TEMP_PATHS=()
 # The overlay's Compose project
@@ -152,7 +154,7 @@ cleanup() {
     docker logs --tail 200 "$CONTAINER" 2>&1 || true
   fi
   if [[ "$FAILED" == true ]]; then
-    for c in "$EXT_APP" "$EXT_ONESHOT" "$EXT_PG" "$BOOT" "$OVERLAY_APP" "$MAINT" "$FRESH"; do
+    for c in "$EXT_APP" "$EXT_ONESHOT" "$EXT_PG" "$BOOT" "$OVERLAY_APP" "$OVERLAY_MAINT" "$MAINT" "$FRESH"; do
       if docker inspect "$c" >/dev/null 2>&1; then
         printf '\n== %s logs (last 200 lines)\n' "$c"
         docker logs --tail 200 "$c" 2>&1 || true
@@ -162,7 +164,7 @@ cleanup() {
   # --keep keeps only the main container
   # $FRESH before $MAINT, whose volumes it uses
   docker rm -f "$FRESH" >/dev/null 2>&1 || true
-  docker rm -f -v "$EXT_APP" "$EXT_ONESHOT" "$EXT_PG" "$BOOT" "$OVERLAY_APP" "$MAINT" >/dev/null 2>&1 || true
+  docker rm -f -v "$EXT_APP" "$EXT_ONESHOT" "$EXT_PG" "$BOOT" "$OVERLAY_APP" "$OVERLAY_MAINT" "$MAINT" >/dev/null 2>&1 || true
   if ((${#TEMP_PATHS[@]})); then
     rm -rf "${TEMP_PATHS[@]}"
   fi
@@ -602,28 +604,44 @@ docker rm -f -v "$BOOT" >/dev/null
 
 # ── Backups ────────────────────────────────────────────────────
 
-# Wait until a container prints its maintenance-mode banner, and check that
-# nothing past it ran. Usage: wait_maintenance <container> <seconds>
-wait_maintenance() {
-  wait_for_log "$1" "ShareTab maintenance mode" "$2"
+# Fails if <container> went past its maintenance-mode banner: a database
+# connection made or attempted (db.mjs logs either way), the schema step, or
+# the app answering. Usage: check_maintenance <container>
+check_maintenance() {
   local log
   log=$(docker logs "$1" 2>&1)
-  if grep -qF 'Running database migrations' <<<"$log" || grep -qF 'Starting ShareTab...' <<<"$log"; then
-    fail "$1 ran the schema step or started ShareTab in maintenance mode."
+  if grep -qE 'Database is ready|Waiting for the database|Running database migrations|Starting ShareTab\.\.\.' <<<"$log"; then
+    fail "$1 went past the maintenance-mode banner."
   fi
   if docker exec "$1" wget -qO- http://127.0.0.1:3000/api/health >/dev/null 2>&1; then
     fail "ShareTab answers in maintenance mode ($1)."
   fi
 }
 
-# The README's restore, in a container in maintenance mode: replace the
-# database with an empty one, load the dump (sharetab.dump with pg_restore, or
+# Wait until a container prints its maintenance-mode banner, then long enough
+# for a start that went on past it to reach the database (db.mjs logs within
+# seconds), and check that nothing did. Usage: wait_maintenance <container> <seconds>
+wait_maintenance() {
+  wait_for_log "$1" "ShareTab maintenance mode" "$2"
+  sleep 10
+  check_maintenance "$1"
+}
+
+# The README's restore, in a container in maintenance mode: check the dump,
+# replace the database with an empty one (a plain DROP, which fails if
+# anything is connected), load the dump (sharetab.dump with pg_restore, or
 # with "sql" the plain-SQL backup.sql, as older backups are, with psql), and
 # replace the uploads with the backup's (docker cp, as docker compose cp does).
 # Usage: restore_backup <container> <backup dir> [sql]
 restore_backup() {
+  if [[ "${3:-}" == sql ]]; then
+    grep -qF 'PostgreSQL database dump complete' <<<"$(tail -n 5 "$2/backup.sql")" ||
+      fail "The plain-SQL dump has no completion line."
+  else
+    docker exec -i "$1" pg_restore -f /dev/null <"$2/sharetab.dump"
+  fi
   docker exec "$1" su-exec postgres psql -v ON_ERROR_STOP=1 \
-    -c 'DROP DATABASE sharetab WITH (FORCE)' -c 'CREATE DATABASE sharetab OWNER sharetab' >/dev/null
+    -c 'DROP DATABASE sharetab' -c 'CREATE DATABASE sharetab OWNER sharetab' >/dev/null
   if [[ "${3:-}" == sql ]]; then
     docker exec -i "$1" su-exec postgres psql -U sharetab -d sharetab -1 -v ON_ERROR_STOP=1 -q \
       <"$2/backup.sql" >/dev/null
@@ -674,6 +692,7 @@ wait_maintenance "$MAINT" 60
 restore_backup "$MAINT" "$backup_dir"
 [[ "$(db_digest "$MAINT")" == "$digest_at_backup" ]] || fail "The restored database isn't the backup's."
 check_uploads_restored "$MAINT"
+check_maintenance "$MAINT"
 stop_start=$SECONDS
 docker stop -t 30 "$MAINT" >/dev/null
 ((SECONDS - stop_start < 10)) || fail "docker stop took $((SECONDS - stop_start))s in maintenance mode."
@@ -703,6 +722,7 @@ wait_maintenance "$MAINT" 90
 grep -qF 'PostgreSQL initialized.' <<<"$(docker logs "$MAINT" 2>&1)" ||
   fail "Maintenance mode on an empty folder didn't initialize the database."
 restore_backup "$MAINT" "$backup_dir" sql
+check_maintenance "$MAINT"
 docker stop -t 30 "$MAINT" >/dev/null
 docker run -d --name "$FRESH" --label sharetab-smoke --volumes-from "$MAINT" \
   -e NEXTAUTH_SECRET="$secret" -e AUTH_SECRET="$secret" -e AUTH_TRUST_HOST=true "$IMAGE" >/dev/null
@@ -793,16 +813,20 @@ if docker compose version >/dev/null 2>&1; then
   TEMP_PATHS+=("$compose_dir")
   mkdir "$compose_dir/docker"
   cp docker/docker-compose.yml docker/docker-compose.external-db.yml "$compose_dir/docker/"
-  printf 'COMPOSE_FILE=docker-compose.yml:docker-compose.external-db.yml\nDB_PASSWORD=smokepw\nALLOW_EMPTY_EXTERNAL_DB=true\n' \
+  printf 'COMPOSE_FILE=docker-compose.yml:docker-compose.external-db.yml\nDB_PASSWORD=smokepw\nALLOW_EMPTY_EXTERNAL_DB=true\nSHARETAB_MAINTENANCE=true\n' \
     >"$compose_dir/docker/.env"
   env_config=$(cd "$compose_dir/docker" &&
-    env -u COMPOSE_FILE -u DB_USER -u DB_PASSWORD -u DB_NAME -u ALLOW_EMPTY_EXTERNAL_DB docker compose config) ||
+    env -u COMPOSE_FILE -u DB_USER -u DB_PASSWORD -u DB_NAME -u ALLOW_EMPTY_EXTERNAL_DB -u SHARETAB_MAINTENANCE \
+      docker compose config) ||
     fail "docker compose config failed with COMPOSE_FILE in docker/.env."
   grep -qF 'DATABASE_URL: postgresql://sharetab:smokepw@postgres:5432/sharetab' <<<"$env_config" ||
     fail "COMPOSE_FILE in docker/.env doesn't bring in the overlay."
-  # The refusal of an empty database names it, so a docker/.env value must arrive
+  # The refusal of an empty database names it, and the README's restore puts
+  # SHARETAB_MAINTENANCE there under sudo, so docker/.env values must arrive
   grep -qE 'ALLOW_EMPTY_EXTERNAL_DB: "?true"?$' <<<"$env_config" ||
     fail "ALLOW_EMPTY_EXTERNAL_DB in docker/.env doesn't reach the container."
+  grep -qE 'SHARETAB_MAINTENANCE: "?true"?$' <<<"$env_config" ||
+    fail "SHARETAB_MAINTENANCE in docker/.env doesn't reach the container."
   # Without the overlay, a DATABASE_URL in docker/.env (as .env.example has)
   # must not reach the container: it would switch it to external mode
   printf 'DATABASE_URL=postgresql://u:p@db:5432/x\n' >"$compose_dir/docker/.env"
@@ -833,22 +857,32 @@ if docker compose version >/dev/null 2>&1; then
     fail "The log shows the overlay's database password."
   fi
   # The README's backup and restore for the overlay's database, with ShareTab
-  # stopped: a user added after the backup must be gone afterwards
+  # in maintenance mode: the user from before the dump must come back, and
+  # the one added after it must be gone
   overlay_dump=$(mktemp)
   TEMP_PATHS+=("$overlay_dump")
+  overlay_users() {
+    compose_overlay exec -T postgres psql -U smoke -d smokedb -v ON_ERROR_STOP=1 -tA "$@"
+  }
+  overlay_users -c "INSERT INTO \"User\" (id, email, \"updatedAt\") VALUES ('ov-0', 'overlay-0@example.com', now())" >/dev/null
   compose_overlay exec -T postgres pg_dump -U smoke -Fc smokedb >"$overlay_dump"
-  overlay_users=$(compose_overlay exec -T postgres psql -U smoke -d smokedb -tAc 'SELECT count(*) FROM "User"')
-  compose_overlay exec -T postgres psql -U smoke -d smokedb -v ON_ERROR_STOP=1 -qc \
-    "INSERT INTO \"User\" (id, email, \"updatedAt\") VALUES ('ov-1', 'overlay@example.com', now())"
+  overlay_users -c "INSERT INTO \"User\" (id, email, \"updatedAt\") VALUES ('ov-1', 'overlay-1@example.com', now())" >/dev/null
   docker stop -t 30 "$OVERLAY_APP" >/dev/null
+  docker run -d --name "$OVERLAY_MAINT" --label sharetab-smoke --network "${COMPOSE_PROJECT}_default" \
+    -e NEXTAUTH_SECRET="$secret" -e AUTH_SECRET="$secret" -e SHARETAB_MAINTENANCE=true \
+    -e DATABASE_URL='postgresql://smoke:smokepw@postgres:5432/smokedb' "$IMAGE" >/dev/null
+  wait_maintenance "$OVERLAY_MAINT" 30
+  compose_overlay exec -T postgres pg_restore -f /dev/null <"$overlay_dump"
   compose_overlay exec -T postgres psql -U smoke -d postgres -v ON_ERROR_STOP=1 \
-    -c 'DROP DATABASE smokedb WITH (FORCE)' -c 'CREATE DATABASE smokedb' >/dev/null
+    -c 'DROP DATABASE smokedb' -c 'CREATE DATABASE smokedb' >/dev/null
   compose_overlay exec -T postgres pg_restore -U smoke -d smokedb \
     --no-owner --no-privileges --single-transaction <"$overlay_dump"
+  check_maintenance "$OVERLAY_MAINT"
+  docker rm -f -v "$OVERLAY_MAINT" >/dev/null
   docker start "$OVERLAY_APP" >/dev/null
   wait_healthy "ShareTab on the overlay's database, after a restore" "$OVERLAY_APP"
-  [[ "$(compose_overlay exec -T postgres psql -U smoke -d smokedb -tAc 'SELECT count(*) FROM "User"')" == "$overlay_users" ]] ||
-    fail "The restore of the overlay's database didn't bring back the backed-up users."
+  [[ "$(overlay_users -c "SELECT string_agg(id, ',' ORDER BY id) FROM \"User\" WHERE id LIKE 'ov-%'")" == ov-0 ]] ||
+    fail "The restore of the overlay's database didn't give back exactly the backed-up users (ov-0, not ov-1)."
   docker rm -f -v "$OVERLAY_APP" >/dev/null
   compose_overlay down -v >/dev/null 2>&1 || true
   echo "ShareTab runs on the overlay's database, which takes its URL's credentials and not others."
@@ -983,9 +1017,7 @@ fi
 section "External database: maintenance mode starts nothing"
 run_external "$EXT_ONESHOT" "$EXT_URL" -e SHARETAB_MAINTENANCE=true
 wait_maintenance "$EXT_ONESHOT" 30
-if grep -qF 'Waiting for the database' <<<"$(docker logs "$EXT_ONESHOT" 2>&1)"; then
-  fail "Maintenance mode connected to the external database."
-fi
+check_maintenance "$EXT_ONESHOT"
 stop_start=$SECONDS
 docker stop -t 30 "$EXT_ONESHOT" >/dev/null
 ((SECONDS - stop_start < 10)) || fail "docker stop took $((SECONDS - stop_start))s in external maintenance mode."

@@ -224,7 +224,8 @@ if [ "$MAINTENANCE" = true ]; then
     echo "  ShareTab is not started. The database is external (DATABASE_URL),"
     echo "  so nothing else runs here: restore into that server directly."
   fi
-  echo "  To start ShareTab, unset SHARETAB_MAINTENANCE and restart the container."
+  echo "  To start ShareTab, clear SHARETAB_MAINTENANCE and recreate the container"
+  echo "  (Unraid: Apply; Compose: docker compose up -d). A restart keeps it set."
   echo "============================================"
   echo ""
   if [ "$DB_MODE" = bundled ]; then

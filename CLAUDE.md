@@ -185,7 +185,7 @@ npx prisma db push   # Push schema without migration (dev only)
 ## CI and Releases
 
 - `test.yml` — the required `test` check on PRs: `npm audit --omit=dev --audit-level=high`, `format:check`, `lint`, `lint:i18n`, `tsc --noEmit`, unit tests, `prisma db push` + `prisma/after-push/*.sql` + seed, `build`, then the Playwright suite against `npm run start`
-- `docker-fresh-install.yml` — on pull requests, builds the production image and runs `scripts/docker-smoke.sh` against it (fresh install on an empty volume, upgrade restarts, the entrypoint's SQL phases, docker stop, Meridian startup, and an external PostgreSQL)
+- `docker-fresh-install.yml` — on pull requests, builds the production image and runs `scripts/docker-smoke.sh` against it (fresh install on an empty volume, upgrade restarts, the entrypoint's SQL phases, docker stop, Meridian startup, backup and restore in maintenance mode, and an external PostgreSQL)
 - `audit.yml` — scheduled npm audit; `auto-assign.yml` — assigns new issues to the owner; Dependabot (`.github/dependabot.yml`) groups npm minor/patch updates (majors come individually) and Actions updates, and also updates the Docker base image
 - No semver releases (retired after v0.8.0): don't bump `package.json` `version` or edit `CHANGELOG.md` for new changes. Each push to `main` runs `auto-release.yml` (tag `build/YYYY.MM.DD.N` + GitHub release listing commits since the previous build) and `docker.yml` (builds the image, smoke-tests it with `scripts/docker-smoke.sh`, then pushes `ghcr.io/sw-carlos-cristobal/sharetab:latest` and `:<short-sha>`). The manual `promote-stable.yml` workflow moves the `stable` git tag and image tag to a chosen build
 
@@ -197,5 +197,5 @@ Run `npm run test:docker` before pushing a change to `docker/`, the entrypoint, 
 
 ```bash
 cd docker && docker compose up -d --build    # Build and start app (PostgreSQL included)
-docker compose exec sharetab su-exec postgres pg_dump -U sharetab sharetab > backup.sql  # Backup of the bundled database (default DB_USER/DB_NAME; with the external-db overlay, dump the postgres service: see README Backups)
+docker compose exec -T sharetab su-exec postgres pg_dump -U sharetab -Fc sharetab > ~/sharetab-backup/sharetab.dump  # Backup of the bundled database, outside the checkout (default DB_USER/DB_NAME; with the external-db overlay, dump the postgres service; restoring: README "Restoring a backup")
 ```
