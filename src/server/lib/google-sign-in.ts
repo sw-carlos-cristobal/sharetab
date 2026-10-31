@@ -10,6 +10,7 @@
  */
 
 import type { PrismaClient } from '@/generated/prisma/client';
+import { isAdminEmail } from './admin-email';
 import type { GoogleConfig } from './auth-config';
 import { logger } from './logger';
 import { isRegistrationOpen } from './registration-mode';
@@ -123,17 +124,13 @@ export async function gatherGoogleFacts(db: PrismaClient, input: GoogleFactsInpu
     input.email ? findUsersByEmail(db, input.email) : [],
     isRegistrationOpen(db),
   ]);
-  // Looser than the exact match that grants admin everywhere else, on
-  // purpose: a near miss still gets the stricter Google check.
-  const adminEmail = input.adminEmail?.trim().toLowerCase() ?? '';
-
   return {
     linkedUserId,
     sessionUserId,
     email: input.email,
     emailVerified: readEmailVerified(input.claims),
     emailHostedByGoogle: input.email !== null && isHostedByGoogle(input.email, input.claims),
-    isAdminEmail: adminEmail !== '' && input.email?.toLowerCase() === adminEmail,
+    isAdminEmail: isAdminEmail(input.email, input.adminEmail),
     emailTaken: usersWithEmail.length > 0,
     registrationOpen,
   };

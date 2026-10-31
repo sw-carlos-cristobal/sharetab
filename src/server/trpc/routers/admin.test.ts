@@ -393,11 +393,76 @@ describe('listGroups input schema', () => {
 
 const adminSession = { user: { id: 'admin-1', email: 'admin@example.com' } };
 
-async function callerAs(session: { user: { id: string; email: string } }) {
+async function callerAs(
+  session: { user: { id: string; email: string } },
+  impersonating: { adminId: string; adminEmail: string; targetId: string; targetEmail: string } | null = null,
+) {
   const { adminRouter } = await import('./admin');
-  const ctx = { session, db: mockDb, headers: new Headers(), impersonating: null };
+  const ctx = { session, db: mockDb, headers: new Headers(), impersonating };
   return adminRouter.createCaller(ctx as unknown as Parameters<typeof adminRouter.createCaller>[0]);
 }
+
+describe('who adminProcedure lets in (#399)', () => {
+  /** The accounts the case-insensitive lookup of ADMIN_EMAIL finds. */
+  function accountsWithAdminEmail(rows: { id: string; email: string }[]) {
+    mockDb.$queryRaw.mockResolvedValueOnce(rows.map(({ id }) => ({ id })));
+    mockDb.user.findMany.mockResolvedValueOnce(rows);
+  }
+
+  beforeEach(() => {
+    vi.stubEnv('ADMIN_EMAIL', 'admin@example.com');
+    vi.clearAllMocks();
+    mockDb.user.findUnique.mockResolvedValue({ suspendedAt: null });
+    mockDb.systemSetting.findUnique.mockResolvedValue(null);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test('lets in an admin who registered the address in other letter case', async () => {
+    accountsWithAdminEmail([{ id: 'admin-1', email: 'Admin@Example.com' }]);
+    const api = await callerAs({ user: { id: 'admin-1', email: 'Admin@Example.com' } });
+    await expect(api.getRegistrationMode()).resolves.toEqual({ mode: 'open' });
+  });
+
+  test('ignores letter case and spaces in ADMIN_EMAIL', async () => {
+    vi.stubEnv('ADMIN_EMAIL', '  ADMIN@example.com ');
+    accountsWithAdminEmail([{ id: 'admin-1', email: 'admin@example.com' }]);
+    const api = await callerAs(adminSession);
+    await expect(api.getRegistrationMode()).resolves.toEqual({ mode: 'open' });
+  });
+
+  test('refuses a case variant while another account has the address exactly', async () => {
+    accountsWithAdminEmail([
+      { id: 'other', email: 'Admin@example.com' },
+      { id: 'admin-1', email: 'admin@example.com' },
+    ]);
+    const api = await callerAs({ user: { id: 'other', email: 'Admin@example.com' } });
+    await expect(api.getRegistrationMode()).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      message: 'Admin access required',
+    });
+  });
+
+  test('refuses anyone else', async () => {
+    const api = await callerAs({ user: { id: 'user-1', email: 'user@example.com' } });
+    await expect(api.getRegistrationMode()).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      message: 'Admin access required',
+    });
+    expect(mockDb.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  test('checks the real admin while impersonating', async () => {
+    accountsWithAdminEmail([{ id: 'admin-1', email: 'Admin@example.com' }]);
+    const api = await callerAs(
+      { user: { id: 'user-1', email: 'user@example.com' } },
+      { adminId: 'admin-1', adminEmail: 'Admin@example.com', targetId: 'user-1', targetEmail: 'user@example.com' },
+    );
+    await expect(api.getRegistrationMode()).resolves.toEqual({ mode: 'open' });
+  });
+});
 
 describe('registration mode', () => {
   beforeEach(() => {
