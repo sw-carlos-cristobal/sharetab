@@ -1,5 +1,7 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@/server/auth';
+import { db } from '@/server/db';
+import { isAdmin } from '@/server/lib/admin-email';
 import { AppSidebar } from '@/components/layout/sidebar';
 import { MobileHeader } from '@/components/layout/mobile-header';
 import { AnnouncementBanner } from '@/components/layout/announcement-banner';
@@ -18,12 +20,12 @@ export default async function AppLayout({
     redirect(`/${locale}/login`);
   }
 
-  const isAdmin = !!process.env.ADMIN_EMAIL && session.user.email === process.env.ADMIN_EMAIL;
+  const showAdmin = await isAdmin(db, { id: session.user.id, email: session.user.email });
 
   return (
     <div className="min-h-dvh lg:flex lg:h-dvh lg:flex-row">
-      <MobileHeader isAdmin={isAdmin} />
-      <AppSidebar user={session.user} isAdmin={isAdmin} />
+      <MobileHeader isAdmin={showAdmin} />
+      <AppSidebar user={session.user} isAdmin={showAdmin} />
       <main className="@container flex-1 min-w-0 lg:overflow-auto">
         <ImpersonationBanner />
         <AnnouncementBanner />

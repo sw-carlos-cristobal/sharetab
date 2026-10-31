@@ -1,13 +1,13 @@
 import { auth } from '@/server/auth';
 import { db } from '@/server/db';
+import { isAdmin } from '@/server/lib/admin-email';
 import { logAdminAction } from '@/server/trpc/routers/admin';
 
 export async function GET() {
   // Auth check: admin only
   const session = await auth();
-  const adminEmail = process.env.ADMIN_EMAIL;
 
-  if (!session?.user?.email || !adminEmail || session.user.email !== adminEmail) {
+  if (!session?.user?.id || !(await isAdmin(db, { id: session.user.id, email: session.user.email }))) {
     return new Response('Forbidden', { status: 403 });
   }
 
@@ -100,7 +100,7 @@ export async function GET() {
     };
 
     // Log the export action
-    await logAdminAction(db, session.user.id!, 'EXPORT_CREATED', null, {
+    await logAdminAction(db, session.user.id, 'EXPORT_CREATED', null, {
       tableCount: Object.keys(exportData.data).length,
     });
 
