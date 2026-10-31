@@ -95,7 +95,7 @@
     Name="NextAuth URL"
     Target="NEXTAUTH_URL"
     Default="http://192.168.1.x:3000"
-    Description="The URL where ShareTab is accessible (e.g., http://your-server-ip:3000). Links in password and auth-expiry emails are built from it. Split and personal links are copied from the browser address bar, not built from this, so open ShareTab at this URL before sharing one."
+    Description="The URL people open ShareTab at, http:// or https:// included (e.g., http://your-server-ip:3000, or https://sharetab.example.com behind a reverse proxy). With https:// here, sign-in works only over https. Links in password and auth-expiry emails are built from it. Split and personal links are copied from the browser address bar, not built from this, so open ShareTab at this URL before sharing one."
     Type="Variable"
     Display="always"
     Required="true"
