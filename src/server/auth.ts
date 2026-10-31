@@ -120,6 +120,13 @@ async function sessionCookieUserId(): Promise<string | null> {
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter,
   session: { strategy: 'jwt' },
+  // Always on, so Auth.js never reads AUTH_TRUST_HOST (#417). Left to itself it refuses every
+  // request in production while AUTH_TRUST_HOST and AUTH_URL are both unset (NEXTAUTH_URL doesn't
+  // count), and reads any non-empty AUTH_TRUST_HOST, "false" included, as on. With AUTH_URL or
+  // NEXTAUTH_URL set, next-auth takes every auth request's address from it. Without one, a route
+  // handler's address is the one the server listens on (0.0.0.0:3000 in the Docker image), never
+  // the Host header.
+  trustHost: true,
   pages: {
     signIn: '/login',
     verifyRequest: '/verify-request',

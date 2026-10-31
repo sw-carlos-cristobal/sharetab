@@ -106,7 +106,6 @@ jobs:
           DATABASE_URL: postgresql://sharetab:sharetab@localhost:5432/sharetab
           NEXTAUTH_SECRET: ${{ steps.auth.outputs.secret }}
           AUTH_SECRET: ${{ steps.auth.outputs.secret }}
-          AUTH_TRUST_HOST: "true"
           ADMIN_EMAIL: alice@example.com
           AI_PROVIDER_PRIORITY: mock
         run: npm run build
@@ -116,7 +115,6 @@ jobs:
           DATABASE_URL: postgresql://sharetab:sharetab@localhost:5432/sharetab
           NEXTAUTH_SECRET: ${{ steps.auth.outputs.secret }}
           AUTH_SECRET: ${{ steps.auth.outputs.secret }}
-          AUTH_TRUST_HOST: "true"
           NEXTAUTH_URL: http://localhost:3000
           BASE_URL: http://localhost:3000
           AUTH_RATE_LIMIT_MAX: "1000"

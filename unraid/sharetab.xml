@@ -118,15 +118,6 @@
     Display="always"
     Required="true"
     Mask="true"></Config>
-  <Config
-    Name="Auth Trust Host"
-    Target="AUTH_TRUST_HOST"
-    Default="true"
-    Description="Set to true when running on a local network or behind a reverse proxy"
-    Type="Variable"
-    Display="advanced"
-    Required="false"
-    Mask="false">true</Config>
 
   <!-- Database -->
   <Config
