@@ -53,6 +53,7 @@ import {
   localeOf,
 } from '@/server/lib/password-reset';
 import { requirePasswordLogin } from '@/server/lib/password-login';
+import { isAdmin } from '@/server/lib/admin-email';
 import { REGISTRATION_MODES, readRegistrationMode } from '@/server/lib/registration-mode';
 import { isGuestUploadsForcedOff, readGuestUploadsSetting, saveGuestUploadsSetting } from '@/server/lib/guest-uploads';
 
@@ -62,11 +63,12 @@ const MERIDIAN_LOGIN_START_WAIT_MS = 15_000;
 const serverStartTime = new Date();
 const { version: cachedVersion, commitSha: cachedCommitSha } = getBuildInfo();
 
-const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  const adminEmail = process.env.ADMIN_EMAIL;
-  // When impersonating, use the real admin email for the check
-  const effectiveEmail = ctx.impersonating ? ctx.impersonating.adminEmail : ctx.user.email;
-  if (!adminEmail || effectiveEmail !== adminEmail) {
+const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+  // When impersonating, check the real admin
+  const realUser = ctx.impersonating
+    ? { id: ctx.impersonating.adminId, email: ctx.impersonating.adminEmail }
+    : { id: ctx.user.id, email: ctx.user.email };
+  if (!(await isAdmin(ctx.db, realUser))) {
     throw new AppError('FORBIDDEN', 'adminRequired');
   }
   // For admin procedures, restore the real admin user context

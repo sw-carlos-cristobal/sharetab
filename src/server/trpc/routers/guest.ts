@@ -24,6 +24,7 @@ import {
 } from '../../lib/json-schemas';
 import { calculateSplitTotals, groupSizeWeights } from '@/lib/split-calculator';
 import { normalizeGuestName } from '@/lib/guest-session';
+import { MAX_GROUP_SIZE, MIN_GROUP_SIZE } from '@/lib/group-size';
 import { canUseGuestUploads } from '../../lib/guest-uploads';
 import { checkJoinRateLimit } from '../../lib/guest-join-limit';
 import {
@@ -56,6 +57,9 @@ const JOIN_REPLAY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 // The most people a claim session holds
 const MAX_SESSION_PEOPLE = 100;
+
+// How many people one person stands for; the claim page checks the same range before sending
+const groupSizeSchema = z.number().int().min(MIN_GROUP_SIZE).max(MAX_GROUP_SIZE);
 
 function toPublicPerson({ name, groupSize, personToken }: GuestSessionPerson) {
   // Never includes personToken, join or saves: no guest procedure returns another person's token
@@ -727,7 +731,7 @@ export const guestRouter = createTRPCRouter({
       z.object({
         token: shareTokenSchema,
         name: z.string().trim().min(1).max(100),
-        groupSize: z.number().int().min(1).max(20).optional(),
+        groupSize: groupSizeSchema.optional(),
         // The token this device stored when it joined: whoever holds it is the caller. Only ever
         // used to find its holder, never given to anyone, so a removed person's old token
         // can't be attached to someone new.
@@ -885,7 +889,7 @@ export const guestRouter = createTRPCRouter({
         // Who to rename, by id (see targetIndexOrThrow)
         targetId: personIdSchema,
         newName: z.string().trim().min(1).max(100),
-        groupSize: z.number().int().min(1).max(20).optional(),
+        groupSize: groupSizeSchema.optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {

@@ -149,7 +149,9 @@
     "finalizeDescription": "Everyone's totals are worked out and the split is locked, so nobody can change their claims after this.",
     "splitFinalized": "Split finalized!",
     "groupSize": "People in your group",
-    "groupSizeHint": "Enter 2+ if joining as a couple or group"
+    "groupSizeHint": "Enter 2+ if joining as a couple or group",
+    "groupSizeInvalid": "Enter a whole number from {min} to {max}",
+    "groupSizePreview": "{count, plural, one {You and # other person} other {You and # other people}}"
   },
   "result": {
     "loading": "Loading split...",

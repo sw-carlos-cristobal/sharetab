@@ -102,6 +102,11 @@ exports[`count messages > read as they should for none, one and two in de 1`] = 
     "1 Artikel auch ausgewählt von Ana",
     "2 Artikel auch ausgewählt von Ana",
   ],
+  "split.claim.groupSizePreview": [
+    "Sie und 0 weitere Personen",
+    "Sie und 1 weitere Person",
+    "Sie und 2 weitere Personen",
+  ],
   "splits.items": [
     "0 Artikel",
     "1 Artikel",
@@ -216,6 +221,11 @@ exports[`count messages > read as they should for none, one and two in en 1`] = 
     "0 items also claimed by Ana",
     "1 item also claimed by Ana",
     "2 items also claimed by Ana",
+  ],
+  "split.claim.groupSizePreview": [
+    "You and 0 other people",
+    "You and 1 other person",
+    "You and 2 other people",
   ],
   "splits.items": [
     "0 items",
@@ -332,6 +342,11 @@ exports[`count messages > read as they should for none, one and two in es 1`] = 
     "1 artículo también reclamado por Ana",
     "2 artículos también reclamados por Ana",
   ],
+  "split.claim.groupSizePreview": [
+    "Tú y 0 personas más",
+    "Tú y 1 persona más",
+    "Tú y 2 personas más",
+  ],
   "splits.items": [
     "0 artículos",
     "1 artículo",
@@ -446,6 +461,11 @@ exports[`count messages > read as they should for none, one and two in fr 1`] = 
     "0 article également réclamé par Ana",
     "1 article également réclamé par Ana",
     "2 articles également réclamés par Ana",
+  ],
+  "split.claim.groupSizePreview": [
+    "Vous et 0 autre personne",
+    "Vous et 1 autre personne",
+    "Vous et 2 autres personnes",
   ],
   "splits.items": [
     "0 article",
@@ -562,6 +582,11 @@ exports[`count messages > read as they should for none, one and two in pt-BR 1`]
     "1 item também selecionado por Ana",
     "2 itens também selecionados por Ana",
   ],
+  "split.claim.groupSizePreview": [
+    "Você e mais 0 pessoa",
+    "Você e mais 1 pessoa",
+    "Você e mais 2 pessoas",
+  ],
   "splits.items": [
     "0 item",
     "1 item",
@@ -676,6 +701,11 @@ exports[`count messages > read as they should for none, one and two in sv 1`] = 
     "0 artiklar också valda av Ana",
     "1 artikel också vald av Ana",
     "2 artiklar också valda av Ana",
+  ],
+  "split.claim.groupSizePreview": [
+    "Du och 0 personer till",
+    "Du och 1 person till",
+    "Du och 2 personer till",
   ],
   "splits.items": [
     "0 artiklar",

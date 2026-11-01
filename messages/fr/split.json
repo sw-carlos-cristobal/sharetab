@@ -149,7 +149,9 @@
     "finalizeDescription": "Les totaux de chacun seront calculés et le partage sera verrouillé : personne ne pourra plus modifier ses choix.",
     "splitFinalized": "Partage finalisé !",
     "groupSize": "Personnes dans votre groupe",
-    "groupSizeHint": "Entrez 2+ si vous rejoignez en couple ou en groupe"
+    "groupSizeHint": "Entrez 2+ si vous rejoignez en couple ou en groupe",
+    "groupSizeInvalid": "Entrez un nombre entier de {min} à {max}",
+    "groupSizePreview": "{count, plural, one {Vous et # autre personne} other {Vous et # autres personnes}}"
   },
   "result": {
     "loading": "Chargement du partage...",
