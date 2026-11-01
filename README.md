@@ -651,7 +651,7 @@ Guest receipts, claim sessions, and invite links also have fixed limits that no 
 
 ### Behind a reverse proxy
 
-Set `NEXTAUTH_URL` to the address people open and `AUTH_TRUST_HOST=true` (see [Other](#other)), and have the proxy set the client's address as [Rate Limiting](#rate-limiting) describes.
+Set `NEXTAUTH_URL` to the address people open (see [Other](#other)), and have the proxy set the client's address as [Rate Limiting](#rate-limiting) describes.
 
 A receipt photo goes up in one request, so the proxy has to accept a request body a little larger than `MAX_UPLOAD_SIZE_MB`: the form around the file adds a few hundred bytes. A proxy that refuses one answers 413, and ShareTab shows only "Upload failed".
 

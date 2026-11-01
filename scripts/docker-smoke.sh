@@ -728,7 +728,7 @@ restore_backup "$MAINT" "$backup_dir" sql
 check_maintenance "$MAINT"
 docker stop -t 30 "$MAINT" >/dev/null
 docker run -d --name "$FRESH" --label sharetab-smoke --volumes-from "$MAINT" \
-  -e NEXTAUTH_SECRET="$secret" -e AUTH_SECRET="$secret" -e AUTH_TRUST_HOST=true "$IMAGE" >/dev/null
+  -e NEXTAUTH_SECRET="$secret" -e AUTH_SECRET="$secret" "$IMAGE" >/dev/null
 wait_healthy "fresh install after a restore" "$FRESH"
 [[ "$(db_digest "$FRESH")" == "$digest_at_backup" ]] || fail "The fresh install's database isn't the backup's."
 check_uploads_restored "$FRESH"
