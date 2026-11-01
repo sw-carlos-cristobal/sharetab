@@ -315,7 +315,7 @@ describe('mapOidcProfile', () => {
     expect(mapOidcProfile({ sub: 's' }).name).toBeNull();
   });
 
-  test('lowercases the email (ADMIN_EMAIL and lookups compare lowercase)', () => {
+  test('lowercases the email (Auth.js and the account lookups use lowercase)', () => {
     expect(mapOidcProfile({ sub: 's', email: 'Alice@Example.COM' }).email).toBe('alice@example.com');
   });
 

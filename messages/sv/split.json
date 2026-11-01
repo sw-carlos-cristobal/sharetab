@@ -149,7 +149,9 @@
     "finalizeDescription": "Allas totaler beräknas och delningen låses, så ingen kan ändra sina val efter detta.",
     "splitFinalized": "Delning slutförd!",
     "groupSize": "Antal i din grupp",
-    "groupSizeHint": "Ange 2+ om ni går med som par eller grupp"
+    "groupSizeHint": "Ange 2+ om ni går med som par eller grupp",
+    "groupSizeInvalid": "Ange ett heltal från {min} till {max}",
+    "groupSizePreview": "{count, plural, one {Du och # person till} other {Du och # personer till}}"
   },
   "result": {
     "loading": "Laddar delning...",

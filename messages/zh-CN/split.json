@@ -149,7 +149,9 @@
     "finalizeDescription": "将计算每个人的金额并锁定分账，此后任何人都无法更改自己的选择。",
     "splitFinalized": "分账已完成！",
     "groupSize": "您的组人数",
-    "groupSizeHint": "如果是情侣或团体请输入2以上"
+    "groupSizeHint": "如果是情侣或团体请输入2以上",
+    "groupSizeInvalid": "请输入 {min} 到 {max} 之间的整数",
+    "groupSizePreview": "{count, plural, other {你和另外 # 人}}"
   },
   "result": {
     "loading": "正在加载分摊...",
