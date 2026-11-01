@@ -55,6 +55,7 @@ interface CapturedConfig {
     }) => Promise<Record<string, unknown> | null>;
   };
   events: { signIn: (message: Record<string, unknown>) => void };
+  trustHost?: boolean;
 }
 
 // Every variable parseAuthConfig or the callbacks read, blanked so the
@@ -79,6 +80,7 @@ const AUTH_ENV = [
   'AUTH_SECRET_3',
   'AUTH_URL',
   'NEXTAUTH_URL',
+  'AUTH_TRUST_HOST',
 ];
 
 async function loadAuth(env: Record<string, string> = {}): Promise<CapturedConfig> {
@@ -136,6 +138,13 @@ describe('Google provider registration', () => {
     expect(logger.warn).toHaveBeenCalledWith('auth.config', {
       warning: expect.stringContaining('GOOGLE_CLIENT_SECRET') as unknown,
     });
+  });
+});
+
+// Set here, so Auth.js doesn't decide it from AUTH_TRUST_HOST itself (#417)
+describe('trustHost', () => {
+  test.each([{}, { AUTH_TRUST_HOST: 'false' }])('is on with %o', async (env) => {
+    expect((await loadAuth(env)).trustHost).toBe(true);
   });
 });
 

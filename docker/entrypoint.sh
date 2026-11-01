@@ -275,7 +275,6 @@ if [ "$DB_MODE" = bundled ]; then
   echo "  DB Name:        ${DB_NAME:-sharetab}"
 fi
 echo "  Auth URL:       ${NEXTAUTH_URL:-not set}"
-echo "  Auth Trust:     ${AUTH_TRUST_HOST:-false}"
 AI_PROVIDER_PRIORITY="${AI_PROVIDER_PRIORITY:-openai}"
 echo "  AI Providers:   ${AI_PROVIDER_PRIORITY}"
 case ",${AI_PROVIDER_PRIORITY}," in

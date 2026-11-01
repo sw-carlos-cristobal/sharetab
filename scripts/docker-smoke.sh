@@ -329,10 +329,12 @@ if [[ -n "$MERIDIAN_AUTH" ]]; then
   auth_mount=(--mount "type=volume,src=$AUTH_VOLUME,dst=/app/claude")
 fi
 secret=$(openssl rand -base64 32)
+# Only the variables the README calls required, plus ADMIN_EMAIL: the Meridian
+# check below signs in, so it also checks that no NEXTAUTH_URL or
+# AUTH_TRUST_HOST is needed for that (#417).
 # ${auth_mount[@]+...} keeps an empty array from tripping set -u in bash < 4.4.
 docker run -d --name "$CONTAINER" --label sharetab-smoke \
-  -e NEXTAUTH_SECRET="$secret" -e AUTH_SECRET="$secret" \
-  -e AUTH_TRUST_HOST=true -e ADMIN_EMAIL="$ADMIN_EMAIL" \
+  -e NEXTAUTH_SECRET="$secret" -e AUTH_SECRET="$secret" -e ADMIN_EMAIL="$ADMIN_EMAIL" \
   ${auth_mount[@]+"${auth_mount[@]}"} "$IMAGE" >/dev/null
 wait_healthy "first start"
 # The tables exist, not just a reachable database (psql fails if either is
@@ -493,7 +495,7 @@ printf '#!/bin/sh\nsleep 8\nexec /usr/bin/initdb "$@"\n' >"$wrap_dir/initdb"
 printf '#!/bin/sh\ncase " $* " in *" start "*) sleep 8 ;; esac\nexec /usr/bin/pg_ctl "$@"\n' >"$wrap_dir/pg_ctl"
 chmod 755 "$wrap_dir/initdb" "$wrap_dir/pg_ctl"
 docker create --name "$BOOT" --label sharetab-smoke \
-  -e NEXTAUTH_SECRET="$secret" -e AUTH_SECRET="$secret" -e AUTH_TRUST_HOST=true \
+  -e NEXTAUTH_SECRET="$secret" -e AUTH_SECRET="$secret" \
   -e DB_PASSWORD='p/w#1@%x' "$IMAGE" >/dev/null
 docker cp "$wrap_dir/initdb" "$BOOT:/usr/local/bin/initdb"
 docker cp "$wrap_dir/pg_ctl" "$BOOT:/usr/local/bin/pg_ctl"
@@ -557,7 +559,7 @@ TEMP_PATHS+=("$step_sql")
 printf 'SELECT no_such_function();\n' >"$step_sql"
 chmod 644 "$step_sql"
 docker create --name "$BOOT" --label sharetab-smoke \
-  -e NEXTAUTH_SECRET="$secret" -e AUTH_SECRET="$secret" -e AUTH_TRUST_HOST=true "$IMAGE" >/dev/null
+  -e NEXTAUTH_SECRET="$secret" -e AUTH_SECRET="$secret" "$IMAGE" >/dev/null
 docker cp "$step_sql" "$BOOT:/app/prisma/migrations/zz_smoke.sql"
 docker start "$BOOT" >/dev/null
 code=$(wait_exited "$BOOT" 120) || fail "A failing migration didn't stop startup within 120s."
@@ -592,7 +594,7 @@ ext_db() {
 run_external() {
   local name="$1" url="$2"
   shift 2
-  local env=(-e NEXTAUTH_SECRET="$secret" -e AUTH_SECRET="$secret" -e AUTH_TRUST_HOST=true)
+  local env=(-e NEXTAUTH_SECRET="$secret" -e AUTH_SECRET="$secret")
   if [[ -n "$url" ]]; then
     env+=(-e DATABASE_URL="$url")
   fi
@@ -688,7 +690,7 @@ if docker compose version >/dev/null 2>&1; then
   fi
   # ShareTab itself, on the overlay's network and URL
   docker run -d --name "$OVERLAY_APP" --label sharetab-smoke --network "${COMPOSE_PROJECT}_default" \
-    -e NEXTAUTH_SECRET="$secret" -e AUTH_SECRET="$secret" -e AUTH_TRUST_HOST=true \
+    -e NEXTAUTH_SECRET="$secret" -e AUTH_SECRET="$secret" \
     -e DATABASE_URL='postgresql://smoke:smokepw@postgres:5432/smokedb' "$IMAGE" >/dev/null
   wait_healthy "ShareTab on the overlay's database" "$OVERLAY_APP"
   if grep -qF 'smokepw' <<<"$(docker logs "$OVERLAY_APP" 2>&1)"; then
@@ -788,7 +790,7 @@ section "External database: TLS with the certificate checked (verify-full)"
 # remote DOCKER_HOST works; readable by the app's user.
 docker rm -f -v "$EXT_ONESHOT" >/dev/null 2>&1 || true
 docker create --name "$EXT_ONESHOT" --label sharetab-smoke --network "$EXT_NET" \
-  -e NEXTAUTH_SECRET="$secret" -e AUTH_SECRET="$secret" -e AUTH_TRUST_HOST=true \
+  -e NEXTAUTH_SECRET="$secret" -e AUTH_SECRET="$secret" \
   -e NODE_EXTRA_CA_CERTS=/etc/sharetab-smoke-ca.crt \
   -e DATABASE_URL="postgresql://sharetab:$EXT_PW@$EXT_PG:5432/sharetab?sslmode=verify-full" "$IMAGE" >/dev/null
 docker cp "$TLS_DIR/server.crt" "$EXT_ONESHOT:/etc/sharetab-smoke-ca.crt"
