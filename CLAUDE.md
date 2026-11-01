@@ -197,5 +197,5 @@ Run `npm run test:docker` before pushing a change to `docker/`, the entrypoint, 
 
 ```bash
 cd docker && docker compose up -d --build    # Build and start app (PostgreSQL included)
-docker compose exec -T sharetab su-exec postgres pg_dump -U sharetab -Fc sharetab > ~/sharetab-backup/sharetab.dump  # Backup of the bundled database, outside the checkout (default DB_USER/DB_NAME; with the external-db overlay, dump the postgres service; restoring: README "Restoring a backup")
+mkdir -p ~/sharetab-backup && docker compose exec -T sharetab su-exec postgres pg_dump -U sharetab -Fc sharetab > ~/sharetab-backup/sharetab.dump  # Backup of the bundled database, outside the checkout (default DB_USER/DB_NAME; with the external-db overlay, dump the postgres service; restoring: README "Restoring a backup")
 ```

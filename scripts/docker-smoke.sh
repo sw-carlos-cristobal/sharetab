@@ -604,10 +604,11 @@ docker rm -f -v "$BOOT" >/dev/null
 
 # ── Backups ────────────────────────────────────────────────────
 
-# Fails if <container> went past its maintenance-mode banner: a database
-# connection made or attempted (db.mjs logs either way), the schema step, or
-# the app answering. Usage: check_maintenance <container>
+# Fails if <container> isn't running, or went past its maintenance-mode
+# banner: a database connection made or attempted (db.mjs logs either way),
+# the schema step, or the app answering. Usage: check_maintenance <container>
 check_maintenance() {
+  [[ "$(docker inspect -f '{{.State.Running}}' "$1")" == true ]] || fail "$1 isn't running in maintenance mode."
   local log
   log=$(docker logs "$1" 2>&1)
   if grep -qE 'Database is ready|Waiting for the database|Running database migrations|Starting ShareTab\.\.\.' <<<"$log"; then
@@ -683,8 +684,8 @@ add_user bk-2 'after-backup@example.com'
 docker exec "$CONTAINER" sh -c 'echo after > /app/uploads/receipts/smoke-after.txt'
 [[ "$(db_digest)" != "$digest_at_backup" ]] || fail "The changes after the backup didn't change the digest."
 
-# The same data folders, with SHARETAB_MAINTENANCE set (as a Compose or
-# Unraid restart with the variable set does)
+# The same data folders, with SHARETAB_MAINTENANCE set (as recreating the
+# container with the variable set does: Unraid's Apply, docker compose up)
 docker stop -t 30 "$CONTAINER" >/dev/null
 docker run -d --name "$MAINT" --label sharetab-smoke --volumes-from "$CONTAINER" \
   -e NEXTAUTH_SECRET="$secret" -e AUTH_SECRET="$secret" -e SHARETAB_MAINTENANCE=true "$IMAGE" >/dev/null

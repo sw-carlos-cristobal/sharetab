@@ -80,9 +80,9 @@ db_step() {
 }
 
 # SHARETAB_MAINTENANCE=true starts the bundled database and nothing else, so
-# a restore (README "Restoring a backup") has it to itself: the app's
-# connections would make DROP DATABASE fail, and its schema step would create
-# tables a restore then collides with.
+# a restore (README "Restoring a backup") has it to itself: the app could
+# hold a connection (DROP DATABASE then fails) or write at any moment, and its
+# schema step would create tables a restore then collides with.
 case "$(echo "${SHARETAB_MAINTENANCE:-}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | tr '[:upper:]' '[:lower:]')" in
   true|1|yes|on)    MAINTENANCE=true ;;
   ''|false|0|no|off) MAINTENANCE=false ;;
