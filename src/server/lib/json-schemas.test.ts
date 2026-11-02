@@ -50,7 +50,7 @@ describe('parseExtractedData', () => {
     expect(result.tax).toBe(0);
     expect(result.tip).toBe(0);
     expect(result.total).toBe(0);
-    // No currency is unknown, not USD: callers fall back to the group's (#361)
+    // No currency is unknown, not USD: callers fall back to the group's (USD outside a group) (#361)
     expect(result.currency).toBeUndefined();
   });
 

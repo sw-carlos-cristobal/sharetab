@@ -152,7 +152,7 @@ test.describe('Receipt currency (#361)', () => {
     }
   });
 
-  test("the group's saved receipts each show their own currency", async ({ page }) => {
+  test("a saved receipt shows its own currency, not the group's", async ({ page }) => {
     const { owner, groupId, dispose } = await createTestGroup(users.alice.email, users.alice.password, [], 'Saved FX');
     try {
       const { receiptId, total } = await scanReceipt(owner, groupId);

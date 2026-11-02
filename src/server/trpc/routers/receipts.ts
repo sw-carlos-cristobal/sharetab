@@ -33,7 +33,7 @@ type ReceiptSummary = {
 
 /**
  * A receipt's extracted data as the pages show it, in its own currency or, when it has none, its
- * group's (`fallback`), so a page never formats an amount without one (#361)
+ * group's (`fallback`; USD outside a group), so a page never formats an amount without one (#361)
  */
 function withCurrency(extractedData: unknown, fallback: string): ReceiptSummary | null {
   if (!extractedData || typeof extractedData !== 'object') return null;
@@ -104,6 +104,14 @@ export const receiptsRouter = createTRPCRouter({
         }
       }
 
+      // When the scan can't tell which currency the receipt is in, it's in its group's (USD outside a
+      // group) (#361). Looked up before the claim below: once the receipt is PROCESSING, only the
+      // scan's own try marks it FAILED
+      const groupId = input.groupId ?? receipt.groupId;
+      const group = groupId
+        ? await ctx.db.group.findUnique({ where: { id: groupId }, select: { currency: true } })
+        : null;
+
       // Note: old items are NOT deleted here — processReceiptImage handles
       // delete + recreate atomically, so if the AI provider fails the old items remain.
 
@@ -135,12 +143,6 @@ export const receiptsRouter = createTRPCRouter({
           now?.groupId === receipt.groupId ? 'receiptBeingProcessed' : 'receiptRemovedFromGroup',
         );
       }
-
-      // When the scan can't tell which currency the receipt is in, it's in its group's (#361)
-      const groupId = input.groupId ?? receipt.groupId;
-      const group = groupId
-        ? await ctx.db.group.findUnique({ where: { id: groupId }, select: { currency: true } })
-        : null;
 
       try {
         return await processReceiptImage({
@@ -366,8 +368,8 @@ export const receiptsRouter = createTRPCRouter({
       return { success: true };
     }),
 
-  // The receipt page's currency selector (#361). Saved on the receipt, so Save for later, the group's
-  // saved receipts and the expense made from it all use it
+  // The receipt page's currency selector (#361). Saved on the receipt when chosen, so it's kept
+  // through Save for later and used by the group's saved receipts and the expense made from it
   setCurrency: protectedProcedure
     .input(z.object({ receiptId: z.string(), currency: currencyCodeSchema }))
     .mutation(async ({ ctx, input }) => {
@@ -376,7 +378,8 @@ export const receiptsRouter = createTRPCRouter({
       await ctx.db.$transaction(async (tx) => {
         // An expense being made from it holds this row FOR SHARE and checks the currency it used
         // under it, so either this waits for that expense (and is refused below) or that expense
-        // sees the change. A scan starting again marks it PROCESSING, and is refused below too
+        // sees the change. A scan starting again marks it PROCESSING under the same lock, so either
+        // this is refused below or the scan waits and then saves its own read of the currency
         await tx.$queryRaw`SELECT 1 FROM "Receipt" WHERE "id" = ${input.receiptId} FOR NO KEY UPDATE`;
         const receipt = await verifyReceiptAccess(tx, input.receiptId, ctx.user.id);
         if (receipt.status !== 'COMPLETED') {

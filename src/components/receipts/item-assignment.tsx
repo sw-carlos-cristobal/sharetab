@@ -82,7 +82,7 @@ export function ItemAssignment({
   const createExpense = trpc.receipts.assignItemsAndCreateExpense.useMutation({
     onSuccess: onComplete,
     onError: (e) => {
-      // No rate could be found for the receipt's currency: ask for one, as the expense form does (#361)
+      // No rate could be found for the receipt's currency: ask for one, with the checkbox and field the expense form has (#361)
       if (e.data?.messageKey === 'exchangeRateUnavailable') setUseManualRate(true);
       reloadAfterError();
     },

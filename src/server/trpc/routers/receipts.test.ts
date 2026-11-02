@@ -1001,6 +1001,18 @@ describe("a receipt's currency when the scan can't tell (#361)", () => {
     expect(processReceiptImage).toHaveBeenCalledWith(expect.objectContaining({ fallbackCurrency: 'EUR' }));
   });
 
+  // Once the receipt is claimed, only the scan's own try marks it FAILED; a lookup failing in between
+  // would leave it PROCESSING, refusing every retry, for 15 minutes
+  test("the group's currency is looked up before the receipt is claimed for the scan", async () => {
+    mockDb.receipt.findUnique.mockResolvedValue({ ...inGroup('USD'), groupId: null, group: null });
+    mockDb.group.findUnique.mockRejectedValue(new Error('connection lost'));
+    const api = await caller();
+    await expect(api.processReceipt({ receiptId: 'r1', groupId: 'g1' })).rejects.toThrow();
+
+    expect(mockDb.receipt.updateMany).not.toHaveBeenCalled();
+    expect(processReceiptImage).not.toHaveBeenCalled();
+  });
+
   test("a rescan of a receipt in a group falls back to its group's currency", async () => {
     mockDb.receipt.findUnique.mockResolvedValue(inGroup('EUR'));
     mockDb.group.findUnique.mockResolvedValue({ currency: 'EUR' });

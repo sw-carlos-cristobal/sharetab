@@ -18,8 +18,9 @@ export const extractedDataSchema = z
 export type ExtractedData = z.infer<typeof extractedDataSchema>;
 
 /**
- * A receipt's currency: the code stored in its extracted data, or `fallback` (its group's
- * currency) when it has none or one that isn't a currency code (#361).
+ * A receipt's currency: the code stored in its extracted data, or `fallback` when it has none or
+ * one that isn't a currency code: callers pass its group's currency (the expense's group when an
+ * ungrouped receipt becomes an expense, USD otherwise) (#361).
  */
 export function receiptCurrency(extractedData: unknown, fallback: string): string {
   const stored =

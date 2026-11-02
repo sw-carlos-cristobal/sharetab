@@ -30,9 +30,9 @@ export const receiptExtractionSchema = z.object({
   tip: moneyCents.default(0),
   total: moneyCents,
   // An uppercase ISO 4217-shaped code, or undefined when the model couldn't tell (the prompt asks
-  // for null) or returned something else. Unknown isn't USD: the scan falls back to the group's
-  // currency (#361)
-  currency: z.unknown().transform(currencyCode),
+  // for null, and a model may leave the key out) or returned something else. Unknown isn't USD:
+  // the scan falls back to the group's currency (USD outside a group) (#361)
+  currency: z.unknown().optional().transform(currencyCode),
   confidence: z.number().min(0).max(1).optional(),
 });
 
