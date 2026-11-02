@@ -32,3 +32,19 @@ describe('receiptExtractionSchema', () => {
     expect(receiptExtractionSchema.safeParse({ ...extraction, date: 'x'.repeat(101) }).success).toBe(false);
   });
 });
+
+// #361: the schema turned a missing or malformed currency into USD, so a receipt whose currency
+// the model couldn't read was converted from USD into the group's currency
+describe('receiptExtractionSchema currency (#361)', () => {
+  it('reads a null, missing or malformed currency as unknown, not USD', () => {
+    for (const currency of [null, undefined, '', '$', 'US Dollar', 'EURO', 42]) {
+      const result = receiptExtractionSchema.parse({ ...extraction, currency });
+      expect(result.currency, JSON.stringify(currency)).toBeUndefined();
+    }
+  });
+
+  it('keeps a currency code the model read, uppercased', () => {
+    expect(receiptExtractionSchema.parse({ ...extraction, currency: 'eur' }).currency).toBe('EUR');
+    expect(receiptExtractionSchema.parse({ ...extraction, currency: ' JPY ' }).currency).toBe('JPY');
+  });
+});

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { currencyCode } from '@/lib/currencies';
 
 // Cap individual extracted money fields well below the Int4 column limit so a
 // hallucinated or prompt-injected value can't overflow the DB or silently
@@ -28,13 +29,10 @@ export const receiptExtractionSchema = z.object({
   tax: moneyCents.default(0),
   tip: moneyCents.default(0),
   total: moneyCents,
-  // Normalize to an uppercase ISO 4217-shaped code: downstream UI passes this
-  // into Intl.NumberFormat, which throws for malformed currency strings.
-  currency: z
-    .string()
-    .max(10)
-    .default('USD')
-    .transform((c) => (/^[a-zA-Z]{3}$/.test(c.trim()) ? c.trim().toUpperCase() : 'USD')),
+  // An uppercase ISO 4217-shaped code, or undefined when the model couldn't tell (the prompt asks
+  // for null) or returned something else. Unknown isn't USD: the scan falls back to the group's
+  // currency (#361)
+  currency: z.unknown().transform(currencyCode),
   confidence: z.number().min(0).max(1).optional(),
 });
 

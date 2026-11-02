@@ -5,7 +5,8 @@ import type { PrismaClient } from '@/generated/prisma/client';
 import { createTRPCRouter, protectedProcedure, groupMemberProcedure } from '../init';
 import { processReceiptImage } from '../../lib/receipt-processor';
 import { logger } from '../../lib/logger';
-import { parseExtractedData } from '../../lib/json-schemas';
+import { parseExtractedData, receiptCurrency } from '../../lib/json-schemas';
+import { DEFAULT_CURRENCY } from '@/lib/currencies';
 import { getExchangeRate, convertCents } from '../../lib/exchange-rates';
 import { stripUndefined } from '../../lib/strip-undefined';
 import { lockActiveGroup } from '../../lib/group-balances';
@@ -13,6 +14,25 @@ import { deleteUnusedSplitReceipts, removeReceiptFiles } from '../../lib/receipt
 import { calculateReceiptSplitTotals } from '@/lib/split-calculator';
 
 const uniqueIds = (ids: string[]) => new Set(ids).size === ids.length;
+
+type ReceiptSummary = {
+  merchantName?: string;
+  date?: string;
+  subtotal: number;
+  tax: number;
+  tip: number;
+  total: number;
+  currency: string;
+};
+
+/**
+ * A receipt's extracted data as the pages show it, in its own currency or, when it has none, its
+ * group's (`fallback`), so a page never formats an amount without one (#361)
+ */
+function withCurrency(extractedData: unknown, fallback: string): ReceiptSummary | null {
+  if (!extractedData || typeof extractedData !== 'object') return null;
+  return { ...(extractedData as ReceiptSummary), currency: receiptCurrency(extractedData, fallback) };
+}
 
 const sameShares = (totals: { userId: string; total: number }[], expected: { userId: string; amount: number }[]) => {
   const expectedByUser = new Map(expected.map((share) => [share.userId, share.amount]));
@@ -110,12 +130,17 @@ export const receiptsRouter = createTRPCRouter({
         );
       }
 
+      // When the scan can't tell which currency the receipt is in, it's in its group's (#361)
+      const groupId = input.groupId ?? receipt.groupId;
+      const group = groupId ? await ctx.db.group.findUnique({ where: { id: groupId }, select: { currency: true } }) : null;
+
       try {
         return await processReceiptImage({
           db: ctx.db,
           receiptId: input.receiptId,
           receipt,
           ...(input.correctionHint !== undefined ? { correctionHint: input.correctionHint } : {}),
+          fallbackCurrency: group?.currency ?? DEFAULT_CURRENCY,
           logPrefix: 'receipt',
         });
       } catch (error) {
@@ -165,15 +190,7 @@ export const receiptsRouter = createTRPCRouter({
         status: receiptWithItems.status,
         imagePath: receiptWithItems.imagePath,
         paidById: receiptWithItems.paidById,
-        extractedData: receiptWithItems.extractedData as {
-          merchantName?: string;
-          date?: string;
-          subtotal: number;
-          tax: number;
-          tip: number;
-          total: number;
-          currency: string;
-        } | null,
+        extractedData: withCurrency(receiptWithItems.extractedData, receipt.group?.currency ?? DEFAULT_CURRENCY),
       },
       items: receiptWithItems.items as ReceiptItem[],
     };
@@ -364,6 +381,7 @@ export const receiptsRouter = createTRPCRouter({
         db: ctx.db,
         receiptId: input.receiptId,
         receipt: { imagePath: receipt.imagePath, mimeType: receipt.mimeType },
+        fallbackCurrency: receipt.group?.currency ?? DEFAULT_CURRENCY,
         logPrefix: 'receipt.retry',
       });
     } catch (error) {
@@ -711,6 +729,7 @@ export const receiptsRouter = createTRPCRouter({
     }),
 
   listPending: groupMemberProcedure.input(z.object({ groupId: z.string() })).query(async ({ ctx, input }) => {
+    const group = await ctx.db.group.findUnique({ where: { id: input.groupId }, select: { currency: true } });
     const receipts = await ctx.db.receipt.findMany({
       where: {
         groupId: input.groupId,
@@ -724,15 +743,7 @@ export const receiptsRouter = createTRPCRouter({
     return receipts.map((r) => ({
       id: r.id,
       createdAt: r.createdAt,
-      extractedData: r.extractedData as {
-        merchantName?: string;
-        date?: string;
-        subtotal: number;
-        tax: number;
-        tip: number;
-        total: number;
-        currency: string;
-      } | null,
+      extractedData: withCurrency(r.extractedData, group?.currency ?? DEFAULT_CURRENCY),
     }));
   }),
 
