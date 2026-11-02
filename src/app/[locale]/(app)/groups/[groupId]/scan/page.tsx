@@ -14,6 +14,7 @@ import { ArrowLeft, Loader2, Camera, RefreshCw, Users } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import { toast } from 'sonner';
 import { ItemAssignment } from '@/components/receipts/item-assignment';
+import { DEFAULT_CURRENCY } from '@/lib/currencies';
 import { ArchivedGroupNotice } from '@/components/groups/archived-group-notice';
 import { loadingMessageKeys, randomLoadingMessageIndex } from '@/lib/loading-messages';
 import { canStoreClaimIdentity, setStoredClaimIdentity } from '@/lib/guest-session';
@@ -98,7 +99,7 @@ function ScanReceiptContent({ params }: { params: Promise<{ groupId: string }> }
           tax: extracted.tax,
           tip: extracted.tip ?? 0,
           total: extracted.total ?? extracted.subtotal + extracted.tax + (extracted.tip ?? 0),
-          currency: extracted.currency ?? 'USD',
+          currency: extracted.currency,
         },
         items: items.map((i) => ({
           name: i.name,
@@ -279,6 +280,7 @@ function ScanReceiptContent({ params }: { params: Promise<{ groupId: string }> }
           <ItemAssignment
             key={receiptId}
             groupId={groupId}
+            groupCurrency={group.data?.currency ?? DEFAULT_CURRENCY}
             receiptId={receiptId}
             members={members}
             onComplete={handleExpenseCreated}

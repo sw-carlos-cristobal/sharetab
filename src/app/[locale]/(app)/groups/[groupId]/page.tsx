@@ -345,7 +345,7 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
                     )}
                     <div className="flex items-center gap-3 ml-3">
                       <p className="text-lg font-semibold">
-                        {r.extractedData ? formatCents(r.extractedData.total, g.currency, locale) : '—'}
+                        {r.extractedData ? formatCents(r.extractedData.total, r.extractedData.currency, locale) : '—'}
                       </p>
                       <button
                         type="button"
