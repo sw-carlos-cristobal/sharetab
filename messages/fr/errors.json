@@ -75,7 +75,6 @@
   "shareUsersNotMembers": "Une ou plusieurs personnes ayant une part ne sont pas membres de ce groupe",
   "sharesSumMismatch": "La somme des parts ({sum}) ne correspond pas au montant de la dépense ({amount})",
   "exchangeRateUnavailable": "Impossible de récupérer le taux de change. Saisissez un taux manuellement ou réessayez.",
-  "receiptExchangeRateUnavailable": "Impossible de récupérer le taux de change pour la devise du reçu. Veuillez réessayer.",
   "convertedAmountTooLarge": "Le montant converti est trop élevé. Vérifiez le taux de change.",
   "settleWithYourself": "Impossible de régler une dette avec vous-même",
   "paymentsFromYourselfOnly": "Vous ne pouvez enregistrer que des paiements effectués par vous",

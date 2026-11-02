@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { AppError } from './app-error';
+import { currencyCode } from '@/lib/currencies';
 
 export const extractedDataSchema = z
   .object({
@@ -9,11 +10,23 @@ export const extractedDataSchema = z
     tax: z.number().int().min(0).default(0),
     tip: z.number().int().min(0).default(0),
     total: z.number().int().min(0).default(0),
-    currency: z.string().default('USD'),
+    // No default: a receipt without one is in its group's currency (#361), see receiptCurrency
+    currency: z.string().nullish(),
   })
   .passthrough();
 
 export type ExtractedData = z.infer<typeof extractedDataSchema>;
+
+/**
+ * A receipt's currency: the code stored in its extracted data, or `fallback` when it has none or
+ * one that isn't a currency code: callers pass its group's currency (the expense's group when an
+ * ungrouped receipt becomes an expense, USD otherwise) (#361).
+ */
+export function receiptCurrency(extractedData: unknown, fallback: string): string {
+  const stored =
+    extractedData && typeof extractedData === 'object' ? (extractedData as { currency?: unknown }).currency : undefined;
+  return currencyCode(stored) ?? fallback;
+}
 
 export const guestItemSchema = z.object({
   name: z.string(),

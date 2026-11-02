@@ -75,7 +75,6 @@
   "shareUsersNotMembers": "One or more share users are not members of this group",
   "sharesSumMismatch": "Shares sum ({sum}) does not equal expense amount ({amount})",
   "exchangeRateUnavailable": "Could not fetch exchange rate. Please provide a manual rate or try again.",
-  "receiptExchangeRateUnavailable": "Could not fetch exchange rate for receipt currency. Please try again.",
   "convertedAmountTooLarge": "Converted amount is too large. Check the exchange rate.",
   "settleWithYourself": "Cannot settle a debt with yourself",
   "paymentsFromYourselfOnly": "You can only record payments from yourself",

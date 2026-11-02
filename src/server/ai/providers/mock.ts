@@ -55,7 +55,9 @@ export class MockProvider implements AIProvider {
       tax,
       tip,
       total,
-      currency: 'USD',
+      // Reads no currency, as with a receipt that shows only "$": the scan saves its group's
+      // currency, or USD outside a group (#361). The e2e suite scans into USD and EUR groups
+      currency: undefined,
       confidence: 0.95,
     };
   }

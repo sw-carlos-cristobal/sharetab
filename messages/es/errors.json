@@ -75,7 +75,6 @@
   "shareUsersNotMembers": "Una o más personas con parte en el gasto no son miembros de este grupo",
   "sharesSumMismatch": "La suma de las partes ({sum}) no coincide con el monto del gasto ({amount})",
   "exchangeRateUnavailable": "No se pudo obtener el tipo de cambio. Indica uno manualmente o inténtalo de nuevo.",
-  "receiptExchangeRateUnavailable": "No se pudo obtener el tipo de cambio para la moneda del recibo. Inténtalo de nuevo.",
   "convertedAmountTooLarge": "El monto convertido es demasiado grande. Revisa el tipo de cambio.",
   "settleWithYourself": "No puedes saldar una deuda contigo mismo",
   "paymentsFromYourselfOnly": "Solo puedes registrar pagos hechos por ti",

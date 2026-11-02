@@ -25,6 +25,7 @@ import {
 import { calculateSplitTotals, groupSizeWeights } from '@/lib/split-calculator';
 import { normalizeGuestName } from '@/lib/guest-session';
 import { MAX_GROUP_SIZE, MIN_GROUP_SIZE } from '@/lib/group-size';
+import { DEFAULT_CURRENCY } from '@/lib/currencies';
 import { canUseGuestUploads } from '../../lib/guest-uploads';
 import { checkJoinRateLimit } from '../../lib/guest-join-limit';
 import {
@@ -377,6 +378,8 @@ export const guestRouter = createTRPCRouter({
           receiptId: input.receiptId,
           receipt,
           ...(input.correctionHint !== undefined ? { correctionHint: input.correctionHint } : {}),
+          // A Quick Split receipt has no group whose currency it could fall back to (#361)
+          fallbackCurrency: DEFAULT_CURRENCY,
           logPrefix: 'guest.receipt',
         });
       } catch (error) {

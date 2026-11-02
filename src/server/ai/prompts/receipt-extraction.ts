@@ -11,7 +11,7 @@ Return a JSON object with exactly this structure:
   "tax": 104,
   "tip": 0,
   "total": 1403,
-  "currency": "USD"
+  "currency": "ISO 4217 code or null"
 }
 
 CRITICAL RULES:
@@ -21,6 +21,7 @@ CRITICAL RULES:
 - subtotal should equal the sum of all item totalPrices
 - total should equal subtotal + tax + tip
 - If you cannot read a value clearly, make your best estimate
+- currency is the ISO 4217 code of the currency the receipt is in (e.g. "EUR", "GBP", "JPY"), taken from the receipt itself: a currency code or symbol printed on it, or the country of the store's address or phone number. A symbol several currencies share, such as "$", "kr" or "¥", needs the country to tell which one it is. If nothing on the receipt tells you, return null; do not assume USD
 - Do not include any text outside the JSON object
 - Return ONLY valid JSON, no markdown code fences
 

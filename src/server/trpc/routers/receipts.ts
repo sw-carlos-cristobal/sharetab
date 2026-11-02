@@ -5,14 +5,40 @@ import type { PrismaClient } from '@/generated/prisma/client';
 import { createTRPCRouter, protectedProcedure, groupMemberProcedure } from '../init';
 import { processReceiptImage } from '../../lib/receipt-processor';
 import { logger } from '../../lib/logger';
-import { parseExtractedData } from '../../lib/json-schemas';
-import { getExchangeRate, convertCents } from '../../lib/exchange-rates';
+import { parseExtractedData, receiptCurrency } from '../../lib/json-schemas';
+import { DEFAULT_CURRENCY } from '@/lib/currencies';
+import { getExchangeRate, convertCents, exchangeRateSchema } from '../../lib/exchange-rates';
 import { stripUndefined } from '../../lib/strip-undefined';
 import { lockActiveGroup } from '../../lib/group-balances';
 import { deleteUnusedSplitReceipts, removeReceiptFiles } from '../../lib/receipt-cleanup';
 import { calculateReceiptSplitTotals } from '@/lib/split-calculator';
 
 const uniqueIds = (ids: string[]) => new Set(ids).size === ids.length;
+
+// An ISO 4217-shaped code, uppercased, as the expense form takes it
+const currencyCodeSchema = z
+  .string()
+  .regex(/^[a-zA-Z]{3}$/)
+  .transform((c) => c.toUpperCase());
+
+type ReceiptSummary = {
+  merchantName?: string;
+  date?: string;
+  subtotal: number;
+  tax: number;
+  tip: number;
+  total: number;
+  currency: string;
+};
+
+/**
+ * A receipt's extracted data as the pages show it, in its own currency or, when it has none, its
+ * group's (`fallback`; USD outside a group), so a page never formats an amount without one (#361)
+ */
+function withCurrency(extractedData: unknown, fallback: string): ReceiptSummary | null {
+  if (!extractedData || typeof extractedData !== 'object') return null;
+  return { ...(extractedData as ReceiptSummary), currency: receiptCurrency(extractedData, fallback) };
+}
 
 const sameShares = (totals: { userId: string; total: number }[], expected: { userId: string; amount: number }[]) => {
   const expectedByUser = new Map(expected.map((share) => [share.userId, share.amount]));
@@ -78,6 +104,14 @@ export const receiptsRouter = createTRPCRouter({
         }
       }
 
+      // When the scan can't tell which currency the receipt is in, it's in its group's (USD outside a
+      // group) (#361). Looked up before the claim below: once the receipt is PROCESSING, only the
+      // scan's own try marks it FAILED
+      const groupId = input.groupId ?? receipt.groupId;
+      const group = groupId
+        ? await ctx.db.group.findUnique({ where: { id: groupId }, select: { currency: true } })
+        : null;
+
       // Note: old items are NOT deleted here — processReceiptImage handles
       // delete + recreate atomically, so if the AI provider fails the old items remain.
 
@@ -116,6 +150,7 @@ export const receiptsRouter = createTRPCRouter({
           receiptId: input.receiptId,
           receipt,
           ...(input.correctionHint !== undefined ? { correctionHint: input.correctionHint } : {}),
+          fallbackCurrency: group?.currency ?? DEFAULT_CURRENCY,
           logPrefix: 'receipt',
         });
       } catch (error) {
@@ -165,15 +200,7 @@ export const receiptsRouter = createTRPCRouter({
         status: receiptWithItems.status,
         imagePath: receiptWithItems.imagePath,
         paidById: receiptWithItems.paidById,
-        extractedData: receiptWithItems.extractedData as {
-          merchantName?: string;
-          date?: string;
-          subtotal: number;
-          tax: number;
-          tip: number;
-          total: number;
-          currency: string;
-        } | null,
+        extractedData: withCurrency(receiptWithItems.extractedData, receipt.group?.currency ?? DEFAULT_CURRENCY),
       },
       items: receiptWithItems.items as ReceiptItem[],
     };
@@ -341,6 +368,36 @@ export const receiptsRouter = createTRPCRouter({
       return { success: true };
     }),
 
+  // The receipt page's currency selector (#361). Saved on the receipt when chosen, so it's kept
+  // through Save for later and used by the group's saved receipts and the expense made from it
+  setCurrency: protectedProcedure
+    .input(z.object({ receiptId: z.string(), currency: currencyCodeSchema }))
+    .mutation(async ({ ctx, input }) => {
+      await verifyReceiptAccess(ctx.db, input.receiptId, ctx.user.id);
+
+      await ctx.db.$transaction(async (tx) => {
+        // An expense being made from it holds this row FOR SHARE and checks the currency it used
+        // under it, so either this waits for that expense (and is refused below) or that expense
+        // sees the change. A scan starting again marks it PROCESSING under the same lock, so either
+        // this is refused below or the scan waits and then saves its own read of the currency
+        await tx.$queryRaw`SELECT 1 FROM "Receipt" WHERE "id" = ${input.receiptId} FOR NO KEY UPDATE`;
+        const receipt = await verifyReceiptAccess(tx, input.receiptId, ctx.user.id);
+        if (receipt.status !== 'COMPLETED') {
+          throw new AppError('BAD_REQUEST', 'receiptNotProcessed');
+        }
+        const existing = await tx.expense.findUnique({ where: { receiptId: input.receiptId } });
+        if (existing) {
+          throw new AppError('BAD_REQUEST', 'receiptAlreadyHasExpense');
+        }
+        const extractedData = (receipt.extractedData ?? {}) as Record<string, unknown>;
+        await tx.receipt.update({
+          where: { id: input.receiptId },
+          data: { extractedData: { ...extractedData, currency: input.currency } as Prisma.InputJsonValue },
+        });
+      });
+      return { currency: input.currency };
+    }),
+
   retryProcessing: protectedProcedure.input(z.object({ receiptId: z.string() })).mutation(async ({ ctx, input }) => {
     const receipt = await verifyReceiptAccess(ctx.db, input.receiptId, ctx.user.id);
 
@@ -364,6 +421,7 @@ export const receiptsRouter = createTRPCRouter({
         db: ctx.db,
         receiptId: input.receiptId,
         receipt: { imagePath: receipt.imagePath, mimeType: receipt.mimeType },
+        fallbackCurrency: receipt.group?.currency ?? DEFAULT_CURRENCY,
         logPrefix: 'receipt.retry',
       });
     } catch (error) {
@@ -403,6 +461,12 @@ export const receiptsRouter = createTRPCRouter({
         // only if it's the same split (#364). The page always sends it; API callers, which showed
         // no split, may leave it out
         expectedShares: z.array(z.object({ userId: z.string(), amount: z.number().int() })).optional(),
+        // The receipt's currency as the page showed it; when it's sent, the expense is saved only
+        // in that currency (#361), since it can be changed on another device. The page always sends it
+        expectedCurrency: currencyCodeSchema.optional(),
+        // A rate entered by hand, used when the receipt isn't in the group's currency in place of
+        // looking one up (#361): Frankfurter has none for some currencies, or for a future date
+        exchangeRate: exchangeRateSchema.optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -444,18 +508,20 @@ export const receiptsRouter = createTRPCRouter({
         })),
       );
 
-      // Currency conversion for receipt expenses
-      const rawCurrency = extractedData.currency;
-      const isValidIso = rawCurrency && /^[a-zA-Z]{3}$/.test(rawCurrency);
-      const receiptCurrency = (isValidIso ? rawCurrency : group!.currency).toUpperCase();
+      // Currency conversion for receipt expenses. A receipt with no currency is in the group's (#361)
       const groupCurrency = group!.currency.toUpperCase();
+      const currency = receiptCurrency(receipt.extractedData, groupCurrency);
+      if (input.expectedCurrency !== undefined && input.expectedCurrency !== currency) {
+        throw new AppError('CONFLICT', 'receiptChangedElsewhere');
+      }
       let exchangeRate: number | null = null;
 
-      if (receiptCurrency !== groupCurrency) {
+      if (currency !== groupCurrency) {
         const receiptDate = extractedData.date?.slice(0, 10);
-        exchangeRate = await getExchangeRate(receiptCurrency, groupCurrency, receiptDate);
+        exchangeRate = input.exchangeRate ?? (await getExchangeRate(currency, groupCurrency, receiptDate));
         if (exchangeRate === null) {
-          throw new AppError('BAD_REQUEST', 'receiptExchangeRateUnavailable');
+          // The expense form's message, which asks for a rate; the receipt page opens its rate field on it
+          throw new AppError('BAD_REQUEST', 'exchangeRateUnavailable');
         }
       }
 
@@ -468,13 +534,18 @@ export const receiptsRouter = createTRPCRouter({
         // (and is refused) or finished first and is seen here. A scan starting again, which
         // replaces the items, marks the receipt PROCESSING under the same lock, so it's either
         // seen here or waits for this expense
-        const [current] = await tx.$queryRaw<{ groupId: string | null; status: string }[]>`
-          SELECT "groupId", "status" FROM "Receipt" WHERE "id" = ${input.receiptId} FOR SHARE`;
+        const [current] = await tx.$queryRaw<{ groupId: string | null; status: string; extractedData: unknown }[]>`
+          SELECT "groupId", "status", "extractedData" FROM "Receipt" WHERE "id" = ${input.receiptId} FOR SHARE`;
         if (!current || current.groupId !== receipt.groupId) {
           throw new AppError('CONFLICT', 'receiptRemovedFromGroup');
         }
         if (current.status !== 'COMPLETED') {
           throw new AppError('BAD_REQUEST', 'receiptNotReady');
+        }
+        // The currency changed on another device since the read the rate was found for (#361).
+        // setCurrency changes it under the same lock, so a later change waits for this expense
+        if (receiptCurrency(current.extractedData, groupCurrency) !== currency) {
+          throw new AppError('CONFLICT', 'receiptChangedElsewhere');
         }
 
         // The items as they are now, which the receipt page may have added to, deleted from or
@@ -537,7 +608,7 @@ export const receiptsRouter = createTRPCRouter({
             groupId: input.groupId,
             title: input.title,
             amount: totalAmount,
-            currency: receiptCurrency,
+            currency,
             exchangeRate: exchangeRate ?? 1.0,
             baseCurrencyAmount,
             splitMode: 'ITEM',
@@ -711,6 +782,7 @@ export const receiptsRouter = createTRPCRouter({
     }),
 
   listPending: groupMemberProcedure.input(z.object({ groupId: z.string() })).query(async ({ ctx, input }) => {
+    const group = await ctx.db.group.findUnique({ where: { id: input.groupId }, select: { currency: true } });
     const receipts = await ctx.db.receipt.findMany({
       where: {
         groupId: input.groupId,
@@ -724,15 +796,7 @@ export const receiptsRouter = createTRPCRouter({
     return receipts.map((r) => ({
       id: r.id,
       createdAt: r.createdAt,
-      extractedData: r.extractedData as {
-        merchantName?: string;
-        date?: string;
-        subtotal: number;
-        tax: number;
-        tip: number;
-        total: number;
-        currency: string;
-      } | null,
+      extractedData: withCurrency(r.extractedData, group?.currency ?? DEFAULT_CURRENCY),
     }));
   }),
 

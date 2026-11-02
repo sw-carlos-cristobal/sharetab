@@ -138,6 +138,16 @@ describe('guest.processReceipt with guest uploads disabled', () => {
     expect(await api.processReceipt({ receiptId: 'r1' })).toEqual({ subtotal: 100 });
     expect(processReceiptImage).toHaveBeenCalledWith(expect.objectContaining({ receiptId: 'r1', receipt }));
   });
+
+  test('a Quick Split receipt whose currency the scan cannot tell is in USD: it has no group (#361)', async () => {
+    mockDb.receipt.findUnique.mockResolvedValue({ id: 'r1', isGuest: true });
+    mockDb.receipt.updateMany.mockResolvedValue({ count: 1 });
+    processReceiptImage.mockResolvedValue({ subtotal: 100 });
+
+    const api = await caller(signedIn);
+    await api.processReceipt({ receiptId: 'r1' });
+    expect(processReceiptImage).toHaveBeenCalledWith(expect.objectContaining({ fallbackCurrency: 'USD' }));
+  });
 });
 
 describe('guest.processReceipt with guest uploads enabled', () => {

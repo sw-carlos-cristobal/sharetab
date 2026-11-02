@@ -10,6 +10,8 @@ interface ProcessReceiptImageOptions {
   receiptId: string;
   receipt: { imagePath: string; mimeType: string };
   correctionHint?: string;
+  /** The currency saved when the scan can't tell which the receipt is in: its group's, when it has one (#361) */
+  fallbackCurrency: string;
   logPrefix?: string;
 }
 
@@ -23,6 +25,7 @@ export async function processReceiptImage({
   receiptId,
   receipt,
   correctionHint,
+  fallbackCurrency,
   logPrefix = 'receipt',
 }: ProcessReceiptImageOptions) {
   const { readFile } = await import('fs/promises');
@@ -85,6 +88,7 @@ export async function processReceiptImage({
   });
 
   const normalizedDate = normalizeDate(extraction.date);
+  const currency = extraction.currency ?? fallbackCurrency;
 
   // Replace items and finalize the receipt atomically — a crash or a
   // concurrent reprocess must never leave a COMPLETED receipt with missing
@@ -116,7 +120,7 @@ export async function processReceiptImage({
           tax: extraction.tax,
           tip: extraction.tip,
           total: extraction.total,
-          currency: extraction.currency,
+          currency,
         } as unknown as Prisma.InputJsonValue,
       },
     });
@@ -130,7 +134,7 @@ export async function processReceiptImage({
     tax: extraction.tax,
     tip: extraction.tip,
     total: extraction.total,
-    currency: extraction.currency,
+    currency,
     itemCount: extraction.items.length,
   };
 }

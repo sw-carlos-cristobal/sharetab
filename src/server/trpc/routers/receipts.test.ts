@@ -2,6 +2,7 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { calculateReceiptSplitTotals } from '@/lib/split-calculator';
 import { getExchangeRate } from '@/server/lib/exchange-rates';
 import { Prisma } from '@/generated/prisma/client';
+import { processReceiptImage } from '@/server/lib/receipt-processor';
 
 vi.mock('next/headers', () => ({
   cookies: vi.fn().mockResolvedValue({ get: vi.fn().mockReturnValue(null) }),
@@ -426,21 +427,33 @@ describe("a receipt's saved split matches the receipt page's preview (#364)", ()
     items: Item[],
     extractedData: { subtotal: number; tax: number; tip: number; currency?: string; date?: string },
   ) {
+    const stored = { currency: 'USD', ...extractedData, total: extractedData.subtotal + extractedData.tax };
     mockDb.receipt.findUnique.mockResolvedValue({
       id: 'r1',
       status: 'COMPLETED',
       groupId: 'g1',
       uploadedById: 'u1',
-      extractedData: { currency: 'USD', ...extractedData, total: extractedData.subtotal + extractedData.tax },
+      extractedData: stored,
       // Unused now: the mutation read the items here before #364, so a revert runs to its own numbers
       // (and fails the tests whose items don't add up to the scanned subtotal)
       items,
     });
+    // The receipt as its lock reads it: unchanged since the read above
+    mockDb.$queryRaw.mockImplementation(async (strings: TemplateStringsArray) =>
+      strings.join('?').includes('FROM "Receipt"')
+        ? [{ groupId: 'g1', status: 'COMPLETED', extractedData: stored }]
+        : [{ archivedAt: null }],
+    );
     // The items as they are when the expense is made, read under the receipt's lock
     mockDb.receiptItem.findMany.mockResolvedValue(items);
   }
 
-  type Options = { tipOverride?: number; expectedShares?: { userId: string; amount: number }[] };
+  type Options = {
+    tipOverride?: number;
+    expectedShares?: { userId: string; amount: number }[];
+    exchangeRate?: number;
+    expectedCurrency?: string;
+  };
   const finishWith = (assignments: Assignment[], options: Options = {}) => ({
     groupId: 'g1',
     receiptId: 'r1',
@@ -759,10 +772,79 @@ describe("a receipt's saved split matches the receipt page's preview (#364)", ()
   test('a receipt in another currency with no rate available is refused, writing nothing', async () => {
     vi.mocked(getExchangeRate).mockResolvedValue(null);
     scanned([{ id: 'i1', totalPrice: 2000 }], { subtotal: 2000, tax: 0, tip: 0, currency: 'EUR' });
+    // The message the expense form gets, which asks for a manual rate, and which the receipt page
+    // reads to open its rate field (#361)
     await expectRefused([{ receiptItemId: 'i1', userIds: ['alice'] }], {
       code: 'BAD_REQUEST',
-      messageKey: 'receiptExchangeRateUnavailable',
+      messageKey: 'exchangeRateUnavailable',
     });
+  });
+
+  // #361: a currency Frankfurter doesn't carry, or a receipt dated in the future, never gets a
+  // rate, so the receipt couldn't become an expense at all
+  test('a rate entered by hand is used in place of looking one up', async () => {
+    scanned([{ id: 'i1', totalPrice: 2000 }], { subtotal: 2000, tax: 200, tip: 0, currency: 'AED' });
+    await save([{ receiptItemId: 'i1', userIds: ['alice'] }], { exchangeRate: 0.27 });
+
+    expect(getExchangeRate).not.toHaveBeenCalled();
+    expect(mockDb.expense.create.mock.calls[0]![0].data).toMatchObject({
+      amount: 2200,
+      currency: 'AED',
+      exchangeRate: 0.27,
+      baseCurrencyAmount: 594,
+    });
+  });
+
+  test("a rate entered by hand for a receipt in the group's currency is ignored", async () => {
+    scanned([{ id: 'i1', totalPrice: 2000 }], { subtotal: 2000, tax: 0, tip: 0 });
+    await save([{ receiptItemId: 'i1', userIds: ['alice'] }], { exchangeRate: 2 });
+    expect(mockDb.expense.create.mock.calls[0]![0].data).toMatchObject({
+      currency: 'USD',
+      exchangeRate: 1,
+      baseCurrencyAmount: null,
+    });
+  });
+
+  test.each([0, -1, 1_000_001, Number.POSITIVE_INFINITY])('a rate of %s is refused', async (exchangeRate) => {
+    scanned([{ id: 'i1', totalPrice: 2000 }], { subtotal: 2000, tax: 0, tip: 0, currency: 'EUR' });
+    await expectRefused([{ receiptItemId: 'i1', userIds: ['alice'] }], { code: 'BAD_REQUEST' }, { exchangeRate });
+    expect(mockDb.$transaction).not.toHaveBeenCalled();
+  });
+
+  // #361: the receipt's currency can be changed on another device, and the expense must be in the
+  // one the page showed
+  test('a receipt whose currency changed since the page loaded it is refused, writing nothing', async () => {
+    vi.mocked(getExchangeRate).mockResolvedValue(1.1);
+    scanned([{ id: 'i1', totalPrice: 2000 }], { subtotal: 2000, tax: 0, tip: 0, currency: 'GBP' });
+    await expectRefused(
+      [{ receiptItemId: 'i1', userIds: ['alice'] }],
+      { code: 'CONFLICT', messageKey: 'receiptChangedElsewhere' },
+      { expectedCurrency: 'EUR' },
+    );
+    expect(getExchangeRate).not.toHaveBeenCalled();
+  });
+
+  test('a receipt whose currency changes before its lock is taken is refused, writing nothing', async () => {
+    vi.mocked(getExchangeRate).mockResolvedValue(1.1);
+    scanned([{ id: 'i1', totalPrice: 2000 }], { subtotal: 2000, tax: 0, tip: 0, currency: 'EUR' });
+    // Changed to GBP after the read the rate was looked up for, before the transaction locked it
+    mockDb.$queryRaw.mockImplementation(async (strings: TemplateStringsArray) =>
+      strings.join('?').includes('FROM "Receipt"')
+        ? [{ groupId: 'g1', status: 'COMPLETED', extractedData: { subtotal: 2000, tax: 0, tip: 0, currency: 'GBP' } }]
+        : [{ archivedAt: null }],
+    );
+    await expectRefused(
+      [{ receiptItemId: 'i1', userIds: ['alice'] }],
+      { code: 'CONFLICT', messageKey: 'receiptChangedElsewhere' },
+      { expectedCurrency: 'EUR' },
+    );
+  });
+
+  test("the currency the page showed, when it is the receipt's, saves the expense in it", async () => {
+    vi.mocked(getExchangeRate).mockResolvedValue(1.1);
+    scanned([{ id: 'i1', totalPrice: 2000 }], { subtotal: 2000, tax: 0, tip: 0, currency: 'eur' });
+    await save([{ receiptItemId: 'i1', userIds: ['alice'] }], { expectedCurrency: 'EUR' });
+    expect(mockDb.expense.create.mock.calls[0]![0].data).toMatchObject({ currency: 'EUR', exchangeRate: 1.1 });
   });
 
   // An item added, deleted or repriced on another device just before the expense is made: the
@@ -783,8 +865,10 @@ describe("a receipt's saved split matches the receipt page's preview (#364)", ()
       (strings as string[]).join('?').includes('FROM "Receipt" WHERE "id" = ? FOR SHARE'),
     );
     expect(txQueryRaw.mock.calls[receiptLock]!.slice(1)).toEqual(['r1']);
-    // It reads the status it checks
-    expect((txQueryRaw.mock.calls[receiptLock]![0] as string[]).join('?')).toMatch(/"groupId", "status" FROM/);
+    // It reads the status and currency it checks
+    expect((txQueryRaw.mock.calls[receiptLock]![0] as string[]).join('?')).toMatch(
+      /"groupId", "status", "extractedData" FROM/,
+    );
     const [itemsRead] = txFindMany.mock.invocationCallOrder;
     expect(itemsRead).toBeGreaterThan(txQueryRaw.mock.invocationCallOrder[receiptLock]!);
     expect(itemsRead).toBeLessThan(mockDb.expense.create.mock.invocationCallOrder[0]!);
@@ -885,5 +969,198 @@ describe("a receipt's saved split matches the receipt page's preview (#364)", ()
     scanned([{ id: 'i1', totalPrice: 2000 }], { subtotal: 2000, tax: 200, tip: 0 });
     await expectRefused(assignments, { code: 'BAD_REQUEST' });
     expect(mockDb.$transaction).not.toHaveBeenCalled();
+  });
+});
+
+// #361: a receipt whose currency the scan couldn't read was saved as USD, so a euro receipt in a
+// EUR group was converted from USD. It's in its group's currency now, and every read of it shows one.
+describe("a receipt's currency when the scan can't tell (#361)", () => {
+  const inGroup = (currency: string) => ({
+    id: 'r1',
+    status: 'COMPLETED',
+    groupId: 'g1',
+    uploadedById: 'u1',
+    imagePath: 'r1.jpg',
+    mimeType: 'image/jpeg',
+    group: { currency, members: [{ userId: 'u1' }] },
+  });
+
+  beforeEach(() => {
+    mockDb.groupMember.findUnique.mockResolvedValue({ role: 'MEMBER', userId: 'u1', groupId: 'g1' });
+    mockDb.receipt.updateMany.mockResolvedValue({ count: 1 });
+    vi.mocked(processReceiptImage).mockResolvedValue({ status: 'COMPLETED' } as never);
+  });
+
+  test("a scan into a group falls back to that group's currency", async () => {
+    mockDb.receipt.findUnique.mockResolvedValue({ ...inGroup('USD'), groupId: null, group: null });
+    mockDb.group.findUnique.mockResolvedValue({ currency: 'EUR' });
+    const api = await caller();
+    await api.processReceipt({ receiptId: 'r1', groupId: 'g1' });
+
+    expect(mockDb.group.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'g1' } }));
+    expect(processReceiptImage).toHaveBeenCalledWith(expect.objectContaining({ fallbackCurrency: 'EUR' }));
+  });
+
+  // Once the receipt is claimed, only the scan's own try marks it FAILED; a lookup failing in between
+  // would leave it PROCESSING, refusing every retry, for 15 minutes
+  test("the group's currency is looked up before the receipt is claimed for the scan", async () => {
+    mockDb.receipt.findUnique.mockResolvedValue({ ...inGroup('USD'), groupId: null, group: null });
+    mockDb.group.findUnique.mockRejectedValue(new Error('connection lost'));
+    const api = await caller();
+    await expect(api.processReceipt({ receiptId: 'r1', groupId: 'g1' })).rejects.toThrow();
+
+    expect(mockDb.receipt.updateMany).not.toHaveBeenCalled();
+    expect(processReceiptImage).not.toHaveBeenCalled();
+  });
+
+  test("a rescan of a receipt in a group falls back to its group's currency", async () => {
+    mockDb.receipt.findUnique.mockResolvedValue(inGroup('EUR'));
+    mockDb.group.findUnique.mockResolvedValue({ currency: 'EUR' });
+    const api = await caller();
+    await api.processReceipt({ receiptId: 'r1' });
+    expect(processReceiptImage).toHaveBeenLastCalledWith(expect.objectContaining({ fallbackCurrency: 'EUR' }));
+
+    await api.retryProcessing({ receiptId: 'r1' });
+    expect(processReceiptImage).toHaveBeenLastCalledWith(expect.objectContaining({ fallbackCurrency: 'EUR' }));
+  });
+
+  test('a scan outside any group falls back to USD', async () => {
+    mockDb.receipt.findUnique.mockResolvedValue({ ...inGroup('USD'), groupId: null, group: null });
+    const api = await caller();
+    await api.processReceipt({ receiptId: 'r1' });
+    expect(processReceiptImage).toHaveBeenLastCalledWith(expect.objectContaining({ fallbackCurrency: 'USD' }));
+
+    await api.retryProcessing({ receiptId: 'r1' });
+    expect(processReceiptImage).toHaveBeenLastCalledWith(expect.objectContaining({ fallbackCurrency: 'USD' }));
+  });
+
+  test("the receipt page gets the receipt's own currency, or its group's when it has none", async () => {
+    const api = await caller();
+    mockDb.receipt.findUnique.mockResolvedValue({ ...inGroup('EUR'), extractedData: { total: 100 }, items: [] });
+    expect((await api.getReceiptItems({ receiptId: 'r1' })).receipt.extractedData?.currency).toBe('EUR');
+
+    mockDb.receipt.findUnique.mockResolvedValue({
+      ...inGroup('EUR'),
+      extractedData: { total: 100, currency: 'GBP' },
+      items: [],
+    });
+    expect((await api.getReceiptItems({ receiptId: 'r1' })).receipt.extractedData?.currency).toBe('GBP');
+  });
+
+  test("the group's saved receipts each show their own currency, or the group's when they have none", async () => {
+    mockDb.group.findUnique.mockResolvedValue({ currency: 'EUR' });
+    mockDb.receipt.findMany.mockResolvedValue([
+      { id: 'r1', createdAt: new Date(), extractedData: { total: 100, currency: 'GBP' } },
+      { id: 'r2', createdAt: new Date(), extractedData: { total: 200 } },
+      { id: 'r3', createdAt: new Date(), extractedData: null },
+    ]);
+    const api = await caller();
+    const pending = await api.listPending({ groupId: 'g1' });
+    expect(pending.map((r) => r.extractedData?.currency ?? null)).toEqual(['GBP', 'EUR', null]);
+  });
+
+  test("an expense from a receipt with no currency is in the group's, with no rate to look up", async () => {
+    const extractedData = { subtotal: 1000, tax: 0, tip: 0, total: 1000 };
+    mockDb.groupMember.findMany.mockResolvedValue([{ userId: 'u1' }]);
+    mockDb.group.findUnique.mockResolvedValue({ archivedAt: null, currency: 'EUR' });
+    mockDb.receipt.findUnique.mockResolvedValue({ ...inGroup('EUR'), extractedData });
+    mockDb.receiptItem.findMany.mockResolvedValue([{ id: 'i1', totalPrice: 1000 }]);
+    mockDb.$queryRaw.mockImplementation(async (strings: TemplateStringsArray) =>
+      strings.join('?').includes('FROM "Receipt"')
+        ? [{ groupId: 'g1', status: 'COMPLETED', extractedData }]
+        : [{ archivedAt: null }],
+    );
+    mockDb.$transaction.mockImplementation(async (fn: (tx: typeof mockDb) => unknown) => fn(mockDb));
+    mockDb.expense.create.mockResolvedValue({ id: 'e1' });
+    vi.mocked(getExchangeRate).mockReset();
+
+    const api = await caller();
+    await api.assignItemsAndCreateExpense({
+      groupId: 'g1',
+      receiptId: 'r1',
+      title: 'Lunch',
+      paidById: 'u1',
+      assignments: [{ receiptItemId: 'i1', userIds: ['u1'] }],
+    });
+    expect(getExchangeRate).not.toHaveBeenCalled();
+    expect(mockDb.expense.create.mock.calls[0]![0].data).toMatchObject({
+      currency: 'EUR',
+      exchangeRate: 1,
+      baseCurrencyAmount: null,
+    });
+  });
+});
+
+// #361: the only way to correct a receipt's currency was Rescan with corrections, which reran the
+// whole scan, depended on the model obeying, and replaced every item
+describe("changing a receipt's currency (#361)", () => {
+  const rawSql = () => mockDb.$queryRaw.mock.calls.map(([strings]) => (strings as string[]).join('?'));
+  const stored = { merchantName: 'Cafe', subtotal: 1000, tax: 80, tip: 0, total: 1080, currency: 'USD' };
+  const receipt = (fields: object = {}) => ({
+    id: 'r1',
+    status: 'COMPLETED',
+    groupId: 'g1',
+    uploadedById: 'u2',
+    extractedData: stored,
+    group: { currency: 'USD', members: [{ userId: 'u1' }] },
+    ...fields,
+  });
+
+  beforeEach(() => {
+    mockDb.$transaction.mockImplementation(async (fn: (tx: typeof mockDb) => unknown) => fn(mockDb));
+    mockDb.$queryRaw.mockResolvedValue([{ '?column?': 1 }]);
+    mockDb.receipt.findUnique.mockResolvedValue(receipt());
+    mockDb.expense.findUnique.mockResolvedValue(null);
+  });
+
+  test('saves the code on the receipt, keeping what the scan read, under its row lock', async () => {
+    const api = await caller();
+    expect(await api.setCurrency({ receiptId: 'r1', currency: 'eur' })).toEqual({ currency: 'EUR' });
+
+    expect(rawSql()).toEqual(['SELECT 1 FROM "Receipt" WHERE "id" = ? FOR NO KEY UPDATE']);
+    expect(mockDb.receipt.update).toHaveBeenCalledWith({
+      where: { id: 'r1' },
+      data: { extractedData: { ...stored, currency: 'EUR' } },
+    });
+    // The receipt it changes is the one read after the lock
+    expect(mockDb.receipt.update.mock.invocationCallOrder[0]).toBeGreaterThan(
+      mockDb.$queryRaw.mock.invocationCallOrder[0]!,
+    );
+    expect(mockDb.receipt.findUnique.mock.invocationCallOrder.at(-1)).toBeGreaterThan(
+      mockDb.$queryRaw.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  test.each(['', 'EURO', '$', 'U$D'])('refuses %j, which is not a currency code', async (currency) => {
+    const api = await caller();
+    await expect(api.setCurrency({ receiptId: 'r1', currency })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockDb.receipt.update).not.toHaveBeenCalled();
+  });
+
+  test('refuses someone outside the group', async () => {
+    mockDb.receipt.findUnique.mockResolvedValue(receipt({ group: { currency: 'USD', members: [{ userId: 'u9' }] } }));
+    const api = await caller();
+    await expect(api.setCurrency({ receiptId: 'r1', currency: 'EUR' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(mockDb.receipt.update).not.toHaveBeenCalled();
+  });
+
+  test('refuses a receipt being scanned, whose scan would replace it', async () => {
+    mockDb.receipt.findUnique.mockResolvedValue(receipt({ status: 'PROCESSING' }));
+    const api = await caller();
+    await expect(api.setCurrency({ receiptId: 'r1', currency: 'EUR' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      messageKey: 'receiptNotProcessed',
+    });
+    expect(mockDb.receipt.update).not.toHaveBeenCalled();
+  });
+
+  test('refuses a receipt that already has its expense, which keeps the currency it was saved in', async () => {
+    mockDb.expense.findUnique.mockResolvedValue({ id: 'e1' });
+    const api = await caller();
+    await expect(api.setCurrency({ receiptId: 'r1', currency: 'EUR' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      messageKey: 'receiptAlreadyHasExpense',
+    });
+    expect(mockDb.receipt.update).not.toHaveBeenCalled();
   });
 });

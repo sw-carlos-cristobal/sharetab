@@ -3,8 +3,12 @@
  * Caches rates in memory with a configurable TTL.
  */
 
+import { z } from 'zod';
 import { AppError } from './app-error';
 import { MAX_MONEY_CENTS } from '@/lib/money';
+
+/** A rate entered by hand (1 unit of the expense's currency = rate units of the group's) */
+export const exchangeRateSchema = z.number().positive().finite().max(1_000_000);
 
 const FRANKFURTER_BASE = 'https://api.frankfurter.app';
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
