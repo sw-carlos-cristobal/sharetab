@@ -75,7 +75,6 @@
   "shareUsersNotMembers": "Mindestens eine Person mit einem Anteil ist kein Mitglied dieser Gruppe",
   "sharesSumMismatch": "Die Summe der Anteile ({sum}) entspricht nicht dem Ausgabenbetrag ({amount})",
   "exchangeRateUnavailable": "Der Wechselkurs konnte nicht abgerufen werden. Geben Sie einen Kurs manuell ein oder versuchen Sie es erneut.",
-  "receiptExchangeRateUnavailable": "Der Wechselkurs für die Belegwährung konnte nicht abgerufen werden. Bitte versuchen Sie es erneut.",
   "convertedAmountTooLarge": "Der umgerechnete Betrag ist zu groß. Prüfen Sie den Wechselkurs.",
   "settleWithYourself": "Sie können keine Schuld mit sich selbst ausgleichen",
   "paymentsFromYourselfOnly": "Sie können nur Zahlungen erfassen, die von Ihnen stammen",

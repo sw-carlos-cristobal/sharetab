@@ -75,7 +75,6 @@
   "shareUsersNotMembers": "En eller flera personer med andelar är inte medlemmar i den här gruppen",
   "sharesSumMismatch": "Summan av andelarna ({sum}) är inte lika med utgiftens belopp ({amount})",
   "exchangeRateUnavailable": "Det gick inte att hämta växelkursen. Ange en kurs manuellt eller försök igen.",
-  "receiptExchangeRateUnavailable": "Det gick inte att hämta växelkursen för kvittots valuta. Försök igen.",
   "convertedAmountTooLarge": "Det omräknade beloppet är för stort. Kontrollera växelkursen.",
   "settleWithYourself": "Du kan inte göra upp en skuld med dig själv",
   "paymentsFromYourselfOnly": "Du kan bara registrera betalningar från dig själv",

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { AppError } from '@/server/lib/app-error';
 import { createTRPCRouter, groupMemberProcedure } from '../init';
 import { SplitMode } from '@/generated/prisma/client';
-import { getExchangeRate, convertCents } from '../../lib/exchange-rates';
+import { getExchangeRate, convertCents, exchangeRateSchema } from '../../lib/exchange-rates';
 import { MAX_MONEY_CENTS } from '@/lib/money';
 import { stripUndefined } from '../../lib/strip-undefined';
 import { lockActiveGroup } from '../../lib/group-balances';
@@ -20,8 +20,6 @@ const expenseSharesArraySchema = z
   .refine((shares) => new Set(shares.map((s) => s.userId)).size === shares.length, {
     message: 'Duplicate user in shares',
   });
-
-const exchangeRateSchema = z.number().positive().finite().max(1_000_000);
 
 // Prisma's `contains` becomes `ILIKE '%' || term || '%'` with the term as given, so
 // escape LIKE's pattern characters for a search to match them literally (#479).

@@ -75,7 +75,6 @@
   "shareUsersNotMembers": "Uma ou mais pessoas na divisão não são membros deste grupo",
   "sharesSumMismatch": "A soma das partes ({sum}) não é igual ao valor da despesa ({amount})",
   "exchangeRateUnavailable": "Não foi possível obter a taxa de câmbio. Informe uma taxa manualmente ou tente novamente.",
-  "receiptExchangeRateUnavailable": "Não foi possível obter a taxa de câmbio da moeda do recibo. Tente novamente.",
   "convertedAmountTooLarge": "O valor convertido é grande demais. Verifique a taxa de câmbio.",
   "settleWithYourself": "Não é possível acertar uma dívida com você mesmo",
   "paymentsFromYourselfOnly": "Você só pode registrar pagamentos feitos por você",
