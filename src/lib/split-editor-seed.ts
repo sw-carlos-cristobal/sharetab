@@ -20,7 +20,13 @@ export type SplitEditorSeed = {
 
 /**
  * The split editor the edit-expense form opens on, seeded with the saved
- * shares so that saving without touching the split keeps it as it was.
+ * shares so that saving without touching the split keeps it as it was. That
+ * holds while the saved amounts match the editor's rounding. One case where
+ * they may not: a SHARES or PERCENTAGE split saved before #331 gave the last
+ * person whatever the others' rounding left, and the editors now divide the
+ * amount with `allocateProportionally`, so saving such an expense can move
+ * its leftover cents, wherever the old rounding put them elsewhere (never for
+ * two people).
  * Only the opening mode is seeded; the other modes keep their new-expense
  * defaults. (percentage is stored in basis points: 5000 = 50%)
  *

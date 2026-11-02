@@ -31,9 +31,10 @@ export function calculateSplitTotals(params: {
   if (entries.length === 0) return [];
 
   // Tax and tip follow each person's items (#331: within a cent of their exact share, so nobody's
-  // goes below zero and free items pay none). On a bill whose items are all free they can't, so
-  // they're shared by head, a group counting for as many people as it stands for.
-  const subtotals = entries.map(([, itemTotal]) => itemTotal);
+  // goes below zero and free items pay none). Someone whose items come to nothing or less (the
+  // guest API takes a negative price) counts as free. When everyone does, they can't follow the
+  // items, so they're shared by head, a group counting for as many people as it stands for.
+  const subtotals = entries.map(([, itemTotal]) => Math.max(0, itemTotal));
   const weights = subtotals.some((s) => s > 0)
     ? subtotals
     : entries.map(([personIdx]) => personWeights?.[personIdx] ?? 1);
@@ -198,7 +199,8 @@ export function calculateClaimTotals(params: Parameters<typeof calculateSplitTot
   }
 
   const subtotals = [...people.map((p) => p.itemTotal), billSubtotal - claimedSubtotal];
-  const weights = freeBill ? [...people.map(() => 0), 1] : subtotals;
+  // As in calculateSplitTotals, someone whose items come to nothing or less takes no tax or tip
+  const weights = freeBill ? [...people.map(() => 0), 1] : subtotals.map((s) => Math.max(0, s));
   const taxes = allocateProportionally(params.tax, weights);
   const tips = allocateProportionally(params.tip, weights);
   const withShares = (itemTotal: number, i: number) => ({

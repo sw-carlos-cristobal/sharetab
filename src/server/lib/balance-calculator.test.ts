@@ -696,7 +696,7 @@ describe('computeBalances: converted shares and their leftover cents', () => {
     expect(owes(balances)).toEqual({ alice: 2, bob: 1, zed: 0 });
   });
 
-  test('two people convert exactly as before (a cent left over goes to the larger remainder)', () => {
+  test('two people: the cent goes to the larger remainder, the first by user id on a tie', () => {
     const balances = computeBalances(
       [
         {
@@ -714,5 +714,23 @@ describe('computeBalances: converted shares and their leftover cents', () => {
 
     // 551.05 and 549.95
     expect(owes(balances)).toEqual({ alice: 551, bob: 550 });
+
+    // 500.5 each: a tie, so the first by user id. Rounded one by one, floating point decided it
+    // (alice 500, bob 501)
+    const tied = computeBalances(
+      [
+        {
+          paidById: 'alice',
+          amount: 2000,
+          baseCurrencyAmount: 1001,
+          shares: [
+            { userId: 'bob', amount: 1000 },
+            { userId: 'alice', amount: 1000 },
+          ],
+        },
+      ],
+      [],
+    );
+    expect(owes(tied)).toEqual({ alice: 501, bob: 500 });
   });
 });

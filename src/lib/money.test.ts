@@ -146,6 +146,8 @@ describe('allocateProportionally', () => {
   test('gives the leftover cents to the largest remainders, earliest first on a tie', () => {
     // 1000 by 2:1 is 666.67 and 333.33: the cent goes to the first
     expect(allocateProportionally(1000, [2, 1])).toEqual([667, 333]);
+    // 1000 by 1:2 is 333.33 and 666.67: the larger remainder wins even though it's later
+    expect(allocateProportionally(1000, [1, 2])).toEqual([333, 667]);
     // 100 by 1:1:1 is 33.33 each: a tie, so the first
     expect(allocateProportionally(100, [1, 1, 1])).toEqual([34, 33, 33]);
     // 10 by 1:3:6 is exact
@@ -171,19 +173,14 @@ describe('allocateProportionally', () => {
     }
   });
 
-  test('stays exact where an amount times a weight passes 2^53', () => {
-    // A $21,474,836.47 expense converted, its shares as the weights
-    const amount = 2_147_483_647;
-    const weights = [1_073_741_823, 1_073_741_821, 3];
-    const shares = allocateProportionally(amount, weights);
-    const weightTotal = BigInt(1_073_741_823 + 1_073_741_821 + 3);
-    expect(shares.reduce((a, b) => a + b, 0)).toBe(amount);
-    for (const [i, share] of shares.entries()) {
-      const exactTimesTotal = BigInt(amount) * BigInt(weights[i]!);
-      const shareTimesTotal = BigInt(share) * weightTotal;
-      const diff = exactTimesTotal - shareTimesTotal;
-      expect(diff < weightTotal && -diff < weightTotal).toBe(true);
-    }
+  test('ranks remainders exactly where an amount times a weight passes 2^53', () => {
+    // The amount is half the weight total and every weight is odd, so every share is exactly half
+    // a cent over: all four remainders tie, and the two leftover cents go to indices 0 and 1 by
+    // order. Computed in floating point, the larger products lost their low bits, index 3's
+    // remainder came out largest, and it took index 1's cent
+    expect(allocateProportionally(340279362, [233910273, 206688257, 204861441, 35098753])).toEqual([
+      116955137, 103344129, 102430720, 17549376,
+    ]);
   });
 
   test('a zero weight gets nothing', () => {

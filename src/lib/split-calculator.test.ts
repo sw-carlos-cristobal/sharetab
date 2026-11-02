@@ -40,6 +40,40 @@ describe('calculateSplitTotals', () => {
     expect(Math.abs(results[0]!.itemTotal - results[1]!.itemTotal)).toBe(1);
   });
 
+  // #331: the order decides who takes a tied cent, so the page and the server must agree on it
+  test("an item's tied cent goes to the first person listed on it, not the lowest index", () => {
+    const results = calculateSplitTotals({
+      items: [{ totalPrice: 1001 }],
+      assignments: [{ itemIndex: 0, personIndices: [1, 0] }],
+      tax: 0,
+      tip: 0,
+      peopleCount: 2,
+    });
+
+    expect(results.find((r) => r.personIndex === 1)!.itemTotal).toBe(501);
+    expect(results.find((r) => r.personIndex === 0)!.itemTotal).toBe(500);
+  });
+
+  test('a tied tax cent goes to the person who comes first in the assignments', () => {
+    const results = calculateSplitTotals({
+      items: [{ totalPrice: 1000 }, { totalPrice: 1000 }, { totalPrice: 1000 }],
+      assignments: [
+        { itemIndex: 0, personIndices: [2] },
+        { itemIndex: 1, personIndices: [0] },
+        { itemIndex: 2, personIndices: [1] },
+      ],
+      tax: 100,
+      tip: 0,
+      peopleCount: 3,
+    });
+
+    expect(results.map((r) => [r.personIndex, r.tax])).toEqual([
+      [2, 34],
+      [0, 33],
+      [1, 33],
+    ]);
+  });
+
   test('distributes tax proportionally', () => {
     const results = calculateSplitTotals({
       items: [{ totalPrice: 600 }, { totalPrice: 400 }],
@@ -55,7 +89,7 @@ describe('calculateSplitTotals', () => {
     expect(results).toHaveLength(2);
     // Person 0 has 60% of subtotal → 60% of tax
     expect(results.find((r) => r.personIndex === 0)!.tax).toBe(60);
-    // Person 1 has 40% of subtotal → gets remainder of tax
+    // Person 1 has 40% of subtotal → 40% of tax
     const person1 = results.find((r) => r.personIndex === 1)!;
     expect(person1.tax).toBe(40);
   });
@@ -332,7 +366,7 @@ describe('calculateSplitTotals', () => {
       expect(results.map((r) => r.tax)).toEqual([34, 33, 33]);
     });
 
-    test("the last person's tip is their own share, not the tax and tip's leftover cents", () => {
+    test("tax and tip each add up on their own; the last person's tax no longer absorbs the tip's rounding", () => {
       const results = calculateSplitTotals({
         items: [{ totalPrice: 1000 }, { totalPrice: 1000 }, { totalPrice: 1000 }],
         assignments: [
@@ -389,6 +423,57 @@ describe('calculateSplitTotals', () => {
       expect(results).toEqual([
         { personIndex: 0, itemTotal: 0, tax: 51, tip: 25, total: 76 },
         { personIndex: 1, itemTotal: 0, tax: 50, tip: 25, total: 75 },
+      ]);
+    });
+
+    // The guest API accepts a negative item price (a discount line), which the UI never sends
+    test('a person whose items come to nothing or less pays no tax or tip, and nothing throws', () => {
+      const cancelling = calculateSplitTotals({
+        items: [{ totalPrice: 500 }, { totalPrice: -500 }],
+        assignments: [
+          { itemIndex: 0, personIndices: [0] },
+          { itemIndex: 1, personIndices: [1] },
+        ],
+        tax: 100,
+        tip: 0,
+        peopleCount: 2,
+      });
+      expect(cancelling).toEqual([
+        { personIndex: 0, itemTotal: 500, tax: 100, tip: 0, total: 600 },
+        { personIndex: 1, itemTotal: -500, tax: 0, tip: 0, total: -500 },
+      ]);
+
+      const discounted = calculateSplitTotals({
+        items: [{ totalPrice: 1000 }, { totalPrice: -300 }],
+        assignments: [
+          { itemIndex: 0, personIndices: [0] },
+          { itemIndex: 1, personIndices: [1] },
+        ],
+        tax: 101,
+        tip: 50,
+        peopleCount: 2,
+      });
+      expect(discounted.map((r) => [r.tax, r.tip])).toEqual([
+        [101, 50],
+        [0, 0],
+      ]);
+    });
+
+    test('a bill where nobody comes to more than nothing shares tax and tip by head', () => {
+      const results = calculateSplitTotals({
+        items: [{ totalPrice: -500 }, { totalPrice: 0 }],
+        assignments: [
+          { itemIndex: 0, personIndices: [0] },
+          { itemIndex: 1, personIndices: [1] },
+        ],
+        tax: 101,
+        tip: 51,
+        peopleCount: 2,
+      });
+
+      expect(results.map((r) => [r.tax, r.tip])).toEqual([
+        [51, 26],
+        [50, 25],
       ]);
     });
 
@@ -546,6 +631,26 @@ describe('calculateClaimTotals', () => {
     ]);
     expect(result.unclaimed).toEqual({ itemTotal: 1000, tax: 100, tip: 0, total: 1100 });
   });
+
+  // #331: the guest API accepts a negative item price, which can't be given a share of the tax
+  test('a person who claimed only a negative item pays no tax or tip, and nothing throws', () => {
+    const result = calculateClaimTotals({
+      items: [{ totalPrice: 1000 }, { totalPrice: -300 }, { totalPrice: 500 }],
+      assignments: [
+        { itemIndex: 0, personIndices: [0] },
+        { itemIndex: 1, personIndices: [1] },
+      ],
+      tax: 150,
+      tip: 300,
+      peopleCount: 2,
+    });
+
+    expect(result.people).toEqual([
+      { personIndex: 0, itemTotal: 1000, tax: 100, tip: 200, total: 1300 },
+      { personIndex: 1, itemTotal: -300, tax: 0, tip: 0, total: -300 },
+    ]);
+    expect(result.unclaimed).toEqual({ itemTotal: 500, tax: 50, tip: 100, total: 650 });
+  });
 });
 
 // #278: the split summary listed a shared item at its full price under each person on it
@@ -571,17 +676,19 @@ describe('personItemShares', () => {
   });
 
   test('weights a shared item by group size, the larger remainder taking the leftover cent', () => {
+    // 66.67 and 33.33: the cent goes to the first, whose remainder is larger (#331). The last
+    // person on the item used to take it (66 and 34)
     const params = {
       items: [{ totalPrice: 100 }],
       assignments: [{ itemIndex: 0, personIndices: [0, 1] }],
-      personWeights: [1, 2],
+      personWeights: [2, 1],
     };
 
     expect(personItemShares(0, params)).toEqual([
-      { itemIndex: 0, amount: 33, share: { numerator: 1, denominator: 3 } },
+      { itemIndex: 0, amount: 67, share: { numerator: 2, denominator: 3 } },
     ]);
     expect(personItemShares(1, params)).toEqual([
-      { itemIndex: 0, amount: 67, share: { numerator: 2, denominator: 3 } },
+      { itemIndex: 0, amount: 33, share: { numerator: 1, denominator: 3 } },
     ]);
   });
 

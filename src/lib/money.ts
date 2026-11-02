@@ -51,7 +51,9 @@ export function centsToDecimal(cents: number): string {
  * share several cents off everyone else's, or below zero.
  *
  * `amount` and `weights` must be integers. The arithmetic is done in BigInt, since an amount times
- * a weight (an expense's share, when converting it) can pass 2^53, where a number loses cents.
+ * a weight (an expense's share, when converting it) can pass 2^53, where a number can't hold the
+ * exact remainder, so a tied or nearly tied cent would go by rounding noise rather than to the
+ * larger remainder, or by order on a tie.
  */
 export function allocateProportionally(amount: number, weights: number[]): number[] {
   if (weights.length === 0) {

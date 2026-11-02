@@ -126,7 +126,8 @@ function EditExpenseForm({
   const [useManualRate, setUseManualRate] = useState(initiallyDifferentCurrency && !!expense.exchangeRate);
 
   // Seed the split editors with the saved shares (splitEditorSeed) so editing
-  // doesn't silently rewrite the split.
+  // doesn't silently rewrite the split (see splitEditorSeed for when saving a
+  // SHARES or PERCENTAGE split from before #331 can move its leftover cents).
   // Saved shares can reference users who have since left the group (member
   // removal preserves financial history). The editors only render current
   // members, so a hidden ex-member id would be unremovable and make every
