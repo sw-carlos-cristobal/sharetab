@@ -2,20 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { formatCents } from '@/lib/money';
+import { evenPercentages, percentageSplitShares, percentTolerance } from '@/lib/expense-split';
 import { Input } from '@/components/ui/input';
 
 type Member = { id: string; name: string | null };
 type ShareEntry = { userId: string; amount: number; percentage: number };
-
-// Acceptable deviation from 100%. The equal prefill is normalized to sum to
-// exactly 100, but splits seeded from saved expenses carry stored percentages
-// (basis points) that can drift by up to 0.005 per member from rounding, so
-// the tolerance scales accordingly. The monetary skew this admits is bounded
-// at 0.005% of the total per member — rounding dust, absorbed by the last
-// share like all other rounding in this component.
-function percentTolerance(memberCount: number): number {
-  return Math.max(0.05, memberCount * 0.005 + 0.001);
-}
 
 export function PercentageSplit({
   members,
@@ -35,61 +26,22 @@ export function PercentageSplit({
 }) {
   const [percentages, setPercentages] = useState<Record<string, string>>(() => {
     if (initialPercentages) return initialPercentages;
-    // Pre-fill equal percentages so switching from Equal mode isn't jarring.
-    // The last member absorbs the rounding difference so the prefill sums to
-    // exactly 100 (e.g. 19 members: 18 x 5.26 + 5.32) — the validation
-    // tolerance never has to accommodate generated values.
-    if (members.length === 0) return {};
-    const per = Math.floor(10000 / members.length) / 100;
-    const last = Math.round((100 - per * (members.length - 1)) * 100) / 100;
-    return Object.fromEntries(members.map((m, i) => [m.id, String(i === members.length - 1 ? last : per)]));
+    // Pre-fill equal percentages so switching from Equal mode isn't jarring. They add up to
+    // exactly 100, no one more than 0.01% above anyone else (#331).
+    const even = evenPercentages(members.length);
+    return Object.fromEntries(members.map((m, i) => [m.id, even[i]!]));
   });
 
+  const pctOf = (id: string) => parseFloat(percentages[id] ?? '0') || 0;
+  // Null until the percentages add up to 100%: no shares are reported, which keeps the submit
+  // button disabled, and each row shows its percentage of the total as typed
+  const shares: ShareEntry[] | null = percentageSplitShares(
+    totalCents,
+    members.map((m) => ({ userId: m.id, pct: pctOf(m.id) })),
+  );
+
   useEffect(() => {
-    const shares: ShareEntry[] = [];
-    let allocated = 0;
-
-    const entries = members
-      .map((m) => ({
-        userId: m.id,
-        pct: parseFloat(percentages[m.id] ?? '0') || 0,
-      }))
-      .filter((e) => e.pct > 0);
-
-    // Only emit shares when percentages sum to ~100%. Otherwise the
-    // last-person remainder would silently absorb the entire shortfall
-    // (e.g. 30%/30% of $100 would submit $30/$70). Reporting no shares
-    // keeps the submit button disabled until the split is valid.
-    // Tolerance scales with the number of participating (non-zero) members
-    // to accept splits whose stored 2-decimal percentages carry rounding
-    // drift of up to 0.005 per member (see percentTolerance above) — zero
-    // entries contribute no drift, so counting them would over-widen the
-    // tolerance in large groups. The equal prefill itself is normalized to
-    // sum to exactly 100 and needs no tolerance.
-    const totalPct = entries.reduce((sum, e) => sum + e.pct, 0);
-    if (Math.abs(totalPct - 100) >= percentTolerance(entries.length)) {
-      onChange([]);
-      return;
-    }
-
-    for (const [i, entry] of entries.entries()) {
-      const basisPoints = Math.round(entry.pct * 100); // 50.00% = 5000
-      let amount: number;
-
-      if (i === entries.length - 1) {
-        // Last person gets the remainder to avoid rounding issues
-        amount = totalCents - allocated;
-      } else {
-        amount = Math.round((totalCents * entry.pct) / 100);
-        allocated += amount;
-      }
-
-      if (amount > 0) {
-        shares.push({ userId: entry.userId, amount, percentage: basisPoints });
-      }
-    }
-
-    onChange(shares);
+    onChange(shares ?? []);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [percentages, totalCents]);
 
@@ -97,15 +49,17 @@ export function PercentageSplit({
     setPercentages((prev) => ({ ...prev, [id]: value }));
   }
 
-  const totalPct = members.reduce((sum, m) => sum + (parseFloat(percentages[m.id] ?? '0') || 0), 0);
-  // Mirror the emit logic: only non-zero entries carry rounding drift.
-  const participatingCount = members.filter((m) => (parseFloat(percentages[m.id] ?? '0') || 0) > 0).length;
+  const totalPct = members.reduce((sum, m) => sum + pctOf(m.id), 0);
+  // Mirror percentageSplitShares: only non-zero entries carry rounding drift.
+  const participatingCount = members.filter((m) => pctOf(m.id) > 0).length;
+  // Once the split is valid, each row shows the amount that's saved, leftover cents included
+  const amounts = shares && new Map(shares.map((s) => [s.userId, s.amount]));
 
   return (
     <div className="space-y-2">
       {members.map((m) => {
-        const pct = parseFloat(percentages[m.id] ?? '0') || 0;
-        const share = Math.round((totalCents * pct) / 100);
+        const pct = pctOf(m.id);
+        const share = amounts ? (amounts.get(m.id) ?? 0) : Math.round((totalCents * pct) / 100);
         return (
           <div key={m.id} className="flex items-center gap-3 rounded-md border p-3">
             <span className="flex-1 text-sm">{m.name ?? 'Unnamed'}</span>

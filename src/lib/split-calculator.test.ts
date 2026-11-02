@@ -196,15 +196,15 @@ describe('calculateSplitTotals', () => {
       tax: 0,
       tip: 0,
       peopleCount: 2,
-      personWeights: [2, 1], // 2/3 = 666.67 cents → floor to 666, remainder goes to last
+      personWeights: [2, 1], // 666.67 and 333.33 cents
     });
 
     expect(results).toHaveLength(2);
     const person0 = results.find((r) => r.personIndex === 0)!;
     const person1 = results.find((r) => r.personIndex === 1)!;
-    // 1000 * 2/3 = 666.67 → floor = 666; last person gets 1000 - 666 = 334
-    expect(person0.itemTotal).toBe(666);
-    expect(person1.itemTotal).toBe(334);
+    // #331: the leftover cent goes to the larger remainder (666.67), not to whoever is last
+    expect(person0.itemTotal).toBe(667);
+    expect(person1.itemTotal).toBe(333);
     expect(person0.itemTotal + person1.itemTotal).toBe(1000);
   });
 
@@ -270,6 +270,140 @@ describe('calculateSplitTotals', () => {
 
     // Equal weights should produce same result as no weights
     expect(withoutWeights).toEqual(withEqualWeights);
+  });
+
+  // #331: each person's tax and tip were rounded on their own and the last person took what was left
+  describe('leftover cents of tax and tip', () => {
+    test('$5.00, $5.00 and a free item, $1.01 tax: no share goes below zero and the free item pays none', () => {
+      const results = calculateSplitTotals({
+        items: [{ totalPrice: 500 }, { totalPrice: 500 }, { totalPrice: 0 }],
+        assignments: [
+          { itemIndex: 0, personIndices: [0] },
+          { itemIndex: 1, personIndices: [1] },
+          { itemIndex: 2, personIndices: [2] },
+        ],
+        tax: 101,
+        tip: 0,
+        peopleCount: 3,
+      });
+
+      expect(results).toEqual([
+        { personIndex: 0, itemTotal: 500, tax: 51, tip: 0, total: 551 },
+        { personIndex: 1, itemTotal: 500, tax: 50, tip: 0, total: 550 },
+        { personIndex: 2, itemTotal: 0, tax: 0, tip: 0, total: 0 },
+      ]);
+    });
+
+    test('a person whose items are all free pays no tip either, wherever they are in the order', () => {
+      const results = calculateSplitTotals({
+        items: [{ totalPrice: 0 }, { totalPrice: 333 }, { totalPrice: 667 }],
+        assignments: [
+          { itemIndex: 1, personIndices: [1] },
+          { itemIndex: 2, personIndices: [2] },
+          { itemIndex: 0, personIndices: [0] },
+        ],
+        tax: 99,
+        tip: 199,
+        peopleCount: 3,
+      });
+
+      expect(results.find((r) => r.personIndex === 0)).toEqual({
+        personIndex: 0,
+        itemTotal: 0,
+        tax: 0,
+        tip: 0,
+        total: 0,
+      });
+    });
+
+    test('three equal people and $1.00 tax: the extra cent goes to the first, not the last', () => {
+      const results = calculateSplitTotals({
+        items: [{ totalPrice: 1000 }, { totalPrice: 1000 }, { totalPrice: 1000 }],
+        assignments: [
+          { itemIndex: 0, personIndices: [0] },
+          { itemIndex: 1, personIndices: [1] },
+          { itemIndex: 2, personIndices: [2] },
+        ],
+        tax: 100,
+        tip: 0,
+        peopleCount: 3,
+      });
+
+      expect(results.map((r) => r.tax)).toEqual([34, 33, 33]);
+    });
+
+    test("the last person's tip is their own share, not the tax and tip's leftover cents", () => {
+      const results = calculateSplitTotals({
+        items: [{ totalPrice: 1000 }, { totalPrice: 1000 }, { totalPrice: 1000 }],
+        assignments: [
+          { itemIndex: 0, personIndices: [0] },
+          { itemIndex: 1, personIndices: [1] },
+          { itemIndex: 2, personIndices: [2] },
+        ],
+        tax: 100,
+        tip: 200,
+        peopleCount: 3,
+      });
+
+      expect(results.map((r) => [r.tax, r.tip])).toEqual([
+        [34, 67],
+        [33, 67],
+        [33, 66],
+      ]);
+    });
+
+    test('every tax and tip share is within a cent of its exact value, and they add up', () => {
+      const items = [{ totalPrice: 1001 }, { totalPrice: 333 }, { totalPrice: 2999 }, { totalPrice: 7 }];
+      const assignments = [
+        { itemIndex: 0, personIndices: [2, 0, 1] },
+        { itemIndex: 1, personIndices: [1, 0] },
+        { itemIndex: 2, personIndices: [0] },
+        { itemIndex: 3, personIndices: [3] },
+      ];
+      const tax = 347;
+      const tip = 611;
+      const results = calculateSplitTotals({ items, assignments, tax, tip, peopleCount: 4 });
+      const subtotal = results.reduce((sum, r) => sum + r.itemTotal, 0);
+
+      expect(results.reduce((sum, r) => sum + r.tax, 0)).toBe(tax);
+      expect(results.reduce((sum, r) => sum + r.tip, 0)).toBe(tip);
+      for (const r of results) {
+        expect(Math.abs(r.tax - (tax * r.itemTotal) / subtotal)).toBeLessThan(1);
+        expect(Math.abs(r.tip - (tip * r.itemTotal) / subtotal)).toBeLessThan(1);
+        expect(r.total).toBe(r.itemTotal + r.tax + r.tip);
+      }
+    });
+
+    test('a bill whose items are all free shares tax and tip evenly instead of giving them to the last person', () => {
+      const results = calculateSplitTotals({
+        items: [{ totalPrice: 0 }, { totalPrice: 0 }],
+        assignments: [
+          { itemIndex: 0, personIndices: [0] },
+          { itemIndex: 1, personIndices: [1] },
+        ],
+        tax: 101,
+        tip: 50,
+        peopleCount: 2,
+      });
+
+      expect(results).toEqual([
+        { personIndex: 0, itemTotal: 0, tax: 51, tip: 25, total: 76 },
+        { personIndex: 1, itemTotal: 0, tax: 50, tip: 25, total: 75 },
+      ]);
+    });
+
+    test('on a free bill, a group counts for as many people as it stands for', () => {
+      const results = calculateSplitTotals({
+        items: [{ totalPrice: 0 }],
+        assignments: [{ itemIndex: 0, personIndices: [0, 1] }],
+        tax: 300,
+        tip: 0,
+        peopleCount: 2,
+        personWeights: [2, 1],
+      });
+
+      expect(results.map((r) => r.tax)).toEqual([200, 100]);
+    });
   });
 });
 
@@ -436,7 +570,7 @@ describe('personItemShares', () => {
     ]);
   });
 
-  test('weights a shared item by group size, the last person on it taking the leftover cent', () => {
+  test('weights a shared item by group size, the larger remainder taking the leftover cent', () => {
     const params = {
       items: [{ totalPrice: 100 }],
       assignments: [{ itemIndex: 0, personIndices: [0, 1] }],
@@ -596,7 +730,7 @@ describe('calculateReceiptSplitTotals', () => {
     expect(totals).toEqual([{ userId: 'alice', itemTotal: 1000, tax: 200, tip: 100, total: 1300 }]);
   });
 
-  test('returns people in the order they first appear, the last taking the leftover cent', () => {
+  test('returns people in the order they first appear, the first taking a leftover cent on a tie', () => {
     const totals = calculateReceiptSplitTotals({
       items: [
         { id: 'i1', totalPrice: 1000 },
@@ -612,11 +746,11 @@ describe('calculateReceiptSplitTotals', () => {
       tip: 0,
     });
 
-    // 33.33 cents of tax each: 33 for all but the last, who takes the 34 left
+    // 33.33 cents of tax each: the leftover cent goes to the first in the order (#331)
     expect(totals.map((p) => [p.userId, p.total])).toEqual([
-      ['carol', 1033],
+      ['carol', 1034],
       ['alice', 1033],
-      ['bob', 1034],
+      ['bob', 1033],
     ]);
   });
 

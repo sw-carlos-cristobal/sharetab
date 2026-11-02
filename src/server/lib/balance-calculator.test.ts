@@ -471,10 +471,9 @@ describe('computeBalances with multi-currency (baseCurrencyAmount)', () => {
     expect(bob.net).toBe(-5500);
   });
 
-  test('scales shares proportionally with rounding remainder on last share', () => {
+  test('scales shares proportionally, adding up to baseCurrencyAmount', () => {
     // 100 EUR at 1.1 = 110 USD, split 3 ways (33.33 EUR each)
-    // Scaled: 33.33 * 1.1 = 36.67 -> 3667 cents each, but 3667*3 = 11001 != 11000
-    // Last share should get the remainder
+    // Scaled: 3667.4, 3666.3 and 3666.3 cents, which round to 11000 only with one share rounded up
     const balances = computeBalances(
       [
         {
@@ -630,5 +629,90 @@ describe('computeBalances with multi-currency (baseCurrencyAmount)', () => {
     expect(alice.paid).toBe(1000);
     expect(alice.owes).toBe(500);
     expect(bob.owes).toBe(500);
+  });
+});
+
+// #331: each converted share was rounded on its own and the last share by user id took the rest,
+// whatever its own amount was
+describe('computeBalances: converted shares and their leftover cents', () => {
+  const owes = (balances: MemberBalance[]) => Object.fromEntries(balances.map((b) => [b.userId, b.owes]));
+
+  test('keeps every share within a cent of its exact scaled value', () => {
+    // 100.00 in seven shares, converted at 1.0003: 1429.43 and 1428.43 cents. Rounded one by one,
+    // the last share came to 1431, 2.57 cents over
+    const shares = [1429, 1429, 1429, 1429, 1428, 1428, 1428].map((amount, i) => ({ userId: `u${i + 1}`, amount }));
+    const balances = computeBalances([{ paidById: 'u1', amount: 10000, baseCurrencyAmount: 10003, shares }], []);
+
+    const owed = owes(balances);
+    for (const share of shares) {
+      expect(Math.abs(owed[share.userId]! - (share.amount * 10003) / 10000)).toBeLessThan(1);
+    }
+    expect(Object.values(owed).reduce((a, b) => a + b, 0)).toBe(10003);
+    expect(owed).toEqual({ u1: 1430, u2: 1430, u3: 1430, u4: 1429, u5: 1428, u6: 1428, u7: 1428 });
+  });
+
+  test('a zero share stays zero after conversion, even last by user id', () => {
+    // 100.00 converted at 1.1: 3667.4, 3666.3 and 3666.3 cents. Rounded one by one they came to
+    // 109.99, and zed, last by user id, owed the cent left
+    const balances = computeBalances(
+      [
+        {
+          paidById: 'alice',
+          amount: 10000,
+          baseCurrencyAmount: 11000,
+          shares: [
+            { userId: 'alice', amount: 3334 },
+            { userId: 'bob', amount: 3333 },
+            { userId: 'carol', amount: 3333 },
+            { userId: 'zed', amount: 0 },
+          ],
+        },
+      ],
+      [],
+    );
+
+    expect(owes(balances)).toEqual({ alice: 3668, bob: 3666, carol: 3666, zed: 0 });
+  });
+
+  test('no share goes below zero', () => {
+    // 1.5 cents each for alice and bob: rounded one by one, both came to 2 and zed owed -1
+    const balances = computeBalances(
+      [
+        {
+          paidById: 'alice',
+          amount: 2,
+          baseCurrencyAmount: 3,
+          shares: [
+            { userId: 'bob', amount: 1 },
+            { userId: 'zed', amount: 0 },
+            { userId: 'alice', amount: 1 },
+          ],
+        },
+      ],
+      [],
+    );
+
+    // A tie goes to the first by user id, whatever order the shares come in
+    expect(owes(balances)).toEqual({ alice: 2, bob: 1, zed: 0 });
+  });
+
+  test('two people convert exactly as before (a cent left over goes to the larger remainder)', () => {
+    const balances = computeBalances(
+      [
+        {
+          paidById: 'alice',
+          amount: 1001,
+          baseCurrencyAmount: 1101,
+          shares: [
+            { userId: 'alice', amount: 501 },
+            { userId: 'bob', amount: 500 },
+          ],
+        },
+      ],
+      [],
+    );
+
+    // 551.05 and 549.95
+    expect(owes(balances)).toEqual({ alice: 551, bob: 550 });
   });
 });

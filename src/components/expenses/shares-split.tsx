@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { formatCents } from '@/lib/money';
+import { sharesSplitShares } from '@/lib/expense-split';
 import { Input } from '@/components/ui/input';
 
 type Member = { id: string; name: string | null };
@@ -27,32 +28,14 @@ export function SharesSplit({
     () => initialShareUnits ?? Object.fromEntries(members.map((m) => [m.id, '1'])),
   );
 
+  const unitsOf = (id: string) => parseInt(shareUnits[id] ?? '0') || 0;
+  // Each row shows the amount that's saved, leftover cents included (#331)
+  const shares: ShareEntry[] = sharesSplitShares(
+    totalCents,
+    members.map((m) => ({ userId: m.id, units: unitsOf(m.id) })),
+  );
+
   useEffect(() => {
-    const entries = members
-      .map((m) => ({
-        userId: m.id,
-        units: parseInt(shareUnits[m.id] ?? '0') || 0,
-      }))
-      .filter((e) => e.units > 0);
-
-    const totalUnits = entries.reduce((sum, e) => sum + e.units, 0);
-    if (totalUnits === 0 || totalCents <= 0) {
-      onChange([]);
-      return;
-    }
-
-    let allocated = 0;
-    const shares: ShareEntry[] = entries.map((entry, i) => {
-      let amount: number;
-      if (i === entries.length - 1) {
-        amount = totalCents - allocated;
-      } else {
-        amount = Math.round((totalCents * entry.units) / totalUnits);
-        allocated += amount;
-      }
-      return { userId: entry.userId, amount, shares: entry.units };
-    });
-
     onChange(shares);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shareUnits, totalCents]);
@@ -61,13 +44,13 @@ export function SharesSplit({
     setShareUnits((prev) => ({ ...prev, [id]: value }));
   }
 
-  const totalUnits = members.reduce((sum, m) => sum + (parseInt(shareUnits[m.id] ?? '0') || 0), 0);
+  const totalUnits = members.reduce((sum, m) => sum + unitsOf(m.id), 0);
+  const amounts = new Map(shares.map((s) => [s.userId, s.amount]));
 
   return (
     <div className="space-y-2">
       {members.map((m) => {
-        const units = parseInt(shareUnits[m.id] ?? '0') || 0;
-        const share = totalUnits > 0 ? Math.round((totalCents * units) / totalUnits) : 0;
+        const share = amounts.get(m.id);
         return (
           <div key={m.id} className="flex items-center gap-3 rounded-md border p-3">
             <span className="flex-1 text-sm">{m.name ?? 'Unnamed'}</span>
@@ -81,7 +64,7 @@ export function SharesSplit({
               onChange={(e) => setUnits(m.id, e.target.value)}
             />
             <span className="text-xs text-muted-foreground">shares</span>
-            {units > 0 && totalCents > 0 && (
+            {share !== undefined && (
               <span className="w-20 text-right text-xs text-muted-foreground">
                 {formatCents(share, currency, locale)}
               </span>
