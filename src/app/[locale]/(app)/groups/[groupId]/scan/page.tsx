@@ -12,6 +12,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ArrowLeft, Loader2, Camera, RefreshCw, Users } from 'lucide-react';
 import { useSession } from 'next-auth/react';
+import { useIsMutating } from '@tanstack/react-query';
+import { getMutationKey } from '@trpc/react-query';
 import { toast } from 'sonner';
 import { ItemAssignment } from '@/components/receipts/item-assignment';
 import { DEFAULT_CURRENCY } from '@/lib/currencies';
@@ -71,6 +73,9 @@ function ScanReceiptContent({ params }: { params: Promise<{ groupId: string }> }
   });
 
   const shareForClaiming = trpc.guest.createClaimSession.useMutation();
+  // A currency change on the receipt page stays pending until the receipt has reloaded; a Share Link
+  // made before then would copy the old currency into the claim session (#361)
+  const savingCurrency = useIsMutating({ mutationKey: getMutationKey(trpc.receipts.setCurrency) }) > 0;
   const receiptData = trpc.receipts.getReceiptItems.useQuery(
     { receiptId: receiptId! },
     { enabled: step === 'assign' && !!receiptId },
@@ -297,6 +302,7 @@ function ScanReceiptContent({ params }: { params: Promise<{ groupId: string }> }
             onClick={handleShareForClaiming}
             disabled={
               shareForClaiming.isPending ||
+              savingCurrency ||
               !authSession?.user?.id ||
               !receiptData.data?.receipt?.extractedData ||
               !receiptData.data?.items?.length ||

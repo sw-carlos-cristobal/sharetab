@@ -87,10 +87,24 @@ test.describe('Receipt currency (#361)', () => {
 
       await openReceipt(page, groupId, receiptId);
       const select = page.getByTestId('receipt-currency-select');
+      const share = page.getByTestId('group-share-claiming-btn');
       await expect(select).toHaveValue('USD');
+      await expect(share).toBeEnabled();
+
+      // Hold the save: until it and the reload finish, a Share Link would copy the old currency
+      let releaseSave = () => {};
+      const saveHeld = new Promise<void>((resolve) => (releaseSave = resolve));
+      await page.route('**/api/trpc/receipts.setCurrency**', async (route) => {
+        await saveHeld;
+        await route.continue();
+      });
       await select.selectOption('GBP');
+      await expect(share).toBeDisabled();
+      releaseSave();
+
       // Saved on the receipt, and the page shows it in pounds
       await expect(select).toBeEnabled();
+      await expect(share).toBeEnabled();
       await expect(page.getByText(money(total, 'GBP'), { exact: true })).toBeVisible();
       await expect
         .poll(async () => {
