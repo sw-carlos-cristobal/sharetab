@@ -1,3 +1,5 @@
+import { allocateProportionally } from './money';
+
 /**
  * Pure function to calculate per-person totals with proportional tax/tip distribution.
  * Used by the guest split flow, and by the group receipt flow through `calculateReceiptSplitTotals`.
@@ -25,35 +27,25 @@ export function calculateSplitTotals(params: {
     }
   }
 
-  const actualSubtotal = Array.from(personSubtotals.values()).reduce((a, b) => a + b, 0);
-  const totalAmount = actualSubtotal + tax + tip;
-
-  const results: { personIndex: number; itemTotal: number; tax: number; tip: number; total: number }[] = [];
-  let allocated = 0;
   const entries = Array.from(personSubtotals.entries());
+  if (entries.length === 0) return [];
 
-  for (const [i, [personIdx, itemTotal]] of entries.entries()) {
-    if (i === entries.length - 1) {
-      // Last person gets remainder to prevent off-by-one
-      const total = totalAmount - allocated;
-      results.push({
-        personIndex: personIdx,
-        itemTotal,
-        tax: total - itemTotal - Math.round(tip * (actualSubtotal > 0 ? itemTotal / actualSubtotal : 0)),
-        tip: Math.round(tip * (actualSubtotal > 0 ? itemTotal / actualSubtotal : 0)),
-        total,
-      });
-    } else {
-      const proportion = actualSubtotal > 0 ? itemTotal / actualSubtotal : 0;
-      const personTax = Math.round(tax * proportion);
-      const personTip = Math.round(tip * proportion);
-      const total = itemTotal + personTax + personTip;
-      results.push({ personIndex: personIdx, itemTotal, tax: personTax, tip: personTip, total });
-      allocated += total;
-    }
-  }
+  // Tax and tip follow each person's items (#331: within a cent of their exact share, so nobody's
+  // goes below zero and free items pay none). Someone whose items come to nothing or less (the
+  // guest API takes a negative price) counts as free. When everyone does, they can't follow the
+  // items, so they're shared by head, a group counting for as many people as it stands for.
+  const subtotals = entries.map(([, itemTotal]) => Math.max(0, itemTotal));
+  const weights = subtotals.some((s) => s > 0)
+    ? subtotals
+    : entries.map(([personIdx]) => personWeights?.[personIdx] ?? 1);
+  const taxes = allocateProportionally(tax, weights);
+  const tips = allocateProportionally(tip, weights);
 
-  return results;
+  return entries.map(([personIndex, itemTotal], i) => {
+    const personTax = taxes[i]!;
+    const personTip = tips[i]!;
+    return { personIndex, itemTotal, tax: personTax, tip: personTip, total: itemTotal + personTax + personTip };
+  });
 }
 
 /** A receipt item and the people on it, in the order the split uses them */
@@ -65,10 +57,10 @@ export type ReceiptAssignment = { receiptItemId: string; userIds: string[] };
  * Tax and tip are shared in proportion to the prices of the items assigned, not the subtotal the
  * scan read, which no longer adds up once an item is added, deleted or repriced. All of the tax
  * and tip goes to the people assigned, so the mutation requires every item to be. People come
- * back in the order they first appear in `assignments`; the last takes the tax and tip's leftover
- * cents, and an item's own leftover cents go to the first people on it, so the page and the server
- * must use the same list in the same order. An assignment to an item that isn't in `items` is left
- * out.
+ * back in the order they first appear in `assignments`, and a leftover cent that two people have
+ * equal claim to goes to the one first in that order (for an item's own cents, first on the item),
+ * so the page and the server must use the same list in the same order. An assignment to an item
+ * that isn't in `items` is left out.
  */
 export function calculateReceiptSplitTotals(params: {
   items: { id: string; totalPrice: number }[];
@@ -123,23 +115,12 @@ export function receiptAssignmentList(
  * `calculateSplitTotals` adds these up into each person's item total.
  */
 function splitItemPrice(totalPrice: number, personIndices: number[], personWeights?: number[]): number[] {
-  if (personWeights) {
-    // Weighted proportional splitting: each share rounded down, the last person taking what's left
-    const totalWeight = itemWeight(personIndices, personWeights);
-    let allocated = 0;
-    return personIndices.map((personIdx, i) => {
-      const amount =
-        i === personIndices.length - 1
-          ? totalPrice - allocated
-          : Math.floor((totalPrice * (personWeights[personIdx] ?? 1)) / totalWeight);
-      allocated += amount;
-      return amount;
-    });
-  }
-  // Equal splitting (original behavior): the leftover cents go to the first people
-  const perPerson = Math.floor(totalPrice / personIndices.length);
-  const remainder = totalPrice - perPerson * personIndices.length;
-  return personIndices.map((_, i) => perPerson + (i < remainder ? 1 : 0));
+  // By group size when weighted, else equally; leftover cents go to the largest remainders, the
+  // first people on the item on a tie (#331), so equal weights split it as no weights do
+  return allocateProportionally(
+    totalPrice,
+    personIndices.map((personIdx) => personWeights?.[personIdx] ?? 1),
+  );
 }
 
 function itemWeight(personIndices: number[], personWeights: number[]): number {
@@ -186,7 +167,7 @@ function greatestCommonDivisor(a: number, b: number): number {
 /**
  * The weights a split of these people is calculated with: their group sizes, or none while
  * everyone counts once. Finalizing a claim session, the claim page and the split summary all use
- * it, since an unweighted split rounds a shared item's cents differently from one weighted 1 to 1.
+ * it, so they agree on who stands for how many people.
  */
 export function groupSizeWeights(people: { groupSize?: number | undefined }[]): { personWeights?: number[] } {
   const personWeights = people.map((p) => p.groupSize ?? 1);
@@ -218,7 +199,8 @@ export function calculateClaimTotals(params: Parameters<typeof calculateSplitTot
   }
 
   const subtotals = [...people.map((p) => p.itemTotal), billSubtotal - claimedSubtotal];
-  const weights = freeBill ? [...people.map(() => 0), 1] : subtotals;
+  // As in calculateSplitTotals, someone whose items come to nothing or less takes no tax or tip
+  const weights = freeBill ? [...people.map(() => 0), 1] : subtotals.map((s) => Math.max(0, s));
   const taxes = allocateProportionally(params.tax, weights);
   const tips = allocateProportionally(params.tip, weights);
   const withShares = (itemTotal: number, i: number) => ({
@@ -232,26 +214,4 @@ export function calculateClaimTotals(params: Parameters<typeof calculateSplitTot
     people: people.map((p, i) => ({ personIndex: p.personIndex, ...withShares(p.itemTotal, i) })),
     unclaimed: withShares(subtotals[people.length]!, people.length),
   };
-}
-
-/**
- * Splits `amount` cents in proportion to `weights` (nonnegative, with a positive sum) so the
- * shares add up to `amount` exactly: each share is rounded down, and the cents left over go to
- * the largest remainders, earliest first on a tie. Rounding each share on its own could hand out
- * more than `amount` and leave the last share negative.
- */
-function allocateProportionally(amount: number, weights: number[]): number[] {
-  const sign = amount < 0 ? -1 : 1;
-  const cents = Math.abs(amount);
-  const weightTotal = weights.reduce((a, b) => a + b, 0);
-  const shares = weights.map((w) => Math.floor((cents * w) / weightTotal));
-  const remainders = weights.map((w, i) => ({ i, remainder: cents * w - shares[i]! * weightTotal }));
-  remainders.sort((a, b) => b.remainder - a.remainder || a.i - b.i);
-  let left = cents - shares.reduce((a, b) => a + b, 0);
-  for (const { i } of remainders) {
-    if (left <= 0) break;
-    shares[i]! += 1;
-    left -= 1;
-  }
-  return shares.map((share) => share * sign);
 }

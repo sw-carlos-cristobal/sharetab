@@ -41,3 +41,40 @@ export function parseToCents(value: string): number {
 export function centsToDecimal(cents: number): string {
   return (cents / 100).toFixed(2);
 }
+
+/**
+ * Splits `amount` cents in proportion to `weights` (nonnegative) so the shares add up to `amount`
+ * exactly and each is within a cent of its exact value (#331): each share is rounded down, and the
+ * cents left over go to the largest remainders, earliest first on a tie, so the order of `weights`
+ * decides only who gets a tied cent. A zero weight gets nothing. Weights that are all zero count as
+ * equal. Rounding each share on its own, with the last taking what's left, could leave that last
+ * share several cents off everyone else's, or below zero.
+ *
+ * `amount` and `weights` must be integers. The arithmetic is done in BigInt, since an amount times
+ * a weight (an expense's share, when converting it) can pass 2^53, where a number can't hold the
+ * exact remainder, so a tied or nearly tied cent would go by rounding noise rather than to the
+ * larger remainder, or by order on a tie.
+ */
+export function allocateProportionally(amount: number, weights: number[]): number[] {
+  if (weights.length === 0) {
+    if (amount !== 0) throw new RangeError(`No one to allocate ${amount} cents to`);
+    return [];
+  }
+  const zero = BigInt(0);
+  const one = BigInt(1);
+  const cents = BigInt(Math.abs(amount));
+  const anyWeight = weights.some((w) => w > 0);
+  const parts = weights.map((w) => BigInt(anyWeight ? w : 1));
+  const partTotal = parts.reduce((a, b) => a + b, zero);
+  // Nonnegative BigInt division rounds down
+  const shares = parts.map((w) => (cents * w) / partTotal);
+  const remainders = parts.map((w, i) => ({ i, remainder: cents * w - shares[i]! * partTotal }));
+  remainders.sort((a, b) => (a.remainder === b.remainder ? a.i - b.i : a.remainder > b.remainder ? -1 : 1));
+  let left = cents - shares.reduce((a, b) => a + b, zero);
+  for (const { i } of remainders) {
+    if (left <= zero) break;
+    shares[i]! += one;
+    left -= one;
+  }
+  return shares.map((share) => Number(amount < 0 ? -share : share));
+}

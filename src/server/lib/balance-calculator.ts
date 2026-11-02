@@ -3,6 +3,8 @@
  * Extracted from the balances tRPC router for testability.
  */
 
+import { allocateProportionally } from '@/lib/money';
+
 export type MemberBalance = {
   userId: string;
   paid: number;
@@ -97,23 +99,18 @@ export function computeBalances(expenses: Expense[], settlements: Settlement[]):
     const effectiveAmount = expense.baseCurrencyAmount ?? expense.amount;
     payer.paid += effectiveAmount;
 
-    // If currency was converted, scale each share proportionally
+    // If currency was converted, scale each share proportionally: each within a cent of its exact
+    // scaled value, a zero share staying zero (#331). Sorting by user id keeps who gets a tied cent
+    // the same however the shares were loaded.
     if (expense.baseCurrencyAmount != null && expense.baseCurrencyAmount !== expense.amount) {
-      const ratio = expense.baseCurrencyAmount / expense.amount;
-      let distributed = 0;
       const sortedShares = [...expense.shares].sort((a, b) => a.userId.localeCompare(b.userId));
-      const scaledShares = sortedShares.map((share, i) => {
-        if (i === sortedShares.length - 1) {
-          // Last share gets the remainder to avoid rounding drift
-          return { userId: share.userId, amount: effectiveAmount - distributed };
-        }
-        const scaled = Math.round(share.amount * ratio);
-        distributed += scaled;
-        return { userId: share.userId, amount: scaled };
-      });
-      for (const share of scaledShares) {
+      const scaled = allocateProportionally(
+        effectiveAmount,
+        sortedShares.map((share) => share.amount),
+      );
+      for (const [i, share] of sortedShares.entries()) {
         const member = getOrCreate(share.userId);
-        member.owes += share.amount;
+        member.owes += scaled[i]!;
       }
     } else {
       for (const share of expense.shares) {

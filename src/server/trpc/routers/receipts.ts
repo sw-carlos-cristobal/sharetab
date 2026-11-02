@@ -390,7 +390,7 @@ export const receiptsRouter = createTRPCRouter({
         tipOverride: z.number().int().min(0).optional(),
         // Each item once, each with someone, each person once on it: a repeated item would count
         // its price twice, and a repeated person would take two shares of it. The order is the
-        // receipt page's, which decides who takes the leftover cents, as in its preview
+        // receipt page's, which decides who takes a tied leftover cent, as in its preview
         assignments: z
           .array(
             z.object({

@@ -572,7 +572,8 @@ describe("a receipt's saved split matches the receipt page's preview (#364)", ()
       { receiptItemId: 'i3', userIds: ['alice'] },
     ];
 
-    // By hand: carol 334 + 27 tax + 47 tip; alice 3499 + 280 + 493; bob, last, the 611 left
+    // By hand: carol 334 + 27 tax + 47 tip; alice 3499 + 280 + 493; bob 500 + 40 + 71. Each tax
+    // and tip share is within a cent of exact, the leftover cents going to the largest remainders
     const expected = { carol: 408, alice: 4272, bob: 611 };
     expect(preview(items, assignments, 347, 611)).toEqual(expected);
     expect(await save(assignments, { tipOverride: 611 })).toEqual({
@@ -595,24 +596,27 @@ describe("a receipt's saved split matches the receipt page's preview (#364)", ()
     expect(await save(assignments, { tipOverride: 0 })).toEqual({ amount: 4400, shares: { alice: 1100, bob: 3300 } });
   });
 
-  // Three $10.00 items, tax $1.00: 33.33 cents each, rounded (to 33) for all but the last. The
-  // server keeps the order it was sent, not the order it reads the items in
+  // Three $10.00 items, tax $1.00: 33.33 cents each, a tie, so the leftover cent goes to the first
+  // (#331). The server keeps the order it was sent, not the order it reads the items in
   test.each([
-    [['i1', 'i2', 'i3'], { alice: 1033, bob: 1033, carol: 1034 }],
-    [['i3', 'i1', 'i2'], { carol: 1033, alice: 1033, bob: 1034 }],
-  ])("the last person in the page's order takes the leftover cent, as in the preview (%j)", async (order, expected) => {
-    const items = [
-      { id: 'i1', totalPrice: 1000 },
-      { id: 'i2', totalPrice: 1000 },
-      { id: 'i3', totalPrice: 1000 },
-    ];
-    scanned(items, { subtotal: 3000, tax: 100, tip: 0 });
-    const people: Record<string, string> = { i1: 'alice', i2: 'bob', i3: 'carol' };
-    const assignments = order.map((id) => ({ receiptItemId: id, userIds: [people[id]!] }));
+    [['i1', 'i2', 'i3'], { alice: 1034, bob: 1033, carol: 1033 }],
+    [['i3', 'i1', 'i2'], { carol: 1034, alice: 1033, bob: 1033 }],
+  ])(
+    "the first person in the page's order takes a tied leftover cent, as in the preview (%j)",
+    async (order, expected) => {
+      const items = [
+        { id: 'i1', totalPrice: 1000 },
+        { id: 'i2', totalPrice: 1000 },
+        { id: 'i3', totalPrice: 1000 },
+      ];
+      scanned(items, { subtotal: 3000, tax: 100, tip: 0 });
+      const people: Record<string, string> = { i1: 'alice', i2: 'bob', i3: 'carol' };
+      const assignments = order.map((id) => ({ receiptItemId: id, userIds: [people[id]!] }));
 
-    expect(preview(items, assignments, 100, 0)).toEqual(expected);
-    expect((await save(assignments)).shares).toEqual(expected);
-  });
+      expect(preview(items, assignments, 100, 0)).toEqual(expected);
+      expect((await save(assignments)).shares).toEqual(expected);
+    },
+  );
 
   // #364: the page sends the totals it showed, so a receipt changed on another device after the
   // page loaded it (an item repriced, the tax edited) isn't saved as a split nobody saw
