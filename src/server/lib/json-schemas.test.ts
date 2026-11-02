@@ -15,7 +15,15 @@ describe('receiptCurrency (#361)', () => {
   });
 
   it('is the fallback when the receipt has none, or one that is not a currency code', () => {
-    for (const data of [null, undefined, {}, { currency: null }, { currency: '' }, { currency: '$' }, { currency: 7 }]) {
+    for (const data of [
+      null,
+      undefined,
+      {},
+      { currency: null },
+      { currency: '' },
+      { currency: '$' },
+      { currency: 7 },
+    ]) {
       expect(receiptCurrency(data, 'EUR'), JSON.stringify(data)).toBe('EUR');
     }
   });

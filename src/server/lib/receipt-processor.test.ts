@@ -141,8 +141,8 @@ describe('processReceiptImage fallback behavior', () => {
   // #361: a receipt whose currency the model couldn't read was saved as USD
   describe('the currency saved', () => {
     async function scan(currency: string | undefined) {
-      const { currency: _, ...withoutCurrency } = successResult;
-      const extraction = currency === undefined ? withoutCurrency : { ...successResult, currency };
+      // The schema reads a currency the model didn't return as undefined
+      const extraction = { ...successResult, currency };
       mockGetAIProvidersWithFallback.mockResolvedValue([
         { name: 'openai', extractReceipt: vi.fn().mockResolvedValue(extraction) },
       ]);
