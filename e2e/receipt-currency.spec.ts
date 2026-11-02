@@ -55,7 +55,9 @@ const money = (cents: number, currency: string) =>
 test.describe('Receipt currency (#361)', () => {
   test('a receipt with no readable currency, scanned in a EUR group, is in EUR', async ({ page }) => {
     const owner = await authedContext(users.alice.email, users.alice.password);
-    const group = await trpcResult(await trpcMutation(owner, 'groups.create', { name: 'Euro Scan', currency: 'EUR' }));
+    const created = await trpcMutation(owner, 'groups.create', { name: 'Euro Scan', currency: 'EUR' });
+    const group = (await created.json()).result?.data?.json;
+    expect(group?.currency, 'groups.create').toBe('EUR');
     try {
       const { receiptId, total } = await scanReceipt(owner, group.id);
 
