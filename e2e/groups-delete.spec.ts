@@ -22,7 +22,7 @@ async function bobOwesAliceHalf({ owner, groupId, memberIds }: TestGroup) {
   return { aliceId, bobId };
 }
 
-// #390: deleting a group took everyone's open balances with it, on the owner's one click,
+// #390: deleting a group took everyone's open balances with it, on the owner's say alone,
 // with no way back. It's refused until everyone is settled up, as archiving is (#275).
 test.describe('Deleting a group with open balances', () => {
   test('is refused until everyone is settled up', async () => {
@@ -55,7 +55,7 @@ test.describe('Deleting a group with open balances', () => {
       expect(paid.ok(), await paid.text()).toBe(true);
       const deleted = await trpcMutation(owner, 'groups.delete', { groupId });
       expect(deleted.ok(), await deleted.text()).toBe(true);
-      expect((await trpcError(await trpcQuery(owner, 'groups.get', { groupId })))?.data?.code).toBeTruthy();
+      expect((await trpcError(await trpcQuery(owner, 'groups.get', { groupId })))?.data?.code).toBe('FORBIDDEN');
     } finally {
       await group.dispose();
     }
@@ -74,7 +74,8 @@ test.describe('Deleting a group with open balances', () => {
       await login(page, users.alice.email, users.alice.password);
       await page.goto(`/en/groups/${groupId}/settings`);
 
-      await expect(page.getByText('Everyone must be settled up first.').first()).toBeVisible();
+      // The delete paragraph's own text (archiving's says "settled up first" too)
+      await expect(page.getByText(/^Deleting a group removes .* Everyone must be settled up first\.$/)).toBeVisible();
       await page.getByRole('button', { name: 'Delete group' }).click();
       const dialog = page.getByRole('alertdialog', { name: 'Delete this group?' });
       await expect(dialog).toContainText('Everyone must be settled up first');
@@ -85,6 +86,12 @@ test.describe('Deleting a group with open balances', () => {
       );
       await expect(page).toHaveURL(new RegExp(`/groups/${groupId}/settings$`));
       expect((await trpcQuery(owner, 'groups.get', { groupId })).ok()).toBe(true);
+
+      // The instance admin's delete isn't checked (Alice is the e2e admin, ADMIN_EMAIL):
+      // it still removes a group with open balances
+      const byAdmin = await trpcMutation(owner, 'admin.deleteGroup', { groupId });
+      expect(byAdmin.ok(), await byAdmin.text()).toBe(true);
+      expect((await trpcError(await trpcQuery(owner, 'groups.get', { groupId })))?.data?.code).toBe('FORBIDDEN');
     } finally {
       await group.dispose();
     }

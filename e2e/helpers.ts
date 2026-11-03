@@ -257,7 +257,8 @@ export async function removeTestUser(email: string) {
 }
 
 /**
- * Delete a test-created group via the API, whatever is left in it. Silently ignores errors.
+ * Delete a test-created group via the API, whatever is left in it. Ignores errors, but warns
+ * when a group with open balances can't be removed.
  *
  * The owner's delete is refused while anyone in the group still owes money (#390), and most
  * test groups end with open balances, so then it uses the admin's delete, which isn't: with
@@ -271,7 +272,13 @@ export async function deleteTestGroup(ctx: Awaited<ReturnType<typeof authedConte
     if ((await trpcMutation(ctx, 'admin.deleteGroup', { groupId })).ok()) return;
     const admin = await authedContext(users.alice.email, users.alice.password);
     try {
-      await trpcMutation(admin, 'admin.deleteGroup', { groupId });
+      const res = await trpcMutation(admin, 'admin.deleteGroup', { groupId });
+      if (!res.ok()) {
+        // Left behind: Alice isn't the admin unless the server has ADMIN_EMAIL=alice@example.com
+        console.warn(
+          `deleteTestGroup: group ${groupId} has open balances and the admin delete failed (${res.status()})`,
+        );
+      }
     } finally {
       await admin.dispose();
     }

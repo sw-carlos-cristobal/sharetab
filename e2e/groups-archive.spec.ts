@@ -222,7 +222,7 @@ test.describe('Group Archiving', () => {
       const error = await trpcError(await trpcMutation(owner, 'groups.archive', { groupId }));
       expect(error?.data?.code).toBe('PRECONDITION_FAILED');
       expect(error?.message).toBe(
-        "Someone who is no longer in this group still owes or is owed money, so it can't be archived. Invite them back to settle up, or edit the expenses they're in.",
+        "Someone who is no longer in this group still owes or is owed money, so it can't be archived. Invite them back to settle up, or edit or delete the expenses and payments they're in.",
       );
 
       await dispose();

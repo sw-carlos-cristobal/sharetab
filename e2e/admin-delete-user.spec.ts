@@ -66,8 +66,23 @@ test.describe('Admin Delete User', () => {
       const expenses = await trpcResult(expListRes);
       const found = expenses.expenses.find((e: { title: string }) => e.title === 'Temp user expense');
       expect(found).toBeDefined();
+
+      // #390: the owner (Alice) can't delete the group while it still holds a balance with
+      // the deleted account, which no payment can settle; she's told to change what it's in
+      const refused = await trpcError(await trpcMutation(admin, 'groups.delete', { groupId }));
+      expect(refused?.data?.code).toBe('PRECONDITION_FAILED');
+      expect(refused?.message).toBe(
+        "Someone who is no longer in this group still owes or is owed money, so it can't be deleted. Invite them back to settle up, or edit or delete the expenses and payments they're in.",
+      );
+      // Doing so clears the balance, and the group can go
+      const removed = await trpcMutation(admin, 'expenses.delete', { groupId, expenseId: found.id });
+      expect(removed.ok(), await removed.text()).toBe(true);
+      const deleted = await trpcMutation(admin, 'groups.delete', { groupId });
+      expect(deleted.ok(), await deleted.text()).toBe(true);
+      groupId = undefined;
     } finally {
-      // The admin's delete: the temp user's expense leaves a balance, which refuses the owner's (#390)
+      // The admin's delete, if the test stopped first: the temp user's expense leaves a
+      // balance, which refuses the owner's (#390)
       if (groupId) await trpcMutation(admin, 'admin.deleteGroup', { groupId }).catch(() => {});
       if (tempId) await trpcMutation(admin, 'admin.deleteUser', { userId: tempId }).catch(() => {});
       await tempCtx?.dispose();

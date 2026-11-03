@@ -920,7 +920,7 @@ describe('leaving a group', () => {
   });
 
   // Removing someone else is a separate decision for the owner, who still sees the
-  // balance (and the archive check names it), so it isn't held up by one.
+  // balance (and the archive and delete checks name it), so it isn't held up by one.
   test('the owner can still remove a member who owes money', async () => {
     setUp({ userId: 'owner', role: 'OWNER' }, { userId: 'bob', role: 'MEMBER' });
     const api = await caller('owner');
@@ -1118,7 +1118,7 @@ describe('deleting a group', () => {
   });
 
   // #390: deleting took every open balance with it, for every member, on the owner's
-  // one click. It's refused until everyone is settled up, as archiving is (#275).
+  // say alone. It's refused until everyone is settled up, as archiving is (#275).
   describe('with open balances', () => {
     // The owner paid $10.00 split with Bob, so Bob owes the owner $5.00
     const bobOwesHalf = [
@@ -1162,15 +1162,22 @@ describe('deleting a group', () => {
 
     // Settlements need both people to be members, so "settle up" alone can't clear a
     // balance with someone who has left, or whose account an admin deleted
-    test('says so when the open balance belongs to someone no longer in the group', async () => {
+    test.each([
+      ['owes', 'owner'],
+      ['is owed', 'bob'],
+    ])('says so when someone no longer in the group %s money', async (_, paidById) => {
+      mockDb.expense.findMany.mockResolvedValue([{ ...bobOwesHalf[0]!, paidById }]);
       membersAre(['owner']);
       const api = await caller('owner');
       await expect(api.delete({ groupId: 'g1' })).rejects.toMatchObject({
         code: 'PRECONDITION_FAILED',
         message:
-          "Someone who is no longer in this group still owes or is owed money, so it can't be deleted. Invite them back to settle up, or edit the expenses they're in.",
+          "Someone who is no longer in this group still owes or is owed money, so it can't be deleted. Invite them back to settle up, or edit or delete the expenses and payments they're in.",
       });
       expect(mockDb.group.delete).not.toHaveBeenCalled();
+      // Every membership row, a removed placeholder's included: they keep their row and
+      // can still be settled with (#284), so their balance gets the plain message
+      expect(mockDb.groupMember.findMany).toHaveBeenCalledWith({ where: { groupId: 'g1' }, select: { userId: true } });
     });
 
     test('goes ahead once everyone is settled up', async () => {
@@ -1183,9 +1190,10 @@ describe('deleting a group', () => {
       expect(mockDb.group.delete).toHaveBeenCalledWith({ where: { id: 'g1' } });
     });
 
-    // Every expense or payment write holds the group's row FOR SHARE until it commits
-    // (lockActiveGroup), and the delete's lock waits for those, so the balances read
-    // after it are final until the group is gone
+    // Expense and payment writes hold the group's row FOR SHARE until they commit
+    // (lockActiveGroup), and the delete's lock waits for those, so what they change
+    // is final once it's held (a placeholder merge takes no group lock: see
+    // requireSettledUp)
     test('reads the balances once it holds the lock, before deleting anything', async () => {
       mockDb.expense.findMany.mockResolvedValue([]);
       const api = await caller('owner');
@@ -1568,7 +1576,7 @@ describe('archiving a group', () => {
     await expect(api.archive({ groupId: 'g1' })).rejects.toMatchObject({
       code: 'PRECONDITION_FAILED',
       message:
-        "Someone who is no longer in this group still owes or is owed money, so it can't be archived. Invite them back to settle up, or edit the expenses they're in.",
+        "Someone who is no longer in this group still owes or is owed money, so it can't be archived. Invite them back to settle up, or edit or delete the expenses and payments they're in.",
     });
     expect(mockDb.activityLog.create).not.toHaveBeenCalled();
   });

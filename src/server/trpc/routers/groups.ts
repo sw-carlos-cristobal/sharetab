@@ -216,9 +216,10 @@ export const groupsRouter = createTRPCRouter({
       }
       // Deleting takes every expense and payment with it, so an open balance would
       // be gone for everyone in the group, on the owner's say alone (#390). The lock
-      // above waits for balance changes in flight and holds off new ones, so the
-      // balances read here are final. An admin's delete (admin.deleteGroup) isn't
-      // checked: it's how an instance's operator clears a group out regardless.
+      // above waits for expense and payment writes in flight and holds off new ones
+      // (see requireSettledUp for the one exception). An admin's delete
+      // (admin.deleteGroup) isn't checked: it's how an instance's operator clears a
+      // group out regardless.
       await requireSettledUp(tx, input.groupId, {
         unsettled: 'deleteGroupUnsettled',
         formerMember: 'deleteGroupFormerMemberUnsettled',
@@ -528,7 +529,7 @@ export const groupsRouter = createTRPCRouter({
 
         // Someone who leaves no longer sees the group, so a debt in it would drop
         // out of their view. The owner removing a member isn't held up by one: they
-        // still see it, and the archive check names it.
+        // still see it, and the archive and delete checks name it.
         if (isSelf) {
           const balance = (await loadGroupBalances(tx, input.groupId)).find((b) => b.userId === ctx.user.id);
           if (balance && balance.net !== 0) {
