@@ -125,7 +125,7 @@ describe('the global AI scan cap counts every scan (#434)', () => {
     expect(accounts).toEqual([true, true, true, true, false, false]);
   });
 
-  test('guests spending their own cap leave the rest of the global budget to signed-in users', () => {
+  test('within one shared window, a guest refused by the guest cap leaves the rest of the global budget to signed-in users', () => {
     vi.stubEnv('GUEST_AI_GLOBAL_LIMIT', '2');
     vi.stubEnv('AI_GLOBAL_LIMIT', '3');
     expect(guestScan()).not.toBeNull();

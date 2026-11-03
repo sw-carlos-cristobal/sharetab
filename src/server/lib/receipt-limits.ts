@@ -7,11 +7,12 @@ import { checkRateLimit, parsePositiveInt, peekRateLimit, refundRateLimit } from
  *   scan path (`/api/upload` without `?guest=true`, `receipts.processReceipt`, `retryProcessing`);
  * - guest scans (Quick Split, signed in or not): per receipt, per client IP, and `GUEST_AI_GLOBAL_LIMIT`
  *   across all guests;
- * - every receipt scan, guest or signed in, against `AI_GLOBAL_LIMIT`: a signed-in scan skips the
- *   guest cap but still stops at this one, so it bounds the instance's AI spend (the admin provider
- *   test isn't counted). It caps guest scans too. Each key's window starts at its own first spend,
- *   so guests can take up to twice `GUEST_AI_GLOBAL_LIMIT`, less one, of a single `AI_GLOBAL_LIMIT`
- *   window: signed-in users are sure only of what's left above that.
+ * - every receipt scan, guest or signed in, against `AI_GLOBAL_LIMIT`: a scan on the group scan
+ *   path skips the guest cap but still stops at this one, so it bounds the instance's AI spend (the
+ *   admin provider test isn't counted). It caps guest scans too. Each key's window starts at its own
+ *   first spend (a refunded spend still opens one), so guests can take up to twice
+ *   `GUEST_AI_GLOBAL_LIMIT` of a single `AI_GLOBAL_LIMIT` window, all of it at the defaults:
+ *   signed-in users are sure only of what's left above that.
  * Guest uploads keep their own limiter in `/api/upload`.
  */
 export const RECEIPT_LIMIT_WINDOW_MS = 60 * 60 * 1000;

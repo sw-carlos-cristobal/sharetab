@@ -524,7 +524,7 @@
     Name="AI Scan Global Limit"
     Target="AI_GLOBAL_LIMIT"
     Default="200"
-    Description="Max AI receipt scans per hour across everyone, guests and signed-in users combined. Bounds the AI spend of the whole instance and caps guest scans too. The guest and overall hourly windows start independently, so guests can take up to twice the Guest AI Scan Global Limit, less one, from a single hour of this one: raise it to reserve more for signed-in users."
+    Description="Max AI receipt scans per hour across everyone, guests and signed-in users combined. Bounds the AI spend of the whole instance and caps guest scans too. The guest and overall hourly windows start independently, so guests can take up to twice the Guest AI Scan Global Limit from a single hour of this one, which at the defaults is all of it. Set it above twice the Guest AI Scan Global Limit to keep scans for signed-in users."
     Type="Variable"
     Display="advanced"
     Required="false"

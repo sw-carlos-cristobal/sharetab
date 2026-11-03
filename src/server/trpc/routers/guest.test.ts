@@ -160,7 +160,7 @@ describe('guest.processReceipt with guest uploads enabled', () => {
   });
 });
 
-// #434: guest and signed-in scans spend one global AI scan cap, so a signed-in scan, which skips
+// #434: guest and group-scan-path scans spend one global AI scan cap, so a group scan, which skips
 // GUEST_AI_GLOBAL_LIMIT, still stops at AI_GLOBAL_LIMIT
 describe('guest.processReceipt and the global AI scan cap (#434)', () => {
   beforeEach(() => {
