@@ -214,7 +214,9 @@ export async function POST(req: NextRequest) {
   if (guestIp !== null && !consumeGuestUploadBudget(guestIp)) {
     return errorResponse(req, 429, 'uploadsRateLimited');
   }
-  if (userId !== undefined && !spendBudget(userUploadQuotas(userId))) {
+  // The refund spendBudget returns isn't kept: an upload that fails after this still counts, as a
+  // guest upload does
+  if (userId !== undefined && spendBudget(userUploadQuotas(userId)) === null) {
     return errorResponse(req, 429, 'uploadsRateLimited');
   }
 
