@@ -3,7 +3,7 @@ import type { Prisma } from '@/generated/prisma/client';
 import { AppError } from '@/server/lib/app-error';
 import { createTRPCRouter, protectedProcedure, groupMemberProcedure } from '../init';
 import { stripUndefined } from '../../lib/strip-undefined';
-import { loadGroupBalances, lockGroupMembers } from '../../lib/group-balances';
+import { loadGroupBalances, lockGroupMembers, requireSettledUp } from '../../lib/group-balances';
 import { deleteGroupWithData } from '../../lib/group-delete';
 import { removeReceiptFiles } from '../../lib/receipt-cleanup';
 import { mergePlaceholderIntoUser } from '../../lib/placeholder-merge';
@@ -214,6 +214,15 @@ export const groupsRouter = createTRPCRouter({
       if (owner?.role !== 'OWNER') {
         throw notOwner;
       }
+      // Deleting takes every expense and payment with it, so an open balance would
+      // be gone for everyone in the group, on the owner's say alone (#390). The lock
+      // above waits for balance changes in flight and holds off new ones, so the
+      // balances read here are final. An admin's delete (admin.deleteGroup) isn't
+      // checked: it's how an instance's operator clears a group out regardless.
+      await requireSettledUp(tx, input.groupId, {
+        unsettled: 'deleteGroupUnsettled',
+        formerMember: 'deleteGroupFormerMemberUnsettled',
+      });
       return deleteGroupWithData(tx, input.groupId);
     });
     await removeReceiptFiles(imagePaths);
@@ -243,23 +252,10 @@ export const groupsRouter = createTRPCRouter({
       // An archived group refuses settlements (and expenses), so an open balance
       // archived with it could only be settled by unarchiving the group first.
       // Throwing here rolls the archive back.
-      const unsettled = (await loadGroupBalances(tx, input.groupId)).filter((b) => b.net !== 0);
-      if (unsettled.length > 0) {
-        // Settlements need both people to be members, so a balance with someone
-        // who left can't be settled until they rejoin. An account an admin
-        // deleted can't rejoin, so the expenses it's in have to change instead.
-        // A placeholder removed from the group keeps their row and can still be
-        // settled with (#284), so they count here.
-        const members = await tx.groupMember.findMany({
-          where: { groupId: input.groupId },
-          select: { userId: true },
-        });
-        const memberIds = new Set(members.map((m) => m.userId));
-        throw new AppError(
-          'PRECONDITION_FAILED',
-          unsettled.some((b) => !memberIds.has(b.userId)) ? 'archiveFormerMemberUnsettled' : 'archiveUnsettled',
-        );
-      }
+      await requireSettledUp(tx, input.groupId, {
+        unsettled: 'archiveUnsettled',
+        formerMember: 'archiveFormerMemberUnsettled',
+      });
       await tx.activityLog.create({
         data: {
           groupId: input.groupId,

@@ -27,6 +27,40 @@ export async function loadGroupBalances(db: Prisma.TransactionClient, groupId: s
 }
 
 /**
+ * Refuse a group where anyone still owes or is owed money, with
+ * PRECONDITION_FAILED and the error key that fits: archiving (#275) and
+ * deleting (#390) both need everyone settled up first. An archived group
+ * refuses the payments that would settle a balance, and a deleted one takes
+ * the record of it away for good.
+ *
+ * Call it once the transaction holds a lock that waits for every balance
+ * change in flight and holds off new ones (groups.archive's update,
+ * lockGroupMembers), so the balances it reads are final. Throwing rolls
+ * back whatever the transaction did before.
+ */
+export async function requireSettledUp(
+  tx: Prisma.TransactionClient,
+  groupId: string,
+  keys: { unsettled: ErrorKey; formerMember: ErrorKey },
+): Promise<void> {
+  const unsettled = (await loadGroupBalances(tx, groupId)).filter((b) => b.net !== 0);
+  if (unsettled.length === 0) {
+    return;
+  }
+  // Settlements need both people to be members, so a balance with someone
+  // who left can't be settled until they rejoin. An account an admin
+  // deleted can't rejoin, so the expenses it's in have to change instead.
+  // A placeholder removed from the group keeps their row and can still be
+  // settled with (#284), so they count here.
+  const members = await tx.groupMember.findMany({ where: { groupId }, select: { userId: true } });
+  const memberIds = new Set(members.map((m) => m.userId));
+  throw new AppError(
+    'PRECONDITION_FAILED',
+    unsettled.some((b) => !memberIds.has(b.userId)) ? keys.formerMember : keys.unsettled,
+  );
+}
+
+/**
  * Lock a group's row for a transaction that changes its balances (an expense
  * or a payment added, edited or deleted), refusing an archived group with
  * the error `message` names. Call it first in the transaction (#289).

@@ -80,7 +80,7 @@
     "statusArchived": "Arquivado",
     "statusActive": "Ativo",
     "deleteTitle": "Excluir grupo",
-    "deleteDescription": "Tem certeza de que deseja excluir {name}? Todas as despesas, acertos e atividades deste grupo serão removidos permanentemente.",
+    "deleteDescription": "Tem certeza de que deseja excluir {name}? Todas as despesas, acertos e atividades deste grupo serão removidos permanentemente. Os saldos que os membros não acertaram também são excluídos.",
     "cancel": "Cancelar",
     "delete": "Excluir",
     "loadMore": "Carregar mais",

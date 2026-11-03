@@ -67,7 +67,8 @@ test.describe('Admin Delete User', () => {
       const found = expenses.expenses.find((e: { title: string }) => e.title === 'Temp user expense');
       expect(found).toBeDefined();
     } finally {
-      if (groupId) await trpcMutation(admin, 'groups.delete', { groupId }).catch(() => {});
+      // The admin's delete: the temp user's expense leaves a balance, which refuses the owner's (#390)
+      if (groupId) await trpcMutation(admin, 'admin.deleteGroup', { groupId }).catch(() => {});
       if (tempId) await trpcMutation(admin, 'admin.deleteUser', { userId: tempId }).catch(() => {});
       await tempCtx?.dispose();
       await admin.dispose();

@@ -40,6 +40,8 @@
   "currencyLocked": "No se puede cambiar la moneda del grupo una vez registrados gastos o pagos. Crea un grupo nuevo con la moneda que quieras.",
   "archiveFormerMemberUnsettled": "Alguien que ya no está en este grupo todavía debe dinero o se le debe, así que no se puede archivar. Invítalo de nuevo para saldar las cuentas o edita los gastos en los que aparece.",
   "archiveUnsettled": "Este grupo todavía tiene saldos pendientes. Salda las cuentas antes de archivarlo.",
+  "deleteGroupUnsettled": "Este grupo todavía tiene saldos pendientes. Salda las cuentas antes de eliminarlo.",
+  "deleteGroupFormerMemberUnsettled": "Alguien que ya no está en este grupo todavía debe dinero o se le debe, así que no se puede eliminar. Invítalo de nuevo para saldar las cuentas o edita los gastos en los que aparece.",
   "cannotRemoveOthers": "No puedes eliminar a otros miembros",
   "cannotRemoveOwner": "No se puede eliminar al propietario",
   "ownerCannotLeave": "El propietario del grupo no puede salir de él. Transfiere primero la propiedad a otro miembro, o elimina el grupo si ya nadie lo necesita.",

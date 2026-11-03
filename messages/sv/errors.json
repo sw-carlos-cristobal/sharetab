@@ -40,6 +40,8 @@
   "currencyLocked": "Gruppens valuta kan inte ändras när utgifter eller betalningar har registrerats. Skapa i stället en ny grupp med den valuta du vill ha.",
   "archiveFormerMemberUnsettled": "Någon som inte längre är med i gruppen är fortfarande skyldig pengar eller har pengar att få, så gruppen kan inte arkiveras. Bjud in personen igen för att göra upp, eller redigera utgifterna som hen finns med i.",
   "archiveUnsettled": "Den här gruppen har fortfarande oreglerade saldon. Gör upp innan du arkiverar den.",
+  "deleteGroupUnsettled": "Den här gruppen har fortfarande oreglerade saldon. Gör upp innan du tar bort den.",
+  "deleteGroupFormerMemberUnsettled": "Någon som inte längre är med i gruppen är fortfarande skyldig pengar eller har pengar att få, så gruppen kan inte tas bort. Bjud in personen igen för att göra upp, eller redigera utgifterna som hen finns med i.",
   "cannotRemoveOthers": "Du kan inte ta bort andra medlemmar",
   "cannotRemoveOwner": "Ägaren kan inte tas bort",
   "ownerCannotLeave": "Gruppens ägare kan inte lämna den. Överför först ägarskapet till en annan medlem, eller ta bort gruppen om ingen behöver den.",

@@ -1113,6 +1113,97 @@ describe('deleting a group', () => {
     mockDb.receipt.findMany.mockResolvedValue([]);
     mockDb.groupMember.findMany.mockResolvedValue([]);
     mockDb.guestSplit.findMany.mockResolvedValue([]);
+    mockDb.expense.findMany.mockResolvedValue([]);
+    mockDb.settlement.findMany.mockResolvedValue([]);
+  });
+
+  // #390: deleting took every open balance with it, for every member, on the owner's
+  // one click. It's refused until everyone is settled up, as archiving is (#275).
+  describe('with open balances', () => {
+    // The owner paid $10.00 split with Bob, so Bob owes the owner $5.00
+    const bobOwesHalf = [
+      {
+        paidById: 'owner',
+        amount: 1000,
+        baseCurrencyAmount: null,
+        shares: [
+          { userId: 'owner', amount: 500 },
+          { userId: 'bob', amount: 500 },
+        ],
+      },
+    ];
+    // Who the group's members are, for the former-member check; the placeholder
+    // lookup the delete itself makes finds none
+    const membersAre = (userIds: string[]) =>
+      mockDb.groupMember.findMany.mockImplementation(async ({ where }: { where: { user?: unknown } }) =>
+        where.user ? [] : userIds.map((userId) => ({ userId })),
+      );
+
+    beforeEach(() => {
+      mockMemberships({ owner: member('owner', 'OWNER'), bob: member('bob', 'MEMBER') });
+      mockDb.expense.findMany.mockResolvedValue(bobOwesHalf);
+      membersAre(['owner', 'bob']);
+    });
+
+    test('is refused while anyone in the group owes money', async () => {
+      mockDb.receipt.findMany.mockResolvedValue([{ id: 'r1', imagePath: 'receipts/r1.jpg' }]);
+      const api = await caller('owner');
+      await expect(api.delete({ groupId: 'g1' })).rejects.toMatchObject({
+        code: 'PRECONDITION_FAILED',
+        message: 'This group still has unsettled balances. Settle up before deleting it.',
+      });
+      expect(mockDb.expense.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { groupId: 'g1' } }));
+      expect(mockDb.settlement.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { groupId: 'g1' } }));
+      expect(mockDb.group.delete).not.toHaveBeenCalled();
+      expect(mockDb.receipt.deleteMany).not.toHaveBeenCalled();
+      expect(mockDb.user.deleteMany).not.toHaveBeenCalled();
+      expect(removeReceiptFiles).not.toHaveBeenCalled();
+    });
+
+    // Settlements need both people to be members, so "settle up" alone can't clear a
+    // balance with someone who has left, or whose account an admin deleted
+    test('says so when the open balance belongs to someone no longer in the group', async () => {
+      membersAre(['owner']);
+      const api = await caller('owner');
+      await expect(api.delete({ groupId: 'g1' })).rejects.toMatchObject({
+        code: 'PRECONDITION_FAILED',
+        message:
+          "Someone who is no longer in this group still owes or is owed money, so it can't be deleted. Invite them back to settle up, or edit the expenses they're in.",
+      });
+      expect(mockDb.group.delete).not.toHaveBeenCalled();
+    });
+
+    test('goes ahead once everyone is settled up', async () => {
+      // Bob paid the owner back
+      mockDb.settlement.findMany.mockResolvedValue([
+        { fromId: 'bob', toId: 'owner', amount: 500, baseCurrencyAmount: null },
+      ]);
+      const api = await caller('owner');
+      await expect(api.delete({ groupId: 'g1' })).resolves.toEqual({ success: true });
+      expect(mockDb.group.delete).toHaveBeenCalledWith({ where: { id: 'g1' } });
+    });
+
+    // Every expense or payment write holds the group's row FOR SHARE until it commits
+    // (lockActiveGroup), and the delete's lock waits for those, so the balances read
+    // after it are final until the group is gone
+    test('reads the balances once it holds the lock, before deleting anything', async () => {
+      mockDb.expense.findMany.mockResolvedValue([]);
+      const api = await caller('owner');
+      await api.delete({ groupId: 'g1' });
+
+      const lockCall = mockDb.$queryRaw.mock.calls.findIndex(([strings]) =>
+        /FROM "Group" WHERE "id" = .* FOR NO KEY UPDATE/.test((strings as string[]).join('?')),
+      );
+      const locked = mockDb.$queryRaw.mock.invocationCallOrder[lockCall]!;
+      const readExpenses = mockDb.expense.findMany.mock.invocationCallOrder[0]!;
+      const readPayments = mockDb.settlement.findMany.mock.invocationCallOrder[0]!;
+      expect(readExpenses).toBeGreaterThan(locked);
+      expect(readPayments).toBeGreaterThan(locked);
+      expect(mockDb.group.delete.mock.invocationCallOrder[0]!).toBeGreaterThan(Math.max(readExpenses, readPayments));
+      expect(mockDb.receipt.findMany.mock.invocationCallOrder[0]!).toBeGreaterThan(
+        Math.max(readExpenses, readPayments),
+      );
+    });
   });
 
   test('the owner deletes it', async () => {

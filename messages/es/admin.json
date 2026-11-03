@@ -80,7 +80,7 @@
     "statusArchived": "Archivado",
     "statusActive": "Activo",
     "deleteTitle": "Eliminar grupo",
-    "deleteDescription": "¿Está seguro de que desea eliminar {name}? Se eliminarán permanentemente todos los gastos, liquidaciones y actividad de este grupo.",
+    "deleteDescription": "¿Está seguro de que desea eliminar {name}? Se eliminarán permanentemente todos los gastos, liquidaciones y actividad de este grupo. Los saldos que los miembros no hayan saldado también se eliminan.",
     "cancel": "Cancelar",
     "delete": "Eliminar",
     "loadMore": "Cargar más",
