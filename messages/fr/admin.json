@@ -80,7 +80,7 @@
     "statusArchived": "Archivé",
     "statusActive": "Actif",
     "deleteTitle": "Supprimer le groupe",
-    "deleteDescription": "Êtes-vous sûr de vouloir supprimer {name} ? Toutes les dépenses, règlements et activités de ce groupe seront définitivement supprimés.",
+    "deleteDescription": "Êtes-vous sûr de vouloir supprimer {name} ? Toutes les dépenses, règlements et activités de ce groupe seront définitivement supprimés. Les soldes que les membres n’ont pas réglés sont supprimés aussi.",
     "cancel": "Annuler",
     "delete": "Supprimer",
     "loadMore": "Charger plus",

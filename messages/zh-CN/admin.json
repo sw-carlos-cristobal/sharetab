@@ -80,7 +80,7 @@
     "statusArchived": "已归档",
     "statusActive": "活跃",
     "deleteTitle": "删除群组",
-    "deleteDescription": "确定要删除 {name} 吗？该群组中的所有支出、结算和活动记录将被永久删除。",
+    "deleteDescription": "确定要删除 {name} 吗？该群组中的所有支出、结算和活动记录将被永久删除。成员之间未结清的余额也会一并删除。",
     "cancel": "取消",
     "delete": "删除",
     "loadMore": "加载更多",

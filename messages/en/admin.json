@@ -80,7 +80,7 @@
     "statusArchived": "Archived",
     "statusActive": "Active",
     "deleteTitle": "Delete Group",
-    "deleteDescription": "Are you sure you want to delete {name}? This will permanently remove all expenses, settlements, and activity in this group.",
+    "deleteDescription": "Are you sure you want to delete {name}? This will permanently remove all expenses, settlements, and activity in this group. Unsettled balances between members are deleted with it.",
     "cancel": "Cancel",
     "delete": "Delete",
     "loadMore": "Load more",

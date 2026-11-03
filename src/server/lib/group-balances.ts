@@ -5,7 +5,8 @@ import { computeBalances, type MemberBalance } from './balance-calculator';
 /**
  * The net balance of everyone in a group's expenses and settlements,
  * including people who have since left. The group page's balances and the
- * archive check both read this, so they can't disagree.
+ * archive and delete checks (requireSettledUp) all read this, so they can't
+ * disagree.
  */
 export async function loadGroupBalances(db: Prisma.TransactionClient, groupId: string): Promise<MemberBalance[]> {
   const [expenses, settlements] = await Promise.all([
@@ -24,6 +25,46 @@ export async function loadGroupBalances(db: Prisma.TransactionClient, groupId: s
     }),
   ]);
   return computeBalances(expenses, settlements);
+}
+
+/**
+ * Refuse a group where anyone still owes or is owed money, with
+ * PRECONDITION_FAILED and the error key that fits: archiving (#275) and
+ * deleting (#390) both need everyone settled up first. An archived group
+ * refuses the payments that would settle a balance, and a deleted one takes
+ * the record of it away for good.
+ *
+ * Call it once the transaction holds a lock that waits for the writes taking
+ * lockActiveGroup (expenses created, edited or deleted, payments recorded or
+ * deleted, receipts.assignItemsAndCreateExpense) and holds off new ones
+ * (groups.archive's update, lockGroupMembers), so what they change is final.
+ * A placeholder merge (mergePlaceholderIntoUser) takes no group lock. It
+ * moves a balance from one person to another and re-rounds the shares of
+ * converted-currency expenses (a tied cent can land on someone else, since
+ * computeBalances orders shares by user id), so one landing mid-read can make
+ * this refuse a settled group or pass one that is a few cents out.
+ * Throwing rolls back whatever the transaction did before.
+ */
+export async function requireSettledUp(
+  tx: Prisma.TransactionClient,
+  groupId: string,
+  keys: { unsettled: ErrorKey; formerMember: ErrorKey },
+): Promise<void> {
+  const unsettled = (await loadGroupBalances(tx, groupId)).filter((b) => b.net !== 0);
+  if (unsettled.length === 0) {
+    return;
+  }
+  // Settlements need both people to be members, so a balance with someone
+  // who left can't be settled until they rejoin. An account an admin
+  // deleted can't rejoin, so the expenses and payments it's in have to change instead.
+  // A placeholder removed from the group keeps their row and can still be
+  // settled with (#284), so they count here.
+  const members = await tx.groupMember.findMany({ where: { groupId }, select: { userId: true } });
+  const memberIds = new Set(members.map((m) => m.userId));
+  throw new AppError(
+    'PRECONDITION_FAILED',
+    unsettled.some((b) => !memberIds.has(b.userId)) ? keys.formerMember : keys.unsettled,
+  );
 }
 
 /**
