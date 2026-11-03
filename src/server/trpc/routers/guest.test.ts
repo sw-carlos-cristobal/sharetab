@@ -44,7 +44,8 @@ const { processReceiptImage, checkRateLimit, peekRateLimit } = vi.hoisted(() => 
 vi.mock('@/server/lib/receipt-processor', () => ({ processReceiptImage }));
 // The token store's functions share the main ones' mocks: these tests check which key and limit a
 // procedure uses, not which store it lands in (rate-limit.test.ts covers that)
-vi.mock('@/server/lib/rate-limit', () => ({
+vi.mock('@/server/lib/rate-limit', async (importOriginal) => ({
+  parsePositiveInt: (await importOriginal<typeof import('@/server/lib/rate-limit')>()).parsePositiveInt,
   checkRateLimit,
   peekRateLimit,
   refundRateLimit: vi.fn(),
@@ -156,6 +157,39 @@ describe('guest.processReceipt with guest uploads enabled', () => {
     mockDb.receipt.findUnique.mockResolvedValue(null);
     const api = await caller();
     await expect(api.processReceipt({ receiptId: 'missing' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+});
+
+// #434: guest and signed-in scans spend one global AI scan cap, so a signed-in scan, which skips
+// GUEST_AI_GLOBAL_LIMIT, still stops at AI_GLOBAL_LIMIT
+describe('guest.processReceipt and the global AI scan cap (#434)', () => {
+  beforeEach(() => {
+    guestUploadsSetting(null);
+    mockDb.receipt.findUnique.mockResolvedValue({ id: 'r1', isGuest: true });
+    mockDb.receipt.updateMany.mockResolvedValue({ count: 1 });
+    processReceiptImage.mockResolvedValue({ subtotal: 100 });
+  });
+
+  test('a guest scan spends the per-receipt, per-IP, all-guests and global budgets', async () => {
+    await (await caller()).processReceipt({ receiptId: 'r1' });
+    const spent = checkRateLimit.mock.calls.map(([key, max]) => [key, max]);
+    expect(spent).toEqual([
+      ['guest-process:r1', 3],
+      ['guest-process-ip:global', 20],
+      ['guest-process-global', 100],
+      ['ai-scan-global', 200],
+    ]);
+  });
+
+  test('is refused once the global budget is spent, without claiming or scanning the receipt', async () => {
+    peekRateLimit.mockImplementation((key: string) => ({ allowed: key !== 'ai-scan-global', retryAfterMs: 0 }));
+    await expect((await caller()).processReceipt({ receiptId: 'r1' })).rejects.toMatchObject({
+      code: 'TOO_MANY_REQUESTS',
+      messageKey: 'processingRateLimited',
+    });
+    expect(checkRateLimit).not.toHaveBeenCalled();
+    expect(mockDb.receipt.updateMany).not.toHaveBeenCalled();
+    expect(processReceiptImage).not.toHaveBeenCalled();
   });
 });
 

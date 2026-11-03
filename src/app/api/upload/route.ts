@@ -9,6 +9,7 @@ import { join } from 'path';
 import { getUploadDir } from '@/server/lib/upload-dir';
 import { getClientIp } from '@/server/lib/client-ip';
 import { canUseGuestUploads } from '@/server/lib/guest-uploads';
+import { hasBudget, spendBudget, userUploadQuotas } from '@/server/lib/receipt-limits';
 import { randomUUID } from 'crypto';
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic'];
@@ -164,6 +165,12 @@ export async function POST(req: NextRequest) {
       return errorResponse(req, 401, 'signInRequired');
     }
     userId = session.user.id;
+
+    // Per-account upload limit (#434). Peek only, like the guest budget: it's spent once the
+    // upload passes validation
+    if (!hasBudget(userUploadQuotas(userId))) {
+      return errorResponse(req, 429, 'uploadsRateLimited');
+    }
   }
 
   const formData = await req.formData();
@@ -203,8 +210,11 @@ export async function POST(req: NextRequest) {
     return errorResponse(req, 400, 'fileContentMismatch');
   }
 
-  // All validation passed — now consume guest budget (per-IP, then global)
+  // All validation passed — now consume the guest budget (per-IP, then global), or the account's
   if (guestIp !== null && !consumeGuestUploadBudget(guestIp)) {
+    return errorResponse(req, 429, 'uploadsRateLimited');
+  }
+  if (userId !== undefined && !spendBudget(userUploadQuotas(userId))) {
     return errorResponse(req, 429, 'uploadsRateLimited');
   }
 

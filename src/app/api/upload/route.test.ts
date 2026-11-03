@@ -149,3 +149,75 @@ describe('POST /api/upload errors', () => {
     });
   });
 });
+
+// #434: an upload from a signed-in user only checked the session, so one account could store
+// receipt images without end
+describe('POST /api/upload for a signed-in user (#434)', () => {
+  function signedInUpload(
+    headers: Record<string, string> = {},
+    file = new File([JPEG], 'receipt.jpg', { type: 'image/jpeg' }),
+  ) {
+    const form = new FormData();
+    form.append('file', file);
+    return new NextRequest('http://localhost/api/upload', { method: 'POST', body: form, headers });
+  }
+
+  beforeEach(() => {
+    auth.mockResolvedValue({ user: { id: 'user-1' } });
+    vi.stubEnv('USER_UPLOAD_LIMIT', '2');
+  });
+
+  test('allows USER_UPLOAD_LIMIT uploads an hour, then refuses with 429, storing nothing', async () => {
+    const { POST } = await import('./route');
+
+    expect((await POST(signedInUpload())).status).toBe(200);
+    expect((await POST(signedInUpload())).status).toBe(200);
+    const refused = await POST(signedInUpload());
+
+    expect(refused.status).toBe(429);
+    expect(await refused.json()).toEqual({ error: en.uploadsRateLimited });
+    expect(writeFile).toHaveBeenCalledTimes(2);
+    expect(mockDb.receipt.create).toHaveBeenCalledTimes(2);
+  });
+
+  test('says so in the language the page sends', async () => {
+    const { POST } = await import('./route');
+    await POST(signedInUpload());
+    await POST(signedInUpload());
+
+    const refused = await POST(signedInUpload({ 'x-locale': 'de' }));
+    expect(await refused.json()).toEqual({ error: de.uploadsRateLimited });
+  });
+
+  test('counts each account separately', async () => {
+    const { POST } = await import('./route');
+    await POST(signedInUpload());
+    await POST(signedInUpload());
+    expect((await POST(signedInUpload())).status).toBe(429);
+
+    auth.mockResolvedValue({ user: { id: 'user-2' } });
+    expect((await POST(signedInUpload())).status).toBe(200);
+  });
+
+  test('an upload refused for its file spends nothing', async () => {
+    const { POST } = await import('./route');
+    const pdf = () => new File(['%PDF'], 'receipt.pdf', { type: 'application/pdf' });
+    for (let i = 0; i < 3; i++) {
+      expect((await POST(signedInUpload({}, pdf()))).status).toBe(400);
+    }
+
+    expect((await POST(signedInUpload())).status).toBe(200);
+    expect((await POST(signedInUpload())).status).toBe(200);
+  });
+
+  test("doesn't spend the guest upload budget", async () => {
+    vi.stubEnv('USER_UPLOAD_LIMIT', '50');
+    vi.stubEnv('GUEST_UPLOAD_GLOBAL_LIMIT', '1');
+    const { POST } = await import('./route');
+    for (let i = 0; i < 3; i++) {
+      expect((await POST(signedInUpload())).status).toBe(200);
+    }
+    auth.mockResolvedValue(null);
+    expect((await POST(uploadRequest('203.0.113.20'))).status).toBe(200);
+  });
+});

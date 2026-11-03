@@ -125,6 +125,10 @@ jobs:
           REGISTER_RATE_LIMIT_MAX: "1000"
           GUEST_RATE_LIMIT_MAX: "1000"
           PASSWORD_RESET_RATE_LIMIT_MAX: "1000"
+          # The suite uploads and scans many receipts as the same few accounts
+          USER_UPLOAD_LIMIT: "10000"
+          USER_AI_LIMIT: "10000"
+          AI_GLOBAL_LIMIT: "10000"
           ADMIN_EMAIL: alice@example.com
           AI_PROVIDER_PRIORITY: mock
           EMAIL_SERVER_HOST: localhost

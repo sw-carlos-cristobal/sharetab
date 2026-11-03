@@ -4,8 +4,9 @@ import { AppError } from '@/server/lib/app-error';
 import { Prisma, GuestSplitStatus } from '@/generated/prisma/client';
 import { createTRPCRouter, publicProcedure, protectedProcedure } from '../init';
 import { processReceiptImage } from '../../lib/receipt-processor';
+import { guestScanQuotas, spendBudget } from '../../lib/receipt-limits';
 import { logger } from '../../lib/logger';
-import { checkRateLimit, checkTokenRateLimit, refundRateLimit } from '../../lib/rate-limit';
+import { checkRateLimit, checkTokenRateLimit } from '../../lib/rate-limit';
 import { checkClaimWriteRateLimit, checkSessionReadRateLimit } from '../../lib/guest-session-limits';
 import { getClientIp } from '../../lib/client-ip';
 import { guestTransaction } from '../../lib/guest-transaction';
@@ -323,35 +324,15 @@ export const guestRouter = createTRPCRouter({
         throw new AppError('NOT_FOUND', 'receiptNotFound');
       }
 
-      // Quotas, checked only AFTER the receipt is validated as a real guest
-      // receipt so bad receipt ids can't burn budget:
-      //  - per receipt (3/h): bounds reprocessing of a single receipt
-      //  - per IP (20/h): bounds one client across receipts (spoofable headers)
-      //  - global: hard cap on total unauthenticated AI spend regardless
-      // Consumption is atomic (synchronous, single event-loop turn) BEFORE
-      // the processing claim, so concurrent requests cannot all slip past a
-      // non-consuming check; if the claim then fails with CONFLICT, the
-      // consumed attempts are refunded so retries against an in-flight
-      // receipt don't drain any bucket.
-      const ip = getClientIp(ctx.headers);
-      const globalMax = parseInt(process.env.GUEST_AI_GLOBAL_LIMIT ?? '100', 10) || 100;
-      const quotaWindow = 60 * 60 * 1000;
-      const quotas: Array<{ key: string; max: number }> = [
-        { key: `guest-process:${input.receiptId}`, max: 3 },
-        { key: `guest-process-ip:${ip}`, max: 20 },
-        { key: 'guest-process-global', max: globalMax },
-      ];
-      const consumed: string[] = [];
-      const refundConsumed = () => {
-        for (const key of consumed) refundRateLimit(key);
-      };
-      for (const quota of quotas) {
-        if (checkRateLimit(quota.key, quota.max, quotaWindow).allowed) {
-          consumed.push(quota.key);
-        } else {
-          refundConsumed();
-          throw new AppError('TOO_MANY_REQUESTS', 'processingRateLimited');
-        }
+      // Quotas (per receipt, per IP, all guests, and every scan on the instance: guestScanQuotas),
+      // spent only AFTER the receipt is validated as a real guest receipt so bad receipt ids can't
+      // burn budget. Spending is atomic (synchronous, single event-loop turn) BEFORE the
+      // processing claim, so concurrent requests cannot all slip past a non-consuming check; if
+      // the claim then fails with CONFLICT, the attempts are refunded so retries against an
+      // in-flight receipt don't drain any bucket.
+      const refundConsumed = spendBudget(guestScanQuotas(input.receiptId, getClientIp(ctx.headers)));
+      if (!refundConsumed) {
+        throw new AppError('TOO_MANY_REQUESTS', 'processingRateLimited');
       }
 
       // Conditional update doubles as a mutex against concurrent processing.

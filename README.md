@@ -632,7 +632,12 @@ If several accounts have the `ADMIN_EMAIL` address in different letter cases (le
 | `GUEST_RATE_LIMIT_MAX`          | `10`    | Per client IP per hour, applied separately to guest receipt uploads, guest splits, and claim sessions.                               |
 | `GUEST_UPLOAD_GLOBAL_LIMIT`     | `100`   | Max guest receipt uploads per hour across all guests combined.                                                                       |
 | `GUEST_AI_GLOBAL_LIMIT`         | `100`   | Max guest AI receipt scans per hour across all guests combined.                                                                      |
+| `USER_UPLOAD_LIMIT`             | `30`    | Max receipt uploads per signed-in account per hour on a group's scan page.                                                           |
+| `USER_AI_LIMIT`                 | `30`    | Max AI receipt scans, rescans included, per signed-in account per hour on a group's scan page.                                       |
+| `AI_GLOBAL_LIMIT`               | `200`   | Max AI receipt scans per hour across everyone, guests and signed-in users combined.                                                  |
 | `PASSWORD_RESET_RATE_LIMIT_MAX` | (unset) | Per client IP: password reset requests per hour (20 by default) and reset link submissions per 15 minutes (30); one value sets both. |
+
+Quick Split counts as a guest upload and scan whether or not you're signed in. Every receipt scan, guest or signed in, also counts toward `AI_GLOBAL_LIMIT` (the admin dashboard's provider test isn't counted), so it bounds what the instance spends on its AI provider even when anyone can create an account: once it's used up, scans are refused for everyone until an hour has passed since the first scan of that window. It caps guest scans too, so a `GUEST_AI_GLOBAL_LIMIT` above it has no effect. The guest and overall windows each start at their own first scan, so guests can take up to twice `GUEST_AI_GLOBAL_LIMIT`, less one, from a single window of `AI_GLOBAL_LIMIT`: signed-in users are sure only of what's left above that, as little as one scan an hour at the defaults. Raise `AI_GLOBAL_LIMIT` to reserve more for them.
 
 Password resets have their own limits: 20 reset requests per client IP an hour and 30 reset link submissions per client IP in 15 minutes (`PASSWORD_RESET_RATE_LIMIT_MAX` sets both; unset keeps these defaults), and at most 5 reset emails per account an hour (fixed). Like the other limits, they're counted in memory and reset when ShareTab restarts.
 
@@ -643,7 +648,7 @@ The client IP comes from the `cf-connecting-ip`, `x-real-ip`, or `x-forwarded-fo
 - Two common mistakes leave the IP under the client's control: setting only `x-forwarded-for` (a client-sent `x-real-ip` wins over it), and appending to `x-forwarded-for` as nginx's `$proxy_add_x_forwarded_for` does (ShareTab reads the first entry, which the client wrote). Setting `x-real-ip` from the connection and removing any client-sent `cf-connecting-ip` avoids both.
 - Trust `cf-connecting-ip` only if ShareTab can be reached through Cloudflare alone.
 
-A proxy that forwards no client address makes every user share the proxy's IP, so the per-IP limits apply to everyone combined: 30 sign-in attempts (successful or not) in 15 minutes block password login for everyone, and registrations, guest uploads, password reset requests (20 an hour) and reset link submissions (30 in 15 minutes) are capped the same way. The per-email and global limits apply either way.
+A proxy that forwards no client address makes every user share the proxy's IP, so the per-IP limits apply to everyone combined: 30 sign-in attempts (successful or not) in 15 minutes block password login for everyone, and registrations, guest uploads, password reset requests (20 an hour) and reset link submissions (30 in 15 minutes) are capped the same way. The per-email, per-account and global limits apply either way.
 
 Guest receipts, claim sessions, and invite links also have fixed limits that no variable changes. Per share link, per minute: 200 joins (10 per person); 300 each of item-claim saves, item splits, name edits, and person removals (30 of each per person); 3000 reads; and 120 rejoin lookups. Per guest receipt, per hour: 3 AI scans and 10 item lookups; per client IP, 20 guest AI scans per hour. A split's creator can change its Venmo handle 10 times per minute. A signed-in user can look up 30 invite links per minute. Counters are kept in memory and reset when ShareTab restarts.
 
@@ -726,7 +731,7 @@ npm run test:docker
 DOCKER_HOST=ssh://user@host npm run test:docker
 ```
 
-Set `AUTH_RATE_LIMIT_MAX=9999`, `AUTH_IP_RATE_LIMIT_MAX=9999`, `REGISTER_RATE_LIMIT_MAX=9999`, `GUEST_RATE_LIMIT_MAX=9999` and `PASSWORD_RESET_RATE_LIMIT_MAX=9999` in `.env` to lift the per-email and per-IP limits during repeated test runs (the global guest caps, the fixed guest limits and the per-account reset email limit still apply). The tests that send mail need the mock SMTP server, and following the emailed reset link or checking the password changed emails also needs `MOCK_SMTP_OUTBOX`; see CONTRIBUTING.md. Every local request counts against one IP, because Next.js adds an `x-forwarded-for` header to local requests.
+Set `AUTH_RATE_LIMIT_MAX=9999`, `AUTH_IP_RATE_LIMIT_MAX=9999`, `REGISTER_RATE_LIMIT_MAX=9999`, `GUEST_RATE_LIMIT_MAX=9999`, `PASSWORD_RESET_RATE_LIMIT_MAX=9999`, `USER_UPLOAD_LIMIT=9999`, `USER_AI_LIMIT=9999` and `AI_GLOBAL_LIMIT=9999` in `.env` to lift the per-email and per-IP limits, the per-account receipt limits and the cap on all AI scans during repeated test runs (the global guest caps, the fixed guest limits and the per-account reset email limit still apply). The tests that send mail need the mock SMTP server, and following the emailed reset link or checking the password changed emails also needs `MOCK_SMTP_OUTBOX`; see CONTRIBUTING.md. Every local request counts against one IP, because Next.js adds an `x-forwarded-for` header to local requests.
 
 ### Releases
 

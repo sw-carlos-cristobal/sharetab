@@ -12,6 +12,7 @@ import { stripUndefined } from '../../lib/strip-undefined';
 import { lockActiveGroup } from '../../lib/group-balances';
 import { deleteUnusedSplitReceipts, removeReceiptFiles } from '../../lib/receipt-cleanup';
 import { calculateReceiptSplitTotals } from '@/lib/split-calculator';
+import { spendBudget, userScanQuotas } from '../../lib/receipt-limits';
 
 const uniqueIds = (ids: string[]) => new Set(ids).size === ids.length;
 
@@ -115,6 +116,13 @@ export const receiptsRouter = createTRPCRouter({
       // Note: old items are NOT deleted here — processReceiptImage handles
       // delete + recreate atomically, so if the AI provider fails the old items remain.
 
+      // The caller's and the instance's AI scan limits (#434), spent only once the caller may scan
+      // this receipt, and given back if it's already being scanned
+      const refundScan = spendBudget(userScanQuotas(ctx.user.id));
+      if (!refundScan) {
+        throw new AppError('TOO_MANY_REQUESTS', 'processingRateLimited');
+      }
+
       // Conditional update doubles as a mutex: a receipt already PROCESSING
       // is rejected so concurrent calls can't interleave delete/recreate.
       // A PROCESSING receipt untouched for 15+ minutes is considered stale
@@ -137,6 +145,7 @@ export const receiptsRouter = createTRPCRouter({
         },
       });
       if (claimed.count === 0) {
+        refundScan();
         const now = await ctx.db.receipt.findUnique({ where: { id: input.receiptId }, select: { groupId: true } });
         throw new AppError(
           'CONFLICT',
@@ -401,6 +410,12 @@ export const receiptsRouter = createTRPCRouter({
   retryProcessing: protectedProcedure.input(z.object({ receiptId: z.string() })).mutation(async ({ ctx, input }) => {
     const receipt = await verifyReceiptAccess(ctx.db, input.receiptId, ctx.user.id);
 
+    // The same AI scan limits as processReceipt (#434)
+    const refundScan = spendBudget(userScanQuotas(ctx.user.id));
+    if (!refundScan) {
+      throw new AppError('TOO_MANY_REQUESTS', 'processingRateLimited');
+    }
+
     // Reset status to PROCESSING and re-run extraction; conditional update
     // rejects concurrent reprocessing of the same receipt. A PROCESSING
     // receipt untouched for 15+ minutes is stale and may be re-claimed
@@ -413,6 +428,7 @@ export const receiptsRouter = createTRPCRouter({
       data: { status: 'PROCESSING' },
     });
     if (claimed.count === 0) {
+      refundScan();
       throw new AppError('CONFLICT', 'receiptBeingProcessed');
     }
 

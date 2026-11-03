@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { calculateReceiptSplitTotals } from '@/lib/split-calculator';
 import { getExchangeRate } from '@/server/lib/exchange-rates';
 import { Prisma } from '@/generated/prisma/client';
@@ -48,9 +48,9 @@ vi.mock('@/server/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-async function caller() {
+async function caller(userId = 'u1') {
   const { receiptsRouter } = await import('./receipts');
-  const ctx = { session: { user: { id: 'u1' } }, db: mockDb, headers: new Headers(), impersonating: null };
+  const ctx = { session: { user: { id: userId } }, db: mockDb, headers: new Headers(), impersonating: null };
   return receiptsRouter.createCaller(ctx as unknown as Parameters<typeof receiptsRouter.createCaller>[0]);
 }
 
@@ -1162,5 +1162,116 @@ describe("changing a receipt's currency (#361)", () => {
       messageKey: 'receiptAlreadyHasExpense',
     });
     expect(mockDb.receipt.update).not.toHaveBeenCalled();
+  });
+});
+
+// #434: the group scan path had no limit, so any account could run AI scans on the operator's key
+// without end, and signing up got around the guest scan cap
+describe('AI scan limits for signed-in users (#434)', () => {
+  const HOUR = 60 * 60 * 1000;
+  const ownReceipt = {
+    id: 'r1',
+    status: 'FAILED',
+    groupId: null,
+    uploadedById: 'u1',
+    imagePath: 'r1.jpg',
+    mimeType: 'image/jpeg',
+    group: null,
+  };
+  // The limits are counted in memory for the whole file; each test starts a day later, so the
+  // windows earlier tests opened are over
+  let clock = Date.now();
+
+  beforeEach(() => {
+    clock += 25 * HOUR;
+    vi.spyOn(Date, 'now').mockReturnValue(clock);
+    vi.stubEnv('USER_AI_LIMIT', '2');
+    mockDb.receipt.findUnique.mockResolvedValue(ownReceipt);
+    mockDb.receipt.updateMany.mockResolvedValue({ count: 1 });
+    vi.mocked(processReceiptImage).mockResolvedValue({ status: 'COMPLETED' } as never);
+  });
+
+  afterEach(() => {
+    vi.mocked(Date.now).mockRestore();
+    vi.unstubAllEnvs();
+  });
+
+  test('processReceipt allows USER_AI_LIMIT scans an hour, then refuses without claiming or scanning', async () => {
+    const api = await caller();
+    await api.processReceipt({ receiptId: 'r1' });
+    await api.processReceipt({ receiptId: 'r1' });
+    await expect(api.processReceipt({ receiptId: 'r1' })).rejects.toMatchObject({
+      code: 'TOO_MANY_REQUESTS',
+      messageKey: 'processingRateLimited',
+    });
+
+    expect(mockDb.receipt.updateMany).toHaveBeenCalledTimes(2);
+    expect(processReceiptImage).toHaveBeenCalledTimes(2);
+  });
+
+  test('retryProcessing spends the same budget', async () => {
+    const api = await caller();
+    await api.processReceipt({ receiptId: 'r1' });
+    await api.retryProcessing({ receiptId: 'r1' });
+    await expect(api.retryProcessing({ receiptId: 'r1' })).rejects.toMatchObject({ code: 'TOO_MANY_REQUESTS' });
+    await expect(api.processReceipt({ receiptId: 'r1' })).rejects.toMatchObject({ code: 'TOO_MANY_REQUESTS' });
+    expect(processReceiptImage).toHaveBeenCalledTimes(2);
+  });
+
+  test('another account has its own budget', async () => {
+    await (await caller()).processReceipt({ receiptId: 'r1' });
+    await (await caller()).processReceipt({ receiptId: 'r1' });
+    await expect((await caller()).processReceipt({ receiptId: 'r1' })).rejects.toMatchObject({
+      code: 'TOO_MANY_REQUESTS',
+    });
+
+    mockDb.receipt.findUnique.mockResolvedValue({ ...ownReceipt, uploadedById: 'u2' });
+    await expect((await caller('u2')).processReceipt({ receiptId: 'r1' })).resolves.toBeDefined();
+  });
+
+  test('a receipt already being scanned gives the attempt back', async () => {
+    mockDb.receipt.updateMany.mockResolvedValueOnce({ count: 0 }).mockResolvedValueOnce({ count: 0 });
+    const api = await caller();
+    await expect(api.processReceipt({ receiptId: 'r1' })).rejects.toMatchObject({ code: 'CONFLICT' });
+    await expect(api.retryProcessing({ receiptId: 'r1' })).rejects.toMatchObject({ code: 'CONFLICT' });
+
+    await api.processReceipt({ receiptId: 'r1' });
+    await api.retryProcessing({ receiptId: 'r1' });
+    expect(processReceiptImage).toHaveBeenCalledTimes(2);
+  });
+
+  test('a scan the caller may not run spends nothing', async () => {
+    mockDb.receipt.findUnique.mockResolvedValue({ ...ownReceipt, uploadedById: 'u2' });
+    const api = await caller();
+    for (let i = 0; i < 3; i++) {
+      await expect(api.processReceipt({ receiptId: 'r1' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(api.retryProcessing({ receiptId: 'r1' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    }
+
+    mockDb.receipt.findUnique.mockResolvedValue(ownReceipt);
+    await api.processReceipt({ receiptId: 'r1' });
+    await api.retryProcessing({ receiptId: 'r1' });
+  });
+
+  test('a scan whose provider failed still counts: the provider was asked', async () => {
+    vi.mocked(processReceiptImage).mockRejectedValue(new Error('provider down'));
+    const api = await caller();
+    await expect(api.processReceipt({ receiptId: 'r1' })).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' });
+    await expect(api.retryProcessing({ receiptId: 'r1' })).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' });
+    await expect(api.processReceipt({ receiptId: 'r1' })).rejects.toMatchObject({ code: 'TOO_MANY_REQUESTS' });
+  });
+
+  test('every account spends the global AI scan cap', async () => {
+    vi.stubEnv('AI_GLOBAL_LIMIT', '2');
+    await (await caller()).processReceipt({ receiptId: 'r1' });
+    mockDb.receipt.findUnique.mockResolvedValue({ ...ownReceipt, uploadedById: 'u2' });
+    await (await caller('u2')).processReceipt({ receiptId: 'r1' });
+
+    mockDb.receipt.findUnique.mockResolvedValue({ ...ownReceipt, uploadedById: 'u3' });
+    await expect((await caller('u3')).processReceipt({ receiptId: 'r1' })).rejects.toMatchObject({
+      code: 'TOO_MANY_REQUESTS',
+      messageKey: 'processingRateLimited',
+    });
+    expect(processReceiptImage).toHaveBeenCalledTimes(2);
   });
 });
