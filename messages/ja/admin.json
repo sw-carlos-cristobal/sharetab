@@ -80,7 +80,7 @@
     "statusArchived": "アーカイブ済み",
     "statusActive": "アクティブ",
     "deleteTitle": "グループを削除",
-    "deleteDescription": "{name}を削除してもよろしいですか？このグループのすべての支出、精算、活動が完全に削除されます。",
+    "deleteDescription": "{name}を削除してもよろしいですか？このグループのすべての支出、精算、活動が完全に削除されます。メンバー間の未精算の残高も削除されます。",
     "cancel": "キャンセル",
     "delete": "削除",
     "loadMore": "さらに読み込む",

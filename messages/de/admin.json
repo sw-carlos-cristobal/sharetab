@@ -80,7 +80,7 @@
     "statusArchived": "Archiviert",
     "statusActive": "Aktiv",
     "deleteTitle": "Gruppe löschen",
-    "deleteDescription": "Sind Sie sicher, dass Sie {name} löschen möchten? Alle Ausgaben, Abrechnungen und Aktivitäten in dieser Gruppe werden dauerhaft entfernt.",
+    "deleteDescription": "Sind Sie sicher, dass Sie {name} löschen möchten? Alle Ausgaben, Abrechnungen und Aktivitäten in dieser Gruppe werden dauerhaft entfernt. Offene Salden zwischen den Mitgliedern werden ebenfalls gelöscht.",
     "cancel": "Abbrechen",
     "delete": "Löschen",
     "loadMore": "Mehr laden",

@@ -80,7 +80,7 @@
     "statusArchived": "보관됨",
     "statusActive": "활성",
     "deleteTitle": "그룹 삭제",
-    "deleteDescription": "{name}을(를) 삭제하시겠습니까? 이 그룹의 모든 지출, 정산 및 활동 기록이 영구적으로 삭제됩니다.",
+    "deleteDescription": "{name}을(를) 삭제하시겠습니까? 이 그룹의 모든 지출, 정산 및 활동 기록이 영구적으로 삭제됩니다. 멤버 간에 정산되지 않은 잔액도 함께 삭제됩니다.",
     "cancel": "취소",
     "delete": "삭제",
     "loadMore": "더 보기",

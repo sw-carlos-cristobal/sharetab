@@ -80,7 +80,7 @@
     "statusArchived": "Arkiverad",
     "statusActive": "Aktiv",
     "deleteTitle": "Ta bort grupp",
-    "deleteDescription": "Är du säker på att du vill ta bort {name}? Detta tar permanent bort alla utgifter, avräkningar och aktiviteter i denna grupp.",
+    "deleteDescription": "Är du säker på att du vill ta bort {name}? Detta tar permanent bort alla utgifter, avräkningar och aktiviteter i denna grupp. Saldon som medlemmarna inte har gjort upp tas också bort.",
     "cancel": "Avbryt",
     "delete": "Ta bort",
     "loadMore": "Ladda fler",
