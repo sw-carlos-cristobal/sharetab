@@ -44,6 +44,22 @@ export const COMMON_CURRENCIES = [
 export type CurrencyCode = (typeof COMMON_CURRENCIES)[number]['code'];
 
 /**
+ * The schema's default for a group's and a user's currency, and the currency of a receipt scanned
+ * outside a group when the scan can't tell which it is in (#361)
+ */
+export const DEFAULT_CURRENCY = 'USD';
+
+/**
+ * A value as an uppercase ISO 4217-shaped code ("eur" → "EUR"), or undefined when it isn't one
+ * (null, "$", "US Dollar"). Intl.NumberFormat, which formatCents uses, throws on a malformed code.
+ */
+export function currencyCode(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const code = value.trim();
+  return /^[a-zA-Z]{3}$/.test(code) ? code.toUpperCase() : undefined;
+}
+
+/**
  * Get the display label for a currency code.
  */
 export function getCurrencyLabel(code: string): string {

@@ -35,6 +35,22 @@ function serializationFailure() {
   });
 }
 
+// Prisma's transaction manager raises P2028 (TransactionManagerError) when no pool connection
+// frees up within maxWait, or when the transaction runs past its timeout. The runtime throws
+// it as an Error subclass carrying the code, not necessarily a PrismaClientKnownRequestError.
+function transactionManagerError(message: string) {
+  return Object.assign(new Error(`Transaction API error: ${message}`), {
+    name: 'TransactionManagerError',
+    code: 'P2028',
+    meta: {},
+  });
+}
+const poolTimeout = () => transactionManagerError('Unable to start a transaction in the given time.');
+const expired = () =>
+  transactionManagerError(
+    'A commit cannot be executed on an expired transaction. The timeout for this transaction was 5000 ms, however 5012 ms passed since the start of the transaction. Consider increasing the interactive transaction timeout or doing less work in the transaction.',
+  );
+
 beforeEach(() => {
   // Shortest backoff so exhausting the retry budget stays fast and deterministic.
   vi.spyOn(Math, 'random').mockReturnValue(0);
@@ -78,6 +94,37 @@ describe('guestTransaction', () => {
       attempts: TRANSACTION_RETRY_ATTEMPTS,
       code: '40001',
     });
+  });
+
+  test.each([
+    ['no pool connection frees up in time', poolTimeout],
+    ['the transaction runs past its timeout', expired],
+  ])('fails fast with SERVICE_UNAVAILABLE when %s (P2028), and logs it (#203)', async (_case, makeError) => {
+    const busy = makeError();
+    const { $transaction, db } = mockDb([busy]);
+
+    const error = await guestTransaction(db, async () => 'never').catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(TRPCError);
+    expect((error as TRPCError).code).toBe('SERVICE_UNAVAILABLE');
+    expect((error as TRPCError).cause).toBe(busy);
+    expect((error as TRPCError).message).not.toMatch(/Transaction API error|P2028|timeout/i);
+    // Retrying would add load while the pool is already full
+    expect($transaction).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith('guest.transaction.unavailable', {
+      code: 'P2028',
+      message: busy.message,
+    });
+  });
+
+  test('treats a P2028 known request error the same way', async () => {
+    const { Prisma } = await import('@/generated/prisma/client');
+    const busy = new Prisma.PrismaClientKnownRequestError(
+      'Transaction API error: Unable to start a transaction in the given time.',
+      { code: 'P2028', clientVersion: 'test' },
+    );
+    const { db } = mockDb([busy]);
+    await expect(guestTransaction(db, async () => 'never')).rejects.toMatchObject({ code: 'SERVICE_UNAVAILABLE' });
   });
 
   test('passes application errors through without retrying or logging', async () => {

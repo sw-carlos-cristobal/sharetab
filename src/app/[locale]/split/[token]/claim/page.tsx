@@ -3,22 +3,52 @@
 import { use, useState, useMemo, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useLocale, useTranslations } from 'next-intl';
+import { TRPCClientError } from '@trpc/client';
 import { trpc } from '@/lib/trpc';
 import { formatCents } from '@/lib/money';
 import { copyToClipboard } from '@/lib/clipboard';
 import {
-  claimStorageKey,
+  canAdoptAnswer,
+  claimPollInterval,
+  getStoredClaimIdentity,
+  isSessionLost,
   joinKeyFor,
+  needsMembershipCheck,
+  newRequestKey,
   personalLinkHash,
   readPersonalLinkToken,
+  removeStoredClaimIdentity,
   resumeOutcome,
+  setStoredClaimIdentity,
   shouldRetryResume,
-  storedClaimIdentitySchema,
   type ClaimIdentity,
   type PendingJoin,
-  type StoredClaimIdentity,
 } from '@/lib/guest-session';
-import { calculateSplitTotals } from '@/lib/split-calculator';
+import {
+  draftsByIndex,
+  editsAfterSave,
+  editsToSave,
+  hasEdits,
+  pendingEdits,
+  stackEdits,
+  toggleEdit,
+  withEdits,
+  type ClaimEdits,
+  type SaveOutcome,
+} from '@/lib/claim-drafts';
+import {
+  SAVE_ATTEMPT_TIMEOUT_MS,
+  abortAfter,
+  failedSaveOutcome,
+  saveInOrder,
+  saveRetryDelay,
+  settleSave,
+  sleep,
+  type ParkedSave,
+  type SaveReload,
+} from '@/lib/claim-save';
+import { calculateClaimTotals, groupSizeWeights } from '@/lib/split-calculator';
+import { MAX_GROUP_SIZE, MIN_GROUP_SIZE, parseGroupSize } from '@/lib/group-size';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -41,38 +71,23 @@ import { toast } from 'sonner';
 import { Link } from '@/i18n/navigation';
 import { buildVenmoPayUrl, isValidVenmoHandle } from '@/lib/venmo';
 import { getInitials, guestAvatarColor } from '@/lib/avatar';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 
-function getStoredClaimIdentity(token: string): StoredClaimIdentity | null {
-  if (typeof window === 'undefined') return null;
+// How one claim save attempt ended: the answer's conflicts when stored, the server's message
+// when refused
+type SaveAttempt = { outcome: SaveOutcome; conflicts: { claimedBy: string[] }[]; message?: string };
 
-  try {
-    const raw = window.localStorage.getItem(claimStorageKey(token));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as unknown;
-    const identity = storedClaimIdentitySchema.safeParse(parsed);
-    return identity.success ? identity.data : null;
-  } catch {
-    return null;
-  }
-}
-
-function removeStoredClaimIdentity(token: string) {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.removeItem(claimStorageKey(token));
-  } catch {
-    // Non-fatal, like setStoredClaimIdentity.
-  }
-}
-
-function setStoredClaimIdentity(token: string, identity: StoredClaimIdentity) {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(claimStorageKey(token), JSON.stringify(identity));
-  } catch {
-    // Non-fatal: failing to persist rejoin state should not block the claim flow.
-  }
-}
+// What a claim save sends to guest.claimItems
+type ClaimRequest = {
+  token: string;
+  personId: string;
+  personToken: string;
+  saveKey: string;
+  addItemIndices: number[];
+  removeItemIndices: number[];
+};
+// One save a Save sends: a parked one, or the person's changes
+type SaveStage = ParkedSave<ClaimRequest> & { parked: boolean };
 
 // Take a personal link's token out of the address bar and this tab's history entry (the
 // browser's global history keeps the URL that was opened). Only called after the page has
@@ -93,21 +108,69 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
 
   // --- State ---
   const [name, setName] = useState('');
-  const [groupSize, setGroupSize] = useState(1);
-  const [personIndex, setPersonIndex] = useState<number | null>(null);
-  const [myPersonIndex, setMyPersonIndex] = useState<number | null>(null);
-  const [personToken, setPersonToken] = useState<string | null>(null);
-  const [claimedItems, setClaimedItems] = useState<Map<number, Set<number>>>(new Map());
+  // The group size as typed (#410): kept as text, so the field can be cleared and typed again, and
+  // checked (parseGroupSize) when it loses focus and on Join, where an empty or out-of-range value
+  // is refused with a message rather than changed
+  const [groupSizeText, setGroupSizeText] = useState('1');
+  const [groupSizeError, setGroupSizeError] = useState(false);
+  const groupSizeRef = useRef<HTMLInputElement>(null);
+  // People are tracked by id, not index: someone's index changes when anyone listed before them
+  // is removed, on any device. Indexes are looked up in the session as last loaded (below).
+  // This device's person, once it joined or resumed
+  const [identity, setIdentityState] = useState<{ personId: string; personToken: string } | null>(null);
+  // The same, for mutation callbacks: they can run with an older render's closure (TanStack
+  // Query only hands a pending mutation each render's options after that render commits), so
+  // they read this device's identity from this ref, which setIdentity updates at once
+  const identityRef = useRef(identity);
+  // Who "Claiming for" is set to (this device's person unless the user picked someone else)
+  const [activePersonId, setActivePersonId] = useState<string | null>(null);
+  // Unsaved claim changes by person id: the items tapped, shown over the person's saved claims
+  // (see ClaimEdits); people without any show their saved claims
+  const [claimEdits, setClaimEdits] = useState<Map<string, ClaimEdits>>(new Map());
+  // The changes a save in flight is sending, by person id. Saving moves a person's changes here,
+  // and taps meanwhile are new changes on top of them (judged against the claims as they'll be
+  // once it lands); if it's refused, restoreEdits puts the sent changes back under the new ones
+  const [savingEdits, setSavingEdits] = useState<Map<string, ClaimEdits>>(new Map());
+  // Saves the page gave up on, by person id (#241): still shown under the person's changes, and
+  // sent again with their own save key before the page's next save, for anyone
+  const [parkedSaves, setParkedSaves] = useState<Map<string, ParkedSave<ClaimRequest>>>(new Map());
+  // Counts the times unsaved changes were discarded (this device became someone else, or no one),
+  // so a save in flight across that doesn't bring its changes back afterwards
+  const editsReset = useRef(0);
+  // Whether the page is still open: a save it's still sending stops at its next step once it
+  // closes (an attempt already out is left to finish, as a mutation would), and says nothing
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  // Stops a save the page is still sending (see settleSave), waking its waits and abandoning its
+  // request: aborted, and replaced, when unsaved changes are discarded (the save no longer matters)
+  const stopSaves = useRef(new AbortController());
+  function discardEdits() {
+    editsReset.current += 1;
+    stopSaves.current.abort();
+    stopSaves.current = new AbortController();
+    setClaimEdits(new Map());
+    setSavingEdits(new Map());
+    setParkedSaves(new Map());
+  }
   const [saving, setSaving] = useState(false);
   const [showImage, setShowImage] = useState(false);
-  const [editingPersonIdx, setEditingPersonIdx] = useState<number | null>(null);
+  const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
-  const [editingGroupSize, setEditingGroupSize] = useState(1);
+  // The edit form's group size, as text like the join form's
+  const [editingGroupSizeText, setEditingGroupSizeText] = useState('1');
+  const [editingGroupSizeError, setEditingGroupSizeError] = useState(false);
   const [splittingItemIdx, setSplittingItemIdx] = useState<number | null>(null);
   const [splitQty, setSplitQty] = useState('');
-  const [venmoHandle, setVenmoHandle] = useState('');
-  const venmoInitRef = useRef(false);
-  const { data: authSession, status: authStatus } = useSession();
+  const [removeFor, setRemoveFor] = useState<{ id: string; name: string } | null>(null);
+  const [confirmFinalize, setConfirmFinalize] = useState(false);
+  // The creator's edit of the payer's Venmo handle (see venmoHandle below)
+  const [venmoHandleEdit, setVenmoHandleEdit] = useState<string | null>(null);
+  const { data: authSession } = useSession();
 
   // --- tRPC ---
   const venmoSetting = trpc.admin.getVenmoEnabled.useQuery();
@@ -122,12 +185,56 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   });
   const session = trpc.guest.getSession.useQuery(
     { token },
-    { refetchInterval: (query) => (query.state.data?.status === 'FINALIZED' || query.state.error ? false : 3000) },
+    {
+      refetchInterval: (query) =>
+        claimPollInterval({
+          finalized: query.state.data?.status === 'FINALIZED',
+          error: query.state.error && { httpStatus: query.state.error.data?.httpStatus },
+        }),
+    },
   );
+  // The payer's Venmo handle follows the session (falling back to the creator's profile) until the
+  // creator edits it, so a handle saved after this page loaded still shows
+  const venmoHandle =
+    venmoHandleEdit ??
+    session.data?.payerVenmoHandle ??
+    (session.data?.isCreator ? (profile.data?.venmoUsername ?? '') : '');
+
+  // Where each person is in the session as last loaded
+  const indexById = useMemo(
+    () => new Map((session.data?.people ?? []).map((person, index) => [person.id, index])),
+    [session.data],
+  );
+  const personToken = identity?.personToken ?? null;
+  const myPersonId = identity?.personId ?? null;
+  // null while this device's person isn't in the session as loaded: they just joined (the
+  // session is loaded again right away), or someone removed them (checked below)
+  const myPersonIndex = myPersonId === null ? null : (indexById.get(myPersonId) ?? null);
+  // Claiming for: the person picked, while they're still in the split, otherwise this device's person
+  const personIndex = (activePersonId === null ? undefined : indexById.get(activePersonId)) ?? myPersonIndex;
+  const activeId = personIndex === null ? null : (session.data?.people[personIndex]?.id ?? null);
+
+  function setIdentity(next: { personId: string; personToken: string } | null) {
+    identityRef.current = next;
+    setIdentityState(next);
+  }
+
+  // This device's person is gone (removed here or on another device): back to the join form.
+  // The stored identity goes only if it's still that person (another tab may have joined since).
+  // The page then stays on the join form: it doesn't resume whoever another tab stored on its
+  // own (joining again from the form still returns that stored person; see startJoin).
+  function forgetIdentity(removedToken: string) {
+    if (getStoredClaimIdentity(token)?.personToken === removedToken) removeStoredClaimIdentity(token);
+    autoRejoinAttempted.current = true;
+    setIdentity(null);
+    setActivePersonId(null);
+    discardEdits();
+    setEditingPersonId(null);
+  }
 
   const editPersonName = trpc.guest.editPersonName.useMutation({
     onSuccess: () => {
-      setEditingPersonIdx(null);
+      setEditingPersonId(null);
       setEditingName('');
       toast.success(t('nameUpdated'));
     },
@@ -136,31 +243,21 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
 
   const removePerson = trpc.guest.removePerson.useMutation({
     onSuccess: (_data, variables) => {
-      const removedIdx = variables.targetIndex;
-      if (removedIdx === myPersonIndex) {
-        removeStoredClaimIdentity(token);
-        setClaimedItems(new Map());
-        setPersonIndex(null);
-        setMyPersonIndex(null);
-        setPersonToken(null);
-      } else {
-        setClaimedItems((prev) => {
-          const next = new Map<number, Set<number>>();
-          for (const [pIdx, itemSet] of prev) {
-            if (pIdx === removedIdx) continue;
-            const newPIdx = pIdx > removedIdx ? pIdx - 1 : pIdx;
-            next.set(newPIdx, itemSet);
-          }
+      const removedId = variables.targetId;
+      const mine = identityRef.current;
+      if (mine && removedId === mine.personId) {
+        forgetIdentity(mine.personToken);
+      } else if (removedId !== undefined) {
+        // Everyone else keeps their id, so there is nothing to renumber
+        const withoutThem = <T,>(prev: Map<string, T>) => {
+          const next = new Map(prev);
+          next.delete(removedId);
           return next;
-        });
-        setPersonIndex((prev) => {
-          if (prev === null) return null;
-          return prev > removedIdx ? prev - 1 : prev;
-        });
-        setMyPersonIndex((prev) => {
-          if (prev === null) return null;
-          return prev > removedIdx ? prev - 1 : prev;
-        });
+        };
+        setClaimEdits(withoutThem);
+        setParkedSaves(withoutThem);
+        // Show the people list without them now, not at the next poll
+        void session.refetch();
       }
       toast.success(t('personRemoved'));
     },
@@ -182,21 +279,15 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
       setSplitQty('');
       // Remap claimed item indices: items after the split point shift +1 (Finding #4).
       // Only invalidate the split item itself; preserve unsaved edits for other items.
-      setClaimedItems((prev) => {
-        const next = new Map<number, Set<number>>();
-        for (const [personIdx, itemSet] of prev) {
-          const remapped = new Set<number>();
-          for (const itemIdx of itemSet) {
-            if (itemIdx === splitIdx) {
-              // Keep claim on the original (now-reduced) item
-              remapped.add(itemIdx);
-            } else if (itemIdx > splitIdx) {
-              remapped.add(itemIdx + 1);
-            } else {
-              remapped.add(itemIdx);
-            }
+      setClaimEdits((prev) => {
+        const next = new Map<string, ClaimEdits>();
+        for (const [personId, edits] of prev) {
+          const remapped = new Map<number, boolean>();
+          for (const [itemIdx, claimed] of edits) {
+            // A change to the split item stays on the original (now-reduced) item
+            remapped.set(itemIdx > splitIdx ? itemIdx + 1 : itemIdx, claimed);
           }
-          next.set(personIdx, remapped);
+          next.set(personId, remapped);
         }
         return next;
       });
@@ -215,44 +306,59 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   // The person a personal link names, waiting for the user to confirm it's them
   const [linkOffer, setLinkOffer] = useState<ClaimIdentity | null>(null);
   // A personal link the user accepted, while it's looked up again: the card may have been open
-  // while people were removed, which would make its person index stale
+  // while its person was removed
   const confirmedLinkToken = useRef<string | null>(null);
   // The join this page sent and hasn't seen succeed (see startJoin). Kept in memory, not in
   // storage: a stored pending key could be read and redeemed for the person before this device
   // holds their token. A reload therefore can't replay a lost join.
   const pendingJoin = useRef<PendingJoin | null>(null);
+  // The token this device stored when the join or resume in flight was sent. Tabs of one browser
+  // share the stored identity, so another tab may become someone else before the answer comes
+  // back; see canAdoptAnswer (#213).
+  const storedWhenSent = useRef<string | undefined>(undefined);
 
   // Become this person on this device, and remember it for the next visit. Also settles any
   // pending personal link, so its card can't come back later and switch this device again.
-  function adoptIdentity(identity: ClaimIdentity) {
+  function adoptIdentity(adopted: ClaimIdentity) {
     setLinkOffer(null);
     linkedToken.current = null;
     confirmedLinkToken.current = null;
     // A link left in the address bar (e.g. its lookup failed and the user joined instead) is
     // settled too, so a reload doesn't offer it again
     removePersonalLinkFromAddressBar();
-    setPersonIndex(identity.personIndex);
-    setMyPersonIndex(identity.personIndex);
-    setPersonToken(identity.personToken);
-    setStoredClaimIdentity(token, { name: identity.name, personToken: identity.personToken });
+    setIdentity({ personId: adopted.personId, personToken: adopted.personToken });
+    setActivePersonId(adopted.personId);
+    setStoredClaimIdentity(token, { name: adopted.name, personToken: adopted.personToken });
     pendingJoin.current = null;
-    // Initialize claimed items from server assignments for ALL people
-    const map = new Map<number, Set<number>>();
-    if (session.data) {
-      for (const a of session.data.assignments) {
-        for (const pi of a.personIndices) {
-          if (!map.has(pi)) map.set(pi, new Set());
-          map.get(pi)!.add(a.itemIndex);
-        }
-      }
-    }
-    setClaimedItems(map);
+    // Unsaved edits were made as whoever this device was before. Saved claims show from the
+    // session as loaded, whose indexes are its own, so nothing is carried over from it.
+    discardEdits();
+    // Someone who just joined isn't in the session as loaded yet. Loads from before now don't
+    // count for the membership check; this refetch drops any poll sent before now, so the
+    // next load is from after the join.
+    membershipCheckedThrough.current = Date.now();
+    void session.refetch();
   }
 
   // The server returns the person under their current name, which may differ from the name
   // typed (see startJoin)
   const joinSession = trpc.guest.joinSession.useMutation({
     onSuccess: (data) => {
+      const stored = getStoredClaimIdentity(token);
+      if (
+        stored &&
+        !canAdoptAnswer({
+          personToken: data.personToken,
+          storedAtStart: storedWhenSent.current,
+          storedNow: stored.personToken,
+        })
+      ) {
+        // Another tab of this browser became someone else while this join was out. Becoming the
+        // person joined here would replace them in storage, so continue as them instead (#213).
+        toast.warning(t('continuingAs', { name: stored.name }));
+        setTimeout(resumeStoredIdentity, 0);
+        return;
+      }
       adoptIdentity(data);
       toast.success(t('joinedSession'));
     },
@@ -278,9 +384,13 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
         confirmed,
         personToken: variables.personToken,
         storedToken: getStoredClaimIdentity(token)?.personToken,
+        storedAtStart: storedWhenSent.current,
       });
       if (data && outcome === 'confirm') {
-        // Don't silently become someone else (a personal link can be mis-shared)
+        // Don't silently become someone else (a personal link can be mis-shared). Also asks again
+        // when the user accepted but another tab became someone else meanwhile: the card now
+        // says who continuing replaces.
+        confirmedLinkToken.current = null;
         setLinkOffer({ ...data, personToken: variables.personToken });
       } else if (data && outcome === 'adopt') {
         adoptIdentity({ ...data, personToken: variables.personToken });
@@ -326,16 +436,19 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     const stored = getStoredClaimIdentity(token);
     if (!stored) return;
     joinInFlight.current = true;
+    storedWhenSent.current = stored.personToken;
     resumeSession.mutate({ token, personToken: stored.personToken });
   }
 
-  // Look the link's token up again rather than trusting the card's person index. Does nothing
+  // Look the link's token up again rather than trusting the card (its person may have been
+  // removed since it opened). Does nothing
   // once the card was declined, even in the same tick before it re-renders (declining clears
   // linkedToken).
   function acceptLinkOffer() {
     if (!linkOffer || joinInFlight.current || linkedToken.current !== linkOffer.personToken) return;
     joinInFlight.current = true;
     confirmedLinkToken.current = linkOffer.personToken;
+    storedWhenSent.current = getStoredClaimIdentity(token)?.personToken;
     resumeSession.mutate({ token, personToken: linkOffer.personToken });
   }
 
@@ -355,29 +468,11 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     if (joinInFlight.current) return;
     joinInFlight.current = true;
     const personToken = getStoredClaimIdentity(token)?.personToken;
+    storedWhenSent.current = personToken;
     const pending = joinKeyFor(input.name, pendingJoin.current);
     pendingJoin.current = pending;
     joinSession.mutate({ token, ...input, joinKey: pending.joinKey, ...(personToken ? { personToken } : {}) });
   }
-
-  // Initialize venmo handle from split record, then creator's profile as fallback
-  useEffect(() => {
-    if (venmoInitRef.current) return;
-    if (session.data?.payerVenmoHandle) {
-      setVenmoHandle(session.data.payerVenmoHandle);
-      venmoInitRef.current = true;
-    } else if (session.data?.isCreator && profile.data?.venmoUsername) {
-      setVenmoHandle(profile.data.venmoUsername);
-      venmoInitRef.current = true;
-    } else if (
-      session.data &&
-      !session.isLoading &&
-      authStatus !== 'loading' &&
-      (profile.isFetched || !authSession?.user)
-    ) {
-      venmoInitRef.current = true;
-    }
-  }, [session.data, profile.data?.venmoUsername, profile.isFetched, session.isLoading, authSession?.user, authStatus]);
 
   // Read a personal link's token (it leaves the address bar once resumeSession answers for it)
   useEffect(() => {
@@ -400,7 +495,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   // session loads, in any status: a finalized split still needs to know who you are. A
   // personal link is tried first; for someone other than this device's person it asks first.
   useEffect(() => {
-    if (autoRejoinAttempted.current || personIndex !== null || !session.data) return;
+    if (autoRejoinAttempted.current || identity !== null || !session.data) return;
 
     const personToken = linkedToken.current ?? getStoredClaimIdentity(token)?.personToken;
     if (!personToken) return;
@@ -409,27 +504,39 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     if (joinInFlight.current) return;
     autoRejoinAttempted.current = true;
     joinInFlight.current = true;
+    storedWhenSent.current = getStoredClaimIdentity(token)?.personToken;
     resumeSession.mutate({ token, personToken });
   }, [session.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const claimItems = trpc.guest.claimItems.useMutation({
-    onSuccess: (result) => {
-      // Sync local Map from server after save so hasAnyUnsavedChanges resets
-      session.refetch();
-      if (result.conflicts && result.conflicts.length > 0) {
-        const names = [...new Set(result.conflicts.flatMap((c) => c.claimedBy))];
-        toast.warning(t('claimConflict', { names: names.join(', '), count: result.conflicts.length }));
-      } else {
-        toast.success(t('claimsSavedToast'));
-      }
-    },
-    onError: (error) => {
-      toast.error(error.message);
+  // Someone on another device may remove this device's person. Their id missing from the session
+  // as loaded doesn't prove it, so ask the server by token (see needsMembershipCheck).
+  // The time of the last load checked, or of becoming this device's person (see adoptIdentity)
+  const membershipCheckedThrough = useRef(0);
+  const checkMembership = trpc.guest.resumeSession.useMutation({
+    onSuccess: (data, variables) => {
+      if (data !== null || identityRef.current?.personToken !== variables.personToken) return;
+      forgetIdentity(variables.personToken);
+      // A finalized split can't be joined again, so only say so while it's still open. Read from
+      // the query cache: this callback may run with an older render's session.
+      if (utils.guest.getSession.getData({ token })?.status !== 'FINALIZED') toast.warning(t('removedFromSession'));
     },
   });
+  useEffect(() => {
+    if (!session.data || identity === null) return;
+    const check = needsMembershipCheck({
+      personId: identity.personId,
+      isListed: (personId) => indexById.has(personId),
+      loadedAt: session.dataUpdatedAt,
+      checkedThrough: membershipCheckedThrough.current,
+      busy: joinInFlight.current || checkMembership.isPending,
+    });
+    if (!check) return;
+    membershipCheckedThrough.current = session.dataUpdatedAt;
+    checkMembership.mutate({ token, personToken: identity.personToken });
+  }, [session.data, session.dataUpdatedAt, identity, indexById]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Derived state ---
-  const hasJoined = personIndex !== null;
+  const hasJoined = identity !== null;
 
   // Compute server claims for all people
   const serverClaimsMap = useMemo(() => {
@@ -444,28 +551,42 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     return map;
   }, [session.data]);
 
-  const hasUnsavedChanges = useMemo(() => {
-    if (personIndex === null) return false;
-    const currentClaims = claimedItems.get(personIndex ?? -1) ?? new Set<number>();
-    const currentServerClaims = serverClaimsMap.get(personIndex ?? -1) ?? new Set<number>();
-    if (currentClaims.size !== currentServerClaims.size) return true;
-    for (const idx of currentClaims) {
-      if (!currentServerClaims.has(idx)) return true;
-    }
-    return false;
-  }, [claimedItems, serverClaimsMap, personIndex]);
+  // Unsaved edits by index in the session as loaded, for comparing with its saved claims
+  const localEdits = useMemo(() => draftsByIndex(claimEdits, session.data?.people ?? []), [claimEdits, session.data]);
+  // Saved claims with any parked save and save in flight applied: what unsaved edits are shown
+  // over and judged by
+  const pendingByIndex = useMemo(
+    () => draftsByIndex(pendingEdits(parkedSaves, savingEdits), session.data?.people ?? []),
+    [parkedSaves, savingEdits, session.data],
+  );
+  const baseClaimsMap = useMemo(() => {
+    const map = new Map(serverClaimsMap);
+    for (const [pi, edits] of pendingByIndex)
+      map.set(pi, withEdits(serverClaimsMap.get(pi) ?? new Set<number>(), edits));
+    return map;
+  }, [serverClaimsMap, pendingByIndex]);
+  // Whether anyone in the split has a parked save
+  const anyParked = useMemo(
+    () => draftsByIndex(parkedSaves, session.data?.people ?? []).size > 0,
+    [parkedSaves, session.data],
+  );
 
-  // Check if ANY person has unsaved local edits (not just the currently selected one)
+  // A parked save counts: Save sends it again
+  const hasUnsavedChanges = useMemo(() => {
+    if (personIndex === null || activeId === null) return false;
+    if (parkedSaves.has(activeId)) return true;
+    return hasEdits(baseClaimsMap.get(personIndex) ?? new Set<number>(), localEdits.get(personIndex));
+  }, [localEdits, baseClaimsMap, personIndex, activeId, parkedSaves]);
+
+  // Check if ANY person has unsaved local edits (not just the currently selected one). A save in
+  // flight or parked counts too: until it lands, finalizing could lock in the claims from before it
   const hasAnyUnsavedChanges = useMemo(() => {
-    for (const [pIdx, localSet] of claimedItems) {
-      const serverSet = serverClaimsMap.get(pIdx) ?? new Set<number>();
-      if (localSet.size !== serverSet.size) return true;
-      for (const idx of localSet) {
-        if (!serverSet.has(idx)) return true;
-      }
+    if (pendingByIndex.size > 0) return true;
+    for (const [pIdx, edits] of localEdits) {
+      if (hasEdits(baseClaimsMap.get(pIdx) ?? new Set<number>(), edits)) return true;
     }
     return false;
-  }, [claimedItems, serverClaimsMap]);
+  }, [pendingByIndex, localEdits, baseClaimsMap]);
 
   // All items have at least one saved claimant
   const allItemsClaimed = useMemo(() => {
@@ -488,25 +609,25 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
     return [...unclaimed, ...claimed];
   }, [session.data, claimedByAnyone]);
 
-  // Calculate per-person totals using the full local claims Map merged with server assignments
+  // Calculate per-person totals using the full local claims Map merged with server assignments.
+  // Tax and tip are prorated over every item, so unclaimed items keep their share (#264).
   const splitTotals = useMemo(() => {
-    if (!session.data) return [];
+    if (!session.data) return { people: [], unclaimed: null };
 
     const serverAssignments = session.data.assignments;
 
-    // Build personWeights from group sizes
-    const personWeights = session.data.people.map((p) => p.groupSize ?? 1);
-    const hasWeights = personWeights.some((w) => w > 1);
-    const weightsParam = hasWeights ? { personWeights } : {};
+    // Group sizes weight the items people share
+    const weightsParam = groupSizeWeights(session.data.people);
 
-    if (claimedItems.size > 0) {
+    if (localEdits.size > 0 || pendingByIndex.size > 0) {
       // Build assignment map from server state
       const assignmentMap = new Map<number, Set<number>>();
       for (const a of serverAssignments) {
         assignmentMap.set(a.itemIndex, new Set(a.personIndices));
       }
       // Override with local claims for each person that has local state
-      for (const [pi, items] of claimedItems) {
+      for (const pi of new Set([...localEdits.keys(), ...pendingByIndex.keys()])) {
+        const items = withEdits(baseClaimsMap.get(pi) ?? new Set<number>(), localEdits.get(pi));
         // Remove this person from all items
         for (const [, persons] of assignmentMap) {
           persons.delete(pi);
@@ -526,7 +647,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
           personIndices: Array.from(persons),
         }));
 
-      return calculateSplitTotals({
+      return calculateClaimTotals({
         items: session.data.items,
         assignments: mergedAssignments,
         tax: session.data.receiptData.tax,
@@ -536,7 +657,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
       });
     }
 
-    return calculateSplitTotals({
+    return calculateClaimTotals({
       items: session.data.items,
       assignments: serverAssignments,
       tax: session.data.receiptData.tax,
@@ -544,7 +665,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
       peopleCount: session.data.people.length,
       ...weightsParam,
     });
-  }, [session.data, claimedItems]);
+  }, [session.data, baseClaimsMap, localEdits, pendingByIndex]);
 
   // --- Handlers ---
   function handleJoin() {
@@ -553,17 +674,23 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
       toast.error(t('pleaseEnterName'));
       return;
     }
+    const groupSize = parseGroupSize(groupSizeText);
+    if (groupSize === null) {
+      setGroupSizeError(true);
+      groupSizeRef.current?.focus();
+      return;
+    }
     startJoin({ name: trimmed, ...(groupSize > 1 ? { groupSize } : {}) });
   }
 
   function toggleClaim(itemIndex: number) {
-    if (personIndex === null) return;
-    setClaimedItems((prev) => {
+    if (personIndex === null || activeId === null) return;
+    const saved = baseClaimsMap.get(personIndex) ?? new Set<number>();
+    setClaimEdits((prev) => {
       const next = new Map(prev);
-      const personClaims = new Set(next.get(personIndex) ?? []);
-      if (personClaims.has(itemIndex)) personClaims.delete(itemIndex);
-      else personClaims.add(itemIndex);
-      next.set(personIndex, personClaims);
+      const edits = toggleEdit(saved, prev.get(activeId), itemIndex);
+      if (edits.size > 0) next.set(activeId, edits);
+      else next.delete(activeId);
       return next;
     });
   }
@@ -618,19 +745,179 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   }
 
   async function saveClaims() {
-    if (personIndex === null || !personToken) return;
-    setSaving(true);
-    try {
-      const claims = claimedItems.get(personIndex) ?? new Set<number>();
-      await claimItems.mutateAsync({
-        token,
-        personIndex,
-        personToken,
-        claimedItemIndices: Array.from(claims),
+    // Not while a split is in flight: it shifts the item indexes the changes are keyed by
+    if (personIndex === null || activeId === null || !personToken || splitClaimItem.isPending) return;
+    const edits = localEdits.get(personIndex);
+    // By id: if someone listed earlier was removed since the session last loaded, an index would
+    // now point at someone else. Only the items changed here are sent, so claims another device
+    // saved for this person on other items are kept (#226). One save key for every attempt, so
+    // the server stores the save once however often it's sent (#238).
+    const changes: SaveStage | undefined = edits && {
+      request: { token, personId: activeId, personToken, saveKey: newRequestKey(), ...editsToSave(edits) },
+      sent: edits,
+      parked: false,
+    };
+    if (!changes && !parkedSaves.has(activeId)) return;
+    // Every save this page parked (#241) goes first, each with its own key. Sent after this
+    // person's changes, theirs would be applied over them if it was never stored; and the server
+    // keeps only the last few save keys of the person saving, whoever the saves are for, so
+    // newer saves from this page could make it forget a parked save it stored.
+    const parked = [...parkedSaves]
+      .filter(([personId]) => indexById.has(personId))
+      .map(([, save]): SaveStage => ({ ...save, parked: true }));
+    const [first, ...rest]: SaveStage[] = [...parked, ...(changes ? [changes] : [])];
+    if (!first) return;
+    // The changes move into the save in flight; taps from now on are new changes on top of it
+    if (edits) {
+      setSavingEdits((prev) => new Map(prev).set(activeId, edits));
+      setClaimEdits((prev) => {
+        const next = new Map(prev);
+        next.delete(activeId);
+        return next;
       });
+    }
+    // Saving until the save is settled (sent, sent again while unanswered, and reloaded), so Save
+    // isn't enabled again in between
+    setSaving(true);
+    const resetsBefore = editsReset.current;
+    const stop = stopSaves.current.signal;
+    // Until the page closes, its unsaved changes are discarded (it became someone else), or the
+    // person claimed for, or this device's own person, is removed: their changes go with them,
+    // and a removed person's token would only get the save refused
+    const saverId = myPersonId;
+    const going = () =>
+      mounted.current &&
+      !stop.aborted &&
+      editsReset.current === resetsBefore &&
+      isListed(activeId) &&
+      (saverId === null || isListed(saverId));
+    // The same, for one save: until the person it's for is removed too
+    const goingFor = (personId: string) => () => going() && isListed(personId);
+    // One attempt, through the plain client rather than a mutation hook, so it can be abandoned
+    // after SAVE_ATTEMPT_TIMEOUT_MS or when the save stops (sending it again is safe), and so it
+    // fails at once when offline instead of pausing (settleSave waits for the server instead)
+    const send = async (request: ClaimRequest, retry: boolean): Promise<SaveAttempt> => {
+      const limit = abortAfter(SAVE_ATTEMPT_TIMEOUT_MS, stop);
+      try {
+        const { conflicts } = await utils.client.guest.claimItems.mutate(request, { signal: limit.signal });
+        return { outcome: 'saved', conflicts };
+      } catch (error) {
+        const answered = error instanceof TRPCClientError && typeof error.data?.httpStatus === 'number';
+        const outcome = failedSaveOutcome(answered ? (error.data.httpStatus as number) : undefined, retry);
+        // Only a refusal's reason is worth showing; an unsettled save gets the generic message
+        return { outcome, conflicts: [], ...(answered && outcome === 'refused' ? { message: error.message } : {}) };
+      } finally {
+        limit.release();
+      }
+    };
+    // One reload, given up on after SAVE_ATTEMPT_TIMEOUT_MS (a paused or hung fetch) or when the
+    // save stops
+    const reload = async (): Promise<SaveReload> => {
+      const limit = abortAfter(SAVE_ATTEMPT_TIMEOUT_MS, stop);
+      try {
+        const cut = new Promise<SaveReload>((resolve) => {
+          if (limit.signal.aborted) resolve('failed');
+          else limit.signal.addEventListener('abort', () => resolve('failed'));
+        });
+        return await Promise.race([reloadSession(), cut]);
+      } finally {
+        limit.release();
+      }
+    };
+    try {
+      // An attempt that got no answer may have been stored, so it's sent again until an answer
+      // says (settleSave). Otherwise its changes would stay as unsaved edits after it was stored,
+      // and could undo a later change from another device at the next save (#238).
+      const { stage, attempt, reloaded, unsent } = await saveInOrder(
+        [first, ...rest],
+        async (save) => {
+          const settled = await settleSave({
+            // Every send of a parked save is a retry: an earlier attempt of it may have stored it
+            send: (retry) => send(save.request, retry || save.parked),
+            reload,
+            wait: (attempt) => sleep(saveRetryDelay(attempt), stop),
+            going: goingFor(save.request.personId),
+          });
+          // Stored: its changes are on the server, which the reload shows
+          if (save.parked && settled.attempt.outcome === 'saved' && editsReset.current === resetsBefore) {
+            setParkedSaves((prev) => {
+              const next = new Map(prev);
+              next.delete(save.request.personId);
+              return next;
+            });
+          }
+          return settled;
+        },
+        going,
+      );
+      if (editsReset.current !== resetsBefore) return;
+      // Whose save it ended on: this person's changes, or a parked save (theirs or someone else's)
+      const personId = stage.request.personId;
+      const savedNow = savedClaimsOf(personId);
+      setClaimEdits((prev) => {
+        const next = new Map(prev);
+        const put = (id: string, edits: Map<number, boolean>) => {
+          if (edits.size > 0) next.set(id, edits);
+          else next.delete(id);
+        };
+        // Changes held back by a parked save that didn't go through come back as they were, under
+        // the taps made since
+        if (changes && unsent.includes(changes)) put(activeId, stackEdits(changes.sent, prev.get(activeId)));
+        put(
+          personId,
+          editsAfterSave({ outcome: attempt.outcome, reloaded, savedNow, sent: stage.sent, since: next.get(personId) }),
+        );
+        return next;
+      });
+      // Still unsettled: parked, to be sent again with its own key before anything newer (#241)
+      setParkedSaves((prev) => {
+        const next = new Map(prev);
+        if (attempt.outcome === 'unknown') next.set(personId, { request: stage.request, sent: stage.sent });
+        else next.delete(personId);
+        return next;
+      });
+      // Said once the outcome is settled (no toast per attempt while it's sent again), and not
+      // for a save abandoned because the page closed or the person was removed
+      if (!mounted.current || (attempt.outcome === 'unknown' && !goingFor(personId)())) return;
+      if (attempt.outcome !== 'saved') {
+        toast.error(attempt.message ?? tc('errors.generic'));
+      } else if (attempt.conflicts.length > 0) {
+        const names = [...new Set(attempt.conflicts.flatMap((c) => c.claimedBy))];
+        toast.warning(t('claimConflict', { names: names.join(', '), count: attempt.conflicts.length }));
+      } else {
+        toast.success(t('claimsSavedToast'));
+      }
     } finally {
+      setSavingEdits((prev) => {
+        const next = new Map(prev);
+        next.delete(activeId);
+        return next;
+      });
       setSaving(false);
     }
+  }
+
+  // Whether a person is in the session as last loaded (read from the query cache, since
+  // saveClaims runs across renders)
+  function isListed(personId: string): boolean {
+    const loaded = utils.guest.getSession.getData({ token });
+    return !loaded || loaded.people.some((person) => person.id === personId);
+  }
+
+  // Loads the session again: 'gone' when the server says it no longer exists (the page then
+  // shows that, and trying again won't help)
+  async function reloadSession(): Promise<SaveReload> {
+    const result = await session.refetch();
+    if (result.status === 'success') return 'loaded';
+    return isSessionLost(true, result.error?.data?.httpStatus) ? 'gone' : 'failed';
+  }
+
+  // A person's saved claims in the session as last loaded (read from the query cache, since
+  // saveClaims runs across renders)
+  function savedClaimsOf(personId: string): Set<number> {
+    const loaded = utils.guest.getSession.getData({ token });
+    const index = loaded?.people.findIndex((person) => person.id === personId) ?? -1;
+    return new Set(loaded?.assignments.filter((a) => a.personIndices.includes(index)).map((a) => a.itemIndex));
   }
 
   // --- Loading state ---
@@ -644,7 +931,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   }
 
   // --- Error state ---
-  if (session.error) {
+  if (session.error && isSessionLost(session.data !== undefined, session.error.data?.httpStatus)) {
     return (
       <div className="text-center space-y-6 py-20">
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-muted">
@@ -653,7 +940,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
         <div className="space-y-2">
           <h2 className="text-xl font-bold">{t('sessionNotFound')}</h2>
           <p className="text-muted-foreground">
-            {session.error.message.includes('expired') ? t('sessionExpired') : t('sessionInvalid')}
+            {session.error.data?.messageKey === 'sessionExpired' ? t('sessionExpired') : t('sessionInvalid')}
           </p>
         </div>
         <Button nativeButton={false} render={<Link href="/split" />}>
@@ -754,7 +1041,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
                 placeholder={tv('handlePlaceholder')}
                 aria-label={tv('handle')}
                 value={venmoHandle}
-                onChange={(e) => setVenmoHandle(e.target.value)}
+                onChange={(e) => setVenmoHandleEdit(e.target.value)}
                 onBlur={() => {
                   const trimmed = venmoHandle.trim() || null;
                   if (trimmed !== (session.data?.payerVenmoHandle ?? null)) {
@@ -835,6 +1122,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
 
   // --- Step 1: Enter name ---
   if (!hasJoined) {
+    const joinGroupSize = parseGroupSize(groupSizeText);
     return (
       <div className="space-y-6 pb-8">
         {/* Header */}
@@ -905,7 +1193,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
             <CardContent>
               <div className="flex flex-wrap gap-2">
                 {data.people.map((person, idx) => (
-                  <div key={idx} className="flex items-center gap-2 rounded-full bg-muted px-3 py-1.5">
+                  <div key={person.id} className="flex items-center gap-2 rounded-full bg-muted px-3 py-1.5">
                     <Avatar className="h-6 w-6">
                       <AvatarFallback className={`text-[10px] font-semibold ${guestAvatarColor(idx)}`}>
                         {getInitials(person.name)}
@@ -952,16 +1240,48 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
               </label>
               <div className="flex items-center gap-2">
                 <Input
+                  ref={groupSizeRef}
                   id="group-size"
                   type="number"
-                  min={1}
-                  max={20}
-                  value={groupSize}
-                  onChange={(e) => setGroupSize(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
+                  min={MIN_GROUP_SIZE}
+                  max={MAX_GROUP_SIZE}
+                  step={1}
+                  value={groupSizeText}
+                  onChange={(e) => {
+                    setGroupSizeText(e.target.value);
+                    setGroupSizeError(false);
+                  }}
+                  onBlur={(e) => setGroupSizeError(parseGroupSize(e.currentTarget.value) === null)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleJoin();
+                  }}
+                  aria-invalid={groupSizeError || undefined}
+                  aria-describedby="group-size-note"
                   className="w-20"
                   data-testid="group-size-input"
                 />
-                <span className="text-xs text-muted-foreground">{t('groupSizeHint')}</span>
+                {/* One note beside the field, so the message doesn't add a line and push the
+                    buttons below it (a click on Join right after typing lands after the field's
+                    blur): the hint, the message for an empty or out-of-range value, or who a size
+                    over 1 stands for, so a typo shows before joining */}
+                {groupSizeError ? (
+                  <span
+                    id="group-size-note"
+                    role="alert"
+                    className="text-xs text-destructive"
+                    data-testid="group-size-error"
+                  >
+                    {t('groupSizeInvalid', { min: MIN_GROUP_SIZE, max: MAX_GROUP_SIZE })}
+                  </span>
+                ) : joinGroupSize !== null && joinGroupSize > 1 ? (
+                  <span id="group-size-note" className="text-xs text-muted-foreground" data-testid="group-size-preview">
+                    {t('groupSizePreview', { count: joinGroupSize - 1 })}
+                  </span>
+                ) : (
+                  <span id="group-size-note" className="text-xs text-muted-foreground">
+                    {t('groupSizeHint')}
+                  </span>
+                )}
               </div>
             </div>
             {/* Join as a listed person nobody has joined as yet (e.g. the payer); people who
@@ -973,7 +1293,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
                   {data.people.map((person, idx) =>
                     person.hasJoined ? null : (
                       <button
-                        key={idx}
+                        key={person.id}
                         type="button"
                         disabled={joining}
                         onClick={() => {
@@ -1020,6 +1340,11 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
   }
 
   // --- Step 2: Claim items ---
+  // What "Claiming for" has claimed: their saved claims with their unsaved changes applied
+  const activeClaims =
+    personIndex === null
+      ? new Set<number>()
+      : withEdits(baseClaimsMap.get(personIndex) ?? new Set<number>(), localEdits.get(personIndex));
   return (
     <div className="space-y-6 pb-24">
       {/* Header */}
@@ -1094,7 +1419,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
           <div className="space-y-2">
             {data.people.map((person, idx) => (
               <div
-                key={idx}
+                key={person.id}
                 className={`flex items-center gap-2 rounded-lg px-3 py-2 ${
                   idx === myPersonIndex ? 'bg-primary/10 ring-1 ring-primary' : 'bg-muted'
                 }`}
@@ -1104,18 +1429,25 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
                     {getInitials(person.name)}
                   </AvatarFallback>
                 </Avatar>
-                {editingPersonIdx === idx ? (
+                {editingPersonId === person.id ? (
                   <form
-                    className="flex flex-1 items-center gap-1"
+                    className="flex flex-1 flex-wrap items-center gap-1"
+                    // The group size is checked below, with a translated message, not by the browser
+                    noValidate
                     onSubmit={(e) => {
                       e.preventDefault();
                       if (!editingName.trim() || !personToken) return;
+                      const groupSize = parseGroupSize(editingGroupSizeText);
+                      if (groupSize === null) {
+                        setEditingGroupSizeError(true);
+                        return;
+                      }
                       editPersonName.mutate({
                         token,
                         personToken,
-                        targetIndex: idx,
+                        targetId: person.id,
                         newName: editingName.trim(),
-                        groupSize: editingGroupSize,
+                        groupSize,
                       });
                     }}
                   >
@@ -1129,10 +1461,17 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
                     />
                     <Input
                       type="number"
-                      min={1}
-                      max={20}
-                      value={editingGroupSize}
-                      onChange={(e) => setEditingGroupSize(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
+                      min={MIN_GROUP_SIZE}
+                      max={MAX_GROUP_SIZE}
+                      step={1}
+                      value={editingGroupSizeText}
+                      onChange={(e) => {
+                        setEditingGroupSizeText(e.target.value);
+                        setEditingGroupSizeError(false);
+                      }}
+                      onBlur={(e) => setEditingGroupSizeError(parseGroupSize(e.currentTarget.value) === null)}
+                      aria-invalid={editingGroupSizeError || undefined}
+                      aria-describedby={editingGroupSizeError ? `edit-group-size-error-${idx}` : undefined}
                       className="h-7 w-14 text-sm"
                       aria-label={t('groupSize')}
                       data-testid={`edit-group-size-${idx}`}
@@ -1143,6 +1482,8 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
                       variant="ghost"
                       className="h-7 px-2"
                       disabled={editPersonName.isPending}
+                      aria-label={t('saveName')}
+                      title={t('saveName')}
                     >
                       <Check className="h-3.5 w-3.5" />
                     </Button>
@@ -1151,10 +1492,22 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
                       size="sm"
                       variant="ghost"
                       className="h-7 px-2"
-                      onClick={() => setEditingPersonIdx(null)}
+                      onClick={() => setEditingPersonId(null)}
+                      aria-label={t('cancelButton')}
+                      title={t('cancelButton')}
                     >
                       <X className="h-3.5 w-3.5" />
                     </Button>
+                    {editingGroupSizeError && (
+                      <p
+                        id={`edit-group-size-error-${idx}`}
+                        role="alert"
+                        className="basis-full text-xs text-destructive"
+                        data-testid={`edit-group-size-error-${idx}`}
+                      >
+                        {t('groupSizeInvalid', { min: MIN_GROUP_SIZE, max: MAX_GROUP_SIZE })}
+                      </p>
+                    )}
                   </form>
                 ) : (
                   <>
@@ -1168,9 +1521,10 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
                     <button
                       type="button"
                       onClick={() => {
-                        setEditingPersonIdx(idx);
+                        setEditingPersonId(person.id);
                         setEditingName(person.name);
-                        setEditingGroupSize(person.groupSize ?? 1);
+                        setEditingGroupSizeText(String(person.groupSize ?? 1));
+                        setEditingGroupSizeError(false);
                       }}
                       className="text-muted-foreground hover:text-foreground p-1"
                       aria-label={t('editName')}
@@ -1181,15 +1535,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
                     {data.people.length > 1 && (
                       <button
                         type="button"
-                        onClick={() => {
-                          if (confirm(t('removePersonConfirm', { name: person.name }))) {
-                            removePerson.mutate({
-                              token,
-                              personToken: personToken!,
-                              targetIndex: idx,
-                            });
-                          }
-                        }}
+                        onClick={() => setRemoveFor({ id: person.id, name: person.name })}
                         className="text-muted-foreground hover:text-destructive p-1"
                         aria-label={t('removePerson')}
                         data-testid={`remove-person-${idx}`}
@@ -1211,20 +1557,9 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
         <div className="flex flex-wrap gap-2">
           {data.people.map((person, idx) => (
             <button
-              key={idx}
+              key={person.id}
               type="button"
-              onClick={() => {
-                // Sync local claims from server for the target person if not yet edited
-                if (!claimedItems.has(idx)) {
-                  setClaimedItems((prev) => {
-                    const next = new Map(prev);
-                    const serverSet = serverClaimsMap.get(idx) ?? new Set<number>();
-                    next.set(idx, new Set(serverSet));
-                    return next;
-                  });
-                }
-                setPersonIndex(idx);
-              }}
+              onClick={() => setActivePersonId(person.id)}
               data-testid={`switch-person-${idx}`}
               className={`flex items-center gap-2 rounded-full px-3 py-1.5 transition-colors ${
                 idx === personIndex
@@ -1261,7 +1596,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
         </h3>
         {sortedItemIndices.map((idx, sortPosition) => {
           const item = data.items[idx]!;
-          const isClaimed = (claimedItems.get(personIndex!) ?? new Set()).has(idx);
+          const isClaimed = activeClaims.has(idx);
           // Find other claimants from server state
           const otherClaimants =
             data.assignments.find((a) => a.itemIndex === idx)?.personIndices.filter((pi) => pi !== personIndex) ?? [];
@@ -1364,10 +1699,13 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
                                 type="button"
                                 size="sm"
                                 className="h-7 text-xs"
-                                disabled={splitClaimItem.isPending || !validQty}
+                                // Not while a save is in flight or parked: splitting shifts the item
+                                // indexes its changes are keyed by, and a parked save is sent again as it
+                                // was
+                                disabled={splitClaimItem.isPending || saving || anyParked || !validQty}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  if (!validQty || !personToken) return;
+                                  if (!validQty || !personToken || saving || anyParked) return;
                                   splitClaimItem.mutate({
                                     token,
                                     personToken,
@@ -1422,17 +1760,21 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
       </div>
 
       {/* Per-person totals */}
-      {splitTotals.length > 0 && (
+      {(splitTotals.people.length > 0 || splitTotals.unclaimed) && (
         <div className="space-y-3">
           <h3 className="font-semibold text-base">{t('perPersonTotals')}</h3>
-          {splitTotals.map((person) => {
+          {splitTotals.people.map((person) => {
             const personName =
               data.people[person.personIndex]?.name ?? t('personFallback', { index: person.personIndex + 1 });
             const isMe = person.personIndex === myPersonIndex;
             const isActive = person.personIndex === personIndex;
 
             return (
-              <Card key={person.personIndex} className={isActive ? 'ring-2 ring-primary' : ''}>
+              <Card
+                key={person.personIndex}
+                className={isActive ? 'ring-2 ring-primary' : ''}
+                data-testid={`person-total-${person.personIndex}`}
+              >
                 <CardContent className="py-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -1465,6 +1807,42 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
               </Card>
             );
           })}
+          {/* Items nobody has claimed yet, with their share of tax and tip, so the totals above don't look final */}
+          {splitTotals.unclaimed && (
+            <Card data-testid="unclaimed-total">
+              <CardContent className="py-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="h-8 w-8 rounded-full border-2 border-dashed border-muted-foreground/40"
+                      aria-hidden="true"
+                    />
+                    <span className="font-medium text-muted-foreground">{t('unclaimed')}</span>
+                  </div>
+                  <span className="text-lg font-bold text-muted-foreground">
+                    {formatCents(splitTotals.unclaimed.total, currency, locale)}
+                  </span>
+                </div>
+                {(splitTotals.unclaimed.tax > 0 || splitTotals.unclaimed.tip > 0) && (
+                  <div className="ml-11 mt-1 flex gap-3 text-xs text-muted-foreground">
+                    <span>
+                      {t('items', { amount: formatCents(splitTotals.unclaimed.itemTotal, currency, locale) })}
+                    </span>
+                    {splitTotals.unclaimed.tax > 0 && (
+                      <span>
+                        {t('taxAmount', { amount: formatCents(splitTotals.unclaimed.tax, currency, locale) })}
+                      </span>
+                    )}
+                    {splitTotals.unclaimed.tip > 0 && (
+                      <span>
+                        {t('tipAmount', { amount: formatCents(splitTotals.unclaimed.tip, currency, locale) })}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
 
@@ -1485,21 +1863,14 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
           {/* Finalize button -- only when no unsaved changes and all items claimed */}
           {!hasAnyUnsavedChanges &&
             personToken &&
+            myPersonId !== null &&
             myPersonIndex !== null &&
             !finalizeSession.isPending &&
             allItemsClaimed && (
               <Button
                 variant="outline"
                 className="w-full h-12 mb-2"
-                onClick={() => {
-                  if (confirm(t('finalizeConfirm'))) {
-                    finalizeSession.mutate({
-                      token,
-                      personIndex: myPersonIndex,
-                      personToken,
-                    });
-                  }
-                }}
+                onClick={() => setConfirmFinalize(true)}
                 disabled={finalizeSession.isPending}
                 data-testid="finalize-btn"
               >
@@ -1515,7 +1886,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
           <Button
             className="w-full h-14"
             onClick={saveClaims}
-            disabled={saving || !hasUnsavedChanges}
+            disabled={saving || splitClaimItem.isPending || !hasUnsavedChanges}
             data-testid="save-claims-btn"
           >
             {saving ? (
@@ -1526,7 +1897,9 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
             ) : hasUnsavedChanges ? (
               <>
                 <Check className="mr-2 h-5 w-5" />
-                {t('saveClaimsFor', { name: data.people[personIndex!]?.name ?? '' })}
+                {t('saveClaimsFor', {
+                  name: (personIndex === null ? undefined : data.people[personIndex]?.name) ?? '',
+                })}
               </>
             ) : (
               <>
@@ -1537,6 +1910,40 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
           </Button>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={removeFor !== null}
+        onOpenChange={(open) => !open && setRemoveFor(null)}
+        title={t('removePersonTitle', { name: removeFor?.name ?? '' })}
+        description={t('removePersonDescription')}
+        confirmLabel={t('remove')}
+        onConfirm={() =>
+          removeFor &&
+          personToken &&
+          removePerson.mutate({
+            token,
+            personToken,
+            targetId: removeFor.id,
+          })
+        }
+      />
+      <ConfirmDialog
+        open={confirmFinalize}
+        onOpenChange={setConfirmFinalize}
+        title={t('finalizeTitle')}
+        description={t('finalizeDescription')}
+        confirmLabel={t('finalizeSplit')}
+        destructive={false}
+        onConfirm={() =>
+          personToken &&
+          myPersonId !== null &&
+          finalizeSession.mutate({
+            token,
+            personId: myPersonId,
+            personToken,
+          })
+        }
+      />
     </div>
   );
 }

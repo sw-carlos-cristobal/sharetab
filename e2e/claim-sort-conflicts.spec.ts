@@ -33,11 +33,11 @@ test.describe('Claim page — item sorting', () => {
       token: shareToken,
       name: 'Alice',
     });
-    const { personToken } = (await joinRes.json()).result?.data?.json;
+    const { personToken, personId } = (await joinRes.json()).result?.data?.json;
 
     await trpcMutation(ctx, 'guest.claimItems', {
       token: shareToken,
-      personIndex: 0,
+      personId,
       personToken,
       claimedItemIndices: [0, 1],
     });
@@ -112,11 +112,11 @@ test.describe('Claim page — conflict detection', () => {
       token: shareToken,
       name: 'Alice',
     });
-    const { personToken: aliceToken } = (await joinRes.json()).result?.data?.json;
+    const { personToken: aliceToken, personId: aliceId } = (await joinRes.json()).result?.data?.json;
 
     await trpcMutation(ctx, 'guest.claimItems', {
       token: shareToken,
-      personIndex: 0,
+      personId: aliceId,
       personToken: aliceToken,
       claimedItemIndices: [0],
     });
@@ -185,7 +185,7 @@ test.describe('Claim page — conflict detection', () => {
     const aliceData = (await joinAlice.json()).result?.data?.json;
     await trpcMutation(ctx, 'guest.claimItems', {
       token: shareToken,
-      personIndex: aliceData.personIndex,
+      personId: aliceData.personId,
       personToken: aliceData.personToken,
       claimedItemIndices: [0],
     });
@@ -198,7 +198,7 @@ test.describe('Claim page — conflict detection', () => {
     const bobData = (await joinBob.json()).result?.data?.json;
     const claimRes = await trpcMutation(ctx, 'guest.claimItems', {
       token: shareToken,
-      personIndex: bobData.personIndex,
+      personId: bobData.personId,
       personToken: bobData.personToken,
       claimedItemIndices: [0, 1],
     });
@@ -243,7 +243,7 @@ test.describe('Claim page — conflict detection', () => {
     const aliceData = (await joinAlice.json()).result?.data?.json;
     await trpcMutation(ctx, 'guest.claimItems', {
       token: shareToken,
-      personIndex: aliceData.personIndex,
+      personId: aliceData.personId,
       personToken: aliceData.personToken,
       claimedItemIndices: [0],
     });
@@ -256,7 +256,7 @@ test.describe('Claim page — conflict detection', () => {
     const bobData = (await joinBob.json()).result?.data?.json;
     const claimRes = await trpcMutation(ctx, 'guest.claimItems', {
       token: shareToken,
-      personIndex: bobData.personIndex,
+      personId: bobData.personId,
       personToken: bobData.personToken,
       claimedItemIndices: [1],
     });

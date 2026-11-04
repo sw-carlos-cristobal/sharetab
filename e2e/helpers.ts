@@ -87,7 +87,7 @@ export async function joinGuestSession(
 ) {
   const res = await trpcMutation(ctx, 'guest.joinSession', input);
   const body = await res.text();
-  let joined: { personIndex?: unknown; personToken?: unknown; name?: unknown } | undefined;
+  let joined: { personIndex?: unknown; personId?: unknown; personToken?: unknown; name?: unknown } | undefined;
   try {
     joined = res.ok() ? JSON.parse(body)?.result?.data?.json : undefined;
   } catch {
@@ -95,12 +95,28 @@ export async function joinGuestSession(
   }
   if (
     typeof joined?.personIndex !== 'number' ||
+    typeof joined.personId !== 'string' ||
     typeof joined.personToken !== 'string' ||
     typeof joined.name !== 'string'
   ) {
     throw new Error(`guest.joinSession failed (${res.status()}): ${body}`);
   }
-  return joined as { personIndex: number; personToken: string; name: string };
+  return joined as { personIndex: number; personId: string; personToken: string; name: string };
+}
+
+/**
+ * The id of the person listed under `name` in a claim session: the claim-session mutations name
+ * people by id (#225), and a person who joined on a page has no join result to read it from.
+ */
+export async function personIdByName(
+  ctx: Awaited<ReturnType<typeof request.newContext>>,
+  token: string,
+  name: string,
+): Promise<string> {
+  const session = await trpcResult(await trpcQuery(ctx, 'guest.getSession', { token }));
+  const person = (session?.people as { id: string; name: string }[] | undefined)?.find((p) => p.name === name);
+  if (!person) throw new Error(`Nobody named ${name} in claim session ${token}`);
+  return person.id;
 }
 
 /**
@@ -205,11 +221,7 @@ export async function createTestGroup(
     memberIds,
     dispose: async () => {
       // Clean up: delete the test group to avoid polluting the database
-      try {
-        await trpcMutation(owner, 'groups.delete', { groupId });
-      } catch {
-        // Ignore — group may already be deleted by the test
-      }
+      await deleteTestGroup(owner, groupId);
       await owner.dispose();
       for (const c of memberContexts) await c.dispose();
     },
@@ -233,11 +245,43 @@ export async function deleteTestUser(adminCtx: Awaited<ReturnType<typeof authedC
 }
 
 /**
- * Delete a test-created group via the API. Silently ignores errors.
+ * Delete a test-created user, signed in as the seeded admin (Alice). Silently ignores errors.
+ */
+export async function removeTestUser(email: string) {
+  const admin = await authedContext(users.alice.email, users.alice.password);
+  try {
+    await deleteTestUser(admin, email);
+  } finally {
+    await admin.dispose();
+  }
+}
+
+/**
+ * Delete a test-created group via the API, whatever is left in it. Ignores errors, but warns
+ * when a group with open balances can't be removed.
+ *
+ * The owner's delete is refused while anyone in the group still owes money (#390), and most
+ * test groups end with open balances, so then it uses the admin's delete, which isn't: with
+ * `ctx` if that's the e2e admin (Alice, ADMIN_EMAIL), else signed in as Alice.
  */
 export async function deleteTestGroup(ctx: Awaited<ReturnType<typeof authedContext>>, groupId: string) {
   try {
-    await trpcMutation(ctx, 'groups.delete', { groupId });
+    const res = await trpcMutation(ctx, 'groups.delete', { groupId });
+    // Anything else (gone already, or not the caller's to delete) is left as it is
+    if (res.ok() || (await trpcError(res))?.data?.code !== 'PRECONDITION_FAILED') return;
+    if ((await trpcMutation(ctx, 'admin.deleteGroup', { groupId })).ok()) return;
+    const admin = await authedContext(users.alice.email, users.alice.password);
+    try {
+      const res = await trpcMutation(admin, 'admin.deleteGroup', { groupId });
+      if (!res.ok()) {
+        // Left behind: Alice isn't the admin unless the server has ADMIN_EMAIL=alice@example.com
+        console.warn(
+          `deleteTestGroup: group ${groupId} has open balances and the admin delete failed (${res.status()})`,
+        );
+      }
+    } finally {
+      await admin.dispose();
+    }
   } catch {
     // Ignore — group may not exist or already deleted
   }

@@ -2,9 +2,12 @@
  * Sentinel returned when no client IP header is present ("identity
  * unknown"). Callers choose how to treat it based on the cost of lumping
  * every client into one bucket:
- * - Login (`src/server/auth.ts`) skips its per-IP bucket on this value —
- *   a shared bucket would let one client lock every user out, and the
- *   per-email bucket still bounds attempts.
+ * - Login (`src/server/lib/password-login.ts`) skips its per-IP bucket on
+ *   this value — a shared bucket would let one client lock every user out,
+ *   and the per-email bucket still bounds attempts.
+ * - Password reset requests and link submissions (`auth.requestPasswordReset`,
+ *   `auth.resetPassword`) skip theirs for the same reason; each account gets
+ *   at most a few reset emails an hour, and a link is a 256-bit secret.
  * - Guest endpoints (createSplit/createClaim, uploads) deliberately keep
  *   it as a shared key: with no client identity, one conservative global
  *   throttle on unauthenticated traffic is the safer failure mode.
@@ -19,7 +22,7 @@ export const FALLBACK_IP = 'global';
  * the first entry of `x-forwarded-for` (easiest for clients to spoof),
  * falling back to a shared constant when none is present (so rate limiting
  * still applies globally rather than not at all). The same order is used
- * by every per-IP limiter (login, guest uploads, guest AI quotas).
+ * by every per-IP limiter (login, password reset, guest uploads, guest AI quotas).
  *
  * SECURITY: these headers are client-supplied unless a trusted reverse proxy
  * strips/overwrites them. When ShareTab is exposed directly (no proxy), an
@@ -31,8 +34,8 @@ export const FALLBACK_IP = 'global';
  * must strip or overwrite the higher-precedence headers too.
  * Next.js route handlers do not expose the socket address, so callers must
  * treat per-IP limits as defense-in-depth, never the only control — pair
- * them with per-account or global caps (see `src/server/auth.ts` per-email
- * bucket and the guest global caps). Operators should front the app with a
+ * them with per-account or global caps (see the per-email login bucket in
+ * `src/server/lib/password-login.ts` and the guest global caps). Operators should front the app with a
  * proxy that sets these headers from the connection (see .env.example).
  */
 // Longest legitimate value is an IPv6 address with a zone id (~50 chars);

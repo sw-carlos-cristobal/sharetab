@@ -1,6 +1,33 @@
 import { describe, it, expect } from 'vitest';
 import { TRPCError } from '@trpc/server';
-import { parseExtractedData, parseGuestItems, parseGuestPeople, parseGuestAssignments } from './json-schemas';
+import {
+  parseExtractedData,
+  parseGuestItems,
+  parseGuestPeople,
+  parseGuestAssignments,
+  receiptCurrency,
+} from './json-schemas';
+
+describe('receiptCurrency (#361)', () => {
+  it("is the receipt's own currency code, uppercased", () => {
+    expect(receiptCurrency({ currency: 'EUR' }, 'USD')).toBe('EUR');
+    expect(receiptCurrency({ currency: 'gbp' }, 'USD')).toBe('GBP');
+  });
+
+  it('is the fallback when the receipt has none, or one that is not a currency code', () => {
+    for (const data of [
+      null,
+      undefined,
+      {},
+      { currency: null },
+      { currency: '' },
+      { currency: '$' },
+      { currency: 7 },
+    ]) {
+      expect(receiptCurrency(data, 'EUR'), JSON.stringify(data)).toBe('EUR');
+    }
+  });
+});
 
 describe('parseExtractedData', () => {
   it('parses valid data', () => {
@@ -23,7 +50,8 @@ describe('parseExtractedData', () => {
     expect(result.tax).toBe(0);
     expect(result.tip).toBe(0);
     expect(result.total).toBe(0);
-    expect(result.currency).toBe('USD');
+    // No currency is unknown, not USD: callers fall back to the group's (USD outside a group) (#361)
+    expect(result.currency).toBeUndefined();
   });
 
   it('handles null input', () => {
@@ -77,6 +105,14 @@ describe('parseGuestPeople', () => {
 
   it('rejects person without name', () => {
     expect(() => parseGuestPeople([{}])).toThrow(TRPCError);
+  });
+
+  it("ignores stored save records, so a malformed one can't fail a finalize (#238)", () => {
+    const people = parseGuestPeople([
+      { name: 'Alice', saves: 'junk' },
+      { name: 'Bob', saves: [null, { key: 1 }] },
+    ]);
+    expect(people.map((p) => p.name)).toEqual(['Alice', 'Bob']);
   });
 });
 

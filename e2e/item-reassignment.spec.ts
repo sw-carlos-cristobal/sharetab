@@ -38,7 +38,7 @@ test.describe('Item reassignment via person switcher', () => {
     const bobData = (await joinBob.json()).result?.data?.json;
     await trpcMutation(ctx, 'guest.claimItems', {
       token: shareToken,
-      personIndex: bobData.personIndex,
+      personId: bobData.personId,
       personToken: bobData.personToken,
       claimedItemIndices: [0, 2],
     });

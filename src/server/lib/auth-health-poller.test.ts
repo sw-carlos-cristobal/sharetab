@@ -134,6 +134,66 @@ describe('MeridianHealthPoller', () => {
     expect(result.error).toBe('Claude authentication expired');
   });
 
+  test('checkMeridianHealth returns unhealthy when Claude Code fails to authenticate the probe', async () => {
+    // Meridian's /health only checks that a credentials file exists, so a
+    // login Claude Code cleared after a failed refresh still reads as logged
+    // in; the probe then fails with a 500 api_error (observed with Meridian
+    // 1.71.0).
+    const message =
+      'Claude Code returned an error result: Failed to authenticate: OAuth session expired and could not be refreshed';
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: 'healthy', auth: { loggedIn: true, email: null } }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ type: 'error', error: { type: 'api_error', message } }), { status: 500 }),
+      );
+
+    const { checkMeridianHealth } = await import('./auth-health-poller');
+    const result = await checkMeridianHealth();
+    expect(result.status).toBe('unhealthy');
+    expect(result.error).toBe(message);
+  });
+
+  test('checkMeridianHealth reports the default error when an auth failure has no string message', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: 'healthy', auth: { loggedIn: true } }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ type: 'error', error: { type: 'authentication_error', message: { code: 1 } } }), {
+          status: 401,
+        }),
+      );
+
+    const { checkMeridianHealth } = await import('./auth-health-poller');
+    const result = await checkMeridianHealth();
+    expect(result.status).toBe('unhealthy');
+    expect(result.error).toBe('Authentication expired');
+  });
+
+  test('checkMeridianHealth returns healthy on api errors that are not about authentication', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: 'healthy', auth: { loggedIn: true, email: 'user@test.com' } }), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            type: 'error',
+            error: { type: 'api_error', message: 'Claude Code returned an error result: Overloaded' },
+          }),
+          { status: 500 },
+        ),
+      );
+
+    const { checkMeridianHealth } = await import('./auth-health-poller');
+    const result = await checkMeridianHealth();
+    expect(result.status).toBe('healthy');
+  });
+
   test('checkMeridianHealth returns healthy on non-auth API errors (rate limit, etc.)', async () => {
     vi.mocked(fetch)
       .mockResolvedValueOnce(
@@ -158,6 +218,55 @@ describe('MeridianHealthPoller', () => {
     const { checkMeridianHealth } = await import('./auth-health-poller');
     const result = await checkMeridianHealth();
     expect(result.status).toBe('healthy');
+  });
+
+  describe('when /health answers email: null (Meridian 1.71.0 for an unknown account, #218)', () => {
+    const health = (status: string, extra: Record<string, unknown> = {}) =>
+      new Response(JSON.stringify({ status, auth: { loggedIn: true, email: null }, ...extra }), { status: 200 });
+    const probe = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
+
+    test.each([
+      ['health reports unhealthy', () => [health('unhealthy', { error: null })], undefined],
+      ['the probe succeeds', () => [health('healthy'), probe(200, { id: 'msg_1', content: [] })], undefined],
+      [
+        'the probe fails authentication',
+        () => [health('healthy'), probe(401, { error: { type: 'authentication_error', message: 'expired' } })],
+        undefined,
+      ],
+      [
+        'the probe hits a non-auth API error',
+        () => [health('healthy'), probe(429, { error: { type: 'rate_limit_error', message: 'slow down' } })],
+        undefined,
+      ],
+      ['the token expiry is far away (no probe)', () => [health('healthy')], Date.now() + 12 * 60 * 60 * 1000],
+    ])('leaves email out when %s', async (_case, responses, expiry) => {
+      if (expiry !== undefined) mockGetStoredMeridianTokenExpiry.mockReturnValue(expiry);
+      for (const response of responses()) vi.mocked(fetch).mockResolvedValueOnce(response);
+
+      const { checkMeridianHealth } = await import('./auth-health-poller');
+      const result = await checkMeridianHealth();
+      expect(result).not.toHaveProperty('email');
+      expect(Object.values(result)).not.toContain(null);
+    });
+
+    test('leaves email out when the probe times out', async () => {
+      vi.mocked(fetch)
+        .mockResolvedValueOnce(health('healthy'))
+        .mockRejectedValueOnce(new Error('AbortError: signal timed out'));
+
+      const { checkMeridianHealth } = await import('./auth-health-poller');
+      const result = await checkMeridianHealth();
+      expect(result.status).toBe('degraded');
+      expect(result).not.toHaveProperty('email');
+    });
+
+    test('still copies a string email', async () => {
+      vi.mocked(fetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: 'unhealthy', auth: { email: 'user@test.com' } }), { status: 503 }),
+      );
+      const { checkMeridianHealth } = await import('./auth-health-poller');
+      expect((await checkMeridianHealth()).email).toBe('user@test.com');
+    });
   });
 
   test('checkMeridianHealth returns not_running on fetch error', async () => {
@@ -308,6 +417,24 @@ describe('MeridianHealthPoller', () => {
     const call = mockSendMail.mock.calls[0]![0];
     expect(call.to).toBe('admin@test.com');
     expect(call.subject).toContain('Claude AI authentication expired');
+  });
+
+  test('sendAuthExpiryEmail uses the shared mail settings: credentials only when set, default sender, AUTH_URL first', async () => {
+    process.env.AUTH_URL = 'https://auth-url.example.com';
+    delete process.env.EMAIL_FROM;
+    delete process.env.EMAIL_SERVER_USER;
+    delete process.env.EMAIL_SERVER_PASSWORD;
+    const mockSendMail = vi.fn().mockResolvedValue({});
+    vi.mocked(nodemailer.createTransport).mockReturnValue(mockTransporter(mockSendMail));
+
+    const { sendAuthExpiryEmail } = await import('./auth-health-poller');
+    await sendAuthExpiryEmail('Not logged in. Run: claude login');
+
+    const options = vi.mocked(nodemailer.createTransport).mock.calls.at(-1)![0] as { auth: unknown };
+    expect(options.auth).toStrictEqual({});
+    const call = mockSendMail.mock.calls[0]![0];
+    expect(call.from).toBe('ShareTab <noreply@sharetab.local>');
+    expect(call.text).toContain('https://auth-url.example.com/admin');
   });
 
   test('sendAuthExpiryEmail skips when email is not configured', async () => {

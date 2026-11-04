@@ -40,7 +40,7 @@ export const activityRouter = createTRPCRouter({
     .input(z.object({ limit: z.number().int().min(1).max(50).default(10) }))
     .query(async ({ ctx, input }) => {
       const userGroups = await ctx.db.groupMember.findMany({
-        where: { userId: ctx.user.id },
+        where: { userId: ctx.user.id, removedAt: null },
         select: { groupId: true },
       });
       const groupIds = userGroups.map((g) => g.groupId);

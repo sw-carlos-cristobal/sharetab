@@ -11,7 +11,8 @@
   "finalized": "완료",
   "untitled": "제목 없는 정산",
   "delete": "분할 삭제",
-  "deleteConfirm": "이 분할을 삭제하시겠습니까? 되돌릴 수 없습니다.",
+  "deleteTitle": "이 분할을 삭제하시겠습니까?",
+  "deleteDescription": "공유한 모든 사람에게 링크가 더 이상 작동하지 않습니다. 되돌릴 수 없습니다.",
   "deleted": "분할이 삭제되었습니다",
   "loading": "로딩 중..."
 }

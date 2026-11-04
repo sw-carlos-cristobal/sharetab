@@ -7,8 +7,9 @@ import { formatCents } from '@/lib/money';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { ArrowUpRight, ArrowDownLeft, Plus, ChevronRight, TrendingUp, TrendingDown } from 'lucide-react';
-import Image from 'next/image';
+import { Badge } from '@/components/ui/badge';
+import { Archive, ArrowUpRight, ArrowDownLeft, Plus, ChevronRight, TrendingUp, TrendingDown } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Link } from '@/i18n/navigation';
 import { getInitials, avatarColor } from '@/lib/avatar';
 
@@ -68,6 +69,7 @@ function GroupCardSkeleton() {
 
 export default function DashboardPage() {
   const t = useTranslations('dashboard');
+  const tGroups = useTranslations('groups');
   const locale = useLocale();
   const dashboard = trpc.balances.getDashboard.useQuery();
   const overallDebts = trpc.balances.getOverallDebts.useQuery();
@@ -76,6 +78,10 @@ export default function DashboardPage() {
   const [showAllGroups, setShowAllGroups] = useState(false);
 
   const visibleGroups = showAllGroups ? groups.data : groups.data?.slice(0, GROUPS_PER_PAGE);
+  // The group list leaves archived groups out, but an archived group can still
+  // hold a balance (archived earlier, or a write racing the archive): the totals
+  // count it, so it gets its own card
+  const archivedWithBalance = dashboard.data?.perGroup.filter((g) => g.archived && g.balance !== 0) ?? [];
   const hasMoreGroups = (groups.data?.length ?? 0) > GROUPS_PER_PAGE;
 
   // Aggregate totals span all groups. When every contributing group uses
@@ -272,7 +278,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {groups.data?.length === 0 && (
+        {groups.data?.length === 0 && !dashboard.isPending && archivedWithBalance.length === 0 && (
           <Card>
             <CardContent className="py-8 text-center">
               <p className="text-muted-foreground">{t('noGroupsDescription')}</p>
@@ -308,15 +314,17 @@ export default function DashboardPage() {
                         <div className="flex -space-x-2">
                           {visibleMembers.map((member) => {
                             const name = member.user.name ?? member.user.placeholderName ?? member.user.email ?? '?';
+                            // A plain <img> (not next/image): avatars come from
+                            // whichever host Google or the IdP serves them from.
                             return member.user.image ? (
-                              <Image
-                                key={member.user.id}
-                                src={member.user.image}
-                                alt={name}
-                                width={28}
-                                height={28}
-                                className="h-7 w-7 rounded-full ring-2 ring-card"
-                              />
+                              <Avatar key={member.user.id} className="size-7 ring-2 ring-card">
+                                <AvatarImage src={member.user.image} alt={name} />
+                                <AvatarFallback
+                                  className={`text-[10px] font-medium text-white ${avatarColor(member.user.id)}`}
+                                >
+                                  {getInitials(name)}
+                                </AvatarFallback>
+                              </Avatar>
                             ) : (
                               <div
                                 key={member.user.id}
@@ -352,6 +360,34 @@ export default function DashboardPage() {
               </Link>
             );
           })}
+          {archivedWithBalance.map((g) => (
+            <Link key={g.groupId} href={`/groups/${g.groupId}`}>
+              <Card className="border-dashed opacity-90 transition-all duration-200 hover:shadow-md">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <span className="text-lg">{g.emoji}</span>
+                    <span className="flex-1 truncate">{g.groupName}</span>
+                    <Badge variant="outline" className="shrink-0 text-[10px]">
+                      <Archive className="mr-1 h-3 w-3" />
+                      {tGroups('list.archivedBadge')}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex justify-end text-sm">
+                    <span
+                      className={`font-semibold tabular-nums ${
+                        g.balance > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                      }`}
+                    >
+                      {g.balance > 0 ? '+' : ''}
+                      {formatCents(g.balance, g.currency, locale)}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
         </div>
 
         {hasMoreGroups && !showAllGroups && (

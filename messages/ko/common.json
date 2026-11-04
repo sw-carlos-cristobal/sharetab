@@ -22,6 +22,7 @@
     "saving": "저장 중...",
     "submit": "제출",
     "openMenu": "메뉴 열기",
+    "toggleTheme": "테마 전환",
     "copyFailed": "링크를 클립보드에 복사할 수 없습니다"
   },
   "brand": {

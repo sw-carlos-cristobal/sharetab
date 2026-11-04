@@ -8,14 +8,32 @@ vi.mock('@/server/auth', () => ({ auth: vi.fn() }));
 const mockDb = {
   systemSetting: { findUnique: vi.fn() },
   user: { findUnique: vi.fn() },
-  receipt: { findUnique: vi.fn(), updateMany: vi.fn(), update: vi.fn() },
-  guestSplit: { findUnique: vi.fn(), update: vi.fn() },
+  receipt: { findUnique: vi.fn(), findMany: vi.fn(), updateMany: vi.fn(), update: vi.fn(), deleteMany: vi.fn() },
+  groupMember: { findUnique: vi.fn() },
+  guestSplit: {
+    findUnique: vi.fn(),
+    findMany: vi.fn(),
+    update: vi.fn(),
+    create: vi.fn(),
+    delete: vi.fn(),
+    deleteMany: vi.fn(),
+  },
+  $queryRaw: vi.fn(),
   // Interactive transactions run their callback against the same mocks.
   $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(mockDb)),
 };
 vi.mock('@/server/db', () => ({ db: mockDb }));
 vi.mock('@/server/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+const { removeReceiptFiles, deleteExpiredSplits } = vi.hoisted(() => ({
+  removeReceiptFiles: vi.fn(),
+  deleteExpiredSplits: vi.fn(),
+}));
+vi.mock('@/server/lib/receipt-cleanup', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/server/lib/receipt-cleanup')>()),
+  removeReceiptFiles,
+  deleteExpiredSplits,
 }));
 
 const { processReceiptImage, checkRateLimit, peekRateLimit } = vi.hoisted(() => ({
@@ -24,8 +42,16 @@ const { processReceiptImage, checkRateLimit, peekRateLimit } = vi.hoisted(() => 
   peekRateLimit: vi.fn(),
 }));
 vi.mock('@/server/lib/receipt-processor', () => ({ processReceiptImage }));
-vi.mock('@/server/lib/rate-limit', () => ({ checkRateLimit, peekRateLimit, refundRateLimit: vi.fn() }));
-vi.mock('@/server/ai/registry', () => ({ getConfiguredProviderPriority: vi.fn().mockReturnValue([]) }));
+// The token store's functions share the main ones' mocks: these tests check which key and limit a
+// procedure uses, not which store it lands in (rate-limit.test.ts covers that)
+vi.mock('@/server/lib/rate-limit', async (importOriginal) => ({
+  parsePositiveInt: (await importOriginal<typeof import('@/server/lib/rate-limit')>()).parsePositiveInt,
+  checkRateLimit,
+  peekRateLimit,
+  refundRateLimit: vi.fn(),
+  checkTokenRateLimit: checkRateLimit,
+  peekTokenRateLimit: peekRateLimit,
+}));
 
 type Session = { user: { id: string } } | null;
 
@@ -48,6 +74,16 @@ beforeEach(async () => {
   checkRateLimit.mockReturnValue({ allowed: true, retryAfterMs: 0 });
   peekRateLimit.mockReturnValue({ allowed: true, retryAfterMs: 0 });
   mockDb.user.findUnique.mockResolvedValue({ suspendedAt: null });
+  // New splits clear expired ones in the background
+  deleteExpiredSplits.mockResolvedValue(0);
+});
+
+describe('AI provider setup (#280)', () => {
+  test('no guest procedure exposes the AI provider setup', async () => {
+    const { guestRouter } = await import('./guest');
+    const names = Object.keys(guestRouter._def.procedures).filter((name) => /provider/i.test(name));
+    expect(names, 'the AI provider setup is admin-only, in admin.getSystemHealth').toEqual([]);
+  });
 });
 
 describe('guest.getUploadStatus', () => {
@@ -103,6 +139,16 @@ describe('guest.processReceipt with guest uploads disabled', () => {
     expect(await api.processReceipt({ receiptId: 'r1' })).toEqual({ subtotal: 100 });
     expect(processReceiptImage).toHaveBeenCalledWith(expect.objectContaining({ receiptId: 'r1', receipt }));
   });
+
+  test('a Quick Split receipt whose currency the scan cannot tell is in USD: it has no group (#361)', async () => {
+    mockDb.receipt.findUnique.mockResolvedValue({ id: 'r1', isGuest: true });
+    mockDb.receipt.updateMany.mockResolvedValue({ count: 1 });
+    processReceiptImage.mockResolvedValue({ subtotal: 100 });
+
+    const api = await caller(signedIn);
+    await api.processReceipt({ receiptId: 'r1' });
+    expect(processReceiptImage).toHaveBeenCalledWith(expect.objectContaining({ fallbackCurrency: 'USD' }));
+  });
 });
 
 describe('guest.processReceipt with guest uploads enabled', () => {
@@ -111,6 +157,79 @@ describe('guest.processReceipt with guest uploads enabled', () => {
     mockDb.receipt.findUnique.mockResolvedValue(null);
     const api = await caller();
     await expect(api.processReceipt({ receiptId: 'missing' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+});
+
+// #434: guest and group-scan-path scans spend one global AI scan cap, so a group scan, which skips
+// GUEST_AI_GLOBAL_LIMIT, still stops at AI_GLOBAL_LIMIT
+describe('guest.processReceipt and the global AI scan cap (#434)', () => {
+  beforeEach(() => {
+    guestUploadsSetting(null);
+    mockDb.receipt.findUnique.mockResolvedValue({ id: 'r1', isGuest: true });
+    mockDb.receipt.updateMany.mockResolvedValue({ count: 1 });
+    processReceiptImage.mockResolvedValue({ subtotal: 100 });
+  });
+
+  test('a guest scan spends the per-receipt, per-IP, all-guests and global budgets', async () => {
+    await (await caller()).processReceipt({ receiptId: 'r1' });
+    const spent = checkRateLimit.mock.calls.map(([key, max]) => [key, max]);
+    expect(spent).toEqual([
+      ['guest-process:r1', 3],
+      ['guest-process-ip:global', 20],
+      ['guest-process-global', 100],
+      ['ai-scan-global', 200],
+    ]);
+  });
+
+  test('is refused once the global budget is spent, without claiming or scanning the receipt', async () => {
+    peekRateLimit.mockImplementation((key: string) => ({ allowed: key !== 'ai-scan-global', retryAfterMs: 0 }));
+    await expect((await caller()).processReceipt({ receiptId: 'r1' })).rejects.toMatchObject({
+      code: 'TOO_MANY_REQUESTS',
+      messageKey: 'processingRateLimited',
+    });
+    expect(checkRateLimit).not.toHaveBeenCalled();
+    expect(mockDb.receipt.updateMany).not.toHaveBeenCalled();
+    expect(processReceiptImage).not.toHaveBeenCalled();
+  });
+});
+
+describe('share tokens longer than any real one (#208)', () => {
+  // Share tokens are 25-character cuids; 64 leaves room and bounds the limiter keys built from them
+  const long = 'x'.repeat(65);
+  const personToken = '11111111-1111-4111-8111-111111111111';
+  const calls: [string, (api: Awaited<ReturnType<typeof caller>>) => Promise<unknown>][] = [
+    ['getSession', (api) => api.getSession({ token: long })],
+    ['getSplit', (api) => api.getSplit({ token: long })],
+    ['resumeSession', (api) => api.resumeSession({ token: long, personToken })],
+    ['editPersonName', (api) => api.editPersonName({ token: long, personToken, targetId: pid(0), newName: 'X' })],
+    ['removePerson', (api) => api.removePerson({ token: long, personToken, targetId: pid(0) })],
+    ['splitClaimItem', (api) => api.splitClaimItem({ token: long, personToken, itemIndex: 0, splitQuantity: 1 })],
+    ['claimItems', (api) => api.claimItems({ token: long, personToken, personId: pid(0), claimedItemIndices: [] })],
+    ['finalizeSession', (api) => api.finalizeSession({ token: long, personToken, personId: pid(0) })],
+  ];
+
+  test.each(calls)('%s refuses it before any rate limit or database read', async (_name, call) => {
+    await expect(call(await caller())).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(checkRateLimit).not.toHaveBeenCalled();
+    expect(peekRateLimit).not.toHaveBeenCalled();
+    expect(mockDb.guestSplit.findUnique).not.toHaveBeenCalled();
+  });
+
+  test('getReceiptItems and processReceipt refuse an oversized receipt id the same way', async () => {
+    const api = await caller(signedIn);
+    await expect(api.getReceiptItems({ receiptId: long })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(api.processReceipt({ receiptId: long })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(checkRateLimit).not.toHaveBeenCalled();
+    expect(mockDb.receipt.findUnique).not.toHaveBeenCalled();
+  });
+
+  test('a signed-in caller gets the same for expireSession and setPayerVenmoHandle', async () => {
+    const api = await caller(signedIn);
+    await expect(api.expireSession({ token: long })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(api.setPayerVenmoHandle({ token: long, handle: 'someone' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    expect(checkRateLimit).not.toHaveBeenCalled();
   });
 });
 
@@ -145,21 +264,49 @@ describe('guest.joinSession rate limit', () => {
 const ALICE_TOKEN = '11111111-1111-4111-8111-111111111111';
 const OTHER_TOKEN = '22222222-2222-4222-8222-222222222222';
 const JOIN_KEY = '44444444-4444-4444-8444-444444444444';
+// A save key Alice's device recorded with an earlier claim save
+const ALICE_SAVE = { key: '77777777-7777-4777-8777-777777777777', hash: 'aaaaaaaaaaaaaaaa' };
 const DAY_MS = 24 * 60 * 60 * 1000;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+// The stable id claimSession gives the person at this index (see withIds)
+function pid(index: number) {
+  return `aaaaaaaa-0000-4000-8000-${String(index).padStart(12, '0')}`;
+}
+
+type TestPerson = {
+  id?: string;
+  name: string;
+  personToken?: string;
+  groupSize?: number;
+  join?: { key: string; name: string; expiresAt: number };
+  saves?: { key: string; hash: string }[];
+};
+
+// People as saved since person ids exist: anyone without an id gets pid(their index)
+function withIds(people: TestPerson[]) {
+  return people.map((p, i) => ({ id: pid(i), ...p }));
+}
 
 // A person's record of the join that created them, still within its replay window
 function liveJoin(normalizedName: string) {
   return { key: JOIN_KEY, name: normalizedName, expiresAt: Date.now() + 60_000 };
 }
 
+// A claim session whose people get ids (withIds), unless `legacy` asks for them as saved
+// before person ids existed
 function claimSession(
-  people: {
-    name: string;
-    personToken?: string;
-    groupSize?: number;
-    join?: { key: string; name: string; expiresAt: number };
-  }[],
-  overrides: { status?: string; expiresAt?: Date } = {},
+  people: TestPerson[],
+  {
+    legacy = false,
+    ...overrides
+  }: {
+    status?: string;
+    expiresAt?: Date;
+    assignments?: { itemIndex: number; personIndices: number[] }[];
+    items?: { name: string; quantity: number; unitPrice: number; totalPrice: number }[];
+    legacy?: boolean;
+  } = {},
 ) {
   mockDb.guestSplit.findUnique.mockResolvedValue({
     id: 'gs1',
@@ -169,7 +316,7 @@ function claimSession(
     receiptId: null,
     receiptData: { subtotal: 0, tax: 0, tip: 0, total: 0, currency: 'USD' },
     items: [],
-    people,
+    people: legacy ? people : withIds(people),
     assignments: [],
     summary: null,
     paidByIndex: 0,
@@ -192,7 +339,12 @@ describe('guest.joinSession', () => {
     expect(joined.personIndex).toBe(1);
     expect(joined.name).toBe('Bob');
     expect(joined.personToken).toMatch(/^[0-9a-f-]{36}$/);
-    expect(savedPeople()).toEqual([{ name: 'Host' }, { name: 'Bob', personToken: joined.personToken }]);
+    expect(joined.personId).toMatch(UUID);
+    expect(joined.personId).not.toBe(pid(0));
+    expect(savedPeople()).toEqual([
+      { id: pid(0), name: 'Host' },
+      { id: joined.personId, name: 'Bob', personToken: joined.personToken },
+    ]);
   });
 
   test("mints a new person's token itself and remembers the caller's join key for a day", async () => {
@@ -203,8 +355,9 @@ describe('guest.joinSession', () => {
     expect(joined.personToken).toMatch(/^[0-9a-f-]{36}$/);
     expect(joined.personToken).not.toBe(JOIN_KEY);
     expect(savedPeople()).toEqual([
-      { name: 'Host' },
+      { id: pid(0), name: 'Host' },
       {
+        id: joined.personId,
         name: 'Bob',
         personToken: joined.personToken,
         join: { key: JOIN_KEY, name: 'bob', expiresAt: expect.any(Number) },
@@ -229,8 +382,11 @@ describe('guest.joinSession', () => {
     const joined = await (await caller()).joinSession({ token: 'share-1', name: ' host ', joinKey: JOIN_KEY });
     expect(joined.personIndex).toBe(0);
     expect(joined.name).toBe('Host');
+    // The seeded person keeps the id they already had
+    expect(joined.personId).toBe(pid(0));
     expect(savedPeople()).toEqual([
       {
+        id: pid(0),
         name: 'Host',
         personToken: joined.personToken,
         join: { key: JOIN_KEY, name: 'host', expiresAt: expect.any(Number) },
@@ -244,7 +400,7 @@ describe('guest.joinSession', () => {
     claimSession([{ name: 'Host' }, { name: 'Bobby', personToken: OTHER_TOKEN, join: liveJoin('bob') }]);
     expect(
       await (await caller()).joinSession({ token: 'share-1', name: 'BOB', joinKey: JOIN_KEY, groupSize: 3 }),
-    ).toEqual({ personIndex: 1, personToken: OTHER_TOKEN, name: 'Bobby' });
+    ).toEqual({ personIndex: 1, personId: pid(1), personToken: OTHER_TOKEN, name: 'Bobby' });
     // A replay changes nothing, not even the group size
     expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
   });
@@ -277,7 +433,7 @@ describe('guest.joinSession', () => {
       await (
         await caller()
       ).joinSession({ token: 'share-1', name: 'Carol', joinKey: JOIN_KEY, personToken: OTHER_TOKEN }),
-    ).toEqual({ personIndex: 2, personToken: OTHER_TOKEN, name: 'Bob' });
+    ).toEqual({ personIndex: 2, personId: pid(2), personToken: OTHER_TOKEN, name: 'Bob' });
   });
 
   test('ignores an expired join key', async () => {
@@ -298,6 +454,7 @@ describe('guest.joinSession', () => {
     claimSession([{ name: 'Host' }, { name: 'Alice S.', personToken: ALICE_TOKEN }]);
     expect(await (await caller()).joinSession({ token: 'share-1', name: 'Alice', personToken: ALICE_TOKEN })).toEqual({
       personIndex: 1,
+      personId: pid(1),
       personToken: ALICE_TOKEN,
       name: 'Alice S.',
     });
@@ -330,6 +487,7 @@ describe('guest.joinSession', () => {
     claimSession([{ name: 'Host' }, { name: 'Alice', personToken: ALICE_TOKEN }]);
     expect(await (await caller()).joinSession({ token: 'share-1', name: 'Alice', personToken: ALICE_TOKEN })).toEqual({
       personIndex: 1,
+      personId: pid(1),
       personToken: ALICE_TOKEN,
       name: 'Alice',
     });
@@ -339,7 +497,28 @@ describe('guest.joinSession', () => {
   test('updates the group size when the token holder rejoins with a new one', async () => {
     claimSession([{ name: 'Alice', personToken: ALICE_TOKEN }]);
     await (await caller()).joinSession({ token: 'share-1', name: 'Alice', personToken: ALICE_TOKEN, groupSize: 2 });
-    expect(savedPeople()).toEqual([{ name: 'Alice', personToken: ALICE_TOKEN, groupSize: 2 }]);
+    expect(savedPeople()).toEqual([{ id: pid(0), name: 'Alice', personToken: ALICE_TOKEN, groupSize: 2 }]);
+  });
+
+  test('a replayed join on people saved before person ids existed saves their ids too', async () => {
+    claimSession([{ name: 'Host' }, { name: 'Bob', personToken: OTHER_TOKEN, join: liveJoin('bob') }], {
+      legacy: true,
+    });
+    const joined = await (await caller()).joinSession({ token: 'share-1', name: 'Bob', joinKey: JOIN_KEY });
+    const saved = savedPeople() as { id: string }[];
+    expect(saved.map((p) => p.id)).toEqual([expect.stringMatching(UUID), expect.stringMatching(UUID)]);
+    expect(joined).toEqual({ personIndex: 1, personId: saved[1]!.id, personToken: OTHER_TOKEN, name: 'Bob' });
+  });
+
+  test("gives people saved before person ids existed their ids, and returns the caller's", async () => {
+    claimSession([{ name: 'Host' }, { name: 'Alice', personToken: ALICE_TOKEN }], { legacy: true });
+    const joined = await (await caller()).joinSession({ token: 'share-1', name: 'Alice', personToken: ALICE_TOKEN });
+    const saved = savedPeople() as { id: string }[];
+    expect(saved).toEqual([
+      { id: expect.stringMatching(UUID), name: 'Host' },
+      { id: expect.stringMatching(UUID), name: 'Alice', personToken: ALICE_TOKEN },
+    ]);
+    expect(joined).toEqual({ personIndex: 1, personId: saved[1]!.id, personToken: ALICE_TOKEN, name: 'Alice' });
   });
 });
 
@@ -358,13 +537,14 @@ describe('guest.resumeSession', () => {
     claimSession([{ name: 'Host' }, { name: 'Alice S.', personToken: ALICE_TOKEN }]);
     expect(await (await caller()).resumeSession({ token: 'share-1', personToken: ALICE_TOKEN })).toEqual({
       personIndex: 1,
+      personId: pid(1),
       name: 'Alice S.',
     });
     expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
     // Reads only the fields it needs, not the (possibly large) items and assignments
     expect(mockDb.guestSplit.findUnique).toHaveBeenCalledWith({
       where: { shareToken: 'share-1' },
-      select: { expiresAt: true, people: true },
+      select: { id: true, expiresAt: true, people: true },
     });
   });
 
@@ -392,30 +572,79 @@ describe('guest.resumeSession', () => {
     claimSession([{ name: 'Alice', personToken: ALICE_TOKEN }], { status: 'FINALIZED' });
     expect(await (await caller()).resumeSession({ token: 'share-1', personToken: ALICE_TOKEN })).toEqual({
       personIndex: 0,
+      personId: pid(0),
       name: 'Alice',
     });
+  });
+
+  test("gives people saved before person ids existed their ids, and returns the caller's", async () => {
+    claimSession([{ name: 'Host' }, { name: 'Alice', personToken: ALICE_TOKEN }], { legacy: true });
+    const resumed = await (await caller()).resumeSession({ token: 'share-1', personToken: ALICE_TOKEN });
+    const saved = savedPeople() as { id: string }[];
+    expect(saved.map((p) => p.id)).toEqual([expect.stringMatching(UUID), expect.stringMatching(UUID)]);
+    expect(resumed).toEqual({ personIndex: 1, personId: saved[1]!.id, name: 'Alice' });
   });
 });
 
 describe('guest.getSession people', () => {
-  test('says which people have joined without exposing their tokens or join keys', async () => {
+  test('says which people have joined without exposing their tokens, join keys or save keys', async () => {
     claimSession([
       { name: 'Host' },
-      { name: 'Alice', personToken: ALICE_TOKEN, groupSize: 2, join: liveJoin('alice') },
+      { name: 'Alice', personToken: ALICE_TOKEN, groupSize: 2, join: liveJoin('alice'), saves: [ALICE_SAVE] },
     ]);
     const session = await (await caller()).getSession({ token: 'share-1' });
     expect(session.people).toEqual([
-      { name: 'Host', groupSize: 1, hasJoined: false },
-      { name: 'Alice', groupSize: 2, hasJoined: true },
+      { id: pid(0), name: 'Host', groupSize: 1, hasJoined: false },
+      { id: pid(1), name: 'Alice', groupSize: 2, hasJoined: true },
     ]);
     expect(JSON.stringify(session)).not.toContain(ALICE_TOKEN);
     expect(JSON.stringify(session)).not.toContain(JOIN_KEY);
+    expect(JSON.stringify(session)).not.toContain(ALICE_SAVE.key);
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
   });
 
-  test("a finalized split's public result doesn't expose tokens or join keys either", async () => {
-    claimSession([{ name: 'Host' }, { name: 'Alice', personToken: ALICE_TOKEN, join: liveJoin('alice') }], {
+  test('gives people saved before person ids existed their ids once, and lists the saved ids', async () => {
+    claimSession([{ name: 'Host' }, { name: 'Alice', personToken: ALICE_TOKEN }], { legacy: true });
+    const session = await (await caller()).getSession({ token: 'share-1' });
+    expect(mockDb.guestSplit.update).toHaveBeenCalledOnce();
+    const saved = savedPeople() as { id: string }[];
+    expect(saved).toEqual([
+      { id: expect.stringMatching(UUID), name: 'Host' },
+      { id: expect.stringMatching(UUID), name: 'Alice', personToken: ALICE_TOKEN },
+    ]);
+    expect(session.people.map((p) => p.id)).toEqual(saved.map((p) => p.id));
+  });
+
+  test('gives ids to the people of a finalized split saved before person ids existed', async () => {
+    claimSession([{ name: 'Host' }, { name: 'Alice', personToken: ALICE_TOKEN }], {
+      legacy: true,
       status: 'FINALIZED',
     });
+    const session = await (await caller()).getSession({ token: 'share-1' });
+    const saved = savedPeople() as { id: string }[];
+    expect(saved.map((p) => p.id)).toEqual([expect.stringMatching(UUID), expect.stringMatching(UUID)]);
+    expect(session.people.map((p) => p.id)).toEqual(saved.map((p) => p.id));
+  });
+
+  test('keeps the ids another request saved first', async () => {
+    // The first read has no ids; by the time the transaction reads again, another request gave them
+    const legacy = [{ name: 'Host' }, { name: 'Alice', personToken: ALICE_TOKEN }];
+    claimSession(legacy, { legacy: true });
+    const stored: unknown = await mockDb.guestSplit.findUnique();
+    mockDb.guestSplit.findUnique.mockClear();
+    mockDb.guestSplit.findUnique
+      .mockResolvedValueOnce(stored)
+      .mockResolvedValueOnce({ ...(stored as object), people: withIds(legacy) });
+    const session = await (await caller()).getSession({ token: 'share-1' });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+    expect(session.people.map((p) => p.id)).toEqual([pid(0), pid(1)]);
+  });
+
+  test("a finalized split's public result doesn't expose tokens, join keys or save keys either", async () => {
+    claimSession(
+      [{ name: 'Host' }, { name: 'Alice', personToken: ALICE_TOKEN, join: liveJoin('alice'), saves: [ALICE_SAVE] }],
+      { status: 'FINALIZED' },
+    );
     const split = await (await caller()).getSplit({ token: 'share-1' });
     expect(split.people).toEqual([
       { name: 'Host', groupSize: 1, hasJoined: false },
@@ -423,5 +652,928 @@ describe('guest.getSession people', () => {
     ]);
     expect(JSON.stringify(split)).not.toContain(ALICE_TOKEN);
     expect(JSON.stringify(split)).not.toContain(JOIN_KEY);
+    expect(JSON.stringify(split)).not.toContain(ALICE_SAVE.key);
   });
+});
+
+describe('guest.createClaimSession', () => {
+  const session = {
+    receiptData: { subtotal: 100, tax: 0, tip: 0, total: 100, currency: 'USD' },
+    items: [{ name: 'Tea', quantity: 1, unitPrice: 100, totalPrice: 100 }],
+  };
+
+  function created() {
+    return (
+      mockDb.guestSplit.create.mock.calls[0]![0] as {
+        data: { people: { id: string; name: string; personToken?: string }[]; paidByIndex: number };
+      }
+    ).data;
+  }
+
+  beforeEach(() => {
+    mockDb.guestSplit.create.mockResolvedValue({ id: 'gs1', shareToken: 'share-token-123' });
+  });
+
+  test('gives the creator and the payer ids', async () => {
+    const result = await (await caller()).createClaimSession({ ...session, creatorName: 'Host', paidByName: 'Payer' });
+    const { people } = created();
+    expect(people).toEqual([
+      { id: expect.stringMatching(UUID), name: 'Host' },
+      { id: expect.stringMatching(UUID), name: 'Payer' },
+    ]);
+    expect(people[0]!.id).not.toBe(people[1]!.id);
+    // Nobody is joined unless the client asks: older clients join the creator by name afterwards
+    expect(result).toEqual({ shareToken: 'share-token-123', creator: null });
+  });
+
+  // #263: Share Link dropped everyone typed on "Who's splitting?" except the payer
+  test('lists everyone typed, in order, with the payer where they were typed', async () => {
+    await (
+      await caller()
+    ).createClaimSession({ ...session, people: ['Dana', 'Pat', 'Lee'], creatorName: 'Pat', paidByName: 'Pat' });
+    const { people, paidByIndex } = created();
+    expect(people.map((p) => p.name)).toEqual(['Dana', 'Pat', 'Lee']);
+    expect(new Set(people.map((p) => p.id)).size).toBe(3);
+    expect(paidByIndex).toBe(1);
+  });
+
+  test('lists a name typed twice once, as first typed, since people join by name', async () => {
+    await (
+      await caller()
+    ).createClaimSession({ ...session, people: ['Pat', 'dana', ' Dana '], creatorName: 'pat', paidByName: 'PAT' });
+    const { people, paidByIndex } = created();
+    expect(people.map((p) => p.name)).toEqual(['Pat', 'dana']);
+    expect(paidByIndex).toBe(0);
+  });
+
+  test('adds the creator and the payer when the list leaves them out', async () => {
+    await (await caller()).createClaimSession({ ...session, people: ['Dana'], creatorName: 'Host', paidByName: 'Pat' });
+    const { people, paidByIndex } = created();
+    expect(people.map((p) => p.name)).toEqual(['Dana', 'Host', 'Pat']);
+    expect(paidByIndex).toBe(2);
+  });
+
+  test('refuses more than 100 people, the most a session can hold', async () => {
+    const hundred = Array.from({ length: 100 }, (_, i) => `Person ${i}`);
+    await expect(
+      (await caller()).createClaimSession({ ...session, people: hundred, creatorName: 'Host', paidByName: 'Host' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockDb.guestSplit.create).not.toHaveBeenCalled();
+  });
+
+  // #263: the creator landed on the join form, and whoever opened the link first could take the payer's place
+  test('joins the creator when asked, returning the identity their device stores', async () => {
+    const result = await (
+      await caller()
+    ).createClaimSession({
+      ...session,
+      people: ['Dana', 'Pat'],
+      creatorName: 'Pat',
+      paidByName: 'Pat',
+      joinCreator: true,
+    });
+    const { people } = created();
+    expect(result).toEqual({
+      shareToken: 'share-token-123',
+      creator: { personId: people[1]!.id, personToken: expect.stringMatching(UUID), name: 'Pat' },
+    });
+    expect(people[1]!.personToken).toBe(result.creator!.personToken);
+    expect(people[0]!.personToken).toBeUndefined();
+  });
+});
+
+function savedAssignments() {
+  const call = mockDb.guestSplit.update.mock.calls.at(-1)?.[0] as { data: { assignments: unknown } } | undefined;
+  return call?.data.assignments;
+}
+
+const D_TOKEN = '33333333-3333-4333-8333-333333333333';
+
+function items(n: number) {
+  return Array.from({ length: n }, (_, i) => ({ name: `Item ${i}`, quantity: 1, unitPrice: 100, totalPrice: 100 }));
+}
+
+// Issue #205: B (index 1) was removed on another device, so C moved from index 2 to 1 and D
+// from 3 to 2. C's page still had the old indexes. D has claimed item 1.
+function sessionAfterBWasRemoved() {
+  claimSession(
+    [
+      { id: pid(0), name: 'A', personToken: ALICE_TOKEN },
+      { id: pid(2), name: 'C', personToken: OTHER_TOKEN },
+      { id: pid(3), name: 'D', personToken: D_TOKEN },
+    ],
+    { items: items(3), assignments: [{ itemIndex: 1, personIndices: [2] }] },
+  );
+}
+
+describe('claim-session write limits (#204)', () => {
+  const writes = [
+    {
+      action: 'claim',
+      call: (api: Awaited<ReturnType<typeof caller>>) =>
+        api.claimItems({ token: 'share-1', personToken: ALICE_TOKEN, personId: pid(1), claimedItemIndices: [0] }),
+    },
+    {
+      action: 'edit-name',
+      call: (api: Awaited<ReturnType<typeof caller>>) =>
+        api.editPersonName({ token: 'share-1', personToken: ALICE_TOKEN, targetId: pid(1), newName: 'X' }),
+    },
+    {
+      action: 'remove-person',
+      call: (api: Awaited<ReturnType<typeof caller>>) =>
+        api.removePerson({ token: 'share-1', personToken: ALICE_TOKEN, targetId: pid(1) }),
+    },
+    {
+      action: 'split-item',
+      call: (api: Awaited<ReturnType<typeof caller>>) =>
+        api.splitClaimItem({ token: 'share-1', personToken: ALICE_TOKEN, itemIndex: 0, splitQuantity: 1 }),
+    },
+  ];
+
+  test.each(writes)(
+    "$action: refuses with TOO_MANY_REQUESTS once the caller's own budget is spent",
+    async ({ action, call }) => {
+      checkRateLimit.mockReturnValue({ allowed: false, retryAfterMs: 30_000 });
+      await expect(call(await caller())).rejects.toMatchObject({ code: 'TOO_MANY_REQUESTS' });
+      expect(checkRateLimit).toHaveBeenCalledWith(
+        `guest-${action}-person:${JSON.stringify(['share-1', ALICE_TOKEN])}`,
+        30,
+        60_000,
+      );
+      expect(mockDb.$transaction).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each(writes)(
+    "$action: refuses with TOO_MANY_REQUESTS once the share token's budget is spent, spending nothing",
+    async ({ action, call }) => {
+      peekRateLimit.mockReturnValue({ allowed: false, retryAfterMs: 30_000 });
+      await expect(call(await caller())).rejects.toMatchObject({ code: 'TOO_MANY_REQUESTS' });
+      expect(peekRateLimit).toHaveBeenCalledWith(`guest-${action}:share-1`, 300);
+      expect(checkRateLimit).not.toHaveBeenCalled();
+      expect(mockDb.$transaction).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe('guest.getSession read limit (#204)', () => {
+  test("refuses with TOO_MANY_REQUESTS once the share token's read budget is spent", async () => {
+    checkRateLimit.mockReturnValue({ allowed: false, retryAfterMs: 30_000 });
+    await expect((await caller()).getSession({ token: 'share-1' })).rejects.toMatchObject({
+      code: 'TOO_MANY_REQUESTS',
+    });
+    expect(checkRateLimit).toHaveBeenCalledWith('guest-session-read:share-1', 3000, 60_000);
+    expect(mockDb.guestSplit.findUnique).not.toHaveBeenCalled();
+  });
+});
+
+describe('guest.claimItems with added and removed items (#226)', () => {
+  // Cat's own phone saved items 0 and 1 while Ann's page was editing Cat's claims
+  function catSavedMeanwhile() {
+    claimSession(
+      [
+        { id: pid(0), name: 'Ann', personToken: ALICE_TOKEN },
+        { id: pid(1), name: 'Cat', personToken: OTHER_TOKEN },
+      ],
+      {
+        items: items(3),
+        assignments: [
+          { itemIndex: 0, personIndices: [1] },
+          { itemIndex: 1, personIndices: [1] },
+        ],
+      },
+    );
+  }
+
+  const forCat = (edits: { addItemIndices?: number[]; removeItemIndices?: number[] }) => ({
+    token: 'share-1',
+    personToken: ALICE_TOKEN,
+    personId: pid(1),
+    ...edits,
+  });
+
+  test('adds to the claims stored now, keeping the ones another device saved meanwhile', async () => {
+    catSavedMeanwhile();
+    await (await caller()).claimItems(forCat({ addItemIndices: [2] }));
+    expect(savedAssignments()).toEqual([
+      { itemIndex: 0, personIndices: [1] },
+      { itemIndex: 1, personIndices: [1] },
+      { itemIndex: 2, personIndices: [1] },
+    ]);
+  });
+
+  test('removes only the items named', async () => {
+    catSavedMeanwhile();
+    await (await caller()).claimItems(forCat({ removeItemIndices: [0] }));
+    expect(savedAssignments()).toEqual([{ itemIndex: 1, personIndices: [1] }]);
+  });
+
+  test('adds and removes in one save', async () => {
+    catSavedMeanwhile();
+    await (await caller()).claimItems(forCat({ addItemIndices: [2], removeItemIndices: [0] }));
+    expect(savedAssignments()).toEqual([
+      { itemIndex: 1, personIndices: [1] },
+      { itemIndex: 2, personIndices: [1] },
+    ]);
+  });
+
+  test('adding an item the person has, or removing one they lack, changes nothing', async () => {
+    catSavedMeanwhile();
+    await (await caller()).claimItems(forCat({ addItemIndices: [0], removeItemIndices: [2] }));
+    expect(savedAssignments()).toEqual([
+      { itemIndex: 0, personIndices: [1] },
+      { itemIndex: 1, personIndices: [1] },
+    ]);
+  });
+
+  test("leaves other people's claims on the same items alone", async () => {
+    claimSession(
+      [
+        { id: pid(0), name: 'Ann', personToken: ALICE_TOKEN },
+        { id: pid(1), name: 'Cat', personToken: OTHER_TOKEN },
+      ],
+      { items: items(2), assignments: [{ itemIndex: 0, personIndices: [0, 1] }] },
+    );
+    await (await caller()).claimItems(forCat({ addItemIndices: [1], removeItemIndices: [0] }));
+    expect(savedAssignments()).toEqual([
+      { itemIndex: 0, personIndices: [0] },
+      { itemIndex: 1, personIndices: [1] },
+    ]);
+  });
+
+  test('refuses an item named as both added and removed', async () => {
+    catSavedMeanwhile();
+    await expect(
+      (await caller()).claimItems(forCat({ addItemIndices: [2], removeItemIndices: [2] })),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test('refuses an item index past the end, added or removed', async () => {
+    catSavedMeanwhile();
+    const api = await caller();
+    await expect(api.claimItems(forCat({ addItemIndices: [3] }))).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(api.claimItems(forCat({ removeItemIndices: [3] }))).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test('refuses a request that sends the whole claim set and changes too, or neither', async () => {
+    catSavedMeanwhile();
+    const api = await caller();
+    await expect(
+      api.claimItems({ ...forCat({ addItemIndices: [2] }), claimedItemIndices: [0, 2] }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(api.claimItems(forCat({}))).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test('the whole claim set still replaces what is stored (older clients)', async () => {
+    catSavedMeanwhile();
+    await (await caller()).claimItems({ ...forCat({}), claimedItemIndices: [2] });
+    expect(savedAssignments()).toEqual([{ itemIndex: 2, personIndices: [1] }]);
+  });
+});
+
+describe('guest.claimItems with a save key (#238)', () => {
+  const SAVE_KEY = '55555555-5555-4555-8555-555555555555';
+
+  const forCat = (edits: {
+    addItemIndices?: number[];
+    removeItemIndices?: number[];
+    claimedItemIndices?: number[];
+  }) => ({
+    token: 'share-1',
+    personToken: ALICE_TOKEN,
+    personId: pid(1),
+    saveKey: SAVE_KEY,
+    ...edits,
+  });
+
+  // Ann's page saves for Cat; `annSaves` is what Ann's person has recorded of her earlier saves
+  function session(
+    assignments: { itemIndex: number; personIndices: number[] }[],
+    annSaves?: { key: string; hash: string }[],
+  ) {
+    claimSession(
+      [
+        { id: pid(0), name: 'Ann', personToken: ALICE_TOKEN, ...(annSaves ? { saves: annSaves } : {}) },
+        { id: pid(1), name: 'Cat', personToken: OTHER_TOKEN },
+      ],
+      { items: items(3), assignments },
+    );
+  }
+
+  // The session as the last save stored it (its people, with the keys recorded), as the next
+  // request reads it; `assignments` stands in for what other devices changed since
+  function storedSinceLastSave(assignments?: { itemIndex: number; personIndices: number[] }[]) {
+    const saved = mockDb.guestSplit.update.mock.calls.at(-1)?.[0] as {
+      data: { people: TestPerson[]; assignments: { itemIndex: number; personIndices: number[] }[] };
+    };
+    claimSession(saved.data.people, { items: items(3), assignments: assignments ?? saved.data.assignments });
+    mockDb.guestSplit.update.mockClear();
+  }
+
+  test("records the key on the caller's person with the save", async () => {
+    session([]);
+    await (await caller()).claimItems(forCat({ addItemIndices: [2] }));
+    expect(savedAssignments()).toEqual([{ itemIndex: 2, personIndices: [1] }]);
+    const people = savedPeople() as { saves?: { key: string }[] }[];
+    expect(people[0]!.saves?.map((s) => s.key)).toEqual([SAVE_KEY]);
+    expect(people[1]!.saves).toBeUndefined();
+  });
+
+  test('a retry of a stored save answers saved without applying it again', async () => {
+    session([]);
+    const api = await caller();
+    await api.claimItems(forCat({ addItemIndices: [2] }));
+    // Ann's page never got the answer; meanwhile Cat's own phone unclaimed the pie
+    storedSinceLastSave([]);
+
+    const answer = await api.claimItems(forCat({ addItemIndices: [2] }));
+    expect(answer).toEqual({ success: true, conflicts: [] });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test('a retry of a whole-claim-set save answers saved without applying it again', async () => {
+    session([]);
+    const api = await caller();
+    await api.claimItems(forCat({ claimedItemIndices: [2] }));
+    storedSinceLastSave([]);
+    expect(await api.claimItems(forCat({ claimedItemIndices: [2] }))).toEqual({ success: true, conflicts: [] });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test('matches a retry that lists an item twice', async () => {
+    session([]);
+    const api = await caller();
+    await api.claimItems(forCat({ addItemIndices: [2] }));
+    storedSinceLastSave();
+    await api.claimItems(forCat({ addItemIndices: [2, 2] }));
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test('matches a retry whatever order it lists the items in', async () => {
+    session([]);
+    const api = await caller();
+    await api.claimItems(forCat({ addItemIndices: [0, 2], removeItemIndices: [1] }));
+    storedSinceLastSave();
+    await api.claimItems(forCat({ addItemIndices: [2, 0], removeItemIndices: [1] }));
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test("a replay reports the conflicts on the person's claims as stored now", async () => {
+    session([]);
+    const api = await caller();
+    await api.claimItems(forCat({ addItemIndices: [2] }));
+    // Meanwhile Ann claimed the pie for herself too
+    storedSinceLastSave([{ itemIndex: 2, personIndices: [1, 0] }]);
+    const answer = await api.claimItems(forCat({ addItemIndices: [2] }));
+    expect(answer).toEqual({ success: true, conflicts: [{ itemIndex: 2, claimedBy: ['Ann'] }] });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test('refuses the same key with different changes, and saves nothing', async () => {
+    session([]);
+    const api = await caller();
+    await api.claimItems(forCat({ addItemIndices: [2] }));
+    storedSinceLastSave();
+    await expect(api.claimItems(forCat({ addItemIndices: [1] }))).rejects.toMatchObject({ code: 'CONFLICT' });
+    await expect(api.claimItems({ ...forCat({ addItemIndices: [2] }), personId: pid(0) })).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
+    await expect(api.claimItems(forCat({ claimedItemIndices: [2] }))).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test("another person's save key isn't the caller's: it applies as a new save", async () => {
+    session([]);
+    await (await caller()).claimItems(forCat({ addItemIndices: [2] }));
+    storedSinceLastSave();
+    // Cat's phone happens to send the same key
+    await (await caller()).claimItems({ ...forCat({ removeItemIndices: [2] }), personToken: OTHER_TOKEN });
+    expect(savedAssignments()).toEqual([]);
+  });
+
+  test('keeps only the last 10 keys a person saved with', async () => {
+    const older = Array.from({ length: 10 }, (_, i) => ({
+      key: `66666666-6666-4666-8666-${String(i).padStart(12, '0')}`,
+      hash: 'x',
+    }));
+    session([], older);
+    await (await caller()).claimItems(forCat({ addItemIndices: [2] }));
+    const people = savedPeople() as { saves?: { key: string }[] }[];
+    expect(people[0]!.saves?.map((s) => s.key)).toEqual([...older.slice(1).map((s) => s.key), SAVE_KEY]);
+  });
+
+  test('without a save key, records nothing and leaves the people alone', async () => {
+    session([]);
+    await (
+      await caller()
+    ).claimItems({ token: 'share-1', personToken: ALICE_TOKEN, personId: pid(1), addItemIndices: [2] });
+    const call = mockDb.guestSplit.update.mock.calls.at(-1)?.[0] as { data: Record<string, unknown> };
+    expect(call.data).not.toHaveProperty('people');
+  });
+
+  test('a retry of a stored save answers saved even after the split was finalized', async () => {
+    session([]);
+    const api = await caller();
+    await api.claimItems(forCat({ addItemIndices: [2] }));
+    const stored = mockDb.guestSplit.update.mock.calls.at(-1)?.[0] as {
+      data: { people: TestPerson[]; assignments: { itemIndex: number; personIndices: number[] }[] };
+    };
+    claimSession(stored.data.people, { items: items(3), assignments: stored.data.assignments, status: 'FINALIZED' });
+    mockDb.guestSplit.update.mockClear();
+    expect(await api.claimItems(forCat({ addItemIndices: [2] }))).toEqual({ success: true, conflicts: [] });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+    // A new save is still refused
+    await expect(
+      api.claimItems({ ...forCat({ addItemIndices: [1] }), saveKey: '88888888-8888-4888-8888-888888888888' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+
+  test('a retry of a stored save answers saved, with no conflicts, after the person was removed', async () => {
+    session([]);
+    const api = await caller();
+    await api.claimItems(forCat({ addItemIndices: [2] }));
+    const stored = mockDb.guestSplit.update.mock.calls.at(-1)?.[0] as { data: { people: TestPerson[] } };
+    // Cat was removed, and her claims with her
+    claimSession([stored.data.people[0]!], { items: items(3), assignments: [] });
+    mockDb.guestSplit.update.mockClear();
+    expect(await api.claimItems(forCat({ addItemIndices: [2] }))).toEqual({ success: true, conflicts: [] });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test('records a short digest of the changes, not the changes', async () => {
+    session([]);
+    await (await caller()).claimItems(forCat({ addItemIndices: [0, 1, 2] }));
+    const people = savedPeople() as { saves?: { hash: string }[] }[];
+    expect(people[0]!.saves?.[0]?.hash).toMatch(/^[A-Za-z0-9_-]{16}$/);
+  });
+
+  test('ignores save records that are not well formed, and drops them with the next save', async () => {
+    const junk = [null, 'x', { key: 1, hash: 'y' }, { key: SAVE_KEY }] as unknown as { key: string; hash: string }[];
+    session([], junk);
+    await (await caller()).claimItems(forCat({ addItemIndices: [2] }));
+    expect(savedAssignments()).toEqual([{ itemIndex: 2, personIndices: [1] }]);
+    const people = savedPeople() as { saves?: { key: string }[] }[];
+    expect(people[0]!.saves?.map((s) => s.key)).toEqual([SAVE_KEY]);
+  });
+
+  test('refuses a save key that is not a UUID', async () => {
+    session([]);
+    await expect(
+      (await caller()).claimItems({ ...forCat({ addItemIndices: [2] }), saveKey: 'not-a-uuid' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('claim-session transactions when the database is busy (#203)', () => {
+  test('a mutation answers SERVICE_UNAVAILABLE when no pool connection frees up in time', async () => {
+    const busy = Object.assign(new Error('Transaction API error: Unable to start a transaction in the given time.'), {
+      name: 'TransactionManagerError',
+      code: 'P2028',
+    });
+    mockDb.$transaction.mockRejectedValueOnce(busy);
+    await expect(
+      (await caller()).claimItems({
+        token: 'share-1',
+        personToken: ALICE_TOKEN,
+        personId: pid(1),
+        claimedItemIndices: [0],
+      }),
+    ).rejects.toMatchObject({
+      code: 'SERVICE_UNAVAILABLE',
+      message: 'ShareTab is busy right now. Please try again in a moment.',
+    });
+    expect(mockDb.$transaction).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('guest.claimItems', () => {
+  test("saves claims for the person the id names, wherever they are now, leaving others' alone", async () => {
+    sessionAfterBWasRemoved();
+    await (
+      await caller()
+    ).claimItems({ token: 'share-1', personToken: OTHER_TOKEN, personId: pid(2), claimedItemIndices: [0] });
+    expect(savedAssignments()).toEqual([
+      { itemIndex: 1, personIndices: [2] },
+      { itemIndex: 0, personIndices: [1] },
+    ]);
+  });
+
+  test('refuses an id nobody has any more with CONFLICT, and saves nothing', async () => {
+    sessionAfterBWasRemoved();
+    await expect(
+      (await caller()).claimItems({
+        token: 'share-1',
+        personToken: OTHER_TOKEN,
+        personId: pid(1),
+        claimedItemIndices: [0],
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test('refuses a person index, which can name whoever moved into that place, and no id at all (#225)', async () => {
+    sessionAfterBWasRemoved();
+    const api = await caller();
+    // Index inputs are gone from the schema; an older client (or a direct caller) can still send one
+    const claimItems = api.claimItems as unknown as (input: Record<string, unknown>) => Promise<unknown>;
+    await expect(
+      claimItems({ token: 'share-1', personToken: OTHER_TOKEN, personIndex: 1, claimedItemIndices: [0] }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(
+      claimItems({ token: 'share-1', personToken: OTHER_TOKEN, claimedItemIndices: [0] }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('guest.removePerson', () => {
+  test('removes the person the id names, wherever they are now', async () => {
+    sessionAfterBWasRemoved();
+    await (await caller()).removePerson({ token: 'share-1', personToken: ALICE_TOKEN, targetId: pid(2) });
+    expect((savedPeople() as { id: string }[]).map((p) => p.id)).toEqual([pid(0), pid(3)]);
+    // D's claim moves down with D
+    expect(savedAssignments()).toEqual([{ itemIndex: 1, personIndices: [1] }]);
+  });
+
+  test('refuses an id nobody has any more with CONFLICT, and removes nobody', async () => {
+    sessionAfterBWasRemoved();
+    await expect(
+      (await caller()).removePerson({ token: 'share-1', personToken: ALICE_TOKEN, targetId: pid(1) }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test('refuses a target index, and no id at all (#225)', async () => {
+    sessionAfterBWasRemoved();
+    const removePerson = (await caller()).removePerson as unknown as (
+      input: Record<string, unknown>,
+    ) => Promise<unknown>;
+    await expect(removePerson({ token: 'share-1', personToken: ALICE_TOKEN, targetIndex: 1 })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    await expect(removePerson({ token: 'share-1', personToken: ALICE_TOKEN })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('guest.editPersonName', () => {
+  test('renames the person the id names, wherever they are now', async () => {
+    sessionAfterBWasRemoved();
+    await (
+      await caller()
+    ).editPersonName({ token: 'share-1', personToken: ALICE_TOKEN, targetId: pid(2), newName: 'Cee' });
+    expect((savedPeople() as { name: string }[]).map((p) => p.name)).toEqual(['A', 'Cee', 'D']);
+  });
+
+  test('refuses an id nobody has any more with CONFLICT, and renames nobody', async () => {
+    sessionAfterBWasRemoved();
+    await expect(
+      (await caller()).editPersonName({ token: 'share-1', personToken: ALICE_TOKEN, targetId: pid(1), newName: 'X' }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+});
+
+// The issue's three-person case: A, B, C joined and B was removed, so C is second and the old
+// index 2 is past the end
+function sessionAfterBWasRemovedFromThree() {
+  claimSession(
+    [
+      { id: pid(0), name: 'A', personToken: ALICE_TOKEN },
+      { id: pid(2), name: 'C', personToken: OTHER_TOKEN },
+    ],
+    { items: items(2) },
+  );
+}
+
+describe('guest.claimItems with three people', () => {
+  test('an id still finds the person whose old index is now past the end', async () => {
+    sessionAfterBWasRemovedFromThree();
+    await (
+      await caller()
+    ).claimItems({ token: 'share-1', personToken: OTHER_TOKEN, personId: pid(2), claimedItemIndices: [0] });
+    expect(savedAssignments()).toEqual([{ itemIndex: 0, personIndices: [1] }]);
+  });
+});
+
+describe('guest.editPersonName by index (#225)', () => {
+  test('refuses a target index, and no id at all', async () => {
+    sessionAfterBWasRemoved();
+    const editPersonName = (await caller()).editPersonName as unknown as (
+      input: Record<string, unknown>,
+    ) => Promise<unknown>;
+    const base = { token: 'share-1', personToken: ALICE_TOKEN, newName: 'X' };
+    await expect(editPersonName({ ...base, targetIndex: 1 })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(editPersonName(base)).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('guest.finalizeSession', () => {
+  function savedStatus() {
+    const call = mockDb.guestSplit.update.mock.calls.at(-1)?.[0] as { data: { status?: string } } | undefined;
+    return call?.data.status;
+  }
+
+  // As sessionAfterBWasRemoved, with every item claimed
+  function everyItemClaimed() {
+    claimSession(
+      [
+        { id: pid(0), name: 'A', personToken: ALICE_TOKEN },
+        { id: pid(2), name: 'C', personToken: OTHER_TOKEN },
+        { id: pid(3), name: 'D', personToken: D_TOKEN },
+      ],
+      {
+        items: items(3),
+        assignments: [
+          { itemIndex: 0, personIndices: [0] },
+          { itemIndex: 1, personIndices: [2] },
+          { itemIndex: 2, personIndices: [1, 2] },
+        ],
+      },
+    );
+  }
+
+  test('finalizes as the person the id names, wherever they are now', async () => {
+    everyItemClaimed();
+    await (await caller()).finalizeSession({ token: 'share-1', personToken: OTHER_TOKEN, personId: pid(2) });
+    expect(savedStatus()).toBe('FINALIZED');
+  });
+
+  test('refuses while an item has nobody, and finalizes nothing (#237)', async () => {
+    // Items 0 and 2 are unclaimed
+    sessionAfterBWasRemoved();
+    await expect(
+      (await caller()).finalizeSession({ token: 'share-1', personToken: OTHER_TOKEN, personId: pid(2) }),
+    ).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: 'Every item needs someone before the split can be finalized.',
+    });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test('counts an item whose claimants were all removed as unclaimed', async () => {
+    claimSession([{ id: pid(0), name: 'A', personToken: ALICE_TOKEN }], {
+      items: items(1),
+      assignments: [{ itemIndex: 0, personIndices: [] }],
+    });
+    await expect(
+      (await caller()).finalizeSession({ token: 'share-1', personToken: ALICE_TOKEN, personId: pid(0) }),
+    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test('checks the caller before the claims: a bad id or token is still CONFLICT or FORBIDDEN', async () => {
+    sessionAfterBWasRemoved();
+    const api = await caller();
+    await expect(
+      api.finalizeSession({ token: 'share-1', personToken: OTHER_TOKEN, personId: pid(1) }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    await expect(
+      api.finalizeSession({ token: 'share-1', personToken: OTHER_TOKEN, personId: pid(3) }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  test('refuses an id nobody has any more with CONFLICT', async () => {
+    sessionAfterBWasRemoved();
+    await expect(
+      (await caller()).finalizeSession({ token: 'share-1', personToken: OTHER_TOKEN, personId: pid(1) }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test("refuses someone else's id with the caller's token", async () => {
+    sessionAfterBWasRemoved();
+    await expect(
+      (await caller()).finalizeSession({ token: 'share-1', personToken: OTHER_TOKEN, personId: pid(3) }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+
+  test('refuses a person index, and no id at all (#225)', async () => {
+    sessionAfterBWasRemoved();
+    const finalizeSession = (await caller()).finalizeSession as unknown as (
+      input: Record<string, unknown>,
+    ) => Promise<unknown>;
+    await expect(finalizeSession({ token: 'share-1', personToken: OTHER_TOKEN, personIndex: 1 })).rejects.toMatchObject(
+      { code: 'BAD_REQUEST' },
+    );
+    await expect(finalizeSession({ token: 'share-1', personToken: OTHER_TOKEN })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+});
+
+// #265: deleting a Quick Split left its scanned receipt behind, with its items and image file
+describe('deleting a split', () => {
+  beforeEach(() => {
+    mockDb.guestSplit.findUnique.mockResolvedValue({ userId: 'user-1', receiptId: 'r1' });
+    mockDb.receipt.findMany.mockResolvedValue([{ id: 'r1', imagePath: 'receipts/r1.jpg' }]);
+    mockDb.guestSplit.findMany.mockResolvedValue([]);
+    mockDb.$queryRaw.mockResolvedValue([]);
+  });
+
+  test("deletes its receipt, and the image file once that's committed", async () => {
+    const api = await caller(signedIn);
+    await expect(api.deleteSplit({ id: 's1' })).resolves.toEqual({ success: true });
+
+    expect(mockDb.guestSplit.delete).toHaveBeenCalledWith({ where: { id: 's1' } });
+    // A group's receipt stays with the group, and so does one an expense was made from
+    expect(mockDb.receipt.findMany).toHaveBeenCalledWith({
+      where: { id: { in: ['r1'] }, groupId: null, expense: { is: null } },
+      select: { id: true, imagePath: true },
+    });
+    expect(mockDb.receipt.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['r1'] } } });
+    expect(removeReceiptFiles).toHaveBeenCalledWith(['receipts/r1.jpg']);
+    expect(removeReceiptFiles.mock.invocationCallOrder[0]!).toBeGreaterThan(
+      mockDb.receipt.deleteMany.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  test('keeps a receipt another split still shows', async () => {
+    mockDb.guestSplit.findMany.mockResolvedValue([{ receiptId: 'r1' }]);
+    const api = await caller(signedIn);
+    await api.deleteSplit({ id: 's1' });
+
+    expect(mockDb.guestSplit.delete).toHaveBeenCalledWith({ where: { id: 's1' } });
+    expect(mockDb.receipt.deleteMany).not.toHaveBeenCalled();
+    expect(removeReceiptFiles).toHaveBeenCalledWith([]);
+  });
+
+  // Two splits made from one receipt, deleted at the same moment, would each still
+  // see the other and both keep it
+  test('locks the receipt before checking who else uses it', async () => {
+    const api = await caller(signedIn);
+    await api.deleteSplit({ id: 's1' });
+
+    const lockCall = mockDb.$queryRaw.mock.calls.findIndex(([strings]) =>
+      /FROM "Receipt" WHERE "id" IN .* FOR UPDATE/.test((strings as string[]).join('?')),
+    );
+    expect(lockCall).toBeGreaterThanOrEqual(0);
+    const locked = mockDb.$queryRaw.mock.invocationCallOrder[lockCall]!;
+    expect(locked).toBeGreaterThan(mockDb.guestSplit.delete.mock.invocationCallOrder[0]!);
+    expect(mockDb.receipt.findMany.mock.invocationCallOrder[0]!).toBeGreaterThan(locked);
+    expect(mockDb.guestSplit.findMany.mock.invocationCallOrder[0]!).toBeGreaterThan(locked);
+  });
+
+  test('a split without a receipt deletes just the split', async () => {
+    mockDb.guestSplit.findUnique.mockResolvedValue({ userId: 'user-1', receiptId: null });
+    const api = await caller(signedIn);
+    await api.deleteSplit({ id: 's1' });
+
+    expect(mockDb.guestSplit.delete).toHaveBeenCalledWith({ where: { id: 's1' } });
+    expect(mockDb.receipt.findMany).not.toHaveBeenCalled();
+    expect(mockDb.receipt.deleteMany).not.toHaveBeenCalled();
+  });
+
+  test("someone else's split is refused, and nothing is deleted", async () => {
+    mockDb.guestSplit.findUnique.mockResolvedValue({ userId: 'user-2', receiptId: 'r1' });
+    const api = await caller(signedIn);
+    await expect(api.deleteSplit({ id: 's1' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(mockDb.guestSplit.delete).not.toHaveBeenCalled();
+    expect(mockDb.receipt.deleteMany).not.toHaveBeenCalled();
+    expect(removeReceiptFiles).not.toHaveBeenCalled();
+  });
+});
+
+// #265: each new split clears expired ones (in the background), now with the receipts
+// only they used
+describe('creating a split', () => {
+  test('clears a batch of expired splits with their receipts', async () => {
+    mockDb.guestSplit.create.mockResolvedValue({ id: 's1', shareToken: 'tok' });
+    const api = await caller();
+    await api.createSplit({
+      receiptData: { subtotal: 1000, tax: 0, tip: 0, total: 1000, currency: 'USD' },
+      items: [{ name: 'Pizza', quantity: 1, unitPrice: 1000, totalPrice: 1000 }],
+      people: [{ name: 'Pat' }],
+      assignments: [{ itemIndex: 0, personIndices: [0] }],
+    });
+    expect(deleteExpiredSplits).toHaveBeenCalledWith(mockDb, 100);
+    expect(mockDb.$queryRaw).not.toHaveBeenCalled();
+  });
+});
+
+// #265: a split made from a receipt while the receipt's last split or its group was being
+// deleted could be saved pointing at the receipt deleted a moment later
+describe('making a split from a receipt', () => {
+  const receiptData = { subtotal: 1000, tax: 0, tip: 0, total: 1000, currency: 'USD' };
+  const items = [{ name: 'Pizza', quantity: 1, unitPrice: 1000, totalPrice: 1000 }];
+  type Api = Awaited<ReturnType<typeof caller>>;
+  const makeSplit = {
+    createSplit: (api: Api) =>
+      api.createSplit({
+        receiptId: 'r1',
+        receiptData,
+        items,
+        people: [{ name: 'Pat' }],
+        assignments: [{ itemIndex: 0, personIndices: [0] }],
+      }),
+    createClaimSession: (api: Api) =>
+      api.createClaimSession({ receiptId: 'r1', receiptData, items, creatorName: 'Pat', paidByName: 'Pat' }),
+  };
+
+  const guestUpload = { isGuest: true, uploadedById: null, groupId: null };
+  const groupReceipt = { isGuest: false, uploadedById: 'owner', groupId: 'g1' };
+
+  beforeEach(() => {
+    mockDb.guestSplit.create.mockResolvedValue({ id: 's1', shareToken: 'tok' });
+    mockDb.groupMember.findUnique.mockResolvedValue(null);
+  });
+
+  // Codex on #319: a split's receipt is shown to anyone with its link, so making one from a
+  // group's receipt would publish a photo only the group could see
+  test.each(Object.keys(makeSplit) as (keyof typeof makeSplit)[])(
+    "%s refuses a group's receipt to someone outside the group",
+    async (name) => {
+      mockDb.$queryRaw.mockResolvedValue([groupReceipt]);
+      await expect(makeSplit[name](await caller())).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      await expect(makeSplit[name](await caller(signedIn))).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(mockDb.groupMember.findUnique).toHaveBeenCalledWith({
+        where: { userId_groupId: { userId: 'user-1', groupId: 'g1' } },
+      });
+      expect(mockDb.guestSplit.create).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each(Object.keys(makeSplit) as (keyof typeof makeSplit)[])(
+    "%s takes a group's receipt from a member of its group, and one outside a group from its uploader",
+    async (name) => {
+      mockDb.$queryRaw.mockResolvedValue([groupReceipt]);
+      mockDb.groupMember.findUnique.mockResolvedValue({ userId: 'user-1', groupId: 'g1' });
+      await makeSplit[name](await caller(signedIn));
+      mockDb.$queryRaw.mockResolvedValue([{ ...groupReceipt, groupId: null }]);
+      mockDb.groupMember.findUnique.mockResolvedValue(null);
+      await makeSplit[name](await caller({ user: { id: 'owner' } }));
+
+      expect(mockDb.guestSplit.create).toHaveBeenCalledTimes(2);
+      for (const [arg] of mockDb.guestSplit.create.mock.calls) {
+        expect(arg.data).toMatchObject({ receiptId: 'r1', receiptShared: true });
+      }
+    },
+  );
+
+  // Codex on #319: the same access the group's pages give (verifyReceiptAccess), so its
+  // uploader who has left the group can't share it either
+  test.each(Object.keys(makeSplit) as (keyof typeof makeSplit)[])(
+    "%s refuses a group's receipt to its uploader once they're not in the group",
+    async (name) => {
+      mockDb.$queryRaw.mockResolvedValue([groupReceipt]);
+      await expect(makeSplit[name](await caller({ user: { id: 'owner' } }))).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+      expect(mockDb.guestSplit.create).not.toHaveBeenCalled();
+    },
+  );
+
+  // Codex on #319: these procedures are public, so the session (a JWT, valid until it expires)
+  // hasn't been checked against the account
+  test.each(Object.keys(makeSplit) as (keyof typeof makeSplit)[])(
+    "%s refuses a group's receipt to a member whose account is suspended or was deleted",
+    async (name) => {
+      mockDb.$queryRaw.mockResolvedValue([groupReceipt]);
+      mockDb.groupMember.findUnique.mockResolvedValue({ userId: 'user-1', groupId: 'g1' });
+      for (const account of [{ suspendedAt: new Date() }, { suspendedAt: null, isPlaceholder: true }, null]) {
+        mockDb.user.findUnique.mockResolvedValue(account);
+        await expect(makeSplit[name](await caller(signedIn))).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      }
+      expect(mockDb.guestSplit.create).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each(Object.keys(makeSplit) as (keyof typeof makeSplit)[])(
+    '%s locks the receipt before saving the split',
+    async (name) => {
+      mockDb.$queryRaw.mockResolvedValue([guestUpload]);
+      await makeSplit[name](await caller());
+
+      const lockCall = mockDb.$queryRaw.mock.calls.findIndex(([strings]) =>
+        /FROM "Receipt" WHERE "id" = .* FOR KEY SHARE/.test((strings as string[]).join('?')),
+      );
+      expect(lockCall).toBeGreaterThanOrEqual(0);
+      expect(mockDb.$transaction).toHaveBeenCalled();
+      expect(mockDb.guestSplit.create.mock.invocationCallOrder[0]!).toBeGreaterThan(
+        mockDb.$queryRaw.mock.invocationCallOrder[lockCall]!,
+      );
+      expect(mockDb.guestSplit.create.mock.calls[0]![0].data).toMatchObject({ receiptId: 'r1', receiptShared: true });
+    },
+  );
+
+  test.each(Object.keys(makeSplit) as (keyof typeof makeSplit)[])(
+    '%s from a receipt deleted meanwhile is saved without it',
+    async (name) => {
+      mockDb.$queryRaw.mockResolvedValue([]);
+      await makeSplit[name](await caller());
+
+      expect(mockDb.guestSplit.create).toHaveBeenCalledTimes(1);
+      expect(mockDb.guestSplit.create.mock.calls[0]![0].data).not.toHaveProperty('receiptId');
+      expect(mockDb.guestSplit.create.mock.calls[0]![0].data).not.toHaveProperty('receiptShared');
+    },
+  );
 });

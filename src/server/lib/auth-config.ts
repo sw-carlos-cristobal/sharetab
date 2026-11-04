@@ -20,10 +20,16 @@ export interface OidcConfig {
   tokenAuthMethod: OidcTokenAuthMethod;
 }
 
+export interface GoogleConfig {
+  clientId: string;
+  clientSecret: string;
+}
+
 export interface AuthConfig {
   passwordLogin: boolean;
   magicLink: boolean;
   oidc: OidcConfig | null;
+  google: GoogleConfig | null;
   warnings: string[];
 }
 
@@ -95,19 +101,38 @@ function parseOidc(env: Env, warnings: string[]): OidcConfig | null {
   };
 }
 
+function parseGoogle(env: Env, warnings: string[]): GoogleConfig | null {
+  const clientId = read(env, 'GOOGLE_CLIENT_ID');
+  const clientSecret = read(env, 'GOOGLE_CLIENT_SECRET');
+  if (clientId === '' && clientSecret === '') return null;
+  if (clientId === '' || clientSecret === '') {
+    warnings.push(
+      `Google sign-in is disabled: ${clientId === '' ? 'GOOGLE_CLIENT_ID' : 'GOOGLE_CLIENT_SECRET'} not set.`,
+    );
+    return null;
+  }
+  return { clientId, clientSecret };
+}
+
 export function parseAuthConfig(env: Env): AuthConfig {
   const warnings: string[] = [];
   const oidc = parseOidc(env, warnings);
+  const google = parseGoogle(env, warnings);
   const magicLink = read(env, 'EMAIL_SERVER_HOST') !== '';
 
   let passwordLogin = !parseBoolean(env, 'DISABLE_PASSWORD_LOGIN', false, warnings);
   // Refuse to disable password login when no other sign-in method is
   // configured. (Whether existing accounts can use it is up to the admin; see
-  // README.) Google doesn't count: the login page has no Google button.
+  // README.) Google doesn't count: unlike OIDC (email linking) or magic link
+  // (any account, by its email), there's no way to move an existing account
+  // to Google, so every password account, usually the admin's included, would
+  // be locked out.
   if (!passwordLogin && !oidc && !magicLink) {
-    warnings.push('DISABLE_PASSWORD_LOGIN is ignored: neither OIDC nor magic link sign-in is configured.');
+    warnings.push(
+      'DISABLE_PASSWORD_LOGIN is ignored: neither OIDC nor magic link sign-in is configured (Google sign-in never links to an existing account).',
+    );
     passwordLogin = true;
   }
 
-  return { passwordLogin, magicLink, oidc, warnings };
+  return { passwordLogin, magicLink, oidc, google, warnings };
 }

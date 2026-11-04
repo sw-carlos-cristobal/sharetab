@@ -18,6 +18,8 @@ test.describe('Receipt Scanning UI', () => {
     await expect(page.getByText('Upload a receipt')).toBeVisible();
     await expect(page.getByLabel('Receipt image')).toBeVisible();
     await expect(page.getByText('AI will extract')).toBeVisible();
+    // The upload card doesn't show the server's AI provider setup (#280)
+    await expect(page.getByText(/Active provider|Fallback chain/)).toHaveCount(0);
   });
 
   test('7.3.7 — Add Expense link navigates correctly', async ({ page }) => {

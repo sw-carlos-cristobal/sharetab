@@ -118,7 +118,7 @@ test.describe('Mobile Admin Page', () => {
     });
 
     // Wait for data to load
-    await expect(storageSection.getByText('Receipts')).toBeVisible({ timeout: 30000 });
+    await expect(storageSection.getByText('Receipts', { exact: true })).toBeVisible({ timeout: 30000 });
     await expect(storageSection.getByText('Disk Usage')).toBeVisible();
 
     const cards = storageSection.locator("[data-slot='card']");

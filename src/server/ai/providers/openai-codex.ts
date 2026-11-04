@@ -4,7 +4,7 @@ import { receiptExtractionSchema } from '../schema';
 import { RECEIPT_EXTRACTION_PROMPT } from '../prompts/receipt-extraction';
 import { checkOpenAICodexHealth, getAccessTokenForApi, retryAfterUnauthorized } from '@/server/lib/openai-codex-login';
 
-const DEFAULT_MODEL = 'gpt-5.5';
+const DEFAULT_MODEL = 'gpt-6.1-sol';
 const CODEX_BASE_URL = 'https://chatgpt.com/backend-api/codex';
 const ORIGINATOR = 'codex_cli_rs';
 
@@ -245,12 +245,21 @@ async function performRequest(body: object): Promise<string> {
   }
 }
 
+/**
+ * The model to request: OPENAI_CODEX_MODEL, or the default when it's unset, blank or only
+ * spaces. A blanked Unraid template field or .env line sets it to '', which would otherwise be
+ * sent as the model name (#222).
+ */
+export function resolveCodexModel(model: string | undefined): string {
+  return model?.trim() || DEFAULT_MODEL;
+}
+
 export class OpenAICodexProvider implements AIProvider {
   readonly name = 'openai-codex';
   private model: string;
 
   constructor(model?: string) {
-    this.model = model ?? DEFAULT_MODEL;
+    this.model = resolveCodexModel(model);
   }
 
   async extractReceipt(

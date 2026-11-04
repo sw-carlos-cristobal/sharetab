@@ -1,12 +1,23 @@
 'use client';
 
 import { useSession } from 'next-auth/react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { trpc } from '@/lib/trpc';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Shield, Database, Package, Clock, FolderOpen, HardDrive, FileWarning, Loader2, RefreshCw } from 'lucide-react';
+import {
+  Shield,
+  Database,
+  Package,
+  Clock,
+  FolderOpen,
+  HardDrive,
+  FileWarning,
+  Loader2,
+  RefreshCw,
+  ReceiptText,
+} from 'lucide-react';
 
 import { AuditLogSection } from '@/components/admin/audit-log-section';
 import { RegistrationControlSection } from '@/components/admin/registration-control-section';
@@ -73,6 +84,7 @@ export default function AdminPage() {
 
 function SystemHealthSection() {
   const t = useTranslations('admin');
+  const locale = useLocale();
   const health = trpc.admin.getSystemHealth.useQuery(undefined, {
     refetchInterval: 30000,
   });
@@ -128,7 +140,7 @@ function SystemHealthSection() {
             <span className="text-sm font-medium">{data ? formatUptime(data.uptime) : '---'}</span>
             {data?.serverStartTime && (
               <p className="mt-1 text-xs text-muted-foreground">
-                {t('systemHealth.started', { time: new Date(data.serverStartTime).toLocaleString() })}
+                {t('systemHealth.started', { time: new Date(data.serverStartTime).toLocaleString(locale) })}
               </p>
             )}
           </CardContent>
@@ -145,6 +157,12 @@ function StorageStatsSection() {
   const storage = trpc.admin.getStorageStats.useQuery();
   const utils = trpc.useUtils();
   const cleanup = trpc.admin.cleanupOrphans.useMutation({
+    onSuccess: () => {
+      utils.admin.getStorageStats.invalidate();
+      utils.admin.getAuditLog.invalidate();
+    },
+  });
+  const cleanupUnused = trpc.admin.cleanupUnusedReceipts.useMutation({
     onSuccess: () => {
       utils.admin.getStorageStats.invalidate();
       utils.admin.getAuditLog.invalidate();
@@ -212,6 +230,44 @@ function StorageStatsSection() {
                 {t('storage.cleanedUp', { count: cleanup.data.deletedCount, size: cleanup.data.freedBytesFormatted })}
               </p>
             )}
+          </CardContent>
+        </Card>
+
+        <Card className="@2xl:col-span-2" data-testid="unused-receipts-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center justify-between">
+              <span className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                <ReceiptText className="h-4 w-4" />
+                {t('storage.unusedReceipts')}
+              </span>
+              {(data?.unusedReceiptCount ?? 0) > 0 && (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => cleanupUnused.mutate()}
+                  disabled={cleanupUnused.isPending}
+                >
+                  {cleanupUnused.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                  )}
+                  {t('storage.cleanUp')}
+                </Button>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold">{data?.unusedReceiptCount ?? 0}</p>
+            <p className="text-xs text-muted-foreground">
+              {t('storage.unusedDescription', { size: data?.unusedReceiptBytesFormatted ?? '0 B' })}
+            </p>
+            {cleanupUnused.isSuccess && (
+              <p className="mt-2 text-sm text-green-600">
+                {t('storage.unusedCleanedUp', { count: cleanupUnused.data.deletedCount })}
+              </p>
+            )}
+            {cleanupUnused.isError && <p className="mt-2 text-sm text-destructive">{cleanupUnused.error.message}</p>}
           </CardContent>
         </Card>
       </div>

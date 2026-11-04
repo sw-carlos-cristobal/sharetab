@@ -1,10 +1,11 @@
 import { z } from 'zod';
-import { TRPCError } from '@trpc/server';
+import { AppError } from '@/server/lib/app-error';
 import { createTRPCRouter, groupMemberProcedure } from '../init';
 import { SplitMode } from '@/generated/prisma/client';
-import { getExchangeRate, convertCents } from '../../lib/exchange-rates';
+import { getExchangeRate, convertCents, exchangeRateSchema } from '../../lib/exchange-rates';
 import { MAX_MONEY_CENTS } from '@/lib/money';
 import { stripUndefined } from '../../lib/strip-undefined';
+import { lockActiveGroup } from '../../lib/group-balances';
 
 const expenseShareSchema = z.object({
   userId: z.string(),
@@ -20,23 +21,92 @@ const expenseSharesArraySchema = z
     message: 'Duplicate user in shares',
   });
 
-const exchangeRateSchema = z.number().positive().finite().max(1_000_000);
+// Prisma's `contains` becomes `ILIKE '%' || term || '%'` with the term as given, so
+// escape LIKE's pattern characters for a search to match them literally (#479).
+function escapeLikePattern(term: string) {
+  return term.replace(/[\\%_]/g, '\\$&');
+}
+
+// expenses.list's cursor carries the first unseen expense's sort values rather than its
+// id, so the next page doesn't depend on that expense still existing or keeping its date:
+// looking it up by id ended the history when it was deleted and skipped expenses when it
+// was re-dated (#478).
+type ExpenseCursor = { expenseDate: Date; id: string };
+
+const expenseCursorSchema = z.tuple([z.iso.datetime(), z.string().min(1)]);
+
+function encodeExpenseCursor({ expenseDate, id }: ExpenseCursor) {
+  return Buffer.from(JSON.stringify([expenseDate.toISOString(), id])).toString('base64url');
+}
+
+function decodeExpenseCursor(token: string): ExpenseCursor | null {
+  let value: unknown;
+  try {
+    value = JSON.parse(Buffer.from(token, 'base64url').toString('utf8'));
+  } catch {
+    return null;
+  }
+  const parsed = expenseCursorSchema.safeParse(value);
+  return parsed.success ? { expenseDate: new Date(parsed.data[0]), id: parsed.data[1] } : null;
+}
 
 export const expensesRouter = createTRPCRouter({
   list: groupMemberProcedure
     .input(
       z.object({
         groupId: z.string(),
-        cursor: z.string().optional(),
+        cursor: z
+          .string()
+          .max(200)
+          .transform((token, ctx) => {
+            const cursor = decodeExpenseCursor(token);
+            if (!cursor) {
+              ctx.addIssue({ code: 'custom', message: 'Invalid cursor' });
+              return z.NEVER;
+            }
+            return cursor;
+          })
+          .optional(),
+        // PostgreSQL text can't hold a NUL byte, so the query would fail with a 500.
+        search: z
+          .string()
+          .trim()
+          .max(1000)
+          .refine((search) => !search.includes('\0'), 'Search contains a NUL byte')
+          .optional(),
         limit: z.number().int().min(1).max(100).default(20),
       }),
     )
     .query(async ({ ctx, input }) => {
+      const pattern = input.search ? escapeLikePattern(input.search) : undefined;
+      const { cursor } = input;
+      const filters = [
+        ...(pattern
+          ? [
+              {
+                OR: [
+                  { title: { contains: pattern, mode: 'insensitive' as const } },
+                  { description: { contains: pattern, mode: 'insensitive' as const } },
+                ],
+              },
+            ]
+          : []),
+        // The cursor's own expense comes first on its page: it wasn't shown yet.
+        ...(cursor
+          ? [
+              {
+                OR: [
+                  { expenseDate: { lt: cursor.expenseDate } },
+                  { expenseDate: cursor.expenseDate, id: { lte: cursor.id } },
+                ],
+              },
+            ]
+          : []),
+      ];
       const expenses = await ctx.db.expense.findMany({
-        where: { groupId: input.groupId },
+        where: { groupId: input.groupId, ...(filters.length > 0 ? { AND: filters } : {}) },
         take: input.limit + 1,
-        ...(input.cursor ? { cursor: { id: input.cursor } } : {}),
-        orderBy: { expenseDate: 'desc' },
+        orderBy: [{ expenseDate: 'desc' }, { id: 'desc' }],
         include: {
           paidBy: { select: { id: true, name: true, email: true, image: true } },
           shares: {
@@ -45,13 +115,9 @@ export const expensesRouter = createTRPCRouter({
         },
       });
 
-      let nextCursor: string | undefined;
-      if (expenses.length > input.limit) {
-        const next = expenses.pop();
-        nextCursor = next?.id;
-      }
-
-      return { expenses, nextCursor };
+      // The extra row fetched is the first unseen one.
+      const next = expenses.length > input.limit ? expenses.pop() : undefined;
+      return { expenses, nextCursor: next ? encodeExpenseCursor(next) : undefined };
     }),
 
   get: groupMemberProcedure
@@ -65,11 +131,10 @@ export const expensesRouter = createTRPCRouter({
           shares: {
             include: { user: { select: { id: true, name: true, email: true, image: true } } },
           },
-          receipt: true,
         },
       });
       if (!expense || expense.groupId !== input.groupId) {
-        throw new TRPCError({ code: 'NOT_FOUND' });
+        throw new AppError('NOT_FOUND');
       }
       return expense;
     }),
@@ -97,45 +162,20 @@ export const expensesRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      // Block expenses on archived groups
+      // Refuse an archived group before the checks and rate lookup below;
+      // lockActiveGroup in the transaction is the check that holds (#289)
       const group = await ctx.db.group.findUnique({
         where: { id: input.groupId },
         select: { archivedAt: true, currency: true },
       });
       if (group?.archivedAt) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'Cannot add expenses to an archived group',
-        });
-      }
-
-      // Validate paidById is a member of the group
-      const paidByMember = await ctx.db.groupMember.findFirst({
-        where: { groupId: input.groupId, userId: input.paidById },
-      });
-      if (!paidByMember) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Paid-by user is not a member of this group' });
-      }
-
-      // Validate all share userIds are group members
-      const shareUserIds = input.shares.map((s) => s.userId);
-      const memberCount = await ctx.db.groupMember.count({
-        where: { groupId: input.groupId, userId: { in: shareUserIds } },
-      });
-      if (memberCount !== new Set(shareUserIds).size) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'One or more share users are not members of this group',
-        });
+        throw new AppError('BAD_REQUEST', 'archivedAddExpense');
       }
 
       // Validate shares sum equals total (in expense's original currency)
       const sharesSum = input.shares.reduce((sum, s) => sum + s.amount, 0);
       if (sharesSum !== input.amount) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: `Shares sum (${sharesSum}) does not equal expense amount (${input.amount})`,
-        });
+        throw new AppError('BAD_REQUEST', 'sharesSumMismatch', { sum: sharesSum, amount: input.amount });
       }
 
       // Currency conversion: compute base currency amount if currencies differ
@@ -156,16 +196,34 @@ export const expensesRouter = createTRPCRouter({
         }
 
         if (exchangeRate === null) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'Could not fetch exchange rate. Please provide a manual rate or try again.',
-          });
+          throw new AppError('BAD_REQUEST', 'exchangeRateUnavailable');
         }
 
         baseCurrencyAmount = convertCents(input.amount, exchangeRate);
       }
 
       const expense = await ctx.db.$transaction(async (tx) => {
+        await lockActiveGroup(tx, input.groupId, 'archivedAddExpense');
+
+        // Validate paidById is a member of the group (after the lock, so someone
+        // leaving meanwhile is either gone or waits for this, #279). A placeholder
+        // removed from the group isn't (#284).
+        const paidByMember = await tx.groupMember.findFirst({
+          where: { groupId: input.groupId, userId: input.paidById, removedAt: null },
+        });
+        if (!paidByMember) {
+          throw new AppError('BAD_REQUEST', 'paidByNotMember');
+        }
+
+        // Validate all share userIds are group members
+        const shareUserIds = input.shares.map((s) => s.userId);
+        const memberCount = await tx.groupMember.count({
+          where: { groupId: input.groupId, userId: { in: shareUserIds }, removedAt: null },
+        });
+        if (memberCount !== new Set(shareUserIds).size) {
+          throw new AppError('BAD_REQUEST', 'shareUsersNotMembers');
+        }
+
         const created = await tx.expense.create({
           data: {
             groupId: input.groupId,
@@ -239,66 +297,36 @@ export const expensesRouter = createTRPCRouter({
         }),
     )
     .mutation(async ({ ctx, input }) => {
-      // Block updates on archived groups
+      // Refuse an archived group before the checks and rate lookup below;
+      // lockActiveGroup in the transaction is the check that holds (#289)
       const groupCheck = await ctx.db.group.findUnique({
         where: { id: input.groupId },
         select: { archivedAt: true, currency: true },
       });
       if (groupCheck?.archivedAt) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'Cannot modify expenses in an archived group',
-        });
+        throw new AppError('BAD_REQUEST', 'archivedEditExpense');
       }
 
       const existing = await ctx.db.expense.findUnique({
         where: { id: input.expenseId },
       });
       if (!existing || existing.groupId !== input.groupId) {
-        throw new TRPCError({ code: 'NOT_FOUND' });
+        throw new AppError('NOT_FOUND');
       }
 
       const isOwnerOrAdmin = ctx.membership.role === 'OWNER' || ctx.membership.role === 'ADMIN';
       const isCreatorOrPayer = existing.paidById === ctx.user.id || existing.addedById === ctx.user.id;
       if (!isOwnerOrAdmin && !isCreatorOrPayer) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'Only the expense creator, payer, or group owner/admin can modify this expense',
-        });
-      }
-
-      // Validate paidById is a member of the group (if provided)
-      if (input.paidById) {
-        const paidByMember = await ctx.db.groupMember.findFirst({
-          where: { groupId: input.groupId, userId: input.paidById },
-        });
-        if (!paidByMember) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Paid-by user is not a member of this group' });
-        }
+        throw new AppError('FORBIDDEN', 'onlyCreatorEditsExpense');
       }
 
       const { groupId, expenseId, shares, currency: inputCurrency, exchangeRate: inputExchangeRate, ...data } = input;
 
       if (shares) {
-        // Validate all share userIds are group members
-        const shareUserIds = shares.map((s) => s.userId);
-        const memberCount = await ctx.db.groupMember.count({
-          where: { groupId, userId: { in: shareUserIds } },
-        });
-        if (memberCount !== new Set(shareUserIds).size) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'One or more share users are not members of this group',
-          });
-        }
-
         const expectedAmount = data.amount ?? existing.amount;
         const sharesSum = shares.reduce((sum, s) => sum + s.amount, 0);
         if (sharesSum !== expectedAmount) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: `Shares sum (${sharesSum}) does not equal expense amount (${expectedAmount})`,
-          });
+          throw new AppError('BAD_REQUEST', 'sharesSumMismatch', { sum: sharesSum, amount: expectedAmount });
         }
       }
 
@@ -317,10 +345,7 @@ export const expensesRouter = createTRPCRouter({
           const dateStr = (data.expenseDate ?? existing.expenseDate.toISOString()).slice(0, 10);
           const fetched = await getExchangeRate(effectiveCurrency, groupCurrency, dateStr);
           if (fetched === null) {
-            throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message: 'Could not fetch exchange rate. Please provide a manual rate or try again.',
-            });
+            throw new AppError('BAD_REQUEST', 'exchangeRateUnavailable');
           }
           newExchangeRate = fetched;
         }
@@ -332,6 +357,46 @@ export const expensesRouter = createTRPCRouter({
       }
 
       const expense = await ctx.db.$transaction(async (tx) => {
+        await lockActiveGroup(tx, groupId, 'archivedEditExpense');
+
+        // Validate a new payer and the shares' people are members (after the lock,
+        // so someone leaving meanwhile is either gone or waits for this, #279). A
+        // placeholder removed from the group stays in the part they had in this
+        // expense, so editing it keeps that part theirs instead of moving it onto
+        // someone else, but isn't put in a part they didn't have (#284). Who has
+        // which part is read under the expense's row lock, so two edits at once
+        // can't each check against what the other is replacing.
+        const [stored] = await tx.$queryRaw<{ paidById: string }[]>`
+          SELECT "paidById" FROM "Expense" WHERE "id" = ${expenseId} FOR NO KEY UPDATE`;
+        const storedShareIds = (await tx.expenseShare.findMany({ where: { expenseId }, select: { userId: true } })).map(
+          (s) => s.userId,
+        );
+        if (input.paidById) {
+          const paidByMember = await tx.groupMember.findFirst({
+            where: {
+              groupId,
+              userId: input.paidById,
+              ...(input.paidById === stored?.paidById ? {} : { removedAt: null }),
+            },
+          });
+          if (!paidByMember) {
+            throw new AppError('BAD_REQUEST', 'paidByNotMember');
+          }
+        }
+        if (shares) {
+          const shareUserIds = shares.map((s) => s.userId);
+          const memberCount = await tx.groupMember.count({
+            where: {
+              groupId,
+              userId: { in: shareUserIds },
+              OR: [{ removedAt: null }, { userId: { in: storedShareIds } }],
+            },
+          });
+          if (memberCount !== new Set(shareUserIds).size) {
+            throw new AppError('BAD_REQUEST', 'shareUsersNotMembers');
+          }
+        }
+
         if (shares) {
           await tx.expenseShare.deleteMany({ where: { expenseId } });
           await tx.expenseShare.createMany({
@@ -380,29 +445,24 @@ export const expensesRouter = createTRPCRouter({
         select: { archivedAt: true },
       });
       if (groupCheck?.archivedAt) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'Cannot delete expenses from an archived group',
-        });
+        throw new AppError('BAD_REQUEST', 'archivedDeleteExpense');
       }
 
       const expense = await ctx.db.expense.findUnique({
         where: { id: input.expenseId },
       });
       if (!expense || expense.groupId !== input.groupId) {
-        throw new TRPCError({ code: 'NOT_FOUND' });
+        throw new AppError('NOT_FOUND');
       }
 
       const isOwnerOrAdmin = ctx.membership.role === 'OWNER' || ctx.membership.role === 'ADMIN';
       const isCreatorOrPayer = expense.paidById === ctx.user.id || expense.addedById === ctx.user.id;
       if (!isOwnerOrAdmin && !isCreatorOrPayer) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'Only the expense creator, payer, or group owner/admin can delete this expense',
-        });
+        throw new AppError('FORBIDDEN', 'onlyCreatorDeletesExpense');
       }
 
       await ctx.db.$transaction(async (tx) => {
+        await lockActiveGroup(tx, input.groupId, 'archivedDeleteExpense');
         await tx.expense.delete({ where: { id: input.expenseId } });
 
         await tx.activityLog.create({

@@ -1,7 +1,15 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { resolve } from 'path';
 
 const RECEIPT_PATH = resolve('e2e/receipts/coffee-shop.png');
+
+// The cards of the items named exactly `name`. Scope item assertions to these:
+// the receipt's own items can share words, quantities, and prices with the
+// items a test adds (the mock provider returns "Fish Tacos", two x3 items, and
+// four x2 items).
+function itemCards(page: Page, name: string) {
+  return page.locator('[data-testid^="guest-item-card-"]').filter({ has: page.getByText(name, { exact: true }) });
+}
 
 test.describe('Guest split — item split UI', () => {
   test.setTimeout(120_000);
@@ -36,41 +44,23 @@ test.describe('Guest split — item split UI', () => {
     await page.getByPlaceholder(/price/i).fill('20');
     await page.getByTestId('guest-add-item-submit').click();
 
-    // Wait for item to appear — find the Beer item with x4
-    await expect(page.getByText('Beer')).toBeVisible({ timeout: 5000 });
-    await expect(page.getByText('x4')).toBeVisible();
+    const beerRows = itemCards(page, 'Beer');
+    await expect(beerRows).toHaveCount(1, { timeout: 5000 });
+    await expect(beerRows.getByText('x4', { exact: true })).toBeVisible();
 
-    // === Step 4: Find and click the split button on the Beer item ===
-    // The Beer item is the last one added — find its index by looking for the split button
-    // near the x4 quantity badge
-    const beerItem = page.locator('[data-testid^="guest-split-btn-"]').last();
-    await expect(beerItem).toBeVisible();
-    await beerItem.click();
+    // === Step 4: Click the Beer item's split button ===
+    await beerRows.locator('[data-testid^="guest-split-btn-"]').click();
 
-    // === Step 5: Enter split quantity and submit ===
-    // Split off 2 of the 4
-    const splitQtyInput = page.locator('[data-testid^="guest-split-qty-"]').last();
-    await expect(splitQtyInput).toBeVisible();
-    await splitQtyInput.fill('2');
+    // === Step 5: Split off 2 of the 4 ===
+    await beerRows.locator('[data-testid^="guest-split-qty-"]').fill('2');
+    await beerRows.locator('[data-testid^="guest-split-submit-"]').click();
 
-    const splitSubmitBtn = page.locator('[data-testid^="guest-split-submit-"]').last();
-    await splitSubmitBtn.click();
-
-    // === Step 6: Verify the split result ===
-    // Should now have two Beer rows: one with x2 and one with x2
-    const beerLabels = page.getByText('Beer');
-    await expect(beerLabels).toHaveCount(await beerLabels.count()); // at least 2
-
-    // Both x2 quantities should be visible
-    const x2Badges = page.getByText('x2');
-    await expect(x2Badges.first()).toBeVisible();
-
-    // The x4 should no longer exist (it was split into two x2s)
-    await expect(page.getByText('x4')).not.toBeVisible();
-
-    // Verify prices: $10.00 each (20/2)
-    const tenDollarPrices = page.getByText('$10.00');
-    await expect(tenDollarPrices.first()).toBeVisible();
+    // === Step 6: Two Beer rows, each x2 at $10.00 (20/2) ===
+    await expect(beerRows).toHaveCount(2);
+    for (const row of await beerRows.all()) {
+      await expect(row.getByText('x2', { exact: true })).toBeVisible();
+      await expect(row.getByText('$10.00', { exact: true })).toBeVisible();
+    }
   });
 
   test('split button only appears on items with quantity > 1', async ({ page }) => {
@@ -94,7 +84,8 @@ test.describe('Guest split — item split UI', () => {
     await page.getByPlaceholder(/price/i).fill('3');
     await page.getByTestId('guest-add-item-submit').click();
 
-    await expect(page.getByText('Soda')).toBeVisible({ timeout: 5000 });
+    const sodaRows = itemCards(page, 'Soda');
+    await expect(sodaRows).toHaveCount(1, { timeout: 5000 });
 
     // Add a multi-quantity item
     await page.getByTestId('guest-add-item-btn').click();
@@ -103,16 +94,12 @@ test.describe('Guest split — item split UI', () => {
     await page.getByPlaceholder(/price/i).fill('15');
     await page.getByTestId('guest-add-item-submit').click();
 
-    await expect(page.getByText('Taco')).toBeVisible({ timeout: 5000 });
-    await expect(page.getByText('x3')).toBeVisible();
+    const tacoRows = itemCards(page, 'Taco');
+    await expect(tacoRows).toHaveCount(1, { timeout: 5000 });
+    await expect(tacoRows.getByText('x3', { exact: true })).toBeVisible();
 
-    // Split button should exist for Taco (qty 3) but not Soda (qty 1)
-    // Count split buttons — at least one should exist (for Taco and any other multi-qty items from the receipt)
-    const splitBtns = page.locator('[data-testid^="guest-split-btn-"]');
-    const count = await splitBtns.count();
-    expect(count).toBeGreaterThanOrEqual(1);
-
-    // Soda should NOT have a split button — verify by checking no scissors icon next to it
-    // (Soda has qty 1, so no split button rendered)
+    // A split button on Taco (qty 3), none on Soda (qty 1)
+    await expect(tacoRows.locator('[data-testid^="guest-split-btn-"]')).toHaveCount(1);
+    await expect(sodaRows.locator('[data-testid^="guest-split-btn-"]')).toHaveCount(0);
   });
 });

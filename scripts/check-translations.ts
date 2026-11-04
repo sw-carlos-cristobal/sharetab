@@ -1,26 +1,27 @@
 import { readFileSync, readdirSync, existsSync, statSync } from 'fs';
 import { join } from 'path';
+import { findMessageProblems, messageEntries } from './lib/message-check';
 
 const messagesDir = join(process.cwd(), 'messages');
 const sourceLocale = 'en';
 
-function getKeys(obj: Record<string, unknown>, prefix = ''): string[] {
-  const keys: string[] = [];
-  for (const [key, value] of Object.entries(obj)) {
-    const fullKey = prefix ? `${prefix}.${key}` : key;
-    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-      keys.push(...getKeys(value as Record<string, unknown>, fullKey));
-    } else {
-      keys.push(fullKey);
-    }
-  }
-  return keys;
+function getKeys(obj: Record<string, unknown>): string[] {
+  return messageEntries(obj).map(([key]) => key);
 }
 
+// A file that isn't valid JSON, or isn't a JSON object, reads as empty here; findMessageProblems
+// reports it (or the folder, when that isn't a supported language)
 function loadNamespace(locale: string, namespace: string): Record<string, unknown> {
   const filePath = join(messagesDir, locale, `${namespace}.json`);
   if (!existsSync(filePath)) return {};
-  return JSON.parse(readFileSync(filePath, 'utf-8'));
+  try {
+    const messages: unknown = JSON.parse(readFileSync(filePath, 'utf-8'));
+    return typeof messages === 'object' && messages !== null && !Array.isArray(messages)
+      ? (messages as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
 }
 
 const sourceDir = join(messagesDir, sourceLocale);
@@ -62,6 +63,14 @@ for (const locale of locales) {
       console.error(`[${locale}] Missing file: ${namespace}.json`);
     }
   }
+}
+
+// Folders that aren't a supported language, files that aren't valid JSON objects, messages
+// next-intl can't parse, and (#441) counts that skip plural rules: a count before a word outside a
+// cardinal plural, and a cardinal plural with no `one` form
+for (const problem of findMessageProblems(messagesDir)) {
+  hasErrors = true;
+  console.error(problem);
 }
 
 if (hasErrors) {

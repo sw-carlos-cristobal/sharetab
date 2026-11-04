@@ -22,6 +22,7 @@
     "saving": "Enregistrement...",
     "submit": "Envoyer",
     "openMenu": "Ouvrir le menu",
+    "toggleTheme": "Changer de thème",
     "copyFailed": "Impossible de copier le lien dans le presse-papiers"
   },
   "brand": {

@@ -2,8 +2,9 @@ name: Docker Fresh Install
 
 # Builds the production image and runs scripts/docker-smoke.sh against it:
 # a fresh install on an empty data volume, restarts the way every existing
-# install does on upgrade, and the Meridian provider starting inside the image
-# and running through the app. The Test workflow runs the app with
+# install does on upgrade, a clean docker stop, the Meridian provider starting
+# inside the image and running through the app, and the image running against
+# PostgreSQL in its own container (DATABASE_URL set). The Test workflow runs the app with
 # `npm run start` against its own database, so it never exercises the
 # entrypoint, the pre-push SQL migrations, or the packages the Dockerfile
 # adds. Run it locally with `npm run test:docker`.
@@ -22,6 +23,9 @@ concurrency:
 jobs:
   fresh-install:
     runs-on: ubuntu-latest
+    # The smoke test takes about 20 minutes; a hung docker call shouldn't hold
+    # the runner for six hours
+    timeout-minutes: 60
     permissions:
       contents: read
 
@@ -30,10 +34,10 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Build image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: docker/Dockerfile

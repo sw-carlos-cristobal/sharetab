@@ -18,12 +18,12 @@ import { EqualSplit } from '@/components/expenses/equal-split';
 import { ExactSplit } from '@/components/expenses/exact-split';
 import { PercentageSplit } from '@/components/expenses/percentage-split';
 import { SharesSplit } from '@/components/expenses/shares-split';
+import { ArchivedGroupNotice } from '@/components/groups/archived-group-notice';
+import { splitEditorSeed, type EditableSplitMode as SplitMode } from '@/lib/split-editor-seed';
 
 type RouterOutputs = inferRouterOutputs<AppRouter>;
 type ExpenseData = RouterOutputs['expenses']['get'];
 type GroupData = NonNullable<RouterOutputs['groups']['get']>;
-
-type SplitMode = 'EQUAL' | 'EXACT' | 'PERCENTAGE' | 'SHARES';
 
 type MemberInfo = {
   id: string;
@@ -58,6 +58,7 @@ export default function EditExpensePage({ params }: { params: Promise<{ groupId:
       </div>
     );
   }
+  if (group.data.archivedAt) return <ArchivedGroupNotice groupId={groupId} />;
 
   return <EditExpenseForm groupId={groupId} expenseId={expenseId} expense={expense.data} group={group.data} />;
 }
@@ -99,13 +100,24 @@ function EditExpenseForm({
   const [title, setTitle] = useState(expense.title);
   const [amountStr, setAmountStr] = useState(() => centsToDecimal(expense.amount));
   const [category, setCategory] = useState(expense.category ?? '');
+  // A placeholder removed from the group keeps the part they had in this
+  // expense, the payment or a share, so editing it doesn't move that part onto
+  // someone else; the server refuses them anywhere else (#284).
+  const payerChoices = useMemo(
+    () => [...group.members, ...group.removedMembers.filter((m) => m.user.id === expense.paidById)],
+    [group, expense],
+  );
+  const shareChoices = useMemo(
+    () => [...group.members, ...group.removedMembers.filter((m) => expense.shares.some((s) => s.userId === m.user.id))],
+    [group, expense],
+  );
+
   // The saved payer may have left the group (member removal preserves
   // financial history). Server-side membership validation would reject the
   // stale id, so start empty and force the user to pick a current member.
   const [paidById, setPaidById] = useState(() =>
-    group.members.some((m) => m.user.id === expense.paidById) ? expense.paidById : '',
+    payerChoices.some((m) => m.user.id === expense.paidById) ? expense.paidById : '',
   );
-  const [splitMode, setSplitMode] = useState<SplitMode>(isItemSplit ? 'EQUAL' : (expense.splitMode as SplitMode));
   const [shares, setShares] = useState<ShareEntry[]>([]);
   const [currency, setCurrency] = useState<string>(expense.currency);
   const [manualRate, setManualRate] = useState<string>(
@@ -113,9 +125,9 @@ function EditExpenseForm({
   );
   const [useManualRate, setUseManualRate] = useState(initiallyDifferentCurrency && !!expense.exchangeRate);
 
-  // Seed the split editors with the saved shares so editing doesn't silently
-  // rewrite the split. Only the saved mode is seeded; other modes keep their
-  // new-expense defaults. (percentage is stored in basis points: 5000 = 50%)
+  // Seed the split editors with the saved shares (splitEditorSeed) so editing
+  // doesn't silently rewrite the split (see splitEditorSeed for when saving a
+  // SHARES or PERCENTAGE split from before #331 can move its leftover cents).
   // Saved shares can reference users who have since left the group (member
   // removal preserves financial history). The editors only render current
   // members, so a hidden ex-member id would be unremovable and make every
@@ -127,14 +139,15 @@ function EditExpenseForm({
   // the expense saveable — and a warning banner tells the user to review it.
   const { savedShares, hasFormerMemberShares } = useMemo(() => {
     const currentMemberIds = new Set(group.members.map((m) => m.user.id));
+    const keptIds = new Set(shareChoices.map((m) => m.user.id));
     const toSeed = (s: ExpenseData['shares'][number]): ShareEntry => ({
       userId: s.userId,
       amount: s.amount,
       ...(s.percentage != null ? { percentage: s.percentage } : {}),
       ...(s.shares != null ? { shares: s.shares } : {}),
     });
-    const kept = expense.shares.filter((s) => currentMemberIds.has(s.userId)).map(toSeed);
-    const dropped = expense.shares.filter((s) => !currentMemberIds.has(s.userId));
+    const kept = expense.shares.filter((s) => keptIds.has(s.userId)).map(toSeed);
+    const dropped = expense.shares.filter((s) => !keptIds.has(s.userId));
     if (dropped.length === 0) {
       return { savedShares: kept, hasFormerMemberShares: false };
     }
@@ -143,7 +156,7 @@ function EditExpenseForm({
     const droppedUnits = dropped.reduce((sum, s) => sum + (s.shares ?? 0), 0);
     const targetId = currentMemberIds.has(expense.paidById)
       ? expense.paidById
-      : (kept[0]?.userId ?? group.members[0]?.user.id);
+      : (kept.find((s) => currentMemberIds.has(s.userId))?.userId ?? group.members[0]?.user.id);
     if (!targetId) {
       return { savedShares: kept, hasFormerMemberShares: true };
     }
@@ -180,34 +193,15 @@ function EditExpenseForm({
       ),
       hasFormerMemberShares: true,
     };
-  }, [expense, group]);
-  const initialSelected = useMemo(
-    () => (expense.splitMode === 'EQUAL' && savedShares.length > 0 ? savedShares.map((s) => s.userId) : undefined),
-    [expense, savedShares],
-  );
-  const initialAmounts = useMemo(
-    () =>
-      expense.splitMode === 'EXACT' && savedShares.length > 0
-        ? Object.fromEntries(savedShares.map((s) => [s.userId, centsToDecimal(s.amount)]))
-        : undefined,
-    [expense, savedShares],
-  );
-  const initialPercentages = useMemo(
-    () =>
-      expense.splitMode === 'PERCENTAGE' && savedShares.length > 0
-        ? Object.fromEntries(
-            savedShares.map((s) => [s.userId, s.percentage != null ? String(s.percentage / 100) : '0']),
-          )
-        : undefined,
-    [expense, savedShares],
-  );
-  const initialShareUnits = useMemo(
-    () =>
-      expense.splitMode === 'SHARES' && savedShares.length > 0
-        ? Object.fromEntries(savedShares.map((s) => [s.userId, String(s.shares ?? 1)]))
-        : undefined,
-    [expense, savedShares],
-  );
+  }, [expense, group, shareChoices]);
+  const {
+    mode: initialSplitMode,
+    initialSelected,
+    initialAmounts,
+    initialPercentages,
+    initialShareUnits,
+  } = useMemo(() => splitEditorSeed(expense.splitMode, savedShares), [expense.splitMode, savedShares]);
+  const [splitMode, setSplitMode] = useState<SplitMode>(initialSplitMode);
 
   const updateExpense = trpc.expenses.update.useMutation({
     onSuccess: () => {
@@ -215,10 +209,12 @@ function EditExpenseForm({
     },
   });
 
-  const members: MemberInfo[] = group.members.map((m) => ({
+  const toMemberInfo = (m: GroupData['members'][number]): MemberInfo => ({
     id: m.user.id,
     name: m.user.placeholderName ?? m.user.name ?? m.user.email,
-  }));
+  });
+  const members = shareChoices.map(toMemberInfo);
+  const payers = payerChoices.map(toMemberInfo);
 
   const amountCents = parseToCents(amountStr);
   const groupCurrency = group.currency;
@@ -392,7 +388,7 @@ function EditExpenseForm({
                 className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
                 <option value="">{t('new.selectMember')}</option>
-                {members.map((m) => (
+                {payers.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.name ?? t('new.unnamed')}
                   </option>

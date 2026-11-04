@@ -5,9 +5,11 @@ import { useLocale, useTranslations } from 'next-intl';
 import { TRPCClientError } from '@trpc/client';
 import { Link, useRouter } from '@/i18n/navigation';
 import { trpc } from '@/lib/trpc';
+import { localeHeaders } from '@/lib/locale-header';
 import { formatCents, centsToDecimal, parseToCents } from '@/lib/money';
 import { calculateSplitTotals } from '@/lib/split-calculator';
-import { loadingMessageKeys } from '@/lib/loading-messages';
+import { canStoreClaimIdentity, setStoredClaimIdentity } from '@/lib/guest-session';
+import { loadingMessageKeys, randomLoadingMessageIndex } from '@/lib/loading-messages';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -30,7 +32,7 @@ import {
   Scissors,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { getInitials } from '@/lib/avatar';
+import { chipLabels, getInitials } from '@/lib/avatar';
 
 type Step = 'upload' | 'processing' | 'people' | 'assign';
 
@@ -98,49 +100,47 @@ export default function GuestSplitPage() {
   // tRPC
   const utils = trpc.useUtils();
   const processReceipt = trpc.guest.processReceipt.useMutation();
-  const providerInfo = trpc.guest.getScanProviderInfo.useQuery();
   const uploadStatus = trpc.guest.getUploadStatus.useQuery();
   const uploadsDisabled = uploadStatus.data?.allowed === false;
-  const receiptData = trpc.guest.getReceiptItems.useQuery(
-    { receiptId: receiptId! },
-    { enabled: !!receiptId && step === 'people' },
-  );
   const createSplit = trpc.guest.createSplit.useMutation();
   const createClaimSession = trpc.guest.createClaimSession.useMutation();
 
-  const configuredProviderChain = providerInfo.data?.configuredProviders?.join(' -> ') ?? 'loading...';
-  const activeProvider = providerInfo.data?.activeProvider ?? 'checking...';
+  // Each scan starts its loading messages at a random one
+  function startProcessing() {
+    setLoadingMsgIdx(randomLoadingMessageIndex());
+    setStep('processing');
+  }
 
   // Rotate loading messages
   useEffect(() => {
     if (step !== 'processing') return;
-    setLoadingMsgIdx(Math.floor(Math.random() * loadingMessageKeys.length));
     const interval = setInterval(() => {
       setLoadingMsgIdx((i) => (i + 1) % loadingMessageKeys.length);
     }, 5000);
     return () => clearInterval(interval);
   }, [step]);
 
-  // Load items when receipt data arrives
-  useEffect(() => {
-    if (receiptData.data && items.length === 0) {
-      const { receipt, items: dbItems } = receiptData.data;
-      setItems(
-        dbItems.map((i) => ({
-          name: i.name,
-          quantity: i.quantity,
-          unitPrice: i.unitPrice,
-          totalPrice: i.totalPrice,
-        })),
-      );
-      if (receipt.extractedData) {
-        setExtracted(receipt.extractedData);
-      }
-      if (receipt.imagePath) {
-        setImagePath(receipt.imagePath);
-      }
+  // Replaces the items (and their assignments) with a finished scan's, along with the receipt's
+  // totals and image. Read through the client, not a cached query, so a rescan's items can't come
+  // from the cache.
+  async function loadScannedItems(id: string) {
+    const { receipt, items: dbItems } = await utils.client.guest.getReceiptItems.query({ receiptId: id });
+    setItems(
+      dbItems.map((i) => ({
+        name: i.name,
+        quantity: i.quantity,
+        unitPrice: i.unitPrice,
+        totalPrice: i.totalPrice,
+      })),
+    );
+    setAssignments({});
+    if (receipt.extractedData) {
+      setExtracted(receipt.extractedData);
     }
-  }, [receiptData.data, items.length]);
+    if (receipt.imagePath) {
+      setImagePath(receipt.imagePath);
+    }
+  }
 
   // Guest uploads were turned off after this page loaded (or the session
   // ended or the account was suspended). Refetch so the notice replaces the
@@ -164,6 +164,7 @@ export default function GuestSplitPage() {
       const res = await fetch('/api/upload?guest=true', {
         method: 'POST',
         body: formData,
+        headers: localeHeaders(),
       });
 
       if (res.status === 403) throw new GuestUploadsDisabledError();
@@ -180,7 +181,7 @@ export default function GuestSplitPage() {
       const data = await res.json();
       setReceiptId(data.receiptId);
       setImagePath(data.imagePath);
-      setStep('processing');
+      startProcessing();
       setUploading(false);
 
       // Start AI processing
@@ -194,6 +195,7 @@ export default function GuestSplitPage() {
         total: result.total,
         currency: result.currency,
       });
+      await loadScannedItems(data.receiptId);
       setStep('people');
     } catch (err) {
       setUploading(false);
@@ -461,9 +463,19 @@ export default function GuestSplitPage() {
         receiptId: receiptId ?? undefined,
         receiptData: { ...extracted, tip },
         items,
+        people: validPeople,
+        // Whoever scans the receipt is taken to be the payer, and joins the session as them
         creatorName: people[paidByIndex]?.trim() || fallbackName,
         paidByName: people[paidByIndex]?.trim() || fallbackName,
+        // Without storage the creator joins by name on the claim page, as before
+        joinCreator: canStoreClaimIdentity(),
       });
+      if (result.creator) {
+        setStoredClaimIdentity(result.shareToken, {
+          name: result.creator.name,
+          personToken: result.creator.personToken,
+        });
+      }
       router.push(`/split/${result.shareToken}/claim`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('assign.createSessionFailed'));
@@ -471,6 +483,8 @@ export default function GuestSplitPage() {
   }
 
   const initials = getInitials;
+  // First names, or whole names where two people share one (#277)
+  const labels = chipLabels(people);
 
   return (
     <div className="space-y-6 pb-24">
@@ -565,12 +579,6 @@ export default function GuestSplitPage() {
             <p className="font-semibold text-lg">{t('processing.title')}</p>
             <p className="text-sm text-muted-foreground animate-fade-in">
               {tc(loadingMessageKeys[loadingMsgIdx] ?? loadingMessageKeys[0])}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {t('processing.activeProvider')} <span className="font-medium text-foreground">{activeProvider}</span>
-              {' · '}
-              {t('processing.fallbackChain')}{' '}
-              <span className="font-medium text-foreground">{configuredProviderChain}</span>
             </p>
           </div>
         </div>
@@ -684,17 +692,12 @@ export default function GuestSplitPage() {
                         className="flex-1"
                         onClick={() => {
                           if (!correctionHint.trim() || !receiptId) return;
-                          setStep('processing');
+                          startProcessing();
                           setShowRescan(false);
                           processReceipt.mutate(
                             { receiptId, correctionHint: correctionHint.trim() },
                             {
-                              onSuccess: (data) => {
-                                // Drop the cached query data, otherwise the
-                                // load effect would repopulate the stale
-                                // pre-rescan items from the cache.
-                                utils.guest.getReceiptItems.reset({ receiptId });
-                                setItems([]); // will be refetched
+                              onSuccess: async (data) => {
                                 setExtracted({
                                   ...(data.merchantName !== undefined ? { merchantName: data.merchantName } : {}),
                                   ...(data.date !== undefined ? { date: data.date } : {}),
@@ -704,8 +707,14 @@ export default function GuestSplitPage() {
                                   total: data.total,
                                   currency: data.currency,
                                 });
-                                setAssignments({});
-                                setStep('people');
+                                try {
+                                  await loadScannedItems(receiptId);
+                                  setStep('people');
+                                } catch (err) {
+                                  // Shown on the upload step, as when a first scan's items fail to load
+                                  setErrorMessage(err instanceof Error ? err.message : t('upload.uploadFailed'));
+                                  setStep('upload');
+                                }
                               },
                               onError: (err) => {
                                 if (isGuestUploadsRefusal(err)) {
@@ -882,7 +891,11 @@ export default function GuestSplitPage() {
               const isEditing = editingItem === itemIdx;
 
               return (
-                <Card key={itemIdx} className={assigned.size === 0 ? 'border-amber-300' : ''}>
+                <Card
+                  key={itemIdx}
+                  className={assigned.size === 0 ? 'border-amber-300' : ''}
+                  data-testid={`guest-item-card-${itemIdx}`}
+                >
                   <CardContent className="py-3">
                     {isEditing ? (
                       <div className="mb-2 space-y-2">
@@ -928,6 +941,8 @@ export default function GuestSplitPage() {
                             type="button"
                             onClick={() => startEditing(itemIdx)}
                             className="text-muted-foreground hover:text-foreground p-1"
+                            aria-label={t('assign.editItem', { name: item.name })}
+                            title={t('assign.editItem', { name: item.name })}
                           >
                             <Pencil className="h-3 w-3" />
                           </button>
@@ -935,6 +950,8 @@ export default function GuestSplitPage() {
                             type="button"
                             onClick={() => deleteItem(itemIdx)}
                             className="text-muted-foreground hover:text-destructive p-1"
+                            aria-label={t('assign.removeItem', { name: item.name })}
+                            title={t('assign.removeItem', { name: item.name })}
                           >
                             <Trash2 className="h-3 w-3" />
                           </button>
@@ -1009,7 +1026,7 @@ export default function GuestSplitPage() {
                             key={personIdx}
                             type="button"
                             onClick={() => toggleAssignment(itemIdx, personIdx)}
-                            className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-sm transition-colors min-h-[36px] ${
+                            className={`flex max-w-full items-center gap-1 rounded-full px-3 py-1.5 text-sm transition-colors min-h-[36px] ${
                               isAssigned
                                 ? 'bg-primary text-primary-foreground'
                                 : 'bg-muted text-muted-foreground hover:bg-muted/80'
@@ -1018,7 +1035,13 @@ export default function GuestSplitPage() {
                             <Avatar className="h-5 w-5">
                               <AvatarFallback className="text-[9px]">{initials(name)}</AvatarFallback>
                             </Avatar>
-                            {name.split(' ')[0]}
+                            <span
+                              data-testid="chip-label"
+                              className="min-w-0 text-left [overflow-wrap:anywhere]"
+                              title={name.trim()}
+                            >
+                              {labels[personIdx]}
+                            </span>
                             {isAssigned && <Check className="h-3 w-3" />}
                           </button>
                         );

@@ -126,8 +126,8 @@ test.describe('Guest Bill Split — API happy path', () => {
     });
     expect(joinRes.ok()).toBe(true);
     const joinBody = await joinRes.json();
-    const { personIndex, personToken } = joinBody.result?.data?.json as {
-      personIndex: number;
+    const { personId, personToken } = joinBody.result?.data?.json as {
+      personId: string;
       personToken: string;
     };
 
@@ -135,7 +135,7 @@ test.describe('Guest Bill Split — API happy path', () => {
       data: {
         json: {
           token: shareToken,
-          personIndex,
+          personId,
           personToken,
           claimedItemIndices: [0],
         },
@@ -147,7 +147,7 @@ test.describe('Guest Bill Split — API happy path', () => {
       data: {
         json: {
           token: shareToken,
-          personIndex,
+          personId,
           personToken,
           tipOverride: 600,
         },

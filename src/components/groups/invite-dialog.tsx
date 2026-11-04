@@ -10,12 +10,18 @@ import { Check, Copy, Link } from 'lucide-react';
 import { toast } from 'sonner';
 import { copyToClipboard } from '@/lib/clipboard';
 
+/**
+ * Invite link for the group. Given a placeholder, the link is theirs to claim:
+ * whoever accepts it takes over the placeholder's expenses and payments.
+ */
 export function InviteDialog({
   groupId,
+  placeholder,
   open,
   onOpenChange,
 }: {
   groupId: string;
+  placeholder?: { id: string; name: string };
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -28,7 +34,7 @@ export function InviteDialog({
   });
 
   function handleGenerate() {
-    createInvite.mutate({ groupId });
+    createInvite.mutate(placeholder ? { groupId, placeholderUserId: placeholder.id } : { groupId });
   }
 
   function getInviteUrl(token: string) {
@@ -51,8 +57,12 @@ export function InviteDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t('invite.title')}</DialogTitle>
-          <DialogDescription>{t('invite.description')}</DialogDescription>
+          <DialogTitle>
+            {placeholder ? t('invite.claimTitle', { name: placeholder.name }) : t('invite.title')}
+          </DialogTitle>
+          <DialogDescription>
+            {placeholder ? t('invite.claimDescription', { name: placeholder.name }) : t('invite.description')}
+          </DialogDescription>
         </DialogHeader>
 
         {!createInvite.data ? (
@@ -68,7 +78,9 @@ export function InviteDialog({
                 {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">{t('invite.linkInfo')}</p>
+            <p className="text-xs text-muted-foreground">
+              {placeholder ? t('invite.claimLinkInfo', { name: placeholder.name }) : t('invite.linkInfo')}
+            </p>
           </div>
         )}
       </DialogContent>

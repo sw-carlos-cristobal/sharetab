@@ -2,6 +2,7 @@ import { randomBytes, createHash } from 'crypto';
 import { readFileSync, writeFileSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { logger } from './logger';
+import { describeTokenError, MALFORMED_TOKEN_RESPONSE, readTokenBody } from './oauth-token-response';
 
 // ─── Constants ───────────────────────────────────────────
 
@@ -37,6 +38,42 @@ function generateCodeVerifier(): string {
 
 function generateCodeChallenge(verifier: string): string {
   return createHash('sha256').update(verifier).digest('base64url');
+}
+
+// ─── Token responses ────────────────────────────────────
+// See oauth-token-response.ts for what may reach a log line or error message.
+
+interface TokenResponse {
+  access_token: string;
+  refresh_token?: string;
+  expires_in: number;
+  subscription_type?: string;
+  rate_limit_tier?: string;
+}
+
+/**
+ * A successful token response, type-checked. A parse error's message can quote
+ * up to 20 characters of the body, and a string expires_in would reach the
+ * refresh log, so either fails with a fixed error. expires_in is required (RFC
+ * 6749 only recommends it) because the credentials file needs expiresAt, and
+ * this endpoint sends it (8-hour tokens); token_type isn't used, so isn't
+ * checked.
+ */
+async function readTokenResponse(res: Response): Promise<TokenResponse> {
+  const body = await readTokenBody(res);
+  const { access_token, refresh_token, expires_in, subscription_type, rate_limit_tier } = body;
+  const optionalString = (value: unknown) => value === undefined || typeof value === 'string';
+  if (
+    typeof access_token !== 'string' ||
+    typeof expires_in !== 'number' ||
+    !Number.isFinite(expires_in) ||
+    !optionalString(refresh_token) ||
+    !optionalString(subscription_type) ||
+    !optionalString(rate_limit_tier)
+  ) {
+    throw new Error(MALFORMED_TOKEN_RESPONSE);
+  }
+  return body as unknown as TokenResponse;
 }
 
 // ─── Credential path ────────────────────────────────────
@@ -174,7 +211,6 @@ export async function submitCode(codeOrUrl: string): Promise<{ success: boolean;
   try {
     logger.info('meridian.login.exchangingCode', {
       codeLength: code.length,
-      codePreview: code.substring(0, 10) + '...',
       redirectUri: REDIRECT_URI,
       clientId: CLIENT_ID,
     });
@@ -194,19 +230,16 @@ export async function submitCode(codeOrUrl: string): Promise<{ success: boolean;
     });
 
     if (!res.ok) {
-      const body = await res.text();
-      logger.error('meridian.login.tokenExchangeFailed', {
-        status: res.status,
-        body,
-      });
+      const failure = await describeTokenError(res);
+      logger.error('meridian.login.tokenExchangeFailed', failure);
       cleanup();
       return {
         success: false,
-        error: `Token exchange failed (${res.status}): ${body}`,
+        error: `Token exchange failed (${failure.status})${failure.error ? `: ${failure.error}` : ''}`,
       };
     }
 
-    const tokens = await res.json();
+    const tokens = await readTokenResponse(res);
     const credPath = getCredentialPath();
 
     // Write credentials in the same format Claude CLI expects
@@ -286,15 +319,11 @@ export async function refreshIfNeeded(options?: { force?: boolean }): Promise<bo
     });
 
     if (!res.ok) {
-      const body = await res.text();
-      logger.error('meridian.refresh.failed', {
-        status: res.status,
-        body,
-      });
+      logger.error('meridian.refresh.failed', await describeTokenError(res));
       return false;
     }
 
-    const tokens = await res.json();
+    const tokens = await readTokenResponse(res);
     const updated = {
       claudeAiOauth: {
         ...oauth,

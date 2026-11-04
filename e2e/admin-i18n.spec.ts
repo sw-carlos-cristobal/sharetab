@@ -41,7 +41,7 @@ test.describe('Admin i18n — English baseline', () => {
       has: page.getByRole('heading', { name: 'Storage Stats' }),
     });
     await expect(section).toBeVisible();
-    await expect(section.getByText('Receipts')).toBeVisible({ timeout: 30000 });
+    await expect(section.getByText('Receipts', { exact: true })).toBeVisible({ timeout: 30000 });
     await expect(section.getByText('Disk Usage')).toBeVisible();
     await expect(section.getByText('Orphaned Files')).toBeVisible();
   });

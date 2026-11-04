@@ -39,12 +39,9 @@ test.describe('Guest Claiming Session UI', () => {
     await page.waitForURL(/\/en\/split\/[a-zA-Z0-9_-]+\/claim$/, { timeout: 30000 });
     const claimUrl = page.url();
 
-    // Creator should see the join form — creator's name should be pre-filled or they join
-    await expect(page.getByTestId('claim-join-form')).toBeVisible({ timeout: 10000 });
-
-    // Creator joins with their name
-    await page.getByTestId('claim-name-input').fill('Alice');
-    await page.getByTestId('claim-join-btn').click();
+    // The creator is already in the session as Alice, the payer (#263)
+    await expect(page.getByTestId('switch-person-0')).toContainText('Alice (you)', { timeout: 10000 });
+    await expect(page.getByTestId('claim-join-form')).toHaveCount(0);
 
     // Should see the items to claim
     await expect(page.locator('[data-testid^="claim-item-"]').first()).toBeVisible({ timeout: 10000 });

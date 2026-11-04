@@ -1,10 +1,10 @@
-import { TRPCError } from '@trpc/server';
+import { AppError } from './app-error';
 import { Prisma, type PrismaClient } from '@/generated/prisma/client';
 import { logger } from './logger';
 import { transactionConflictCode, withTransactionRetry, TRANSACTION_RETRY_ATTEMPTS } from './transaction-retry';
 
-// Every claim-session transaction in the guest router reads one GuestSplit row by
-// shareToken and writes back only that row. Under Repeatable Read, a concurrent committed
+// Every claim-session transaction in the guest router reads one GuestSplit row (by
+// shareToken, or by id when saving person ids) and writes back only that row. Under Repeatable Read, a concurrent committed
 // write to that row makes the later writer's UPDATE fail with a serialization failure,
 // which guestTransaction re-runs, so no update is lost. Serializable also aborted
 // transactions on *different* sessions, which surfaced as random join/claim failures
@@ -22,6 +22,13 @@ export const GUEST_TRANSACTION_ISOLATION = Prisma.TransactionIsolationLevel.Repe
  * such as logging outside it.
  * A conflict that outlasts the retry budget becomes a CONFLICT error with a generic
  * message, so the raw database error never reaches the client.
+ *
+ * Prisma's transaction manager errors (P2028) become SERVICE_UNAVAILABLE without a retry
+ * (#203). P2028 covers several transaction lifecycle failures, e.g. no pool connection
+ * freeing up within maxWait, the transaction running past its timeout, or a transaction
+ * already closed or not found; retrying the pool case would add load while the pool is
+ * full. They all get the same handling rather than being told apart by message, which
+ * isn't a stable API; the log keeps Prisma's message.
  */
 export async function guestTransaction<T>(
   db: Pick<PrismaClient, '$transaction'>,
@@ -30,13 +37,23 @@ export async function guestTransaction<T>(
   try {
     return await withTransactionRetry(() => db.$transaction(fn, { isolationLevel: GUEST_TRANSACTION_ISOLATION }));
   } catch (error) {
+    if (isTransactionManagerError(error)) {
+      logger.warn('guest.transaction.unavailable', { code: 'P2028', message: error.message });
+      throw new AppError('SERVICE_UNAVAILABLE', 'serverBusy', undefined, { cause: error });
+    }
     const code = transactionConflictCode(error);
     if (code === undefined) throw error;
     logger.warn('guest.transaction.retries_exhausted', { attempts: TRANSACTION_RETRY_ATTEMPTS, code });
-    throw new TRPCError({
-      code: 'CONFLICT',
-      message: 'Someone else is updating this split right now. Please try again.',
-      cause: error,
-    });
+    throw new AppError('CONFLICT', 'splitBusy', undefined, { cause: error });
   }
+}
+
+/**
+ * Prisma's transaction manager error (P2028), see guestTransaction; password writes map it too
+ * (`passwordTransaction`, password-reset.ts).
+ * The runtime throws it as an Error subclass carrying the code, and it may also arrive as a
+ * PrismaClientKnownRequestError, so match on the code.
+ */
+export function isTransactionManagerError(error: unknown): error is Error {
+  return error instanceof Error && (error as { code?: unknown }).code === 'P2028';
 }

@@ -5,13 +5,14 @@
   "emptyDescription": "Use Divisao rapida para dividir uma conta com amigos.",
   "goToSplit": "Dividir uma conta",
   "loadMore": "Carregar mais",
-  "people": "{count} pessoas",
-  "items": "{count} itens",
+  "people": "{count, plural, one {# pessoa} other {# pessoas}}",
+  "items": "{count, plural, one {# item} other {# itens}}",
   "claiming": "Em andamento",
   "finalized": "Concluido",
   "untitled": "Divisao sem titulo",
   "delete": "Excluir divisão",
-  "deleteConfirm": "Excluir esta divisão? Esta ação não pode ser desfeita.",
+  "deleteTitle": "Excluir esta divisão?",
+  "deleteDescription": "O link deixará de funcionar para todos com quem você o compartilhou. Esta ação não pode ser desfeita.",
   "deleted": "Divisão excluída",
   "loading": "Carregando..."
 }

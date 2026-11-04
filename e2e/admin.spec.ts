@@ -83,7 +83,7 @@ test.describe('Admin page UI', () => {
     await expect(storageSection).toBeVisible();
 
     // Should show receipt count within storage section
-    await expect(storageSection.getByText('Receipts')).toBeVisible({ timeout: 30000 });
+    await expect(storageSection.getByText('Receipts', { exact: true })).toBeVisible({ timeout: 30000 });
 
     // Should show disk usage within storage section
     await expect(storageSection.getByText('Disk Usage')).toBeVisible();

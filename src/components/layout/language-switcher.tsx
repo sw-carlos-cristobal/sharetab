@@ -48,7 +48,8 @@ function LanguageSwitcherInner() {
     }
 
     const qs = searchParams.toString();
-    const href = qs ? `${pathname}?${qs}` : pathname;
+    // The #fragment too: a password reset link carries its token there (#397)
+    const href = `${qs ? `${pathname}?${qs}` : pathname}${window.location.hash}`;
     router.replace(href, { locale: newLocale });
   }
 

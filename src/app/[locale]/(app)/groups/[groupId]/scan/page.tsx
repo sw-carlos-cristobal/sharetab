@@ -5,15 +5,21 @@ import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Link, useRouter } from '@/i18n/navigation';
 import { trpc } from '@/lib/trpc';
+import { localeHeaders } from '@/lib/locale-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ArrowLeft, Loader2, Camera, RefreshCw, Users } from 'lucide-react';
 import { useSession } from 'next-auth/react';
+import { useIsMutating } from '@tanstack/react-query';
+import { getMutationKey } from '@trpc/react-query';
 import { toast } from 'sonner';
 import { ItemAssignment } from '@/components/receipts/item-assignment';
-import { loadingMessageKeys } from '@/lib/loading-messages';
+import { DEFAULT_CURRENCY } from '@/lib/currencies';
+import { ArchivedGroupNotice } from '@/components/groups/archived-group-notice';
+import { loadingMessageKeys, randomLoadingMessageIndex } from '@/lib/loading-messages';
+import { canStoreClaimIdentity, setStoredClaimIdentity } from '@/lib/guest-session';
 
 type Step = 'upload' | 'processing' | 'assign' | 'error';
 
@@ -34,7 +40,6 @@ function ScanReceiptContent({ params }: { params: Promise<{ groupId: string }> }
   const { data: authSession } = useSession();
   const resumeReceiptId = searchParams.get('receiptId');
   const group = trpc.groups.get.useQuery({ groupId });
-  const providerInfo = trpc.receipts.getScanProviderInfo.useQuery();
 
   const [step, setStep] = useState<Step>(resumeReceiptId ? 'assign' : 'upload');
   const [receiptId, setReceiptId] = useState<string | null>(resumeReceiptId);
@@ -44,10 +49,15 @@ function ScanReceiptContent({ params }: { params: Promise<{ groupId: string }> }
   const [correctionHint, setCorrectionHint] = useState('');
   const [showRescan, setShowRescan] = useState(false);
 
+  // Each scan starts its loading messages at a random one
+  function startProcessing() {
+    setLoadingMsgIdx(randomLoadingMessageIndex());
+    setStep('processing');
+  }
+
   // Rotate loading messages while processing
   useEffect(() => {
     if (step !== 'processing') return;
-    setLoadingMsgIdx(Math.floor(Math.random() * loadingMessageKeys.length));
     const interval = setInterval(() => {
       setLoadingMsgIdx((i) => (i + 1) % loadingMessageKeys.length);
     }, 5000);
@@ -63,6 +73,9 @@ function ScanReceiptContent({ params }: { params: Promise<{ groupId: string }> }
   });
 
   const shareForClaiming = trpc.guest.createClaimSession.useMutation();
+  // A currency change on the receipt page stays pending until the receipt has reloaded; a Share Link
+  // made before then would copy the old currency into the claim session (#361)
+  const savingCurrency = useIsMutating({ mutationKey: getMutationKey(trpc.receipts.setCurrency) }) > 0;
   const receiptData = trpc.receipts.getReceiptItems.useQuery(
     { receiptId: receiptId! },
     { enabled: step === 'assign' && !!receiptId },
@@ -91,7 +104,7 @@ function ScanReceiptContent({ params }: { params: Promise<{ groupId: string }> }
           tax: extracted.tax,
           tip: extracted.tip ?? 0,
           total: extracted.total ?? extracted.subtotal + extracted.tax + (extracted.tip ?? 0),
-          currency: extracted.currency ?? 'USD',
+          currency: extracted.currency,
         },
         items: items.map((i) => ({
           name: i.name,
@@ -101,7 +114,15 @@ function ScanReceiptContent({ params }: { params: Promise<{ groupId: string }> }
         })),
         creatorName: myName,
         paidByName: myName,
+        // Without storage the creator joins by name on the claim page, as before
+        joinCreator: canStoreClaimIdentity(),
       });
+      if (result.creator) {
+        setStoredClaimIdentity(result.shareToken, {
+          name: result.creator.name,
+          personToken: result.creator.personToken,
+        });
+      }
       router.push(`/split/${result.shareToken}/claim`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('createSessionFailed'));
@@ -122,6 +143,7 @@ function ScanReceiptContent({ params }: { params: Promise<{ groupId: string }> }
       const res = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
+        headers: localeHeaders(),
       });
 
       if (!res.ok) {
@@ -135,7 +157,7 @@ function ScanReceiptContent({ params }: { params: Promise<{ groupId: string }> }
 
       const data = await res.json();
       setReceiptId(data.receiptId);
-      setStep('processing');
+      startProcessing();
       setUploading(false);
 
       // Start AI processing with groupId
@@ -156,9 +178,6 @@ function ScanReceiptContent({ params }: { params: Promise<{ groupId: string }> }
       id: m.user.id,
       name: m.user.placeholderName ?? m.user.name ?? m.user.email,
     })) ?? [];
-
-  const configuredProviderChain = providerInfo.data?.configuredProviders?.join(' -> ') ?? 'loading...';
-  const activeProvider = providerInfo.data?.activeProvider ?? 'checking...';
 
   // Loading state for group data (Finding #22)
   if (group.isLoading) {
@@ -195,10 +214,19 @@ function ScanReceiptContent({ params }: { params: Promise<{ groupId: string }> }
     );
   }
 
+  // An archived group refuses new expenses, including finishing a saved receipt
+  if (group.data?.archivedAt) return <ArchivedGroupNotice groupId={groupId} />;
+
   return (
     <div className="mx-auto max-w-lg space-y-6">
       <div className="flex items-center gap-2">
-        <Button variant="ghost" size="icon" nativeButton={false} render={<Link href={`/groups/${groupId}`} />}>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={tc('actions.back')}
+          nativeButton={false}
+          render={<Link href={`/groups/${groupId}`} />}
+        >
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <h1 className="text-2xl font-bold">{t('title')}</h1>
@@ -214,11 +242,6 @@ function ScanReceiptContent({ params }: { params: Promise<{ groupId: string }> }
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">{t('uploadDescription')}</p>
-            <p className="text-xs text-muted-foreground">
-              {t('activeProvider')} <span className="font-medium text-foreground">{activeProvider}</span>
-              {' · '}
-              {t('fallbackChain')} <span className="font-medium text-foreground">{configuredProviderChain}</span>
-            </p>
 
             <div className="space-y-2">
               <Label htmlFor="receipt">{t('receiptImage')}</Label>
@@ -249,11 +272,6 @@ function ScanReceiptContent({ params }: { params: Promise<{ groupId: string }> }
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <div className="text-center space-y-2">
               <p className="font-medium">{t('processing')}</p>
-              <p className="text-xs text-muted-foreground">
-                {t('using')} <span className="font-medium text-foreground">{activeProvider}</span>
-                {' · '}
-                {t('chain')} <span className="font-medium text-foreground">{configuredProviderChain}</span>
-              </p>
               <p className="text-sm text-muted-foreground">
                 {tc(loadingMessageKeys[loadingMsgIdx] ?? loadingMessageKeys[0])}
               </p>
@@ -267,6 +285,7 @@ function ScanReceiptContent({ params }: { params: Promise<{ groupId: string }> }
           <ItemAssignment
             key={receiptId}
             groupId={groupId}
+            groupCurrency={group.data?.currency ?? DEFAULT_CURRENCY}
             receiptId={receiptId}
             members={members}
             onComplete={handleExpenseCreated}
@@ -283,6 +302,7 @@ function ScanReceiptContent({ params }: { params: Promise<{ groupId: string }> }
             onClick={handleShareForClaiming}
             disabled={
               shareForClaiming.isPending ||
+              savingCurrency ||
               !authSession?.user?.id ||
               !receiptData.data?.receipt?.extractedData ||
               !receiptData.data?.items?.length ||
@@ -315,7 +335,7 @@ function ScanReceiptContent({ params }: { params: Promise<{ groupId: string }> }
                       className="flex-1"
                       onClick={() => {
                         if (!correctionHint.trim()) return;
-                        setStep('processing');
+                        startProcessing();
                         setShowRescan(false);
                         processReceipt.mutate({ receiptId, groupId, correctionHint: correctionHint.trim() });
                       }}
@@ -352,7 +372,7 @@ function ScanReceiptContent({ params }: { params: Promise<{ groupId: string }> }
               {receiptId && (
                 <Button
                   onClick={() => {
-                    setStep('processing');
+                    startProcessing();
                     processReceipt.mutate({ receiptId, groupId });
                   }}
                 >

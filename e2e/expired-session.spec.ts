@@ -1,5 +1,5 @@
 import { test, expect, request } from '@playwright/test';
-import { trpcMutation, trpcError, authedContext, users } from './helpers';
+import { trpcMutation, trpcError, authedContext, personIdByName, users } from './helpers';
 
 const BASE = process.env.BASE_URL || 'http://localhost:3001';
 
@@ -26,25 +26,45 @@ async function createSessionWithToken() {
     token: shareToken,
     name: 'Alice',
   });
-  const { personToken } = (await joinRes.json()).result?.data?.json;
+  const { personToken, personId: aliceId } = (await joinRes.json()).result?.data?.json;
+  // Bob is the payer; the guards below target people by id
+  const bobId = await personIdByName(ctx, shareToken, 'Bob');
 
-  return { ctx, authed, shareToken, personToken };
+  return { ctx, authed, shareToken, personToken, aliceId, bobId };
+}
+
+/** Alice claims the only item (a split finalizes only once every item is claimed, #237) and finalizes. */
+async function finalizeAsAlice(
+  ctx: Awaited<ReturnType<typeof request.newContext>>,
+  shareToken: string,
+  aliceId: string,
+  personToken: string,
+) {
+  const claimed = await trpcMutation(ctx, 'guest.claimItems', {
+    token: shareToken,
+    personId: aliceId,
+    personToken,
+    claimedItemIndices: [0],
+  });
+  expect(claimed.ok(), await claimed.text()).toBe(true);
+  const finalized = await trpcMutation(ctx, 'guest.finalizeSession', {
+    token: shareToken,
+    personId: aliceId,
+    personToken,
+  });
+  expect(finalized.ok(), await finalized.text()).toBe(true);
 }
 
 test.describe('Session mutation guards — finalized', () => {
   test('editPersonName rejects finalized sessions', async () => {
-    const { ctx, authed, shareToken, personToken } = await createSessionWithToken();
+    const { ctx, authed, shareToken, personToken, aliceId } = await createSessionWithToken();
 
-    await trpcMutation(ctx, 'guest.finalizeSession', {
-      token: shareToken,
-      personIndex: 0,
-      personToken,
-    });
+    await finalizeAsAlice(ctx, shareToken, aliceId, personToken);
 
     const res = await trpcMutation(ctx, 'guest.editPersonName', {
       token: shareToken,
       personToken,
-      targetIndex: 0,
+      targetId: aliceId,
       newName: 'Carol',
     });
     expect((await trpcError(res))?.data?.code).toBe('BAD_REQUEST');
@@ -53,18 +73,14 @@ test.describe('Session mutation guards — finalized', () => {
   });
 
   test('removePerson rejects finalized sessions', async () => {
-    const { ctx, authed, shareToken, personToken } = await createSessionWithToken();
+    const { ctx, authed, shareToken, personToken, aliceId, bobId } = await createSessionWithToken();
 
-    await trpcMutation(ctx, 'guest.finalizeSession', {
-      token: shareToken,
-      personIndex: 0,
-      personToken,
-    });
+    await finalizeAsAlice(ctx, shareToken, aliceId, personToken);
 
     const res = await trpcMutation(ctx, 'guest.removePerson', {
       token: shareToken,
       personToken,
-      targetIndex: 1,
+      targetId: bobId,
     });
     expect((await trpcError(res))?.data?.code).toBe('BAD_REQUEST');
     await authed.dispose();
@@ -72,13 +88,9 @@ test.describe('Session mutation guards — finalized', () => {
   });
 
   test('splitClaimItem rejects finalized sessions', async () => {
-    const { ctx, authed, shareToken, personToken } = await createSessionWithToken();
+    const { ctx, authed, shareToken, personToken, aliceId } = await createSessionWithToken();
 
-    await trpcMutation(ctx, 'guest.finalizeSession', {
-      token: shareToken,
-      personIndex: 0,
-      personToken,
-    });
+    await finalizeAsAlice(ctx, shareToken, aliceId, personToken);
 
     const res = await trpcMutation(ctx, 'guest.splitClaimItem', {
       token: shareToken,
@@ -94,14 +106,14 @@ test.describe('Session mutation guards — finalized', () => {
 
 test.describe('Session mutation guards — expired', () => {
   test('editPersonName rejects expired sessions', async () => {
-    const { ctx, authed, shareToken, personToken } = await createSessionWithToken();
+    const { ctx, authed, shareToken, personToken, aliceId } = await createSessionWithToken();
 
     await trpcMutation(authed, 'guest.expireSession', { token: shareToken });
 
     const res = await trpcMutation(ctx, 'guest.editPersonName', {
       token: shareToken,
       personToken,
-      targetIndex: 0,
+      targetId: aliceId,
       newName: 'Carol',
     });
     const err = await trpcError(res);
@@ -111,14 +123,14 @@ test.describe('Session mutation guards — expired', () => {
   });
 
   test('removePerson rejects expired sessions', async () => {
-    const { ctx, authed, shareToken, personToken } = await createSessionWithToken();
+    const { ctx, authed, shareToken, personToken, bobId } = await createSessionWithToken();
 
     await trpcMutation(authed, 'guest.expireSession', { token: shareToken });
 
     const res = await trpcMutation(ctx, 'guest.removePerson', {
       token: shareToken,
       personToken,
-      targetIndex: 1,
+      targetId: bobId,
     });
     const err = await trpcError(res);
     expect(err?.data?.code).toBe('NOT_FOUND');
@@ -159,13 +171,13 @@ test.describe('Session mutation guards — expired', () => {
   });
 
   test('claimItems rejects expired sessions', async () => {
-    const { ctx, authed, shareToken, personToken } = await createSessionWithToken();
+    const { ctx, authed, shareToken, personToken, aliceId } = await createSessionWithToken();
 
     await trpcMutation(authed, 'guest.expireSession', { token: shareToken });
 
     const res = await trpcMutation(ctx, 'guest.claimItems', {
       token: shareToken,
-      personIndex: 0,
+      personId: aliceId,
       personToken,
       claimedItemIndices: [0],
     });
@@ -176,13 +188,13 @@ test.describe('Session mutation guards — expired', () => {
   });
 
   test('finalizeSession rejects expired sessions', async () => {
-    const { ctx, authed, shareToken, personToken } = await createSessionWithToken();
+    const { ctx, authed, shareToken, personToken, aliceId } = await createSessionWithToken();
 
     await trpcMutation(authed, 'guest.expireSession', { token: shareToken });
 
     const res = await trpcMutation(ctx, 'guest.finalizeSession', {
       token: shareToken,
-      personIndex: 0,
+      personId: aliceId,
       personToken,
     });
     const err = await trpcError(res);

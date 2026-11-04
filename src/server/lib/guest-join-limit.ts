@@ -1,5 +1,5 @@
 import { normalizeGuestName } from '@/lib/guest-session';
-import { checkRateLimit, peekRateLimit } from './rate-limit';
+import { checkTokenRateLimit, peekTokenRateLimit } from './rate-limit';
 
 /**
  * Joins per person per minute: per share token and the caller's person token when it sends one,
@@ -30,9 +30,9 @@ const JOIN_WINDOW_MS = 60 * 1000;
  * Known tradeoff: a client that changes the name (or presents a different
  * made-up person token) on every call is held only
  * by the per-session budget, so it can use it up and block other joins on
- * that token until the window resets. Anyone with the share link can already
- * do the same to claimItems (10 a minute per token); there is no per-IP
- * bound because people splitting a bill often share one IP.
+ * that token until the window resets. The claim-session writes accept the
+ * same tradeoff for made-up person tokens (see guest-session-limits.ts); there
+ * is no per-IP bound because people splitting a bill often share one IP.
  *
  * Kept out of guest.ts so the check order can be unit-tested against the real
  * limiter; guest.test.ts mocks rate-limit for the whole file.
@@ -43,9 +43,9 @@ export function checkJoinRateLimit(token: string, name: string, personToken?: st
   const person = personToken ? ['token', personToken] : ['name', normalizeGuestName(name)];
   const personKey = `guest-join-person:${JSON.stringify([token, ...person])}`;
 
-  if (!peekRateLimit(sessionKey, JOIN_LIMIT_PER_SESSION).allowed) return false;
-  if (!checkRateLimit(personKey, JOIN_LIMIT_PER_PERSON, JOIN_WINDOW_MS).allowed) return false;
+  if (!peekTokenRateLimit(sessionKey, JOIN_LIMIT_PER_SESSION).allowed) return false;
+  if (!checkTokenRateLimit(personKey, JOIN_LIMIT_PER_PERSON, JOIN_WINDOW_MS).allowed) return false;
   // Synchronous since the peek, so the session budget still has room
-  checkRateLimit(sessionKey, JOIN_LIMIT_PER_SESSION, JOIN_WINDOW_MS);
+  checkTokenRateLimit(sessionKey, JOIN_LIMIT_PER_SESSION, JOIN_WINDOW_MS);
   return true;
 }

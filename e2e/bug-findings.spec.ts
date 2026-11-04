@@ -1,5 +1,5 @@
 import { test, expect, request } from '@playwright/test';
-import { rememberClaimIdentity, trpcMutation, trpcResult, trpcQuery } from './helpers';
+import { personIdByName, rememberClaimIdentity, trpcMutation, trpcResult, trpcQuery } from './helpers';
 
 const BASE = process.env.BASE_URL || 'http://localhost:3001';
 
@@ -64,7 +64,7 @@ test.describe('Finding #3: removePerson index state', () => {
     const removeRes = await trpcMutation(apiCtx, 'guest.removePerson', {
       token: shareToken,
       personToken: aliceToken,
-      targetIndex: 1,
+      targetId: await personIdByName(apiCtx, shareToken, 'Bob'),
     });
     expect(removeRes.ok()).toBe(true);
     await apiCtx.dispose();

@@ -1,6 +1,6 @@
 'use client';
 
-import { use } from 'react';
+import { use, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Link, useRouter } from '@/i18n/navigation';
 import { trpc } from '@/lib/trpc';
@@ -11,17 +11,21 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ArrowLeft, Trash2, Pencil } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import { toast } from 'sonner';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 
 export default function ExpenseDetailPage({ params }: { params: Promise<{ groupId: string; expenseId: string }> }) {
   const { groupId, expenseId } = use(params);
   const locale = useLocale();
   const router = useRouter();
   const t = useTranslations('expenses');
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const expense = trpc.expenses.get.useQuery({ groupId, expenseId });
   const group = trpc.groups.get.useQuery({ groupId });
   const deleteExpense = trpc.expenses.delete.useMutation({
     onSuccess: () => router.push(`/groups/${groupId}`),
+    onError: (err) => toast.error(err.message),
   });
 
   if (expense.isLoading) return <LoadingSpinner />;
@@ -39,6 +43,13 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ groupI
   }
 
   const e = expense.data;
+  const splitModeLabels = {
+    EQUAL: t('new.splitEqual'),
+    EXACT: t('new.splitExact'),
+    PERCENTAGE: t('new.splitPercentage'),
+    SHARES: t('new.splitShares'),
+    ITEM: t('detail.splitByItem'),
+  } satisfies Record<typeof e.splitMode, string>;
   const groupCurrency = group.data?.currency ?? 'USD';
   const isCurrencyConverted = e.baseCurrencyAmount != null && e.currency.toUpperCase() !== groupCurrency.toUpperCase();
 
@@ -68,7 +79,7 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ groupI
                 </span>
               )}
             </div>
-            <Badge variant="secondary">{e.splitMode}</Badge>
+            <Badge variant="secondary">{splitModeLabels[e.splitMode]}</Badge>
           </CardTitle>
           {isCurrencyConverted && (
             <p className="text-xs text-muted-foreground">
@@ -88,7 +99,7 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ groupI
             </div>
             <div>
               <p className="text-muted-foreground">{t('detail.date')}</p>
-              <p className="font-medium">{new Date(e.expenseDate).toLocaleDateString()}</p>
+              <p className="font-medium">{new Date(e.expenseDate).toLocaleDateString(locale)}</p>
             </div>
             {e.category && (
               <div>
@@ -125,30 +136,38 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ groupI
         </CardContent>
       </Card>
 
-      <div className="flex gap-2">
-        <Button
-          variant="outline"
-          className="flex-1"
-          nativeButton={false}
-          render={<Link href={`/groups/${groupId}/expenses/${expenseId}/edit`} />}
-        >
-          <Pencil className="mr-2 h-4 w-4" />
-          {t('detail.edit')}
-        </Button>
-        <Button
-          variant="destructive"
-          className="flex-1"
-          onClick={() => {
-            if (confirm(t('detail.deleteConfirm'))) {
-              deleteExpense.mutate({ groupId, expenseId });
-            }
-          }}
-          disabled={deleteExpense.isPending}
-        >
-          <Trash2 className="mr-2 h-4 w-4" />
-          {deleteExpense.isPending ? t('detail.deleting') : t('detail.delete')}
-        </Button>
-      </div>
+      {/* An archived group refuses edits and deletes, so offer them only once the group is known to be active */}
+      {group.data?.archivedAt && <p className="text-center text-sm text-muted-foreground">{t('detail.archived')}</p>}
+      {group.data && !group.data.archivedAt && (
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            className="flex-1"
+            nativeButton={false}
+            render={<Link href={`/groups/${groupId}/expenses/${expenseId}/edit`} />}
+          >
+            <Pencil className="mr-2 h-4 w-4" />
+            {t('detail.edit')}
+          </Button>
+          <Button
+            variant="destructive"
+            className="flex-1"
+            onClick={() => setConfirmDelete(true)}
+            disabled={deleteExpense.isPending}
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            {deleteExpense.isPending ? t('detail.deleting') : t('detail.delete')}
+          </Button>
+        </div>
+      )}
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title={t('detail.deleteTitle')}
+        description={t('detail.deleteDescription', { title: e.title })}
+        confirmLabel={t('detail.delete')}
+        onConfirm={() => deleteExpense.mutate({ groupId, expenseId })}
+      />
     </div>
   );
 }

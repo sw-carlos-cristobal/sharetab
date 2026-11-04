@@ -76,6 +76,7 @@ describe('processReceiptImage fallback behavior', () => {
       db: db as never,
       receiptId: 'r1',
       receipt: { imagePath: 'r1.jpg', mimeType: 'image/jpeg' },
+      fallbackCurrency: 'USD',
     });
 
     expect(provider1.extractReceipt).toHaveBeenCalledTimes(1);
@@ -107,6 +108,7 @@ describe('processReceiptImage fallback behavior', () => {
       db: db as never,
       receiptId: 'r2',
       receipt: { imagePath: 'r2.jpg', mimeType: 'image/jpeg' },
+      fallbackCurrency: 'USD',
     });
 
     expect(mockGetAIProvidersWithFallback).toHaveBeenCalledTimes(2);
@@ -129,9 +131,39 @@ describe('processReceiptImage fallback behavior', () => {
         db: db as never,
         receiptId: 'r3',
         receipt: { imagePath: 'r3.jpg', mimeType: 'image/jpeg' },
+        fallbackCurrency: 'USD',
       }),
     ).rejects.toThrow('Receipt extraction failed across configured providers');
 
     expect(mockClearProviderCache).toHaveBeenCalledTimes(1);
+  });
+
+  // #361: a receipt whose currency the model couldn't read was saved as USD
+  describe('the currency saved', () => {
+    async function scan(currency: string | undefined) {
+      // The schema reads a currency the model didn't return as undefined
+      const extraction = { ...successResult, currency };
+      mockGetAIProvidersWithFallback.mockResolvedValue([
+        { name: 'openai', extractReceipt: vi.fn().mockResolvedValue(extraction) },
+      ]);
+      const { processReceiptImage } = await import('./receipt-processor');
+      const db = makeDbMock();
+      const result = await processReceiptImage({
+        db: db as never,
+        receiptId: 'r4',
+        receipt: { imagePath: 'r4.jpg', mimeType: 'image/jpeg' },
+        fallbackCurrency: 'EUR',
+      });
+      const { data } = db.receipt.update.mock.calls[0]![0] as { data: { extractedData: { currency: string } } };
+      return { saved: data.extractedData.currency, returned: result.currency };
+    }
+
+    test('is the fallback (the group currency) when the scan read none', async () => {
+      expect(await scan(undefined)).toEqual({ saved: 'EUR', returned: 'EUR' });
+    });
+
+    test('is the one the scan read when it read one', async () => {
+      expect(await scan('GBP')).toEqual({ saved: 'GBP', returned: 'GBP' });
+    });
   });
 });

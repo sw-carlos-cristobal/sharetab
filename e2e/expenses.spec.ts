@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { users, login, createTestGroup, trpcMutation, navigateToGroup } from './helpers';
+import { users, login, createTestGroup, trpcMutation, trpcQuery, trpcResult, navigateToGroup } from './helpers';
 
 // Creates expenses on seed "Apartment" group — run serially to avoid balance assertion conflicts
 test.describe.configure({ mode: 'serial' });
@@ -47,6 +47,13 @@ test.describe('Expenses', () => {
   // ── Add Expense ───────────────────────────────────────────
 
   test.describe('Add Expense', () => {
+    test('Paid by defaults to the signed-in user', async ({ page }) => {
+      await navigateToGroup(page, 'Apartment');
+      await page.goto(page.url() + '/expenses/new');
+
+      await expect(page.getByTestId('paid-by-select').locator('option:checked')).toHaveText(users.alice.name);
+    });
+
     test('7.4.1 — equal split UI with all members', async ({ page }) => {
       await navigateToGroup(page, 'Apartment');
       const groupUrl = page.url();
@@ -210,6 +217,50 @@ test.describe('Expenses', () => {
 
       await dispose();
     });
+
+    // #274: the edit page opened a receipt (ITEM) split as an equal split
+    // over every member, so a title-only edit rewrote who owes what.
+    test('editing only the title of a receipt expense keeps every share', async ({ page }) => {
+      const { owner, groupId, memberIds, dispose } = await createTestGroup(
+        users.alice.email,
+        users.alice.password,
+        [
+          { email: users.bob.email, password: users.bob.password },
+          { email: users.charlie.email, password: users.charlie.password },
+        ],
+        'Receipt Edit Keeps Shares',
+      );
+      const aliceId = memberIds[users.alice.email]!;
+      const bobId = memberIds[users.bob.email]!;
+      // Charlie is in the group but wasn't on the receipt.
+      const expRes = await trpcMutation(owner, 'expenses.create', {
+        groupId,
+        title: 'Receipt Dinner',
+        amount: 3051,
+        splitMode: 'ITEM',
+        paidById: aliceId,
+        shares: [
+          { userId: aliceId, amount: 1931 },
+          { userId: bobId, amount: 1120 },
+        ],
+      });
+      const expense = (await expRes.json()).result?.data?.json;
+
+      await page.goto(`/en/groups/${groupId}/expenses/${expense.id}/edit`);
+      await expect(page.getByRole('heading', { name: 'Edit Expense' })).toBeVisible();
+      await page.getByLabel('Description').fill('Receipt Dinner (renamed)');
+      await page.getByRole('button', { name: 'Save Changes' }).click();
+      await page.waitForURL(new RegExp(`/expenses/${expense.id}$`), { timeout: 15000 });
+
+      const updated = await trpcResult(await trpcQuery(owner, 'expenses.get', { groupId, expenseId: expense.id }));
+      expect(updated.title).toBe('Receipt Dinner (renamed)');
+      const shares = Object.fromEntries(
+        updated.shares.map((s: { userId: string; amount: number }) => [s.userId, s.amount]),
+      );
+      expect(shares).toEqual({ [aliceId]: 1931, [bobId]: 1120 });
+
+      await dispose();
+    });
   });
 
   // ── Delete Expense ────────────────────────────────────────
@@ -235,8 +286,8 @@ test.describe('Expenses', () => {
       await page.waitForURL(/\/expenses\/\w+$/);
 
       // Confirm delete
-      page.on('dialog', (dialog) => dialog.accept());
       await page.getByRole('button', { name: /Delete/i }).click();
+      await page.getByRole('alertdialog').getByRole('button', { name: 'Delete', exact: true }).click();
 
       // Should redirect back to group
       await page.waitForURL(/\/groups\/\w+$/, { timeout: 10000 });

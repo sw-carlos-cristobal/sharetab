@@ -47,6 +47,22 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+// ─── PASSWORD RESET (app managed) ──────────────────────────
+
+// A password reset link (#397), emailed by "Forgot password?" or made by an admin. Only a
+// SHA-256 hash of the link's token is stored. One row per user: issuing a link replaces the
+// earlier one, and using it, changing the password, suspending or deleting the user deletes it
+// (src/server/lib/password-reset.ts)
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
 // ─── CORE MODELS ───────────────────────────────────────────
 
 model User {
@@ -55,6 +71,8 @@ model User {
   email           String    @unique
   emailVerified   DateTime?
   passwordHash    String?
+  // Set when the password is reset or changed: sessions signed in before it end (auth.ts jwt callback)
+  passwordChangedAt DateTime?
   image           String?
   defaultCurrency String    @default("USD")
   locale          String    @default("en")
@@ -66,6 +84,7 @@ model User {
 
   accounts        Account[]
   sessions        Session[]
+  passwordResetToken PasswordResetToken?
   groupMembers    GroupMember[]
   expensesPaid    Expense[]          @relation("PaidBy")
   expensesAdded   Expense[]          @relation("AddedBy")
@@ -77,6 +96,7 @@ model User {
   systemInvitesUsed SystemInvite[] @relation("SystemInviteUsedBy")
   uploadedReceipts Receipt[] @relation("UploadedReceipts")
   guestSplits      GuestSplit[] @relation("GuestSplits")
+  groupInvitesCreated GroupInvite[] @relation("GroupInvitesCreated")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -112,6 +132,12 @@ model GroupMember {
   group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   joinedAt DateTime @default(now())
+  // Set when a placeholder who is in the group's expenses or payments is removed
+  // at a zero balance (#284): they're no longer a member, but their history stays
+  // theirs, so their name still shows and a balance that comes back can be
+  // settled with them. Only a placeholder's membership is ever marked; a real
+  // user who leaves loses the row.
+  removedAt DateTime?
 
   @@unique([userId, groupId])
   @@index([groupId])
@@ -127,12 +153,15 @@ model GroupInvite {
   usedById  String?
 
   placeholderUserId String?  // if set, auto-merge this placeholder when invite is used
+  createdById       String?  // who made the invite (null for invites made before this was recorded, or once that user row is deleted)
 
-  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  group     Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdBy User? @relation("GroupInvitesCreated", fields: [createdById], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
 
   @@index([groupId])
+  @@index([createdById])
 }
 
 enum GroupRole {
@@ -312,6 +341,7 @@ enum ActivityType {
   EXPENSE_UPDATED
   EXPENSE_DELETED
   SETTLEMENT_CREATED
+  SETTLEMENT_DELETED
   MEMBER_JOINED
   MEMBER_LEFT
   GROUP_UPDATED
@@ -319,6 +349,7 @@ enum ActivityType {
   PLACEHOLDER_MERGED
   GROUP_ARCHIVED
   GROUP_UNARCHIVED
+  OWNERSHIP_TRANSFERRED
 }
 
 // ─── ADMIN ─────────────────────────────────────────────────
@@ -362,6 +393,8 @@ enum AdminAction {
   AI_PROVIDER_TESTED
   VENMO_SETTING_CHANGED
   GUEST_UPLOADS_SETTING_CHANGED
+  UNUSED_RECEIPTS_CLEANED
+  PASSWORD_RESET_LINK_CREATED
 }
 
 model SystemSetting {
@@ -396,9 +429,13 @@ model GuestSplit {
   id          String   @id @default(cuid())
   shareToken  String   @unique @default(cuid())
   receiptId   String?
+  // Its creator could see the receipt when it was made (lockReceiptForSplit), so /api/uploads
+  // serves the receipt's image to anyone while it's open (#318). Splits made before that
+  // check existed stay false
+  receiptShared Boolean @default(false)
   receiptData Json     // {merchantName, date, subtotal, tax, tip, total, currency}
   items       Json     // [{name, quantity, unitPrice, totalPrice}]
-  people      Json     // [{name}]
+  people      Json     // [{id?, name, personToken?, groupSize?, join?, saves?}] (see src/server/lib/guest-people.ts)
   assignments Json     // [{itemIndex, personIndices}]
   summary     Json?    // [{name, itemTotal, tax, tip, total}]
   paidByIndex      Int              @default(0)
@@ -412,4 +449,7 @@ model GuestSplit {
 
   @@index([userId])
   @@index([expiresAt])
+  // /api/uploads looks up a receipt's splits on every non-guest image load (#318), and the
+  // receipt cleanups check whether a split uses a receipt
+  @@index([receiptId])
 }

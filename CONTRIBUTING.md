@@ -6,7 +6,7 @@ Thanks for your interest in contributing! Here's everything you need to get star
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 22 (the version CI and the Docker image use)
 - npm 10+
 - Git
 
@@ -19,17 +19,21 @@ npm install
 npx prisma generate
 ```
 
+The committed `.npmrc` sets `legacy-peer-deps=true` (CI and the Dockerfile pass `--legacy-peer-deps` explicitly): next-auth's optional `nodemailer` peer range is older than the `nodemailer` version ShareTab pins. Keep `.npmrc` when copying the project, or `npm install` stops with an `ERESOLVE` error.
+
 ### Start the dev server
 
-The easiest way is the all-in-one script — it starts an embedded PostgreSQL instance and the Next.js dev server together:
+The easiest way is the all-in-one script — it starts an embedded PostgreSQL instance (PostgreSQL 18; Docker and CI use PostgreSQL 16) and the Next.js dev server together:
 
 ```bash
+cp .env.example .env   # its DATABASE_URL already points at the embedded database
 npm run dev:full
 ```
 
-Or if you have your own PostgreSQL running, copy `.env.example` to `.env`, set `DATABASE_URL`, then:
+Or if you have your own PostgreSQL running, copy `.env.example` to `.env`, set `DATABASE_URL`, then create the schema and start the server:
 
 ```bash
+npx prisma db push
 npm run dev
 ```
 
@@ -55,16 +59,25 @@ This creates three demo users you can log in with:
 npm test
 ```
 
-Runs ~278 fast Vitest tests (under 1 second). These cover money utilities, split calculations, balance computation, AI providers, admin routes, and more.
+Runs over 1,100 fast Vitest tests (under 10 seconds). Tests sit next to the code they cover (`src/**/*.test.ts`, plus `docker/**/*.test.mjs` for the Docker scripts and `scripts/**/*.test.ts` for the repo scripts): money and split math, balance computation, rate limiting, exchange rates, sign-in, OIDC and Google policy, guest sessions, AI providers, the admin, auth, balances, expenses, guest, groups, and receipts routers, and the translation checks.
 
 ### E2E tests
 
 ```bash
+npx playwright install chromium   # once, to download the browser (add --with-deps on Linux for its system libraries)
 npm run dev:full   # in one terminal
 BASE_URL=http://localhost:3000 npx playwright test   # in another
 ```
 
-Tip: set `AUTH_RATE_LIMIT_MAX=9999` and `GUEST_RATE_LIMIT_MAX=9999` in `.env` to avoid rate limiting during test runs.
+Tip: set `AUTH_RATE_LIMIT_MAX=9999`, `AUTH_IP_RATE_LIMIT_MAX=9999`, `REGISTER_RATE_LIMIT_MAX=9999`, `GUEST_RATE_LIMIT_MAX=9999`, `PASSWORD_RESET_RATE_LIMIT_MAX=9999`, `USER_UPLOAD_LIMIT=9999`, `USER_AI_LIMIT=9999` and `AI_GLOBAL_LIMIT=9999` in `.env` to lift the per-email and per-IP limits, the per-account receipt limits and the cap on all AI scans during test runs (the global guest caps, the fixed guest limits and the 5 reset emails per account an hour still apply). Every local request counts against one IP, because Next.js adds an `x-forwarded-for` header to local requests.
+
+The full suite also expects the settings CI uses. In `.env`, for the server: `ADMIN_EMAIL=alice@example.com` (the admin tests sign in as the seeded Alice, and the test-group cleanup uses her admin delete for groups whose open balances refuse the owner's), `AI_PROVIDER_PRIORITY=mock` (deterministic receipt scans), and `EMAIL_SERVER_HOST=localhost` with `EMAIL_SERVER_PORT=2525`, with `MOCK_SMTP_OUTBOX=/tmp/sharetab-outbox node scripts/mock-smtp.mjs 2525` running (it accepts all mail and delivers nothing; with `MOCK_SMTP_OUTBOX` set it also saves each message there, so the password tests can follow an emailed reset link and check the password changed emails). Playwright doesn't read `.env`, and the two magic-link tests and the two password reset tests that request a reset email skip unless the test process itself sees `EMAIL_SERVER_HOST` (the emailed reset link test also needs the same `MOCK_SMTP_OUTBOX`, and without it the password changed email checks are left out; under `CI` the two reset tests that request an email fail instead of skipping; the other magic-link tests fail unless the server has `EMAIL_SERVER_HOST`), so pass them on the command line too:
+
+```bash
+EMAIL_SERVER_HOST=localhost MOCK_SMTP_OUTBOX=/tmp/sharetab-outbox BASE_URL=http://localhost:3000 npx playwright test
+```
+
+See the "Run tests" step in `.github/workflows/test.yml`.
 
 ### Linting
 
@@ -85,6 +98,16 @@ npm run format:check   # check only (what CI runs)
 npx tsc --noEmit
 ```
 
+TypeScript runs in strict mode with extra checks, including `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess` (see `tsconfig.json`), and ESLint fails on any warning (`--max-warnings 0`).
+
+### Translations
+
+```bash
+npm run lint:i18n   # every locale has exactly the keys English has, its files are valid JSON and its messages valid ICU, and counts named `count` use plurals (CONTRIBUTING-TRANSLATIONS.md)
+```
+
+CI runs it too; run it locally whenever you add or change UI text. See [CONTRIBUTING-TRANSLATIONS.md](CONTRIBUTING-TRANSLATIONS.md).
+
 ## Making Changes
 
 ### Prisma schema changes
@@ -96,7 +119,13 @@ npx prisma db push      # apply to dev DB
 npx prisma generate     # regenerate the client
 ```
 
-**Breaking schema changes** (enum conversions, column type changes, data migrations) can't be handled by `prisma db push` alone. For these, add an idempotent `.sql` file in `prisma/migrations/`. The Docker entrypoint runs all `*.sql` files in that directory before `prisma db push`, so they execute automatically on container startup. Name the file descriptively (e.g., `guest_split_status_enum.sql`) and make it safe to re-run.
+**Breaking schema changes** (enum conversions, column type changes, data migrations) can't be handled by `prisma db push` alone. For these, add an idempotent `.sql` file in `prisma/migrations/`. The Docker entrypoint runs all `*.sql` files in that directory before `prisma db push`, so they execute automatically on container startup. Name the file descriptively (e.g., `guest_split_status_enum.sql`) and make it safe to re-run. It must also do nothing on an empty database, because a fresh install runs it before any tables exist.
+
+Database objects that Prisma's schema can't express (for example the unique index on `lower(email)`) go in `prisma/after-push/`, which the entrypoint runs **after** `prisma db push`. These must be idempotent too. An error in either directory stops the container from starting, so for anything optional, log a warning (`RAISE WARNING`) instead of raising an error. CI's `docker-fresh-install.yml` workflow boots the image on an empty volume to check both directories.
+
+**Removing or renaming a model** leaves its table in every existing external database, and the entrypoint's schema check (`docker/db-lib.mjs`, `check-schema`) refuses a database with a table ShareTab doesn't have, before any SQL file runs. Add the old table name to `RETIRED_TABLES` there in the same change, and leave it in the list of shipped models in `docker/db.test.mjs`, which fails until you do. A new model goes in that list too (the test fails until it is), and models can't use `@@map`, since the check takes model names as table names.
+
+The entrypoint runs each file through `docker/db.mjs` as one query, so a file's statements run in one transaction and an error rolls back the whole file. So a file can't add an enum value and use it (that fails with 55P04: put them in two files), can't hold `CREATE INDEX CONCURRENTLY` or `VACUUM` alongside other statements, and can't use `psql` meta-commands or `:variables`.
 
 ### Adding a tRPC route
 
@@ -107,7 +136,8 @@ Routers live in `src/server/trpc/routers/`. Add your procedure there and wire it
 - **One concern per PR** — bug fixes, features, and refactors should be separate PRs.
 - **Describe what and why** — the PR description should explain the motivation, not just restate the diff.
 - **Add tests** — new logic should have unit tests where possible; new user flows should have e2e coverage.
-- **Pass CI** — make sure `npm run format:check`, `npm run lint`, `npx tsc --noEmit`, `npm test`, and `npm run build` all pass before opening a PR. If you change `docker/`, the entrypoint, `prisma/` SQL, or dependencies, also run `npm run test:docker` (the Docker Fresh Install check; `DOCKER_HOST=ssh://user@host` works if you have no local Docker).
+- **Pass CI** — the required `test` check runs `npm audit --omit=dev --audit-level=high`, `npm run format:check`, `npm run lint`, `npm run lint:i18n`, `npx tsc --noEmit`, `npm test`, `npm run build`, and the Playwright e2e suite. Run the first seven locally before opening a PR. If you change `docker/`, the entrypoint, `prisma/` SQL, or dependencies, also run `npm run test:docker` (the Docker Fresh Install check; `DOCKER_HOST=ssh://user@host` works if you have no local Docker).
+- **Document upgrade steps** — if a change needs anything from operators on upgrade (a manual command, a new required variable, a behavior they must know about), add it under **Upgrading** in the README, since build releases only list commit titles.
 - **Conventional commits** — use prefixes like `feat:`, `fix:`, `chore:`, `docs:`, `refactor:` in commit messages.
 
 ## Project Structure
@@ -120,7 +150,7 @@ src/
   lib/           # Shared utilities (money, splits, etc.)
 prisma/
   schema.prisma  # Database schema
-docker/          # Dockerfile + docker-compose
+docker/          # Dockerfile, Compose files, entrypoint and its database steps (db.mjs)
 ```
 
 See [CLAUDE.md](CLAUDE.md) for a full architecture reference.

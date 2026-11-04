@@ -22,6 +22,7 @@
     "saving": "保存中...",
     "submit": "提交",
     "openMenu": "打开菜单",
+    "toggleTheme": "切换主题",
     "copyFailed": "无法将链接复制到剪贴板"
   },
   "brand": {

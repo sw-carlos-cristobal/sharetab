@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { TRPCError } from '@trpc/server';
+import { AppError } from '@/server/lib/app-error';
 import { createTRPCRouter, publicProcedure, protectedProcedure } from '../init';
 import {
   getAIProvidersWithFallback,
@@ -8,11 +8,19 @@ import {
   createProviderByName,
 } from '@/server/ai/registry';
 import { type AdminAction, type PrismaClient, Prisma } from '@/generated/prisma/client';
-import nodemailer from 'nodemailer';
+import { createMailTransport, describeMailError, mailFrom } from '@/server/lib/mailer';
 import fs from 'fs';
 import * as fsp from 'fs/promises';
 import path from 'path';
-import { getRecentLogs } from '@/server/lib/logger';
+import { getRecentLogs, logger } from '@/server/lib/logger';
+import { deleteGroupWithData } from '@/server/lib/group-delete';
+import { lockGroupMembers } from '@/server/lib/group-balances';
+import {
+  countUnusedReceipts,
+  deleteExpiredSplits,
+  deleteUnusedReceipts,
+  removeReceiptFiles,
+} from '@/server/lib/receipt-cleanup';
 import {
   checkMeridianHealth,
   invalidateMeridianHealthCache,
@@ -38,6 +46,15 @@ import {
 } from '@/server/lib/openai-codex-login';
 
 import { getBuildInfo } from '@/server/lib/build-info';
+import {
+  ADMIN_RESET_LINK_TTL_MS,
+  canResetPassword,
+  issuePasswordResetToken,
+  localeOf,
+} from '@/server/lib/password-reset';
+import { requirePasswordLogin } from '@/server/lib/password-login';
+import { isAdmin } from '@/server/lib/admin-email';
+import { REGISTRATION_MODES, readRegistrationMode } from '@/server/lib/registration-mode';
 import { isGuestUploadsForcedOff, readGuestUploadsSetting, saveGuestUploadsSetting } from '@/server/lib/guest-uploads';
 
 // How long a successful Meridian login waits for the proxy start attempt.
@@ -46,15 +63,13 @@ const MERIDIAN_LOGIN_START_WAIT_MS = 15_000;
 const serverStartTime = new Date();
 const { version: cachedVersion, commitSha: cachedCommitSha } = getBuildInfo();
 
-const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  const adminEmail = process.env.ADMIN_EMAIL;
-  // When impersonating, use the real admin email for the check
-  const effectiveEmail = ctx.impersonating ? ctx.impersonating.adminEmail : ctx.user.email;
-  if (!adminEmail || effectiveEmail !== adminEmail) {
-    throw new TRPCError({
-      code: 'FORBIDDEN',
-      message: 'Admin access required',
-    });
+const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+  // When impersonating, check the real admin
+  const realUser = ctx.impersonating
+    ? { id: ctx.impersonating.adminId, email: ctx.impersonating.adminEmail }
+    : { id: ctx.user.id, email: ctx.user.email };
+  if (!(await isAdmin(ctx.db, realUser))) {
+    throw new AppError('FORBIDDEN', 'adminRequired');
   }
   // For admin procedures, restore the real admin user context
   if (ctx.impersonating) {
@@ -300,10 +315,7 @@ export const adminRouter = createTRPCRouter({
 
   suspendUser: adminProcedure.input(z.object({ userId: z.string() })).mutation(async ({ ctx, input }) => {
     if (input.userId === ctx.user.id) {
-      throw new TRPCError({
-        code: 'BAD_REQUEST',
-        message: 'Cannot suspend your own account',
-      });
+      throw new AppError('BAD_REQUEST', 'cannotSuspendYourself');
     }
 
     const user = await ctx.db.user.findUnique({
@@ -312,19 +324,20 @@ export const adminRouter = createTRPCRouter({
     });
 
     if (!user) {
-      throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found' });
+      throw new AppError('NOT_FOUND', 'userNotFound');
     }
 
     if (user.suspendedAt) {
-      throw new TRPCError({
-        code: 'BAD_REQUEST',
-        message: 'User is already suspended',
-      });
+      throw new AppError('BAD_REQUEST', 'alreadySuspended');
     }
 
-    await ctx.db.user.update({
-      where: { id: input.userId },
-      data: { suspendedAt: new Date() },
+    await ctx.db.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: input.userId },
+        data: { suspendedAt: new Date() },
+      });
+      // Otherwise an unexpired reset link would work again once the user is unsuspended
+      await tx.passwordResetToken.deleteMany({ where: { userId: input.userId } });
     });
 
     await logAdminAction(ctx.db, ctx.user.id, 'USER_SUSPENDED', input.userId, { email: user.email });
@@ -339,21 +352,15 @@ export const adminRouter = createTRPCRouter({
     });
 
     if (!user) {
-      throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found' });
+      throw new AppError('NOT_FOUND', 'userNotFound');
     }
 
     if (!user.suspendedAt) {
-      throw new TRPCError({
-        code: 'BAD_REQUEST',
-        message: 'User is not suspended',
-      });
+      throw new AppError('BAD_REQUEST', 'notSuspended');
     }
 
     if (user.isPlaceholder) {
-      throw new TRPCError({
-        code: 'BAD_REQUEST',
-        message: 'Cannot unsuspend a placeholder or deleted account',
-      });
+      throw new AppError('BAD_REQUEST', 'cannotUnsuspend');
     }
 
     await ctx.db.user.update({
@@ -368,10 +375,7 @@ export const adminRouter = createTRPCRouter({
 
   deleteUser: adminProcedure.input(z.object({ userId: z.string() })).mutation(async ({ ctx, input }) => {
     if (input.userId === ctx.user.id) {
-      throw new TRPCError({
-        code: 'BAD_REQUEST',
-        message: 'Cannot delete your own account',
-      });
+      throw new AppError('BAD_REQUEST', 'cannotDeleteYourself');
     }
 
     const user = await ctx.db.user.findUnique({
@@ -380,10 +384,7 @@ export const adminRouter = createTRPCRouter({
     });
 
     if (!user) {
-      throw new TRPCError({
-        code: 'NOT_FOUND',
-        message: 'User not found',
-      });
+      throw new AppError('NOT_FOUND', 'userNotFound');
     }
 
     await ctx.db.$transaction(async (tx) => {
@@ -401,9 +402,10 @@ export const adminRouter = createTRPCRouter({
           suspendedAt: new Date(),
         },
       });
-      // Remove auth records (sessions, accounts)
+      // Remove auth records (sessions, accounts, password reset links)
       await tx.account.deleteMany({ where: { userId: input.userId } });
       await tx.session.deleteMany({ where: { userId: input.userId } });
+      await tx.passwordResetToken.deleteMany({ where: { userId: input.userId } });
       // Transfer ownership before removing memberships
       const ownedGroups = await tx.groupMember.findMany({
         where: { userId: input.userId, role: 'OWNER' },
@@ -442,6 +444,39 @@ export const adminRouter = createTRPCRouter({
     });
 
     return { deleted: true, userId: input.userId };
+  }),
+
+  // A password reset link for the admin to hand over (#397): the only way back in for a
+  // locked-out user on an instance without email. Returns the token, not a URL: the admin's
+  // page builds the link from its own address, as it does split links. Replaces the user's
+  // earlier links, emailed ones included.
+  createPasswordResetLink: adminProcedure.input(z.object({ userId: z.string() })).mutation(async ({ ctx, input }) => {
+    requirePasswordLogin();
+
+    const user = await ctx.db.user.findUnique({
+      where: { id: input.userId },
+      select: { id: true, email: true, locale: true, isPlaceholder: true, suspendedAt: true },
+    });
+    if (!user) {
+      throw new AppError('NOT_FOUND', 'userNotFound');
+    }
+    // Refused without opening a transaction; checked again under the user row's lock
+    if (!canResetPassword(user)) {
+      throw new AppError('BAD_REQUEST', 'passwordResetNotAllowed');
+    }
+
+    // Under the user row's lock: suspended or deleted meanwhile gives no link
+    const issued = await issuePasswordResetToken(ctx.db, user.id, ADMIN_RESET_LINK_TTL_MS);
+    if (!issued) {
+      throw new AppError('BAD_REQUEST', 'passwordResetNotAllowed');
+    }
+    await logAdminAction(ctx.db, ctx.user.id, 'PASSWORD_RESET_LINK_CREATED', user.id, { email: user.email });
+
+    return {
+      token: issued.token,
+      locale: localeOf(user),
+      expiresAt: issued.expiresAt,
+    };
   }),
 
   listGroups: adminProcedure
@@ -569,13 +604,15 @@ export const adminRouter = createTRPCRouter({
     });
 
     if (!group) {
-      throw new TRPCError({
-        code: 'NOT_FOUND',
-        message: 'Group not found',
-      });
+      throw new AppError('NOT_FOUND', 'groupNotFound');
     }
 
-    await ctx.db.group.delete({ where: { id: input.groupId } });
+    const imagePaths = await ctx.db.$transaction(async (tx) => {
+      // Waits for balance changes, removals and transfers in flight, as the owner's delete does
+      await lockGroupMembers(tx, input.groupId);
+      return deleteGroupWithData(tx, input.groupId);
+    });
+    await removeReceiptFiles(imagePaths);
 
     await logAdminAction(ctx.db, ctx.user.id, 'GROUP_DELETED', input.groupId, { name: group.name });
 
@@ -626,19 +663,12 @@ export const adminRouter = createTRPCRouter({
 
   // ─── Registration Control ───────────────────────────────
 
-  getRegistrationMode: adminProcedure.query(async ({ ctx }) => {
-    const setting = await ctx.db.systemSetting.findUnique({
-      where: { key: 'registrationMode' },
-    });
-    return {
-      mode: (setting?.value ?? 'open') as 'open' | 'invite-only' | 'closed',
-    };
-  }),
+  getRegistrationMode: adminProcedure.query(async ({ ctx }) => ({ mode: await readRegistrationMode(ctx.db) })),
 
   setRegistrationMode: adminProcedure
     .input(
       z.object({
-        mode: z.enum(['open', 'invite-only', 'closed']),
+        mode: z.enum(REGISTRATION_MODES),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -708,17 +738,11 @@ export const adminRouter = createTRPCRouter({
     });
 
     if (!invite) {
-      throw new TRPCError({
-        code: 'NOT_FOUND',
-        message: 'Invite not found',
-      });
+      throw new AppError('NOT_FOUND', 'inviteNotFound');
     }
 
     if (invite.revokedAt) {
-      throw new TRPCError({
-        code: 'BAD_REQUEST',
-        message: 'Invite is already revoked',
-      });
+      throw new AppError('BAD_REQUEST', 'inviteAlreadyRevoked');
     }
 
     await ctx.db.systemInvite.update({
@@ -838,10 +862,7 @@ export const adminRouter = createTRPCRouter({
   setGuestUploadsEnabled: adminProcedure.input(z.object({ enabled: z.boolean() })).mutation(async ({ ctx, input }) => {
     // While the env var locks it, a saved value would only take effect later, unseen.
     if (isGuestUploadsForcedOff()) {
-      throw new TRPCError({
-        code: 'PRECONDITION_FAILED',
-        message: 'Guest uploads are locked off by DISABLE_GUEST_UPLOADS',
-      });
+      throw new AppError('PRECONDITION_FAILED', 'guestUploadsLockedOff');
     }
     await saveGuestUploadsSetting(ctx.db, input.enabled);
 
@@ -855,23 +876,11 @@ export const adminRouter = createTRPCRouter({
   sendTestEmail: adminProcedure.mutation(async ({ ctx }) => {
     const host = process.env.EMAIL_SERVER_HOST;
     if (!host) {
-      throw new TRPCError({
-        code: 'PRECONDITION_FAILED',
-        message: 'Email is not configured. Set EMAIL_SERVER_HOST environment variable.',
-      });
+      throw new AppError('PRECONDITION_FAILED', 'emailNotConfigured');
     }
 
-    const transport = nodemailer.createTransport({
-      host,
-      port: parseInt(process.env.EMAIL_SERVER_PORT ?? '587'),
-      secure: parseInt(process.env.EMAIL_SERVER_PORT ?? '587') === 465,
-      auth: {
-        user: process.env.EMAIL_SERVER_USER,
-        pass: process.env.EMAIL_SERVER_PASSWORD,
-      },
-    });
-
-    const from = process.env.EMAIL_FROM ?? 'ShareTab <noreply@sharetab.local>';
+    const transport = createMailTransport();
+    const from = mailFrom();
     const to = ctx.user.email!;
 
     try {
@@ -898,9 +907,8 @@ export const adminRouter = createTRPCRouter({
 
       return { success: true, sentTo: to };
     } catch (error) {
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: `Failed to send test email: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      throw new AppError('INTERNAL_SERVER_ERROR', 'testEmailFailed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   }),
@@ -954,6 +962,8 @@ export const adminRouter = createTRPCRouter({
       await scanDir(uploadDir);
     }
 
+    const unused = await countUnusedReceipts(ctx.db);
+
     return {
       receiptCount,
       diskFiles,
@@ -961,6 +971,9 @@ export const adminRouter = createTRPCRouter({
       totalDiskUsageFormatted: formatBytes(totalDiskUsage),
       orphanCount,
       orphanPaths,
+      unusedReceiptCount: unused.count,
+      unusedReceiptBytes: unused.bytes,
+      unusedReceiptBytesFormatted: formatBytes(unused.bytes),
     };
   }),
 
@@ -1024,6 +1037,16 @@ export const adminRouter = createTRPCRouter({
       freedBytesFormatted: formatBytes(freedBytes),
     };
   }),
+
+  // Receipts no group, expense or split uses, a day or more old (#312), with their files
+  cleanupUnusedReceipts: adminProcedure.mutation(async ({ ctx }) => {
+    const deletedCount = await deleteUnusedReceipts(ctx.db, 500);
+    if (deletedCount > 0) {
+      await logAdminAction(ctx.db, ctx.user.id, 'UNUSED_RECEIPTS_CLEANED', null, { deletedCount });
+    }
+    return { deletedCount };
+  }),
+
   // ─── Guest Split Cleanup ──────────────────────────────────
 
   getExpiredSplitCount: adminProcedure.query(async ({ ctx }) => {
@@ -1035,15 +1058,21 @@ export const adminRouter = createTRPCRouter({
   }),
 
   cleanupExpiredSplits: adminProcedure.mutation(async ({ ctx }) => {
-    const result = await ctx.db.guestSplit.deleteMany({
-      where: { expiresAt: { lt: new Date() } },
-    });
-
-    if (result.count > 0) {
-      await logAdminAction(ctx.db, ctx.user.id, 'EXPIRED_SPLITS_CLEANED', null, { deletedCount: result.count });
+    // With the receipts only they used (#265), a batch at a time so a large backlog
+    // doesn't make one long transaction
+    const batchSize = 500;
+    let deletedCount = 0;
+    for (;;) {
+      const count = await deleteExpiredSplits(ctx.db, batchSize);
+      deletedCount += count;
+      if (count === 0) break;
     }
 
-    return { deletedCount: result.count };
+    if (deletedCount > 0) {
+      await logAdminAction(ctx.db, ctx.user.id, 'EXPIRED_SPLITS_CLEANED', null, { deletedCount });
+    }
+
+    return { deletedCount };
   }),
 
   // ─── Server Logs ─────────────────────────────────────────
@@ -1085,17 +1114,16 @@ export const adminRouter = createTRPCRouter({
 
   startMeridianLogin: adminProcedure.mutation(async ({ ctx }) => {
     if (!isProviderConfigured('meridian')) {
-      throw new TRPCError({
-        code: 'PRECONDITION_FAILED',
-        message: 'Meridian is not configured in AI provider priority',
-      });
+      throw new AppError('PRECONDITION_FAILED', 'meridianNotConfigured');
     }
 
     try {
       const url = await startLogin();
 
-      // Send email with login URL
-      await sendAuthExpiryEmail('Re-authentication initiated from admin dashboard', url);
+      // Send email with login URL. Best effort: the login has started, and its URL comes back here
+      await sendAuthExpiryEmail('Re-authentication initiated from admin dashboard', url).catch((error: unknown) => {
+        logger.warn('admin.meridian_login_email_failed', describeMailError(error));
+      });
 
       await logAdminAction(ctx.db, ctx.user.id, 'MERIDIAN_LOGIN_STARTED', null, {
         url,
@@ -1103,10 +1131,9 @@ export const adminRouter = createTRPCRouter({
 
       return { url };
     } catch (err) {
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: err instanceof Error ? err.message : 'Failed to start login',
-      });
+      throw err instanceof Error
+        ? new AppError('INTERNAL_SERVER_ERROR', 'detail', { detail: err.message })
+        : new AppError('INTERNAL_SERVER_ERROR', 'loginStartFailed');
     }
   }),
 
@@ -1146,10 +1173,9 @@ export const adminRouter = createTRPCRouter({
 
         return { ...result, ...(proxyError ? { proxyError } : {}) };
       } catch (err) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: err instanceof Error ? err.message : 'Failed to submit code',
-        });
+        throw err instanceof Error
+          ? new AppError('INTERNAL_SERVER_ERROR', 'detail', { detail: err.message })
+          : new AppError('INTERNAL_SERVER_ERROR', 'loginCodeFailed');
       }
     }),
 
@@ -1163,18 +1189,14 @@ export const adminRouter = createTRPCRouter({
 
   logoutMeridian: adminProcedure.mutation(async ({ ctx }) => {
     if (!isProviderConfigured('meridian')) {
-      throw new TRPCError({
-        code: 'PRECONDITION_FAILED',
-        message: 'Meridian is not configured in AI provider priority',
-      });
+      throw new AppError('PRECONDITION_FAILED', 'meridianNotConfigured');
     }
 
     const result = logoutMeridian();
     if (!result.success) {
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: result.error ?? 'Failed to log out Meridian',
-      });
+      throw result.error
+        ? new AppError('INTERNAL_SERVER_ERROR', 'detail', { detail: result.error })
+        : new AppError('INTERNAL_SERVER_ERROR', 'meridianLogoutFailed');
     }
 
     clearProviderCache();
@@ -1229,10 +1251,7 @@ export const adminRouter = createTRPCRouter({
 
   startOpenAICodexLogin: adminProcedure.mutation(async () => {
     if (!isProviderConfigured('openai-codex')) {
-      throw new TRPCError({
-        code: 'PRECONDITION_FAILED',
-        message: 'OpenAI Codex is not configured in AI provider priority',
-      });
+      throw new AppError('PRECONDITION_FAILED', 'codexNotConfigured');
     }
     return { url: await startOpenAICodexLogin() };
   }),
@@ -1255,18 +1274,14 @@ export const adminRouter = createTRPCRouter({
 
   logoutOpenAICodex: adminProcedure.mutation(async () => {
     if (!isProviderConfigured('openai-codex')) {
-      throw new TRPCError({
-        code: 'PRECONDITION_FAILED',
-        message: 'OpenAI Codex is not configured in AI provider priority',
-      });
+      throw new AppError('PRECONDITION_FAILED', 'codexNotConfigured');
     }
 
     const result = logoutOpenAICodex();
     if (!result.success) {
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: result.error ?? 'Failed to log out OpenAI Codex',
-      });
+      throw result.error
+        ? new AppError('INTERNAL_SERVER_ERROR', 'detail', { detail: result.error })
+        : new AppError('INTERNAL_SERVER_ERROR', 'codexLogoutFailed');
     }
 
     clearProviderCache();
@@ -1290,38 +1305,41 @@ export const adminRouter = createTRPCRouter({
       try {
         provider = await createProviderByName(input.providerName);
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to create provider';
+        const error =
+          err instanceof Error
+            ? new AppError('BAD_REQUEST', 'detail', { detail: err.message })
+            : new AppError('BAD_REQUEST', 'providerCreateFailed');
         await logAdminAction(ctx.db, ctx.user.id, 'AI_PROVIDER_TESTED', null, {
           provider: input.providerName,
           durationMs: Date.now() - start,
           success: false,
-          error: message,
+          error: error.message,
         });
-        throw new TRPCError({ code: 'BAD_REQUEST', message });
+        throw error;
       }
 
       const available = await provider.isAvailable();
       if (!available) {
-        const message = `Provider "${input.providerName}" is not available`;
+        const error = new AppError('PRECONDITION_FAILED', 'providerUnavailable', { provider: input.providerName });
         await logAdminAction(ctx.db, ctx.user.id, 'AI_PROVIDER_TESTED', null, {
           provider: input.providerName,
           durationMs: Date.now() - start,
           success: false,
-          error: message,
+          error: error.message,
         });
-        throw new TRPCError({ code: 'PRECONDITION_FAILED', message });
+        throw error;
       }
 
       const imageBuffer = Buffer.from(input.imageBase64, 'base64');
       if (imageBuffer.length > 5 * 1024 * 1024) {
-        const message = 'Image exceeds 5 MB limit';
+        const error = new AppError('BAD_REQUEST', 'testImageTooLarge');
         await logAdminAction(ctx.db, ctx.user.id, 'AI_PROVIDER_TESTED', null, {
           provider: input.providerName,
           durationMs: Date.now() - start,
           success: false,
-          error: message,
+          error: error.message,
         });
-        throw new TRPCError({ code: 'BAD_REQUEST', message });
+        throw error;
       }
 
       try {
@@ -1337,23 +1355,23 @@ export const adminRouter = createTRPCRouter({
         return { result, durationMs };
       } catch (err) {
         const durationMs = Date.now() - start;
-        const message = err instanceof Error ? err.message : 'Extraction failed';
+        // SERVICE_UNAVAILABLE (503): the provider failed, not ShareTab. Not
+        // BAD_GATEWAY: Cloudflare (and proxies set to intercept errors)
+        // replaces a 502 or 504 body with its own HTML page, hiding this
+        // message.
+        const error =
+          err instanceof Error
+            ? new AppError('SERVICE_UNAVAILABLE', 'detail', { detail: err.message })
+            : new AppError('SERVICE_UNAVAILABLE', 'extractionFailed');
 
         await logAdminAction(ctx.db, ctx.user.id, 'AI_PROVIDER_TESTED', null, {
           provider: input.providerName,
           durationMs,
           success: false,
-          error: message,
+          error: error.message,
         });
 
-        // SERVICE_UNAVAILABLE (503): the provider failed, not ShareTab. Not
-        // BAD_GATEWAY: Cloudflare (and proxies set to intercept errors)
-        // replaces a 502 or 504 body with its own HTML page, hiding this
-        // message.
-        throw new TRPCError({
-          code: 'SERVICE_UNAVAILABLE',
-          message,
-        });
+        throw error;
       }
     }),
 });

@@ -5,13 +5,14 @@
   "emptyDescription": "Anvand Snabb delning for att dela en nota med vanner.",
   "goToSplit": "Dela en nota",
   "loadMore": "Ladda fler",
-  "people": "{count} personer",
-  "items": "{count} artiklar",
+  "people": "{count, plural, one {# person} other {# personer}}",
+  "items": "{count, plural, one {# artikel} other {# artiklar}}",
   "claiming": "Pagaende",
   "finalized": "Slutford",
   "untitled": "Namnlos delning",
   "delete": "Ta bort delning",
-  "deleteConfirm": "Ta bort denna delning? Detta kan inte ångras.",
+  "deleteTitle": "Ta bort denna delning?",
+  "deleteDescription": "Länken slutar fungera för alla du delade den med. Detta kan inte ångras.",
   "deleted": "Delning borttagen",
   "loading": "Laddar..."
 }

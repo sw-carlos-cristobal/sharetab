@@ -1,8 +1,9 @@
 import { z } from 'zod';
-import { TRPCError } from '@trpc/server';
+import { AppError } from '@/server/lib/app-error';
 import { createTRPCRouter, groupMemberProcedure } from '../init';
 import { getExchangeRate, convertCents } from '../../lib/exchange-rates';
 import { MAX_MONEY_CENTS } from '@/lib/money';
+import { loadGroupBalances, lockActiveGroup } from '../../lib/group-balances';
 
 export const settlementsRouter = createTRPCRouter({
   list: groupMemberProcedure
@@ -19,8 +20,8 @@ export const settlementsRouter = createTRPCRouter({
         take: input.limit + 1,
         ...(input.cursor ? { cursor: { id: input.cursor } } : {}),
         include: {
-          from: { select: { id: true, name: true, image: true } },
-          to: { select: { id: true, name: true, image: true } },
+          from: { select: { id: true, name: true, email: true, image: true } },
+          to: { select: { id: true, name: true, email: true, image: true } },
         },
         orderBy: [{ settledAt: 'desc' }, { id: 'desc' }],
       });
@@ -54,46 +55,24 @@ export const settlementsRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const effectiveFromId = input.fromId ?? ctx.user.id;
 
-      // Block settlements on archived groups
+      // Refuse an archived group before the checks and rate lookup below;
+      // lockActiveGroup in the transaction is the check that holds (#289)
       const group = await ctx.db.group.findUnique({
         where: { id: input.groupId },
         select: { archivedAt: true, currency: true },
       });
       if (group?.archivedAt) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'Cannot create settlements in an archived group',
-        });
+        throw new AppError('BAD_REQUEST', 'archivedCreateSettlement');
       }
 
       // Cannot settle with yourself
       if (effectiveFromId === input.toId) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'Cannot settle a debt with yourself',
-        });
+        throw new AppError('BAD_REQUEST', 'settleWithYourself');
       }
 
       // Security: non-admin members can only create settlements from themselves
       if (ctx.membership.role === 'MEMBER' && input.fromId && input.fromId !== ctx.user.id) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'You can only record payments from yourself',
-        });
-      }
-
-      // Validate both fromId and toId are members of the group
-      const memberCount = await ctx.db.groupMember.count({
-        where: {
-          groupId: input.groupId,
-          userId: { in: [effectiveFromId, input.toId] },
-        },
-      });
-      if (memberCount < (effectiveFromId === input.toId ? 1 : 2)) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'Both the payer and recipient must be members of this group',
-        });
+        throw new AppError('FORBIDDEN', 'paymentsFromYourselfOnly');
       }
 
       // Currency conversion: compute base currency amount if currencies differ
@@ -109,16 +88,50 @@ export const settlementsRouter = createTRPCRouter({
         }
 
         if (exchangeRate === null) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'Could not fetch exchange rate. Please provide a manual rate or try again.',
-          });
+          throw new AppError('BAD_REQUEST', 'exchangeRateUnavailable');
         }
 
         baseCurrencyAmount = convertCents(input.amount, exchangeRate);
       }
 
       const settlement = await ctx.db.$transaction(async (tx) => {
+        await lockActiveGroup(tx, input.groupId, 'archivedCreateSettlement');
+
+        // Validate both fromId and toId are members of the group (after the lock,
+        // so someone leaving meanwhile is either gone or waits for this, #279)
+        const memberCount = await tx.groupMember.count({
+          where: {
+            groupId: input.groupId,
+            userId: { in: [effectiveFromId, input.toId] },
+          },
+        });
+        if (memberCount < 2) {
+          throw new AppError('BAD_REQUEST', 'settlementPartiesNotMembers');
+        }
+
+        // A placeholder removed from the group (#284) is still counted above, so a
+        // balance that comes back to them can be settled. But the payment may only
+        // settle it, not make a new one: they're no longer in the group. Two such
+        // payments at once can each pass (the lock above is shared); what they
+        // overpay can still be settled the same way.
+        const removed = await tx.groupMember.findMany({
+          where: { groupId: input.groupId, userId: { in: [effectiveFromId, input.toId] }, removedAt: { not: null } },
+          select: { userId: true },
+        });
+        if (removed.length > 0) {
+          const balances = await loadGroupBalances(tx, input.groupId);
+          const net = (userId: string) => balances.find((b) => b.userId === userId)?.net ?? 0;
+          // Balances are in the group's currency
+          const paid = baseCurrencyAmount ?? input.amount;
+          // A positive net is owed to them: paying them settles it, and they pay what they owe
+          const settles = removed.every(({ userId }) =>
+            userId === input.toId ? paid <= net(userId) : paid <= -net(userId),
+          );
+          if (!settles) {
+            throw new AppError('BAD_REQUEST', 'settlementRemovedMemberOverpaid');
+          }
+        }
+
         const created = await tx.settlement.create({
           data: {
             groupId: input.groupId,
@@ -146,5 +159,60 @@ export const settlementsRouter = createTRPCRouter({
       });
 
       return settlement;
+    }),
+
+  delete: groupMemberProcedure
+    .input(z.object({ groupId: z.string(), settlementId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const group = await ctx.db.group.findUnique({
+        where: { id: input.groupId },
+        select: { archivedAt: true },
+      });
+      if (group?.archivedAt) {
+        throw new AppError('BAD_REQUEST', 'archivedDeletePayment');
+      }
+
+      const settlement = await ctx.db.settlement.findUnique({
+        where: { id: input.settlementId },
+      });
+      if (!settlement || settlement.groupId !== input.groupId) {
+        throw new AppError('NOT_FOUND');
+      }
+
+      // A member can only record a payment from themselves, so the payer is
+      // whoever recorded it unless an owner/admin recorded it for them. The
+      // recipient can't delete it: that would let them deny being paid.
+      const isOwnerOrAdmin = ctx.membership.role === 'OWNER' || ctx.membership.role === 'ADMIN';
+      if (!isOwnerOrAdmin && settlement.fromId !== ctx.user.id) {
+        throw new AppError('FORBIDDEN', 'onlyPayerDeletesPayment');
+      }
+
+      await ctx.db.$transaction(async (tx) => {
+        await lockActiveGroup(tx, input.groupId, 'archivedDeletePayment');
+        // deleteMany so a payment someone else deleted in the meantime is NOT_FOUND, not a Prisma error
+        const { count } = await tx.settlement.deleteMany({
+          where: { id: input.settlementId, groupId: input.groupId },
+        });
+        if (count === 0) {
+          throw new AppError('NOT_FOUND');
+        }
+
+        await tx.activityLog.create({
+          data: {
+            groupId: input.groupId,
+            userId: ctx.user.id,
+            type: 'SETTLEMENT_DELETED',
+            entityId: input.settlementId,
+            metadata: {
+              fromId: settlement.fromId,
+              toId: settlement.toId,
+              amount: settlement.amount,
+              currency: settlement.currency,
+            },
+          },
+        });
+      });
+
+      return { success: true };
     }),
 });

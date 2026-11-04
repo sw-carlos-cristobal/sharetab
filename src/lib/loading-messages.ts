@@ -29,3 +29,8 @@ export const loadingMessageKeys = [
   'loadingMessages.msg23',
   'loadingMessages.msg24',
 ] as const;
+
+/** Where a scan's loading messages start, so each scan doesn't open on the same one */
+export function randomLoadingMessageIndex(): number {
+  return Math.floor(Math.random() * loadingMessageKeys.length);
+}

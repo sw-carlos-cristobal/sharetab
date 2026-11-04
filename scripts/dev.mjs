@@ -3,37 +3,53 @@ import { spawn, execSync } from 'child_process';
 import { rmSync, readFileSync } from 'fs';
 import { join } from 'path';
 
+// The processes listening on a port: PowerShell on Windows, lsof elsewhere (macOS, most Linux).
+// Without either, returns none, and a leftover server keeps the port.
+function pidsOnPort(port) {
+  try {
+    const out =
+      process.platform === 'win32'
+        ? execSync(
+            `powershell -Command "(Get-NetTCPConnection -LocalPort ${port} -ErrorAction SilentlyContinue).OwningProcess"`,
+            { encoding: 'utf8' },
+          )
+        : execSync(`lsof -ti tcp:${port} -sTCP:LISTEN`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    return [
+      ...new Set(
+        out
+          .split(/\r?\n/)
+          .map((s) => s.trim())
+          .filter((pid) => pid && pid !== '0'),
+      ),
+    ];
+  } catch {
+    return [];
+  }
+}
+
 // Kill any process using a port
 function killPort(port) {
-  try {
-    const out = execSync(
-      `powershell -Command "(Get-NetTCPConnection -LocalPort ${port} -ErrorAction SilentlyContinue).OwningProcess"`,
-      { encoding: 'utf8' },
-    ).trim();
-    for (const pid of new Set(
-      out
-        .split(/\r?\n/)
-        .map((s) => s.trim())
-        .filter(Boolean),
-    )) {
-      if (pid !== '0') {
-        console.log(`Killing process ${pid} on port ${port}...`);
-        execSync(`powershell -Command "Stop-Process -Id ${pid} -Force -ErrorAction SilentlyContinue"`);
-      }
-    }
-  } catch {}
+  for (const pid of pidsOnPort(port)) {
+    console.log(`Killing process ${pid} on port ${port}...`);
+    try {
+      process.kill(Number(pid), 'SIGKILL');
+    } catch {}
+  }
 }
 
 // Kill stale servers from previous runs
 killPort(3000);
 killPort(51214);
 
+// embedded-postgres's own default; named here so the stale-lock cleanup below uses the same path
+const DATABASE_DIR = join('data', 'db');
+
 const pg = new EmbeddedPostgres({
   port: 51214,
   user: 'postgres',
   password: 'postgres',
   persistent: true,
-  dataPath: './test-pg-data',
+  databaseDir: DATABASE_DIR,
   initdbFlags: ['--encoding=UTF8', '--locale=en_US.UTF-8'],
 });
 
@@ -52,7 +68,7 @@ try {
   // Stale lock file from a previous crash — remove it and retry
   console.log('Removing stale lock file and retrying...');
   try {
-    rmSync(join('data', 'db', 'postmaster.pid'));
+    rmSync(join(DATABASE_DIR, 'postmaster.pid'));
   } catch {}
   await pg.start();
 }

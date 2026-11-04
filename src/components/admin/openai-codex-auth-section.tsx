@@ -323,7 +323,12 @@ export function OpenAICodexAuthSection() {
                   {testFile && (
                     <span className="flex items-center gap-1 text-xs text-muted-foreground">
                       <span className="max-w-32 truncate">{testFile.name}</span>
-                      <button onClick={clearFile} className="text-muted-foreground hover:text-foreground">
+                      <button
+                        onClick={clearFile}
+                        className="text-muted-foreground hover:text-foreground"
+                        aria-label={t('codexAuth.removeFile')}
+                        title={t('codexAuth.removeFile')}
+                      >
                         <X className="h-3 w-3" />
                       </button>
                     </span>

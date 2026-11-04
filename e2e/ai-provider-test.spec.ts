@@ -75,7 +75,8 @@ test.describe('AI Provider Test — admin endpoint', () => {
       expect(result.durationMs).toBeGreaterThan(0);
       expect(result.result.items.length).toBeGreaterThanOrEqual(1);
       expect(result.result.total).toBeGreaterThan(0);
-      expect(result.result.currency).toBeDefined();
+      // A currency code, or none when the receipt doesn't say which "$" it means (#361)
+      if (result.result.currency != null) expect(result.result.currency).toMatch(/^[A-Z]{3}$/);
     } else {
       // Provider error is acceptable (rate limit, etc.) — just ensure it's not a crash
       expect(error?.message).toBeDefined();

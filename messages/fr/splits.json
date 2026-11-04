@@ -5,13 +5,14 @@
   "emptyDescription": "Utilisez Partage rapide pour partager une note entre amis.",
   "goToSplit": "Partager une note",
   "loadMore": "Charger plus",
-  "people": "{count} personnes",
-  "items": "{count} articles",
+  "people": "{count, plural, one {# personne} other {# personnes}}",
+  "items": "{count, plural, one {# article} other {# articles}}",
   "claiming": "En cours",
   "finalized": "Termine",
   "untitled": "Partage sans titre",
   "delete": "Supprimer le partage",
-  "deleteConfirm": "Supprimer ce partage ? Cette action est irréversible.",
+  "deleteTitle": "Supprimer ce partage ?",
+  "deleteDescription": "Son lien ne fonctionnera plus pour les personnes avec qui vous l'avez partagé. Cette action est irréversible.",
   "deleted": "Partage supprimé",
   "loading": "Chargement..."
 }

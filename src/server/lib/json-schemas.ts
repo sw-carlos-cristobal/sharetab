@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { TRPCError } from '@trpc/server';
+import { AppError } from './app-error';
+import { currencyCode } from '@/lib/currencies';
 
 export const extractedDataSchema = z
   .object({
@@ -9,11 +10,23 @@ export const extractedDataSchema = z
     tax: z.number().int().min(0).default(0),
     tip: z.number().int().min(0).default(0),
     total: z.number().int().min(0).default(0),
-    currency: z.string().default('USD'),
+    // No default: a receipt without one is in its group's currency (#361), see receiptCurrency
+    currency: z.string().nullish(),
   })
   .passthrough();
 
 export type ExtractedData = z.infer<typeof extractedDataSchema>;
+
+/**
+ * A receipt's currency: the code stored in its extracted data, or `fallback` when it has none or
+ * one that isn't a currency code: callers pass its group's currency (the expense's group when an
+ * ungrouped receipt becomes an expense, USD otherwise) (#361).
+ */
+export function receiptCurrency(extractedData: unknown, fallback: string): string {
+  const stored =
+    extractedData && typeof extractedData === 'object' ? (extractedData as { currency?: unknown }).currency : undefined;
+  return currencyCode(stored) ?? fallback;
+}
 
 export const guestItemSchema = z.object({
   name: z.string(),
@@ -24,7 +37,24 @@ export const guestItemSchema = z.object({
 
 export type GuestItem = z.infer<typeof guestItemSchema>;
 
+/** A claim save's key and a digest of its changes, kept on the person who sent it (guest.claimItems, #238). */
+const guestSaveRecordSchema = z.object({ key: z.string(), hash: z.string() });
+
+/**
+ * The well-formed records in a person's stored `saves`; anything else is ignored rather than
+ * failing the request. (guestPersonSchema leaves `saves` out: parsing strips it, and the one
+ * caller, finalizeSession, doesn't use it.)
+ */
+export function validSaveRecords(value: unknown): z.infer<typeof guestSaveRecordSchema>[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((record) => {
+    const parsed = guestSaveRecordSchema.safeParse(record);
+    return parsed.success ? [parsed.data] : [];
+  });
+}
+
 export const guestPersonSchema = z.object({
+  id: z.string().optional(),
   name: z.string(),
   personToken: z.string().optional(),
   groupSize: z.number().int().min(1).optional(),
@@ -55,11 +85,7 @@ function wrapZodError(label: string, fn: () => unknown) {
   try {
     return fn();
   } catch (err) {
-    throw new TRPCError({
-      code: 'BAD_REQUEST',
-      message: `Invalid ${label} data`,
-      cause: err,
-    });
+    throw new AppError('BAD_REQUEST', 'invalidData', { label }, { cause: err });
   }
 }
 

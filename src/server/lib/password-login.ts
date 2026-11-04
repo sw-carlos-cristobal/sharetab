@@ -1,14 +1,50 @@
 /**
- * Email/password sign-in: the Credentials provider's `authorize` step.
+ * Email/password sign-in: the Credentials provider's `authorize` step, the per-address login limit
+ * (whose count and window Settings password guesses reuse under a key of their own), and the
+ * check that refuses the password routes while password sign-in is off.
  */
 
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { db } from '../db';
+import { AppError } from './app-error';
+import { parseAuthConfig } from './auth-config';
 import { logger } from './logger';
 import { checkRateLimit, parsePositiveInt } from './rate-limit';
 import { getClientIp, FALLBACK_IP } from './client-ip';
 import { AmbiguousEmailError, findUserByEmail } from './user-email';
+
+/** Refuses the password routes while password sign-in is off (`DISABLE_PASSWORD_LOGIN`). */
+export function requirePasswordLogin() {
+  const config = parseAuthConfig(process.env);
+  if (!config.passwordLogin) {
+    throw new AppError('FORBIDDEN', 'passwordLoginDisabled');
+  }
+  return config;
+}
+
+/**
+ * The per-address login rate-limit key, also cleared by a password reset or a change in Settings.
+ * Lowercased like the user lookup, so case variants share a bucket.
+ */
+export function loginRateLimitKey(email: string): string {
+  return `login:${email.toLowerCase()}`;
+}
+
+/** Password attempts per address in LOGIN_WINDOW_MS (configurable for CI/testing). Settings shares it. */
+export function loginAttemptsPerEmail(): number {
+  return parsePositiveInt(process.env.AUTH_RATE_LIMIT_MAX, 5);
+}
+
+export const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+
+/**
+ * Current-password guesses in Settings, per account: each counted before it's checked, as many in
+ * LOGIN_WINDOW_MS as the login form allows; a right one clears the count.
+ */
+export function passwordChangeGuessKey(userId: string): string {
+  return `password-change:${userId}`;
+}
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -39,10 +75,8 @@ export async function authorizePasswordLogin(credentials: unknown, headers: Head
     }
   }
 
-  // Rate limit login attempts per email (configurable for CI/testing).
-  // Lowercased like the lookup below, so case variants share a bucket.
-  const maxLoginAttempts = parsePositiveInt(process.env.AUTH_RATE_LIMIT_MAX, 5);
-  const { allowed } = checkRateLimit(`login:${parsed.data.email.toLowerCase()}`, maxLoginAttempts, 15 * 60 * 1000);
+  // Rate limit login attempts per email
+  const { allowed } = checkRateLimit(loginRateLimitKey(parsed.data.email), loginAttemptsPerEmail(), LOGIN_WINDOW_MS);
   if (!allowed) {
     logger.warn('auth.rate_limited', { email: parsed.data.email });
     return null;
@@ -65,5 +99,13 @@ export async function authorizePasswordLogin(credentials: unknown, headers: Head
   }
 
   logger.info('auth.login', { userId: user.id, email: user.email });
-  return { id: user.id, name: user.name, email: user.email, image: user.image, locale: user.locale };
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    image: user.image,
+    locale: user.locale,
+    // Read with the hash just verified: a reset that commits meanwhile ends this session (auth.ts)
+    passwordChangedAt: user.passwordChangedAt,
+  };
 }

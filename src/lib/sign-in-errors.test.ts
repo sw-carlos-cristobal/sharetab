@@ -9,6 +9,11 @@ describe('getSignInErrorKey', () => {
 
   test.each([
     ['OidcSessionActive', 'sessionActive'],
+    ['GoogleSessionActive', 'sessionActive'],
+    ['GoogleAccountExists', 'accountExists'],
+    ['GoogleRegistrationDisabled', 'registrationDisabled'],
+    ['GoogleEmailUnverified', 'emailUnverified'],
+    ['GoogleAdminEmailNotHosted', 'adminEmailNotHosted'],
     ['OidcEmailMissing', 'emailMissing'],
     ['OidcAccountNotLinked', 'accountNotLinked'],
     ['OAuthAccountNotLinked', 'accountNotLinked'],

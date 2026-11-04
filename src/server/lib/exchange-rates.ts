@@ -3,8 +3,12 @@
  * Caches rates in memory with a configurable TTL.
  */
 
-import { TRPCError } from '@trpc/server';
+import { z } from 'zod';
+import { AppError } from './app-error';
 import { MAX_MONEY_CENTS } from '@/lib/money';
+
+/** A rate entered by hand (1 unit of the expense's currency = rate units of the group's) */
+export const exchangeRateSchema = z.number().positive().finite().max(1_000_000);
 
 const FRANKFURTER_BASE = 'https://api.frankfurter.app';
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
@@ -85,15 +89,12 @@ export async function getExchangeRate(from: string, to: string, date?: string): 
  * @param amountCents - Amount in cents in the source currency
  * @param exchangeRate - The exchange rate (1 unit source = rate units target)
  * @returns Amount in cents in the target currency, rounded to nearest cent
- * @throws TRPCError if the converted amount exceeds the Int4 money column range
+ * @throws AppError if the converted amount exceeds the Int4 money column range
  */
 export function convertCents(amountCents: number, exchangeRate: number): number {
   const converted = Math.round(amountCents * exchangeRate);
   if (!Number.isFinite(converted) || Math.abs(converted) > MAX_MONEY_CENTS) {
-    throw new TRPCError({
-      code: 'BAD_REQUEST',
-      message: 'Converted amount is too large. Check the exchange rate.',
-    });
+    throw new AppError('BAD_REQUEST', 'convertedAmountTooLarge');
   }
   return converted;
 }

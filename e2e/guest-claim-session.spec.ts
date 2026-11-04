@@ -78,13 +78,13 @@ test.describe('Guest claiming sessions', () => {
       token: shareToken,
       name: 'Alice',
     });
-    const { personIndex, personToken } = (await joinRes.json()).result?.data?.json;
+    const { personIndex, personId, personToken } = (await joinRes.json()).result?.data?.json;
     expect(personIndex).toBe(0);
 
     // Claim items 0 and 1
     const claimRes = await trpcMutation(ctx, 'guest.claimItems', {
       token: shareToken,
-      personIndex,
+      personId,
       personToken,
       claimedItemIndices: [0, 1],
     });
@@ -136,7 +136,7 @@ test.describe('Guest claiming sessions', () => {
     // Alice claims item 0
     await trpcMutation(ctx, 'guest.claimItems', {
       token: shareToken,
-      personIndex: aliceJoin.personIndex,
+      personId: aliceJoin.personId,
       personToken: aliceJoin.personToken,
       claimedItemIndices: [0],
     });
@@ -144,7 +144,7 @@ test.describe('Guest claiming sessions', () => {
     // Bob claims item 1
     await trpcMutation(ctx, 'guest.claimItems', {
       token: shareToken,
-      personIndex: bobJoin.personIndex,
+      personId: bobJoin.personId,
       personToken: bobJoin.personToken,
       claimedItemIndices: [1],
     });
@@ -152,7 +152,7 @@ test.describe('Guest claiming sessions', () => {
     // Finalize (Alice finalizes)
     const finalizeRes = await trpcMutation(ctx, 'guest.finalizeSession', {
       token: shareToken,
-      personIndex: aliceJoin.personIndex,
+      personId: aliceJoin.personId,
       personToken: aliceJoin.personToken,
     });
     expect(finalizeRes.ok()).toBe(true);
@@ -197,7 +197,12 @@ test.describe('Guest claiming sessions', () => {
 
     // The device holding her token rejoins as her
     const rejoin = await joinGuestSession(ctx, { token: shareToken, name: 'alice', personToken: alice.personToken });
-    expect(rejoin).toEqual({ personIndex: 0, personToken: alice.personToken, name: 'Alice' });
+    expect(rejoin).toEqual({
+      personIndex: 0,
+      personId: alice.personId,
+      personToken: alice.personToken,
+      name: 'Alice',
+    });
 
     await ctx.dispose();
   });
@@ -218,19 +223,27 @@ test.describe('Guest claiming sessions', () => {
       token: shareToken,
       name: 'Alice',
     });
-    const { personIndex, personToken } = (await joinRes.json()).result?.data?.json;
+    const { personId, personToken } = (await joinRes.json()).result?.data?.json;
 
-    // Finalize
-    await trpcMutation(ctx, 'guest.finalizeSession', {
+    // Claim everything (a split finalizes only once every item is claimed, #237), then finalize
+    const claimed = await trpcMutation(ctx, 'guest.claimItems', {
       token: shareToken,
-      personIndex,
+      personId,
+      personToken,
+      claimedItemIndices: [0, 1],
+    });
+    expect(claimed.ok(), await claimed.text()).toBe(true);
+    const finalized = await trpcMutation(ctx, 'guest.finalizeSession', {
+      token: shareToken,
+      personId,
       personToken,
     });
+    expect(finalized.ok(), await finalized.text()).toBe(true);
 
     // Try to claim items on finalized session
     const claimRes = await trpcMutation(ctx, 'guest.claimItems', {
       token: shareToken,
-      personIndex,
+      personId,
       personToken,
       claimedItemIndices: [0],
     });
@@ -329,7 +342,7 @@ test.describe('Guest claiming sessions', () => {
     // Alice claims her 2 beers (0,1) + Nachos (5, shared)
     await trpcMutation(ctx, 'guest.claimItems', {
       token: shareToken,
-      personIndex: alice.personIndex,
+      personId: alice.personId,
       personToken: alice.personToken,
       claimedItemIndices: [0, 1, 5],
     });
@@ -337,7 +350,7 @@ test.describe('Guest claiming sessions', () => {
     // Bob claims his 2 beers (2,3) + Nachos (5, shared)
     await trpcMutation(ctx, 'guest.claimItems', {
       token: shareToken,
-      personIndex: bob.personIndex,
+      personId: bob.personId,
       personToken: bob.personToken,
       claimedItemIndices: [2, 3, 5],
     });
@@ -345,7 +358,7 @@ test.describe('Guest claiming sessions', () => {
     // Charlie claims his 1 beer (4) + Nachos (5, shared)
     await trpcMutation(ctx, 'guest.claimItems', {
       token: shareToken,
-      personIndex: charlie.personIndex,
+      personId: charlie.personId,
       personToken: charlie.personToken,
       claimedItemIndices: [4, 5],
     });
@@ -380,7 +393,7 @@ test.describe('Guest claiming sessions', () => {
     // Finalize and verify totals
     const finalizeRes = await trpcMutation(ctx, 'guest.finalizeSession', {
       token: shareToken,
-      personIndex: alice.personIndex,
+      personId: alice.personId,
       personToken: alice.personToken,
     });
     expect(finalizeRes.ok()).toBe(true);
@@ -466,7 +479,7 @@ test.describe('Guest claiming sessions', () => {
         joined.map((guest, i) =>
           trpcMutation(ctx, 'guest.claimItems', {
             token: shareToken,
-            personIndex: guest.personIndex,
+            personId: guest.personId,
             personToken: guest.personToken,
             claimedItemIndices: [i, sharedItem],
           }),

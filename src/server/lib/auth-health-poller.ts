@@ -1,5 +1,5 @@
-import nodemailer from 'nodemailer';
 import { db } from '@/server/db';
+import { createMailTransport, mailFrom, publicBaseUrl } from './mailer';
 import { isProviderConfigured } from '@/server/ai/registry';
 import { checkOpenAICodexHealth } from './openai-codex-login';
 import { getStoredMeridianTokenExpiry, refreshIfNeeded as refreshMeridianToken } from './meridian-login';
@@ -63,6 +63,8 @@ const MERIDIAN_HEALTH_CACHE_TTL_MS = {
 
 // ─── Health check ─────────────────────────────────────────
 
+const CLAUDE_CODE_AUTH_FAILURE = /failed to authenticate|could not be refreshed/i;
+
 function getMeridianHealthCacheTtl(result: MeridianHealthResult): number {
   if (result.status !== 'healthy') {
     return MERIDIAN_HEALTH_CACHE_TTL_MS[result.status];
@@ -86,12 +88,19 @@ function getMeridianHealthCacheTtl(result: MeridianHealthResult): number {
   return MERIDIAN_HEALTH_CACHE_TTL_MS.healthyLongLived;
 }
 
+/** The account email from Meridian's /health answer, when it gives one (it may send null). */
+function accountEmail(healthData: { auth?: { email?: unknown } }): { email?: string } {
+  const email = healthData.auth?.email;
+  return typeof email === 'string' ? { email } : {};
+}
+
 async function runMeridianHealthCheck(): Promise<MeridianHealthResult> {
   const port = process.env.MERIDIAN_PORT ?? '3457';
   const baseUrl = `http://127.0.0.1:${port}`;
 
   // Step 1: Check if proxy is running at all
-  let healthData: { status?: string; auth?: { email?: string }; error?: string };
+  // Untrusted JSON: Meridian answers "email": null when it doesn't know the account (1.71.0)
+  let healthData: { status?: unknown; auth?: { email?: unknown }; error?: unknown };
   try {
     const res = await fetch(`${baseUrl}/health`, {
       signal: AbortSignal.timeout(10_000),
@@ -105,8 +114,8 @@ async function runMeridianHealthCheck(): Promise<MeridianHealthResult> {
   if (healthData.status !== 'healthy' && healthData.status !== 'degraded') {
     return {
       status: 'unhealthy',
-      ...(healthData.auth?.email !== undefined ? { email: healthData.auth.email } : {}),
-      ...(healthData.error !== undefined ? { error: healthData.error } : {}),
+      ...accountEmail(healthData),
+      ...(typeof healthData.error === 'string' ? { error: healthData.error } : {}),
     };
   }
 
@@ -118,7 +127,7 @@ async function runMeridianHealthCheck(): Promise<MeridianHealthResult> {
   if (storedExpiry && storedExpiry - Date.now() > 2 * 60 * 60 * 1000) {
     return {
       status: healthData.status === 'degraded' ? 'degraded' : 'healthy',
-      ...(healthData.auth?.email !== undefined ? { email: healthData.auth.email } : {}),
+      ...accountEmail(healthData),
     };
   }
 
@@ -147,31 +156,40 @@ async function runMeridianHealthCheck(): Promise<MeridianHealthResult> {
       }
       return {
         status: 'healthy',
-        ...(healthData.auth?.email !== undefined ? { email: healthData.auth.email } : {}),
+        ...accountEmail(healthData),
       };
     }
 
     const probeBody = await probeRes.json().catch(() => null);
     const errorType = probeBody?.error?.type;
+    const errorMessage: unknown = probeBody?.error?.message;
 
-    if (errorType === 'authentication_error') {
+    // Meridian reports its own auth checks as authentication_error, but passes
+    // Claude Code's failures through as api_error (e.g. "Claude Code returned
+    // an error result: Failed to authenticate: OAuth session expired and could
+    // not be refreshed" once Claude Code has cleared a login whose refresh
+    // failed).
+    if (
+      errorType === 'authentication_error' ||
+      (typeof errorMessage === 'string' && CLAUDE_CODE_AUTH_FAILURE.test(errorMessage))
+    ) {
       return {
         status: 'unhealthy',
-        ...(healthData.auth?.email !== undefined ? { email: healthData.auth.email } : {}),
-        error: probeBody?.error?.message ?? 'Authentication expired',
+        ...accountEmail(healthData),
+        error: typeof errorMessage === 'string' ? errorMessage : 'Authentication expired',
       };
     }
 
     // Other API errors (rate limit, overloaded, etc.) — proxy and auth are fine
     return {
       status: healthData.status === 'degraded' ? 'degraded' : 'healthy',
-      ...(healthData.auth?.email !== undefined ? { email: healthData.auth.email } : {}),
+      ...accountEmail(healthData),
     };
   } catch {
     // Probe timed out or failed — proxy is up but something is wrong
     return {
       status: 'degraded',
-      ...(healthData.auth?.email !== undefined ? { email: healthData.auth.email } : {}),
+      ...accountEmail(healthData),
       error: 'Auth verification probe timed out',
     };
   }
@@ -222,18 +240,9 @@ export async function sendAuthExpiryEmail(
     return false;
   }
 
-  const transport = nodemailer.createTransport({
-    host,
-    port: parseInt(process.env.EMAIL_SERVER_PORT ?? '587'),
-    secure: parseInt(process.env.EMAIL_SERVER_PORT ?? '587') === 465,
-    auth: {
-      user: process.env.EMAIL_SERVER_USER,
-      pass: process.env.EMAIL_SERVER_PASSWORD,
-    },
-  });
-
-  const from = process.env.EMAIL_FROM ?? 'ShareTab <noreply@sharetab.local>';
-  const dashboardUrl = `${process.env.NEXTAUTH_URL ?? 'http://localhost:3000'}/admin`;
+  const transport = createMailTransport();
+  const from = mailFrom();
+  const dashboardUrl = `${publicBaseUrl()}/admin`;
   const providerLabel = provider === 'openai-codex' ? 'ChatGPT OAuth (OpenAI Codex)' : 'Claude AI';
 
   const loginSection = loginUrl ? `<p><strong>Login URL:</strong><br/><a href="${loginUrl}">${loginUrl}</a></p>` : '';

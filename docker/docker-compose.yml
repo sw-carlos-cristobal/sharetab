@@ -12,10 +12,13 @@ services:
       - DB_USER=${DB_USER:-sharetab}
       - DB_PASSWORD=${DB_PASSWORD:-sharetab}
       - DB_NAME=${DB_NAME:-sharetab}
+      - DB_WAIT_SECONDS=${DB_WAIT_SECONDS:-}
+      - ALLOW_EMPTY_EXTERNAL_DB=${ALLOW_EMPTY_EXTERNAL_DB:-}
+      # true starts only the bundled database, for a restore (README "Restoring a backup")
+      - SHARETAB_MAINTENANCE=${SHARETAB_MAINTENANCE:-}
       - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-}
       - AUTH_SECRET=${AUTH_SECRET:-}
-      - AUTH_TRUST_HOST=${AUTH_TRUST_HOST:-false}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       - OIDC_ISSUER=${OIDC_ISSUER:-}
@@ -29,9 +32,9 @@ services:
       - AI_PROVIDER_PRIORITY=${AI_PROVIDER_PRIORITY:-openai}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o}
-      - OPENAI_CODEX_MODEL=${OPENAI_CODEX_MODEL:-gpt-5.5}
+      - OPENAI_CODEX_MODEL=${OPENAI_CODEX_MODEL:-gpt-6.1-sol}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-opus-4-6}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-5}
       - ANTHROPIC_HEALTH_MODEL=${ANTHROPIC_HEALTH_MODEL:-claude-haiku-4-5-20251001}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       - OLLAMA_MODEL=${OLLAMA_MODEL:-llava}
@@ -48,8 +51,13 @@ services:
       - AUTH_IP_RATE_LIMIT_MAX=${AUTH_IP_RATE_LIMIT_MAX:-30}
       - REGISTER_RATE_LIMIT_MAX=${REGISTER_RATE_LIMIT_MAX:-10}
       - GUEST_RATE_LIMIT_MAX=${GUEST_RATE_LIMIT_MAX:-10}
+      # Empty keeps the defaults (20 reset requests an hour, 30 link submissions per 15 minutes)
+      - PASSWORD_RESET_RATE_LIMIT_MAX=${PASSWORD_RESET_RATE_LIMIT_MAX:-}
       - GUEST_UPLOAD_GLOBAL_LIMIT=${GUEST_UPLOAD_GLOBAL_LIMIT:-100}
       - GUEST_AI_GLOBAL_LIMIT=${GUEST_AI_GLOBAL_LIMIT:-100}
+      - USER_UPLOAD_LIMIT=${USER_UPLOAD_LIMIT:-30}
+      - USER_AI_LIMIT=${USER_AI_LIMIT:-30}
+      - AI_GLOBAL_LIMIT=${AI_GLOBAL_LIMIT:-200}
       - DISABLE_GUEST_UPLOADS=${DISABLE_GUEST_UPLOADS:-false}
       - LOG_LEVEL=${LOG_LEVEL:-info}
     volumes:
@@ -61,7 +69,7 @@ services:
     # Give the entrypoint time to stop Node and shut PostgreSQL down cleanly
     stop_grace_period: 30s
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3

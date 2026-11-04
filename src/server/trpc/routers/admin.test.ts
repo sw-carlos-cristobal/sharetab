@@ -45,11 +45,14 @@ vi.mock('@/server/auth', () => ({
 // Mock Prisma client
 const mockDb = {
   $queryRaw: vi.fn(),
+  // Interactive transactions run their callback against the same mocks
+  $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(mockDb)),
   user: {
     findMany: vi.fn(),
     findUnique: vi.fn(),
     count: vi.fn(),
     delete: vi.fn(),
+    deleteMany: vi.fn(),
     update: vi.fn(),
   },
   group: {
@@ -57,6 +60,22 @@ const mockDb = {
     findUnique: vi.fn(),
     count: vi.fn(),
     delete: vi.fn(),
+  },
+  groupMember: {
+    findMany: vi.fn(),
+    deleteMany: vi.fn(),
+  },
+  account: {
+    deleteMany: vi.fn(),
+  },
+  session: {
+    deleteMany: vi.fn(),
+  },
+  passwordResetToken: {
+    deleteMany: vi.fn(),
+  },
+  guestSplit: {
+    findMany: vi.fn(),
   },
   expense: {
     count: vi.fn(),
@@ -68,6 +87,7 @@ const mockDb = {
   receipt: {
     count: vi.fn(),
     findMany: vi.fn(),
+    deleteMany: vi.fn(),
     groupBy: vi.fn().mockResolvedValue([]),
   },
   adminAuditLog: {
@@ -94,6 +114,19 @@ vi.mock('@/server/db', () => ({ db: mockDb }));
 vi.mock('@/server/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
+const { removeReceiptFiles, deleteExpiredSplits, countUnusedReceipts, deleteUnusedReceipts } = vi.hoisted(() => ({
+  removeReceiptFiles: vi.fn(),
+  deleteExpiredSplits: vi.fn(),
+  countUnusedReceipts: vi.fn(),
+  deleteUnusedReceipts: vi.fn(),
+}));
+vi.mock('@/server/lib/receipt-cleanup', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/server/lib/receipt-cleanup')>()),
+  removeReceiptFiles,
+  deleteExpiredSplits,
+  countUnusedReceipts,
+  deleteUnusedReceipts,
+}));
 vi.mock('@/server/lib/rate-limit', () => ({
   checkRateLimit: vi.fn().mockReturnValue({ allowed: true }),
 }));
@@ -115,19 +148,27 @@ vi.mock('@/server/ai/providers/meridian', () => ({
   startMeridianProxy: mockStartMeridianProxy,
   getMeridianStartError: mockGetMeridianStartError,
 }));
-const { mockCheckMeridianHealth, mockInvalidateMeridianHealthCache } = vi.hoisted(() => ({
+const { mockCheckMeridianHealth, mockInvalidateMeridianHealthCache, mockSendAuthExpiryEmail } = vi.hoisted(() => ({
   mockCheckMeridianHealth: vi.fn(),
   mockInvalidateMeridianHealthCache: vi.fn(),
+  mockSendAuthExpiryEmail: vi.fn(),
 }));
 vi.mock('@/server/lib/auth-health-poller', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/server/lib/auth-health-poller')>()),
   checkMeridianHealth: mockCheckMeridianHealth,
   invalidateMeridianHealthCache: mockInvalidateMeridianHealthCache,
+  sendAuthExpiryEmail: mockSendAuthExpiryEmail,
 }));
-const { mockSubmitCode } = vi.hoisted(() => ({ mockSubmitCode: vi.fn() }));
+const { issuePasswordResetToken } = vi.hoisted(() => ({ issuePasswordResetToken: vi.fn() }));
+vi.mock('@/server/lib/password-reset', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/server/lib/password-reset')>()),
+  issuePasswordResetToken,
+}));
+const { mockSubmitCode, mockStartLogin } = vi.hoisted(() => ({ mockSubmitCode: vi.fn(), mockStartLogin: vi.fn() }));
 vi.mock('@/server/lib/meridian-login', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/server/lib/meridian-login')>()),
   submitCode: mockSubmitCode,
+  startLogin: mockStartLogin,
   isLoginInProgress: vi.fn().mockReturnValue(false),
 }));
 
@@ -226,6 +267,7 @@ describe('admin router procedures existence', () => {
     expect(procedures).toContain('deleteGroup');
     expect(procedures).toContain('getStorageStats');
     expect(procedures).toContain('cleanupOrphans');
+    expect(procedures).toContain('cleanupUnusedReceipts');
 
     // New procedures
     expect(procedures).toContain('getAuditLog');
@@ -351,11 +393,125 @@ describe('listGroups input schema', () => {
 
 const adminSession = { user: { id: 'admin-1', email: 'admin@example.com' } };
 
-async function callerAs(session: { user: { id: string; email: string } }) {
+async function callerAs(
+  session: { user: { id: string; email: string } },
+  impersonating: { adminId: string; adminEmail: string; targetId: string; targetEmail: string } | null = null,
+) {
   const { adminRouter } = await import('./admin');
-  const ctx = { session, db: mockDb, headers: new Headers(), impersonating: null };
+  const ctx = { session, db: mockDb, headers: new Headers(), impersonating };
   return adminRouter.createCaller(ctx as unknown as Parameters<typeof adminRouter.createCaller>[0]);
 }
+
+describe('who adminProcedure lets in (#399)', () => {
+  /** The accounts the case-insensitive lookup of ADMIN_EMAIL finds. */
+  function accountsWithAdminEmail(rows: { id: string; email: string }[]) {
+    mockDb.$queryRaw.mockResolvedValueOnce(rows.map(({ id }) => ({ id })));
+    mockDb.user.findMany.mockResolvedValueOnce(rows);
+  }
+
+  beforeEach(() => {
+    vi.stubEnv('ADMIN_EMAIL', 'admin@example.com');
+    vi.clearAllMocks();
+    mockDb.user.findUnique.mockResolvedValue({ suspendedAt: null });
+    mockDb.systemSetting.findUnique.mockResolvedValue(null);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test('lets in an admin who registered the address in other letter case', async () => {
+    accountsWithAdminEmail([{ id: 'admin-1', email: 'Admin@Example.com' }]);
+    const api = await callerAs({ user: { id: 'admin-1', email: 'Admin@Example.com' } });
+    await expect(api.getRegistrationMode()).resolves.toEqual({ mode: 'open' });
+  });
+
+  test('ignores letter case and spaces in ADMIN_EMAIL', async () => {
+    vi.stubEnv('ADMIN_EMAIL', '  ADMIN@example.com ');
+    accountsWithAdminEmail([{ id: 'admin-1', email: 'admin@example.com' }]);
+    const api = await callerAs(adminSession);
+    await expect(api.getRegistrationMode()).resolves.toEqual({ mode: 'open' });
+  });
+
+  test('refuses a case variant while another account has the address exactly', async () => {
+    accountsWithAdminEmail([
+      { id: 'other', email: 'Admin@example.com' },
+      { id: 'admin-1', email: 'admin@example.com' },
+    ]);
+    const api = await callerAs({ user: { id: 'other', email: 'Admin@example.com' } });
+    await expect(api.getRegistrationMode()).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      message: 'Admin access required',
+    });
+  });
+
+  test('refuses anyone else', async () => {
+    const api = await callerAs({ user: { id: 'user-1', email: 'user@example.com' } });
+    await expect(api.getRegistrationMode()).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      message: 'Admin access required',
+    });
+    expect(mockDb.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  test('checks the real admin while impersonating', async () => {
+    accountsWithAdminEmail([{ id: 'admin-1', email: 'Admin@example.com' }]);
+    const api = await callerAs(
+      { user: { id: 'user-1', email: 'user@example.com' } },
+      { adminId: 'admin-1', adminEmail: 'Admin@example.com', targetId: 'user-1', targetEmail: 'user@example.com' },
+    );
+    await expect(api.getRegistrationMode()).resolves.toEqual({ mode: 'open' });
+  });
+});
+
+describe('registration mode', () => {
+  beforeEach(() => {
+    vi.stubEnv('ADMIN_EMAIL', 'admin@example.com');
+    vi.clearAllMocks();
+    mockDb.user.findUnique.mockResolvedValue({ suspendedAt: null });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test.each(['invite-only', 'closed'])('returns the stored %s setting', async (mode) => {
+    mockDb.systemSetting.findUnique.mockResolvedValue({ key: 'registrationMode', value: mode });
+    const api = await callerAs(adminSession);
+    expect(await api.getRegistrationMode()).toEqual({ mode });
+  });
+
+  test('reads an unrecognised stored setting as open, as sign-up does', async () => {
+    mockDb.systemSetting.findUnique.mockResolvedValue({ key: 'registrationMode', value: 'something-else' });
+    const api = await callerAs(adminSession);
+    expect(await api.getRegistrationMode()).toEqual({ mode: 'open' });
+  });
+
+  test.each(['open', 'invite-only', 'closed'] as const)('saves the %s setting', async (mode) => {
+    mockDb.systemSetting.upsert.mockResolvedValue({ key: 'registrationMode', value: mode });
+    const api = await callerAs(adminSession);
+    expect(await api.setRegistrationMode({ mode })).toEqual({ mode });
+    expect(mockDb.systemSetting.upsert).toHaveBeenCalledWith({
+      where: { key: 'registrationMode' },
+      update: { value: mode },
+      // A fresh install has no row yet.
+      create: { key: 'registrationMode', value: mode },
+    });
+    expect(mockDb.adminAuditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ action: 'REGISTRATION_MODE_CHANGED', metadata: { mode } }) as unknown,
+      }),
+    );
+  });
+
+  test('refuses to save a mode ShareTab does not know', async () => {
+    const api = await callerAs(adminSession);
+    await expect(api.setRegistrationMode({ mode: 'everyone' as 'open' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    expect(mockDb.systemSetting.upsert).not.toHaveBeenCalled();
+  });
+});
 
 describe('guest uploads toggle', () => {
   beforeEach(async () => {
@@ -568,5 +724,297 @@ describe('Meridian login and status', () => {
 
     expect(status).toMatchObject({ status: 'healthy', email: 'me@example.com' });
     expect(status).not.toHaveProperty('error');
+  });
+});
+
+// #265: deleting a group left its placeholder users and scanned receipts behind. The
+// admin dashboard's delete removes them as the owner's does (groups.test.ts covers
+// what's kept).
+describe('deleteGroup', () => {
+  beforeEach(() => {
+    vi.stubEnv('ADMIN_EMAIL', 'admin@example.com');
+    vi.clearAllMocks();
+    mockDb.user.findUnique.mockResolvedValue({ suspendedAt: null });
+    mockDb.group.findUnique.mockResolvedValue({ id: 'g1', name: 'Trip' });
+    mockDb.$queryRaw.mockResolvedValue([]);
+    mockDb.receipt.findMany.mockResolvedValue([{ id: 'r1', imagePath: 'receipts/r1.jpg' }]);
+    mockDb.guestSplit.findMany.mockResolvedValue([]);
+    mockDb.groupMember.findMany.mockResolvedValue([{ userId: 'p1' }]);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test('deletes the group with its receipts and placeholder members, then the image files', async () => {
+    const api = await callerAs(adminSession);
+    await expect(api.deleteGroup({ groupId: 'g1' })).resolves.toEqual({ deleted: true, groupId: 'g1' });
+
+    expect(mockDb.$transaction).toHaveBeenCalled();
+    expect(mockDb.group.delete).toHaveBeenCalledWith({ where: { id: 'g1' } });
+    expect(mockDb.receipt.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['r1'] } } });
+    expect(mockDb.user.deleteMany).toHaveBeenCalledWith({
+      where: expect.objectContaining({ id: { in: ['p1'] }, isPlaceholder: true }),
+    });
+    expect(removeReceiptFiles).toHaveBeenCalledWith(['receipts/r1.jpg']);
+    expect(removeReceiptFiles.mock.invocationCallOrder[0]!).toBeGreaterThan(
+      mockDb.group.delete.mock.invocationCallOrder[0]!,
+    );
+  });
+});
+
+// #265: expired splits go with the receipts only they used (receipt-cleanup.test.ts),
+// in batches so a backlog doesn't make one long transaction
+describe('cleanupExpiredSplits', () => {
+  beforeEach(() => {
+    vi.stubEnv('ADMIN_EMAIL', 'admin@example.com');
+    vi.clearAllMocks();
+    mockDb.user.findUnique.mockResolvedValue({ suspendedAt: null });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  // A batch comes back short when the background cleanup or a user deleted some of its
+  // splits first, with more left after it, so only an empty batch means none are left
+  test('deletes expired splits batch by batch until none are left', async () => {
+    deleteExpiredSplits
+      .mockResolvedValueOnce(500)
+      .mockResolvedValueOnce(498)
+      .mockResolvedValueOnce(3)
+      .mockResolvedValueOnce(0);
+    const api = await callerAs(adminSession);
+    await expect(api.cleanupExpiredSplits()).resolves.toEqual({ deletedCount: 1001 });
+
+    expect(deleteExpiredSplits).toHaveBeenCalledTimes(4);
+    expect(deleteExpiredSplits).toHaveBeenCalledWith(mockDb, 500);
+    expect(mockDb.adminAuditLog.create).toHaveBeenCalledWith({
+      data: { adminId: 'admin-1', action: 'EXPIRED_SPLITS_CLEANED', metadata: { deletedCount: 1001 } },
+    });
+  });
+});
+
+// #312: receipts no group, expense or split uses stayed for good, with their image files
+// (the queries are in receipt-cleanup.ts)
+describe('unused receipts', () => {
+  beforeEach(() => {
+    vi.stubEnv('ADMIN_EMAIL', 'admin@example.com');
+    vi.stubEnv('UPLOAD_DIR', '/nonexistent-sharetab-uploads');
+    vi.clearAllMocks();
+    mockDb.user.findUnique.mockResolvedValue({ suspendedAt: null });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test('storage stats count them, with their size', async () => {
+    mockDb.receipt.count.mockResolvedValue(5);
+    mockDb.receipt.findMany.mockResolvedValue([]);
+    countUnusedReceipts.mockResolvedValue({ count: 2, bytes: 2048 });
+    const api = await callerAs(adminSession);
+
+    await expect(api.getStorageStats()).resolves.toMatchObject({
+      receiptCount: 5,
+      unusedReceiptCount: 2,
+      unusedReceiptBytes: 2048,
+      unusedReceiptBytesFormatted: '2 KB',
+    });
+    expect(countUnusedReceipts).toHaveBeenCalledWith(mockDb);
+  });
+
+  test('cleaning up deletes them in batches and records it in the audit log', async () => {
+    deleteUnusedReceipts.mockResolvedValue(3);
+    const api = await callerAs(adminSession);
+
+    await expect(api.cleanupUnusedReceipts()).resolves.toEqual({ deletedCount: 3 });
+    expect(deleteUnusedReceipts).toHaveBeenCalledWith(mockDb, 500);
+    expect(mockDb.adminAuditLog.create).toHaveBeenCalledWith({
+      data: { adminId: 'admin-1', action: 'UNUSED_RECEIPTS_CLEANED', metadata: { deletedCount: 3 } },
+    });
+  });
+
+  test('with none to clean up, records nothing', async () => {
+    deleteUnusedReceipts.mockResolvedValue(0);
+    const api = await callerAs(adminSession);
+
+    await expect(api.cleanupUnusedReceipts()).resolves.toEqual({ deletedCount: 0 });
+    expect(mockDb.adminAuditLog.create).not.toHaveBeenCalled();
+  });
+
+  test('a member who is not the admin is refused', async () => {
+    const api = await callerAs({ user: { id: 'user-1', email: 'user@example.com' } });
+    await expect(api.cleanupUnusedReceipts()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(deleteUnusedReceipts).not.toHaveBeenCalled();
+  });
+});
+
+describe('password reset links (#397)', () => {
+  const EXPIRES = new Date('2026-10-24T12:00:00Z');
+  let target: { id: string; email: string; locale: string; isPlaceholder: boolean; suspendedAt: Date | null } | null;
+
+  beforeEach(() => {
+    vi.stubEnv('ADMIN_EMAIL', 'admin@example.com');
+    vi.stubEnv('DISABLE_PASSWORD_LOGIN', '');
+    vi.stubEnv('EMAIL_SERVER_HOST', '');
+    vi.clearAllMocks();
+    target = { id: 'bob', email: 'bob@example.com', locale: 'ja', isPlaceholder: false, suspendedAt: null };
+    // The caller's own row (protectedProcedure's suspension check), or the user the link is for
+    mockDb.user.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
+      where.id === 'admin-1' || where.id === 'user-1' ? { suspendedAt: null } : where.id === 'bob' ? target : null,
+    );
+    issuePasswordResetToken.mockResolvedValue({ token: 'the-token', expiresAt: EXPIRES });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test('makes a 24-hour link for the user, in their language, and records it without the token', async () => {
+    const api = await callerAs(adminSession);
+
+    await expect(api.createPasswordResetLink({ userId: 'bob' })).resolves.toEqual({
+      token: 'the-token',
+      locale: 'ja',
+      expiresAt: EXPIRES,
+    });
+    expect(issuePasswordResetToken).toHaveBeenCalledWith(mockDb, 'bob', 24 * 60 * 60 * 1000);
+    expect(mockDb.adminAuditLog.create).toHaveBeenCalledWith({
+      data: {
+        adminId: 'admin-1',
+        action: 'PASSWORD_RESET_LINK_CREATED',
+        targetId: 'bob',
+        metadata: { email: 'bob@example.com' },
+      },
+    });
+    expect(JSON.stringify(mockDb.adminAuditLog.create.mock.calls)).not.toContain('the-token');
+  });
+
+  test('a user whose language ShareTab no longer has gets an English link', async () => {
+    target!.locale = 'xx';
+    const api = await callerAs(adminSession);
+    await expect(api.createPasswordResetLink({ userId: 'bob' })).resolves.toMatchObject({ locale: 'en' });
+  });
+
+  test('refuses a suspended user or a placeholder, who can’t sign in', async () => {
+    const api = await callerAs(adminSession);
+    target!.suspendedAt = new Date();
+    await expect(api.createPasswordResetLink({ userId: 'bob' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      messageKey: 'passwordResetNotAllowed',
+    });
+    target = { ...target!, suspendedAt: null, isPlaceholder: true };
+    await expect(api.createPasswordResetLink({ userId: 'bob' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      messageKey: 'passwordResetNotAllowed',
+    });
+    expect(issuePasswordResetToken).not.toHaveBeenCalled();
+    expect(mockDb.adminAuditLog.create).not.toHaveBeenCalled();
+  });
+
+  test('refuses an unknown user', async () => {
+    const api = await callerAs(adminSession);
+    await expect(api.createPasswordResetLink({ userId: 'nobody' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  test('refuses while password login is off', async () => {
+    vi.stubEnv('DISABLE_PASSWORD_LOGIN', 'true');
+    vi.stubEnv('EMAIL_SERVER_HOST', 'smtp.example.com');
+    const api = await callerAs(adminSession);
+    await expect(api.createPasswordResetLink({ userId: 'bob' })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      messageKey: 'passwordLoginDisabled',
+    });
+    expect(issuePasswordResetToken).not.toHaveBeenCalled();
+  });
+
+  test('a member who is not the admin is refused', async () => {
+    const api = await callerAs({ user: { id: 'user-1', email: 'user@example.com' } });
+    await expect(api.createPasswordResetLink({ userId: 'bob' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(issuePasswordResetToken).not.toHaveBeenCalled();
+  });
+
+  test('suspending a user also deletes their reset link, so unsuspending doesn’t revive it', async () => {
+    // A transaction client of its own: the delete must be in the transaction, after the user write
+    // (the lock order resetPasswordWithToken uses)
+    const tx = { user: { update: vi.fn() }, passwordResetToken: { deleteMany: vi.fn() } };
+    mockDb.$transaction.mockImplementationOnce(async (fn: (client: typeof tx) => unknown) => fn(tx));
+    const api = await callerAs(adminSession);
+
+    await api.suspendUser({ userId: 'bob' });
+
+    expect(tx.user.update).toHaveBeenCalledWith({ where: { id: 'bob' }, data: { suspendedAt: expect.any(Date) } });
+    expect(tx.passwordResetToken.deleteMany).toHaveBeenCalledWith({ where: { userId: 'bob' } });
+    expect(tx.user.update.mock.invocationCallOrder[0]).toBeLessThan(
+      tx.passwordResetToken.deleteMany.mock.invocationCallOrder[0]!,
+    );
+    expect(mockDb.passwordResetToken.deleteMany).not.toHaveBeenCalled();
+  });
+
+  test('works without email configured: the way back in on such an instance', async () => {
+    vi.stubEnv('EMAIL_SERVER_HOST', '');
+    const api = await callerAs(adminSession);
+    await expect(api.createPasswordResetLink({ userId: 'bob' })).resolves.toMatchObject({ token: 'the-token' });
+  });
+
+  test('a user suspended while the link was being made gets none, and nothing is recorded', async () => {
+    // issuePasswordResetToken checks again under the user row's lock
+    issuePasswordResetToken.mockResolvedValue(null);
+    const api = await callerAs(adminSession);
+    await expect(api.createPasswordResetLink({ userId: 'bob' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      messageKey: 'passwordResetNotAllowed',
+    });
+    expect(mockDb.adminAuditLog.create).not.toHaveBeenCalled();
+  });
+
+  test('deleting a user also deletes their reset link, in the transaction, after the user write', async () => {
+    const tx = {
+      user: { update: vi.fn() },
+      account: { deleteMany: vi.fn() },
+      session: { deleteMany: vi.fn() },
+      passwordResetToken: { deleteMany: vi.fn() },
+      groupMember: {
+        findMany: vi.fn().mockResolvedValue([]),
+        findFirst: vi.fn(),
+        update: vi.fn(),
+        deleteMany: vi.fn(),
+      },
+    };
+    mockDb.$transaction.mockImplementationOnce(async (fn: (client: typeof tx) => unknown) => fn(tx));
+    const api = await callerAs(adminSession);
+
+    await api.deleteUser({ userId: 'bob' });
+
+    expect(tx.passwordResetToken.deleteMany).toHaveBeenCalledWith({ where: { userId: 'bob' } });
+    expect(tx.user.update.mock.invocationCallOrder[0]).toBeLessThan(
+      tx.passwordResetToken.deleteMany.mock.invocationCallOrder[0]!,
+    );
+    expect(mockDb.passwordResetToken.deleteMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('admin.startMeridianLogin', () => {
+  beforeEach(() => {
+    vi.stubEnv('ADMIN_EMAIL', 'admin@example.com');
+    vi.clearAllMocks();
+    mockDb.user.findUnique.mockResolvedValue({ suspendedAt: null });
+    mockStartLogin.mockResolvedValue('https://claude.ai/oauth/authorize?state=s');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test('returns the login URL even when the email about it can’t be sent: the login has started', async () => {
+    // A failing SMTP server, or AUTH_URL/NEXTAUTH_URL that isn't an http(s) URL
+    mockSendAuthExpiryEmail.mockRejectedValue(new Error('AUTH_URL or NEXTAUTH_URL is not an http(s) URL'));
+    const api = await callerAs(adminSession);
+
+    await expect(api.startMeridianLogin()).resolves.toEqual({ url: 'https://claude.ai/oauth/authorize?state=s' });
+    expect(mockDb.adminAuditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ action: 'MERIDIAN_LOGIN_STARTED' }) }),
+    );
   });
 });

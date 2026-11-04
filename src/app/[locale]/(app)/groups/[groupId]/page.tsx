@@ -1,7 +1,7 @@
 'use client';
 
 import { use, useState, useRef, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
+import { keepPreviousData } from '@tanstack/react-query';
 import { useLocale, useTranslations } from 'next-intl';
 import { trpc } from '@/lib/trpc';
 import { formatCents } from '@/lib/money';
@@ -9,14 +9,30 @@ import { buildVenmoPayUrl, isValidVenmoHandle } from '@/lib/venmo';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
-import { Plus, Settings, UserPlus, ArrowRight, Receipt, Handshake, Camera, Tag, Archive, Trash2 } from 'lucide-react';
+import {
+  Plus,
+  Settings,
+  UserPlus,
+  ArrowRight,
+  Receipt,
+  Handshake,
+  Camera,
+  Tag,
+  Archive,
+  Trash2,
+  Search,
+  Loader2,
+} from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { toast } from 'sonner';
 import { InviteDialog } from '@/components/groups/invite-dialog';
 import { SettleDialog } from '@/components/groups/settle-dialog';
+import { PaymentsList } from '@/components/groups/payments-list';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { getInitials, avatarColor } from '@/lib/avatar';
 
 export default function GroupDetailPage({ params }: { params: Promise<{ groupId: string }> }) {
@@ -29,11 +45,38 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
     to?: string;
     amount?: number;
   }>({ open: false });
+  // The Venmo payment to ask about once the payer is back from Venmo
+  const [venmoPaid, setVenmoPaid] = useState<{ from: string; to: string; amount: number; toName: string } | null>(null);
+  const [deleteReceiptId, setDeleteReceiptId] = useState<string | null>(null);
 
   const t = useTranslations('groups');
-  const { data: authSession } = useSession();
+  const tc = useTranslations('common');
+  // Who tRPC acts as: the impersonated user while an admin impersonates, where
+  // useSession() would still report the admin.
+  const profile = trpc.auth.getProfile.useQuery();
+  const myId = profile.data?.id;
   const group = trpc.groups.get.useQuery({ groupId });
-  const expenses = trpc.expenses.list.useQuery({ groupId, limit: 10 });
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+  const searchPending = search.trim() !== debouncedSearch;
+  // Older pages load only from Show more: loading them on scroll put the whole history
+  // between the user and Payments, which sits below the list (#477).
+  const expenses = trpc.expenses.list.useInfiniteQuery(
+    { groupId, limit: 10, search: debouncedSearch },
+    // Keep the last result on screen while a new search loads, rather than a spinner.
+    { getNextPageParam: (lastPage) => lastPage.nextCursor, placeholderData: keepPreviousData },
+  );
+  const expensesBusy = searchPending || expenses.isFetching;
+  // An expense re-dated between page loads can come back on a later page as well (#478).
+  const expenseItems = [
+    ...new Map(
+      (expenses.data?.pages.flatMap((page) => page.expenses) ?? []).map((expense) => [expense.id, expense]),
+    ).values(),
+  ];
   const debts = trpc.balances.getSimplifiedDebts.useQuery({ groupId });
   const pendingReceipts = trpc.receipts.listPending.useQuery({ groupId });
   const venmoSetting = trpc.admin.getVenmoEnabled.useQuery();
@@ -80,7 +123,12 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
   }
 
   const g = group.data;
-  const memberMap = new Map(g.members.map((m) => [m.user.id, m.user]));
+  // A placeholder removed from the group still has their name in the balances: one that
+  // comes back (an old expense changed) shows under it, and can be settled with them (#284)
+  const memberMap = new Map([...g.members, ...g.removedMembers].map((m) => [m.user.id, m.user]));
+  const inDebts = new Set(debts.data?.debts.flatMap((d) => [d.from, d.to]) ?? []);
+  const settleParties = [...g.members, ...g.removedMembers.filter((m) => inDebts.has(m.user.id))];
+  const myRole = g.members.find((m) => m.user.id === myId)?.role;
 
   return (
     <div className="space-y-6">
@@ -102,6 +150,8 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
           <Button
             variant="outline"
             size="sm"
+            aria-label={t('settings.title')}
+            title={t('settings.title')}
             nativeButton={false}
             render={<Link href={`/groups/${groupId}/settings`} />}
           >
@@ -151,16 +201,22 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
       {g.archivedAt && (
         <div className="flex items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-200">
           <Archive className="h-4 w-4 shrink-0" />
-          <span>{t('detail.archivedMessage')}</span>
-          <Button
-            variant="link"
-            size="sm"
-            className="ml-auto h-auto p-0 text-amber-800 dark:text-amber-200"
-            nativeButton={false}
-            render={<Link href={`/groups/${groupId}/settings`} />}
-          >
-            {t('detail.manage')}
-          </Button>
+          {/* Only owners and admins can unarchive, so a plain member is told whom to ask */}
+          <span>
+            {t('detail.archivedMessage')}
+            {myRole === 'MEMBER' && <> {t('detail.askToUnarchive')}</>}
+          </span>
+          {(myRole === 'OWNER' || myRole === 'ADMIN') && (
+            <Button
+              variant="link"
+              size="sm"
+              className="ml-auto h-auto p-0 text-amber-800 dark:text-amber-200"
+              nativeButton={false}
+              render={<Link href={`/groups/${groupId}/settings`} />}
+            >
+              {t('detail.manage')}
+            </Button>
+          )}
         </div>
       )}
 
@@ -174,10 +230,13 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
               <CardTitle className="text-base" data-testid="balances-title">
                 {t('detail.balances')}
               </CardTitle>
-              <Button variant="outline" size="sm" onClick={() => setSettleState({ open: true })}>
-                <Handshake className="mr-2 h-4 w-4" />
-                {t('detail.settle')}
-              </Button>
+              {/* An archived group refuses payments (see the banner above) */}
+              {!g.archivedAt && (
+                <Button variant="outline" size="sm" onClick={() => setSettleState({ open: true })}>
+                  <Handshake className="mr-2 h-4 w-4" />
+                  {t('detail.settle')}
+                </Button>
+              )}
             </div>
           </CardHeader>
           <CardContent className="space-y-1">
@@ -185,8 +244,9 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
               const from = memberMap.get(debt.from);
               const to = memberMap.get(debt.to);
               const toName = to?.name ?? to?.email ?? t('detail.unknown');
-              const isMyDebt = debt.from === authSession?.user?.id;
+              const isMyDebt = debt.from === myId;
               const showVenmo =
+                !g.archivedAt &&
                 venmoSetting.data?.enabled &&
                 g.currency === 'USD' &&
                 isMyDebt &&
@@ -199,7 +259,8 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
                 <div key={i} className="flex items-center gap-2">
                   <button
                     type="button"
-                    className="flex flex-1 items-center gap-2 rounded-lg p-2.5 text-sm transition-all hover:bg-muted/70 hover:shadow-sm"
+                    disabled={!!g.archivedAt}
+                    className="flex flex-1 items-center gap-2 rounded-lg p-2.5 text-sm transition-all enabled:hover:bg-muted/70 enabled:hover:shadow-sm"
                     onClick={() =>
                       setSettleState({
                         open: true,
@@ -232,23 +293,7 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
                         window.open(venmoUrl, '_blank', 'noopener,noreferrer');
                         settleTimerRef.current = setTimeout(() => {
                           settleTimerRef.current = null;
-                          if (
-                            confirm(
-                              t('detail.venmoPaymentConfirm', {
-                                amount: formatCents(debt.amount, g.currency, locale),
-                                name: toName,
-                              }),
-                            )
-                          ) {
-                            settleVenmo.mutate({
-                              groupId,
-                              fromId: debt.from,
-                              toId: debt.to,
-                              amount: debt.amount,
-                              currency: g.currency,
-                              note: t('detail.settledViaVenmo'),
-                            });
-                          }
+                          setVenmoPaid({ from: debt.from, to: debt.to, amount: debt.amount, toName });
                         }, 2000);
                       }}
                       data-testid={`venmo-settle-${i}`}
@@ -276,42 +321,52 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
         <div>
           <h2 className="mb-3 text-lg font-semibold">{t('detail.pendingReceipts')}</h2>
           <div className="space-y-2">
-            {pendingReceipts.data.map((r) => (
-              <Card key={r.id} className="transition-colors hover:bg-muted/50">
-                <CardContent className="flex items-center justify-between py-3">
-                  <Link href={`/groups/${groupId}/scan?receiptId=${r.id}`} className="flex-1 min-w-0">
-                    <p className="font-medium">{r.extractedData?.merchantName ?? t('detail.receipt')}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {r.extractedData?.date ?? new Date(r.createdAt).toLocaleDateString()}
-                      {' · '}
-                      {t('detail.savedForLater')}
-                    </p>
-                  </Link>
-                  <div className="flex items-center gap-3 ml-3">
-                    <p className="text-lg font-semibold">
-                      {r.extractedData ? formatCents(r.extractedData.total, g.currency, locale) : '—'}
-                    </p>
-                    <button
-                      type="button"
-                      className="text-muted-foreground hover:text-destructive transition-colors p-1"
-                      onClick={() => {
-                        if (confirm(t('detail.deleteReceiptConfirm'))) {
-                          deletePending.mutate({ receiptId: r.id });
-                        }
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+            {pendingReceipts.data.map((r) => {
+              const summary = (
+                <>
+                  <p className="font-medium">{r.extractedData?.merchantName ?? t('detail.receipt')}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {r.extractedData?.date ?? new Date(r.createdAt).toLocaleDateString(locale)}
+                    {' · '}
+                    {t('detail.savedForLater')}
+                  </p>
+                </>
+              );
+              return (
+                <Card key={r.id} className={g.archivedAt ? undefined : 'transition-colors hover:bg-muted/50'}>
+                  <CardContent className="flex items-center justify-between py-3">
+                    {/* An archived group refuses the expense finishing a saved receipt makes; deleting one still works */}
+                    {g.archivedAt ? (
+                      <div className="flex-1 min-w-0">{summary}</div>
+                    ) : (
+                      <Link href={`/groups/${groupId}/scan?receiptId=${r.id}`} className="flex-1 min-w-0">
+                        {summary}
+                      </Link>
+                    )}
+                    <div className="flex items-center gap-3 ml-3">
+                      <p className="text-lg font-semibold">
+                        {r.extractedData ? formatCents(r.extractedData.total, r.extractedData.currency, locale) : '—'}
+                      </p>
+                      <button
+                        type="button"
+                        className="text-muted-foreground hover:text-destructive transition-colors p-1"
+                        aria-label={t('detail.deleteReceipt')}
+                        title={t('detail.deleteReceipt')}
+                        onClick={() => setDeleteReceiptId(r.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </div>
       )}
 
       {/* Expenses */}
-      <div>
+      <div data-testid="expenses-section" aria-busy={expensesBusy}>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">{t('detail.expenses')}</h2>
           {!g.archivedAt && (
@@ -333,30 +388,73 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
           )}
         </div>
 
+        <div className="relative mb-4">
+          <Search
+            aria-hidden="true"
+            className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input
+            type="search"
+            aria-label={t('detail.searchExpenses')}
+            placeholder={t('detail.searchExpensesPlaceholder')}
+            maxLength={1000}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className="pl-9"
+          />
+        </div>
+
         {expenses.isLoading && <LoadingSpinner />}
 
-        {expenses.data?.expenses.length === 0 && (
-          <Card>
-            <CardContent className="py-8 text-center">
-              <Receipt className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
-              <p className="text-muted-foreground">{t('detail.noExpenses')}</p>
-              <Button
-                className="mt-4"
-                size="sm"
-                nativeButton={false}
-                render={<Link href={`/groups/${groupId}/expenses/new`} />}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                {t('detail.addFirstExpense')}
-              </Button>
-            </CardContent>
-          </Card>
+        {/* A failed older page is reported next to Show more, where the user is. */}
+        {expenses.isError && !expenses.isFetchNextPageError && (
+          <div role="alert" className="mb-4 flex flex-wrap items-center gap-2 text-sm text-destructive">
+            <p>{expenses.error.message}</p>
+            <Button variant="outline" size="sm" disabled={expensesBusy} onClick={() => void expenses.refetch()}>
+              {t('detail.retryExpenses')}
+            </Button>
+          </div>
         )}
 
-        {expenses.data && expenses.data.expenses.length > 0 && (
-          <Card className="divide-y divide-border overflow-hidden">
-            {expenses.data.expenses.map((expense, index) => (
-              <Link key={expense.id} href={`/groups/${groupId}/expenses/${expense.id}`} className="block">
+        {expenses.data &&
+          !expenses.isError &&
+          !expenses.isPlaceholderData &&
+          !searchPending &&
+          expenseItems.length === 0 && (
+            <Card>
+              <CardContent className="py-8 text-center">
+                <Receipt className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
+                <p className="text-muted-foreground">
+                  {debouncedSearch ? t('detail.noExpenseSearchResults') : t('detail.noExpenses')}
+                </p>
+                {!debouncedSearch && !g.archivedAt && (
+                  <Button
+                    className="mt-4"
+                    size="sm"
+                    nativeButton={false}
+                    render={<Link href={`/groups/${groupId}/expenses/new`} />}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    {t('detail.addFirstExpense')}
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+        {expenseItems.length > 0 && (
+          <Card
+            className={`divide-y divide-border overflow-hidden transition-opacity ${
+              expenses.isPlaceholderData ? 'opacity-60' : ''
+            }`}
+          >
+            {expenseItems.map((expense, index) => (
+              <Link
+                key={expense.id}
+                href={`/groups/${groupId}/expenses/${expense.id}`}
+                className="block"
+                data-testid="expense-row"
+              >
                 <div
                   className={`flex items-center justify-between px-4 py-3 transition-colors hover:bg-muted/50 ${
                     index % 2 === 1 ? 'bg-muted/20' : ''
@@ -373,7 +471,7 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
                           name: expense.paidBy.name ?? expense.paidBy.email ?? t('detail.unknown'),
                         })}
                         {' · '}
-                        {new Date(expense.expenseDate).toLocaleDateString()}
+                        {new Date(expense.expenseDate).toLocaleDateString(locale)}
                         {expense.category && (
                           <span className="ml-1 text-muted-foreground/70">
                             {' · '}
@@ -395,19 +493,77 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
             ))}
           </Card>
         )}
+        {expenses.hasNextPage && (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              // The pages shown while a new search loads belong to the previous search.
+              disabled={expensesBusy || expenses.isPlaceholderData}
+              onClick={() => void expenses.fetchNextPage()}
+            >
+              {expenses.isFetchingNextPage && <Loader2 aria-hidden="true" className="mr-2 h-4 w-4 animate-spin" />}
+              {t('detail.showMoreExpenses')}
+            </Button>
+            {expenses.isFetchNextPageError && (
+              <p role="alert" className="text-sm text-destructive">
+                {expenses.error.message}
+              </p>
+            )}
+          </div>
+        )}
       </div>
+
+      <PaymentsList
+        groupId={groupId}
+        groupCurrency={g.currency}
+        currentUserId={myId}
+        isOwnerOrAdmin={myRole === 'OWNER' || myRole === 'ADMIN'}
+        archived={!!g.archivedAt}
+      />
 
       <InviteDialog groupId={groupId} open={showInvite} onOpenChange={setShowInvite} />
 
       <SettleDialog
         groupId={groupId}
-        members={g.members.map((m) => ({ id: m.user.id, name: m.user.name ?? m.user.email }))}
+        members={settleParties.map((m) => ({ id: m.user.id, name: m.user.name ?? m.user.email }))}
         {...(settleState.from !== undefined ? { suggestedFrom: settleState.from } : {})}
         {...(settleState.to !== undefined ? { suggestedTo: settleState.to } : {})}
         {...(settleState.amount !== undefined ? { suggestedAmount: settleState.amount } : {})}
         currency={g.currency}
         open={settleState.open}
         onOpenChange={(open) => setSettleState((s) => ({ ...s, open }))}
+      />
+      <ConfirmDialog
+        open={venmoPaid !== null}
+        onOpenChange={(open) => !open && setVenmoPaid(null)}
+        title={t('detail.venmoPaidTitle')}
+        description={t('detail.venmoPaidDescription', {
+          amount: venmoPaid ? formatCents(venmoPaid.amount, g.currency, locale) : '',
+          name: venmoPaid?.toName ?? '',
+        })}
+        confirmLabel={t('detail.venmoPaidConfirm')}
+        cancelLabel={t('detail.venmoPaidCancel')}
+        destructive={false}
+        onConfirm={() =>
+          venmoPaid &&
+          settleVenmo.mutate({
+            groupId,
+            fromId: venmoPaid.from,
+            toId: venmoPaid.to,
+            amount: venmoPaid.amount,
+            currency: g.currency,
+            note: t('detail.settledViaVenmo'),
+          })
+        }
+      />
+      <ConfirmDialog
+        open={deleteReceiptId !== null}
+        onOpenChange={(open) => !open && setDeleteReceiptId(null)}
+        title={t('detail.deleteReceiptTitle')}
+        description={t('detail.deleteReceiptDescription')}
+        confirmLabel={tc('actions.delete')}
+        onConfirm={() => deleteReceiptId && deletePending.mutate({ receiptId: deleteReceiptId })}
       />
     </div>
   );

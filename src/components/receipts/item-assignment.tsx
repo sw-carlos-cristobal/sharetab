@@ -4,15 +4,18 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { trpc } from '@/lib/trpc';
 import { formatCents, centsToDecimal, parseToCents } from '@/lib/money';
-import { calculateSplitTotals } from '@/lib/split-calculator';
+import { calculateReceiptSplitTotals, receiptAssignmentList } from '@/lib/split-calculator';
+import { COMMON_CURRENCIES } from '@/lib/currencies';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { chipLabels } from '@/lib/avatar';
 import { Check, Users, Pencil, Trash2, Plus, Image as ImageIcon, Scissors, Bookmark } from 'lucide-react';
 import { toast } from 'sonner';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 
 type Member = { id: string; name: string | null };
 
@@ -20,12 +23,14 @@ type Assignments = Record<string, Set<string>>; // receiptItemId -> Set<userId>
 
 export function ItemAssignment({
   groupId,
+  groupCurrency,
   receiptId,
   members,
   onComplete,
   onSaveForLater,
 }: {
   groupId: string;
+  groupCurrency: string;
   receiptId: string;
   members: Member[];
   onComplete: () => void;
@@ -33,7 +38,12 @@ export function ItemAssignment({
 }) {
   const locale = useLocale();
   const t = useTranslations('expenses.receipt');
+  // The currency and rate fields say what the expense form's do
+  const tNew = useTranslations('expenses.new');
   const receiptData = trpc.receipts.getReceiptItems.useQuery({ receiptId });
+  // Who tRPC acts as: the impersonated user while an admin impersonates, where
+  // useSession() would still report the admin
+  const profile = trpc.auth.getProfile.useQuery();
   const utils = trpc.useUtils();
 
   const [assignments, setAssignments] = useState<Assignments>({});
@@ -57,9 +67,34 @@ export function ItemAssignment({
   const [newItem, setNewItem] = useState({ name: '', quantity: '1', totalPrice: '' });
   const [splittingItem, setSplittingItem] = useState<string | null>(null);
   const [splitQuantity, setSplitQuantity] = useState('');
+  const [removeItem, setRemoveItem] = useState<{ id: string; name: string } | null>(null);
+  // A rate entered by hand, for the currency it was typed for: once the receipt's currency changes
+  // (here or on another device) it no longer applies (#361)
+  const [useManualRate, setUseManualRate] = useState(false);
+  const [manualRate, setManualRate] = useState({ currency: '', text: '' });
 
+  // A refused Create, Save for later or item delete may mean the receipt changed since the page loaded it (an
+  // item added, deleted or repriced), so load it again to show what's there now. Not awaited: the
+  // mutation reports its error once onError returns
+  function reloadAfterError() {
+    void utils.receipts.getReceiptItems.invalidate({ receiptId });
+  }
   const createExpense = trpc.receipts.assignItemsAndCreateExpense.useMutation({
     onSuccess: onComplete,
+    onError: (e) => {
+      // No rate could be found for the receipt's currency: ask for one, with the checkbox and field the expense form has (#361)
+      if (e.data?.messageKey === 'exchangeRateUnavailable') setUseManualRate(true);
+      reloadAfterError();
+    },
+  });
+  // Saved on the receipt (#361). Pending until the receipt has reloaded, so the selector doesn't
+  // show the old currency in between
+  const setCurrency = trpc.receipts.setCurrency.useMutation({
+    onSuccess: () => utils.receipts.getReceiptItems.invalidate({ receiptId }),
+    onError: (e) => {
+      toast.error(e.message);
+      reloadAfterError();
+    },
   });
   const updateItem = trpc.receipts.updateItem.useMutation({
     onSuccess: () => {
@@ -69,8 +104,20 @@ export function ItemAssignment({
     onError: (e) => toast.error(e.message),
   });
   const deleteItem = trpc.receipts.deleteItem.useMutation({
-    onSuccess: () => utils.receipts.getReceiptItems.invalidate({ receiptId }),
-    onError: (e) => toast.error(e.message),
+    onSuccess: (_, { itemId }) => {
+      // Its people go with it (#411)
+      setAssignments((prev) => {
+        const next = { ...prev };
+        delete next[itemId];
+        return next;
+      });
+      utils.receipts.getReceiptItems.invalidate({ receiptId });
+    },
+    // Deleted on another device, say: show the receipt as it is now
+    onError: (e) => {
+      toast.error(e.message);
+      reloadAfterError();
+    },
   });
   const addItem = trpc.receipts.addItem.useMutation({
     onSuccess: () => {
@@ -86,7 +133,10 @@ export function ItemAssignment({
   });
   const saveForLater = trpc.receipts.saveForLater.useMutation({
     onSuccess: () => onSaveForLater?.(),
-    onError: (e) => toast.error(e.message),
+    onError: (e) => {
+      toast.error(e.message);
+      reloadAfterError();
+    },
   });
 
   // Toggle the image. Zoom/pan reset on every toggle (fresh view when
@@ -154,6 +204,11 @@ export function ItemAssignment({
   const parsedTip = parseFloat(tipOverride);
   const tip =
     extracted && tipOverride !== '' && isFinite(parsedTip) ? Math.round(parsedTip * 100) : (extracted?.tip ?? 0);
+  // Until someone picks a payer or a saved one loads, default to the current user (when
+  // they're in the group), as Add Expense does (#271, #265)
+  const currentUserId = profile.data?.id;
+  const defaultPaidById = currentUserId && members.some((m) => m.id === currentUserId) ? currentUserId : '';
+  const effectivePaidById = paidById || defaultPaidById;
 
   // Note (Finding #29): toggleAssignment and assignAllToEveryone are intentionally
   // duplicated from split/page.tsx. This component uses Record<string, Set<string>>
@@ -228,43 +283,21 @@ export function ItemAssignment({
     });
   }
 
-  // Calculate per-person totals using shared calculateSplitTotals (Finding #30).
-  // Memoized to avoid recomputation on every render (Finding #36).
-  const perPersonTotals = useMemo(() => {
-    // Build member-id -> index mapping for calculateSplitTotals
-    const memberIdToIndex = new Map<string, number>();
-    members.forEach((m, i) => memberIdToIndex.set(m.id, i));
-
-    const assignmentList = Object.entries(assignments)
-      .filter(([, userIds]) => userIds.size > 0)
-      .map(([receiptItemId, userIds]) => {
-        const itemIdx = items.findIndex((it) => it.id === receiptItemId);
-        return {
-          itemIndex: itemIdx,
-          personIndices: Array.from(userIds)
-            .map((uid) => memberIdToIndex.get(uid))
-            .filter((idx): idx is number => idx !== undefined),
-        };
-      })
-      .filter((a) => a.itemIndex >= 0 && a.personIndices.length > 0);
-
-    const results = calculateSplitTotals({
-      items,
-      assignments: assignmentList,
-      tax: extracted?.tax ?? 0,
-      tip,
-      peopleCount: members.length,
-    });
-
-    // Map back from person indices to member IDs
-    const totals = new Map<string, number>();
-    for (const r of results) {
-      const member = members[r.personIndex];
-      if (member) totals.set(member.id, r.total);
-    }
-    return totals;
-  }, [items, assignments, members, extracted, tip]);
-  const assignedItemCount = Object.values(assignments).filter((s) => s.size > 0).length;
+  // What the totals below show, and what Create Expense and Save for later send: the current items
+  // that have someone. Read through `items`, so an item deleted on another device doesn't count (#411).
+  const assignmentList = useMemo(() => receiptAssignmentList(items, assignments), [items, assignments]);
+  // The server calculates the expense with the same function and the same list, and saves it only
+  // if each person's total is the one shown here (#364). Memoized to avoid recomputation on every
+  // render (Finding #36).
+  const shownTotals = useMemo(
+    () => calculateReceiptSplitTotals({ items, assignments: assignmentList, tax: extracted?.tax ?? 0, tip }),
+    [items, assignmentList, extracted, tip],
+  );
+  const perPersonTotals = useMemo(
+    () => new Map(shownTotals.map((person) => [person.userId, person.total])),
+    [shownTotals],
+  );
+  const assignedItemCount = assignmentList.length;
   const allAssigned = items.length > 0 && assignedItemCount === items.length;
 
   // Precompute member initials to avoid recalculation every render (Finding #37)
@@ -285,6 +318,11 @@ export function ItemAssignment({
       ),
     [members],
   );
+  // First names, or whole names where two people share one (#277)
+  const memberLabels = useMemo(() => {
+    const labels = chipLabels(members.map((m) => m.name));
+    return new Map(members.map((m, i) => [m.id, labels[i]]));
+  }, [members]);
 
   if (receiptData.isLoading) {
     return <p className="text-muted-foreground">{t('loadingItems')}</p>;
@@ -300,23 +338,31 @@ export function ItemAssignment({
   const safeReceipt = receipt!;
   const safeExtracted = extracted;
 
+  // The receipt's currency (its group's when the scan couldn't tell, #361), or the one being saved
+  const currency = setCurrency.isPending ? setCurrency.variables.currency : safeExtracted.currency;
+  const isDifferentCurrency = currency !== groupCurrency;
+  // The common currencies, and the receipt's and the group's when they aren't among them
+  const currencyOptions = [...new Set([...COMMON_CURRENCIES.map((c) => c.code as string), currency, groupCurrency])];
+  const manualRateText = manualRate.currency === currency ? manualRate.text : '';
+  const parsedManualRate = parseFloat(manualRateText);
+  const manualRateValid = useManualRate && isFinite(parsedManualRate) && parsedManualRate > 0;
+  const expenseTotal = shownTotals.reduce((sum, person) => sum + person.total, 0);
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!paidById || !allAssigned) return;
+    if (!effectivePaidById || !allAssigned) return;
 
     createExpense.mutate({
       groupId,
       receiptId,
       title,
-      paidById,
+      paidById: effectivePaidById,
       tipOverride:
         tipOverride !== '' && isFinite(parseFloat(tipOverride)) ? Math.round(parseFloat(tipOverride) * 100) : undefined,
-      assignments: Object.entries(assignments)
-        .filter(([, userIds]) => userIds.size > 0)
-        .map(([receiptItemId, userIds]) => ({
-          receiptItemId,
-          userIds: Array.from(userIds),
-        })),
+      assignments: assignmentList,
+      expectedShares: shownTotals.map((person) => ({ userId: person.userId, amount: person.total })),
+      expectedCurrency: currency,
+      ...(isDifferentCurrency && manualRateValid ? { exchangeRate: parsedManualRate } : {}),
     });
   }
 
@@ -324,13 +370,8 @@ export function ItemAssignment({
     saveForLater.mutate({
       groupId,
       receiptId,
-      paidById: paidById || null,
-      assignments: Object.entries(assignments)
-        .filter(([, userIds]) => userIds.size > 0)
-        .map(([receiptItemId, userIds]) => ({
-          receiptItemId,
-          userIds: Array.from(userIds),
-        })),
+      paidById: effectivePaidById || null,
+      assignments: assignmentList,
     });
   }
 
@@ -470,20 +511,20 @@ export function ItemAssignment({
           )}
           <div className="flex justify-between">
             <span className="text-muted-foreground">{t('subtotal')}</span>
-            <span>{formatCents(safeExtracted.subtotal, safeExtracted.currency, locale)}</span>
+            <span>{formatCents(safeExtracted.subtotal, currency, locale)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">{t('tax')}</span>
-            <span>{formatCents(safeExtracted.tax, safeExtracted.currency, locale)}</span>
+            <span>{formatCents(safeExtracted.tax, currency, locale)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">{t('tip')}</span>
-            <span>{formatCents(tip, safeExtracted.currency, locale)}</span>
+            <span>{formatCents(tip, currency, locale)}</span>
           </div>
           <Separator />
           <div className="flex justify-between font-semibold">
             <span>{t('total')}</span>
-            <span>{formatCents(safeExtracted.subtotal + safeExtracted.tax + tip, safeExtracted.currency, locale)}</span>
+            <span>{formatCents(safeExtracted.subtotal + safeExtracted.tax + tip, currency, locale)}</span>
           </div>
         </CardContent>
       </Card>
@@ -505,7 +546,7 @@ export function ItemAssignment({
             <Label htmlFor="paidBy">{t('paidBy')}</Label>
             <select
               id="paidBy"
-              value={paidById}
+              value={effectivePaidById}
               onChange={(e) => setPaidById(e.target.value)}
               required
               className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
@@ -520,13 +561,72 @@ export function ItemAssignment({
             </select>
           </div>
           <div className="space-y-2">
+            <Label htmlFor="receipt-currency">{tNew('currency')}</Label>
+            <select
+              id="receipt-currency"
+              value={currency}
+              onChange={(e) => setCurrency.mutate({ receiptId, currency: e.target.value })}
+              disabled={setCurrency.isPending}
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+              data-testid="receipt-currency-select"
+            >
+              {currencyOptions.map((code) => (
+                <option key={code} value={code}>
+                  {code}
+                </option>
+              ))}
+            </select>
+          </div>
+          {isDifferentCurrency && (
+            <div
+              className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm dark:border-blue-800 dark:bg-blue-950/50"
+              data-testid="receipt-rate"
+            >
+              <p className="text-blue-800 dark:text-blue-200">
+                {tNew('differentCurrencyNote', { expenseCurrency: currency, groupCurrency })}
+              </p>
+              <label className="mt-2 flex items-center gap-1.5 text-xs text-blue-700 dark:text-blue-300">
+                <input
+                  type="checkbox"
+                  checked={useManualRate}
+                  onChange={(e) => setUseManualRate(e.target.checked)}
+                  className="rounded"
+                />
+                {tNew('manualRateOverride')}
+              </label>
+              {useManualRate ? (
+                <div className="mt-2">
+                  <Input
+                    type="number"
+                    step="any"
+                    min="0.000001"
+                    aria-label={tNew('exchangeRatePlaceholder', { from: currency, to: groupCurrency })}
+                    placeholder={tNew('exchangeRatePlaceholder', { from: currency, to: groupCurrency })}
+                    value={manualRateText}
+                    onChange={(e) => setManualRate({ currency, text: e.target.value })}
+                    data-testid="receipt-rate-input"
+                  />
+                  {manualRateValid && expenseTotal > 0 && (
+                    <p className="mt-1 text-xs text-blue-700 dark:text-blue-300">
+                      {tNew('convertedAmount', {
+                        amount: formatCents(Math.round(expenseTotal * parsedManualRate), groupCurrency, locale),
+                      })}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="mt-1 text-xs text-blue-600 dark:text-blue-400">{tNew('autoRateNote')}</p>
+              )}
+            </div>
+          )}
+          <div className="space-y-2">
             <Label htmlFor="tip">{t('tipOverride')}</Label>
             <Input
               id="tip"
               type="number"
               step="0.01"
               min="0"
-              placeholder={t('tipDetected', { amount: formatCents(safeExtracted.tip, safeExtracted.currency, locale) })}
+              placeholder={t('tipDetected', { amount: formatCents(safeExtracted.tip, currency, locale) })}
               value={tipOverride}
               onChange={(e) => setTipOverride(e.target.value)}
             />
@@ -660,17 +760,17 @@ export function ItemAssignment({
                         type="button"
                         onClick={() => startEditing(item)}
                         className="text-muted-foreground hover:text-foreground"
+                        aria-label={t('editItem', { name: item.name })}
+                        title={t('editItem', { name: item.name })}
                       >
                         <Pencil className="h-3 w-3" />
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
-                          if (confirm(t('removeConfirm', { name: item.name }))) {
-                            deleteItem.mutate({ itemId: item.id });
-                          }
-                        }}
+                        onClick={() => setRemoveItem({ id: item.id, name: item.name })}
                         className="text-muted-foreground hover:text-destructive"
+                        aria-label={t('removeItem', { name: item.name })}
+                        title={t('removeItem', { name: item.name })}
                       >
                         <Trash2 className="h-3 w-3" />
                       </button>
@@ -690,9 +790,7 @@ export function ItemAssignment({
                         </button>
                       )}
                     </div>
-                    <span className="font-semibold">
-                      {formatCents(item.totalPrice, safeExtracted.currency, locale)}
-                    </span>
+                    <span className="font-semibold">{formatCents(item.totalPrice, currency, locale)}</span>
                   </div>
                 )}
                 {!isEditing &&
@@ -750,7 +848,7 @@ export function ItemAssignment({
                         type="button"
                         onClick={() => toggleAssignment(item.id, m.id)}
                         data-testid={`member-toggle-${m.id}`}
-                        className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors ${
+                        className={`flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors ${
                           isAssigned
                             ? 'bg-primary text-primary-foreground'
                             : 'bg-muted text-muted-foreground hover:bg-muted/80'
@@ -759,7 +857,13 @@ export function ItemAssignment({
                         <Avatar className="h-4 w-4">
                           <AvatarFallback className="text-[8px]">{memberInitials.get(m.id) ?? '?'}</AvatarFallback>
                         </Avatar>
-                        {m.name?.split(' ')[0] ?? '?'}
+                        <span
+                          data-testid="chip-label"
+                          className="min-w-0 text-left [overflow-wrap:anywhere]"
+                          title={m.name ?? undefined}
+                        >
+                          {memberLabels.get(m.id) ?? '?'}
+                        </span>
                         {isAssigned && <Check className="h-3 w-3" />}
                       </button>
                     );
@@ -784,7 +888,9 @@ export function ItemAssignment({
               return (
                 <div key={m.id} className="flex justify-between text-sm">
                   <span>{m.name ?? t('unnamed')}</span>
-                  <span className="font-medium">{formatCents(total, safeExtracted.currency, locale)}</span>
+                  <span className="font-medium" data-testid={`person-total-${m.id}`}>
+                    {formatCents(total, currency, locale)}
+                  </span>
                 </div>
               );
             })}
@@ -799,7 +905,7 @@ export function ItemAssignment({
       <Button
         type="submit"
         className="w-full"
-        disabled={createExpense.isPending || !allAssigned || !paidById}
+        disabled={createExpense.isPending || setCurrency.isPending || !allAssigned || !effectivePaidById}
         data-testid="create-expense-btn"
       >
         {createExpense.isPending
@@ -822,6 +928,14 @@ export function ItemAssignment({
           {saveForLater.isPending ? t('saving') : t('saveForLater')}
         </Button>
       )}
+      <ConfirmDialog
+        open={removeItem !== null}
+        onOpenChange={(open) => !open && setRemoveItem(null)}
+        title={t('removeTitle', { name: removeItem?.name ?? '' })}
+        description={t('removeDescription')}
+        confirmLabel={t('remove')}
+        onConfirm={() => removeItem && deleteItem.mutate({ itemId: removeItem.id })}
+      />
     </form>
   );
 }

@@ -16,6 +16,7 @@ import { EqualSplit } from '@/components/expenses/equal-split';
 import { ExactSplit } from '@/components/expenses/exact-split';
 import { PercentageSplit } from '@/components/expenses/percentage-split';
 import { SharesSplit } from '@/components/expenses/shares-split';
+import { ArchivedGroupNotice } from '@/components/groups/archived-group-notice';
 
 type SplitMode = 'EQUAL' | 'EXACT' | 'PERCENTAGE' | 'SHARES';
 
@@ -37,6 +38,9 @@ export default function NewExpensePage({ params }: { params: Promise<{ groupId: 
   const locale = useLocale();
   const t = useTranslations('expenses');
   const group = trpc.groups.get.useQuery({ groupId });
+  // Who tRPC acts as: the impersonated user while an admin impersonates, where
+  // useSession() would still report the admin.
+  const profile = trpc.auth.getProfile.useQuery();
 
   const [title, setTitle] = useState('');
   const [amountStr, setAmountStr] = useState('');
@@ -82,13 +86,19 @@ export default function NewExpensePage({ params }: { params: Promise<{ groupId: 
     [group.data?.members],
   );
 
+  // Until someone picks a payer, default to the current user (when they're in the group),
+  // the same way currency defaults to the group's.
+  const currentUserId = profile.data?.id;
+  const defaultPaidById = currentUserId && members.some((m) => m.id === currentUserId) ? currentUserId : '';
+  const effectivePaidById = paidById || defaultPaidById;
+
   const amountCents = parseToCents(amountStr);
   const parsedManualRate = parseFloat(manualRate);
   const manualRateValid = useManualRate && !isNaN(parsedManualRate) && parsedManualRate > 0;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!paidById || amountCents <= 0 || shares.length === 0) return;
+    if (!effectivePaidById || amountCents <= 0 || shares.length === 0) return;
 
     createExpense.mutate({
       groupId,
@@ -97,13 +107,14 @@ export default function NewExpensePage({ params }: { params: Promise<{ groupId: 
       currency: effectiveCurrency,
       ...(isDifferentCurrency && manualRateValid ? { exchangeRate: parsedManualRate } : {}),
       category: category || undefined,
-      paidById,
+      paidById: effectivePaidById,
       splitMode,
       shares,
     });
   }
 
   if (group.isLoading) return <LoadingSpinner />;
+  if (group.data?.archivedAt) return <ArchivedGroupNotice groupId={groupId} />;
 
   return (
     <div className="mx-auto max-w-lg space-y-6">
@@ -229,7 +240,8 @@ export default function NewExpensePage({ params }: { params: Promise<{ groupId: 
               <Label htmlFor="paidBy">{t('new.paidBy')}</Label>
               <select
                 id="paidBy"
-                value={paidById}
+                data-testid="paid-by-select"
+                value={effectivePaidById}
                 onChange={(e) => setPaidById(e.target.value)}
                 required
                 className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
