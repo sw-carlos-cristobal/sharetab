@@ -14,9 +14,10 @@ import { deleteReceiptsNoSplitUses } from './receipt-cleanup';
  */
 export async function deleteGroupWithData(tx: Prisma.TransactionClient, groupId: string): Promise<string[]> {
   // A new member or receipt row refers to the group, and the key-share lock its insert
-  // takes on the group's row waits for this one: nothing joins the group or is scanned
-  // into it once the placeholders and receipts below are read, and once this commits
-  // that insert fails.
+  // takes on the group's row waits for this one: no new membership or receipt row lands
+  // once the placeholders and receipts below are read, and once this commits that insert
+  // fails. Rejoining restores an existing row, which takes no lock here (#323): the two
+  // then deadlock and PostgreSQL aborts one, the rejoin or the delete.
   await tx.$queryRaw`SELECT 1 FROM "Group" WHERE "id" = ${groupId} FOR UPDATE`;
   // A split deleted at the same moment waits for the receipt it shares (and the
   // other way round), so one of the two sees the other gone and deletes the receipt

@@ -478,8 +478,7 @@ export const groupsRouter = createTRPCRouter({
           where: { id: existing.id, removedAt: { not: null }, user: { isPlaceholder: false, suspendedAt: null } },
           data: { removedAt: null, role: 'MEMBER', joinedAt: new Date() },
         });
-        // Back through another link at the same moment, or the group deleted meanwhile.
-        // Throwing gives the invite back.
+        // Back through another link at the same moment. Throwing gives the invite back.
         if (count === 0) {
           throw new AppError('NOT_FOUND', 'inviteInvalid');
         }
@@ -538,7 +537,7 @@ export const groupsRouter = createTRPCRouter({
         // A placeholder merge into this person takes no group lock, only a share lock on
         // their row (mergePlaceholderIntoUser). Wait for one in flight, so the balance and
         // history read below include what it hands them; one that starts later finds them
-        // removed or gone (#323).
+        // removed or gone (#323). A first join still uncommitted isn't seen by this lock.
         await tx.$queryRaw`
           SELECT 1 FROM "GroupMember" WHERE "userId" = ${input.userId} AND "groupId" = ${input.groupId} FOR NO KEY UPDATE`;
 
@@ -726,7 +725,16 @@ export const groupsRouter = createTRPCRouter({
         if (count === 0) {
           throw new AppError('NOT_FOUND', 'memberNotFound');
         }
-        await tx.groupMember.update({ where: { id: owner.id }, data: { role: 'MEMBER' } });
+        // Likewise an admin deleting the caller's account can hand the group to someone else
+        // and mark this row removed: then there's no owner here to demote, and throwing rolls
+        // the grant back, so the group never ends up with two owners
+        const demoted = await tx.groupMember.updateMany({
+          where: { id: owner.id, role: 'OWNER', removedAt: null },
+          data: { role: 'MEMBER' },
+        });
+        if (demoted.count === 0) {
+          throw notOwner;
+        }
         await tx.activityLog.create({
           data: {
             groupId: input.groupId,
@@ -764,22 +772,22 @@ export const groupsRouter = createTRPCRouter({
         // Adding a removed placeholder's name brings them back with their history,
         // rather than a second person by that name (#284). A merge that took them
         // meanwhile leaves nobody to bring back, and the name is free. An account an admin
-        // deleted is a placeholder too, but not one anybody added (#323): its name is taken.
+        // deleted (a placeholder the owner added included) is suspended and stays removed:
+        // it's never brought back, and its name is taken (#323).
         if (holder?.user.isPlaceholder && !holder.user.suspendedAt) {
-          // An admin deleting the account meanwhile marks only current memberships, so this
-          // row would bring it back: lock the account, waiting for a deletion in progress
-          const [account] = await tx.$queryRaw<{ suspendedAt: Date | null }[]>`
-            SELECT "suspendedAt" FROM "User" WHERE "id" = ${holder.userId} AND "isPlaceholder" = true FOR SHARE`;
-          if (account?.suspendedAt) {
-            throw new AppError('CONFLICT', 'placeholderNameTaken');
-          }
-          const { count } = account
-            ? await tx.groupMember.updateMany({
-                where: { userId: holder.userId, groupId: input.groupId, removedAt: { not: null } },
-                data: { removedAt: null },
-              })
-            : { count: 0 };
+          const { count } = await tx.groupMember.updateMany({
+            where: { userId: holder.userId, groupId: input.groupId, removedAt: { not: null } },
+            data: { removedAt: null },
+          });
           if (count === 1) {
+            // An admin deleting the account meanwhile marks only current memberships, so
+            // this row would bring it back. Lock the account, after the row as a merge of
+            // them does, waiting for a deletion in progress; throwing rolls the row back.
+            const [account] = await tx.$queryRaw<{ suspendedAt: Date | null }[]>`
+              SELECT "suspendedAt" FROM "User" WHERE "id" = ${holder.userId} AND "isPlaceholder" = true FOR SHARE`;
+            if (!account || account.suspendedAt) {
+              throw new AppError('CONFLICT', 'placeholderNameTaken');
+            }
             return {
               user: { id: holder.userId, name: holder.user.placeholderName ?? holder.user.name },
               restored: true,

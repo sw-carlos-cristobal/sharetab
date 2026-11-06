@@ -302,8 +302,8 @@ describe('placeholder names are unique in the group', () => {
       });
     });
 
-    // #323: an account an admin deleted becomes a placeholder, and its memberships are
-    // marked removed. It isn't one the owner made, so adding its name doesn't bring it back.
+    // #323: an account an admin deleted (a placeholder the owner added included) becomes a
+    // suspended placeholder with its memberships marked removed; it's never brought back.
     test('addPlaceholder refuses the name of a deleted account instead of bringing it back', async () => {
       mockDb.groupMember.findMany.mockResolvedValue([
         ...members,
@@ -323,7 +323,9 @@ describe('placeholder names are unique in the group', () => {
 
     // An admin deleting Hal's account meanwhile marks only current memberships, so bringing
     // this row back would bring the deleted account back too (#323)
-    test("addPlaceholder locks the placeholder's account before bringing them back", async () => {
+    // After the row, in the order a merge of them takes the two (row, then account), so the
+    // two can't deadlock
+    test("addPlaceholder locks the placeholder's account once their row is back", async () => {
       const api = await caller();
       await api.addPlaceholder({ groupId: 'g1', name: 'Hal' });
       const accountLock = mockDb.$queryRaw.mock.calls.findIndex(([strings]) =>
@@ -331,25 +333,37 @@ describe('placeholder names are unique in the group', () => {
       );
       expect(accountLock).toBeGreaterThanOrEqual(0);
       expect(mockDb.$queryRaw.mock.calls[accountLock]!.slice(1)).toEqual(['p9']);
-      expect(mockDb.$queryRaw.mock.invocationCallOrder[accountLock]!).toBeLessThan(
+      expect(mockDb.$queryRaw.mock.invocationCallOrder[accountLock]!).toBeGreaterThan(
         mockDb.groupMember.updateMany.mock.invocationCallOrder[0]!,
       );
     });
 
+    // Throwing rolls the row back
     test("addPlaceholder refuses the name once the placeholder's account was deleted meanwhile", async () => {
       mockDb.$queryRaw.mockResolvedValue([{ suspendedAt: new Date() }]);
       const api = await caller();
       await expect(api.addPlaceholder({ groupId: 'g1', name: 'Hal' })).rejects.toMatchObject({ code: 'CONFLICT' });
-      expect(mockDb.groupMember.updateMany).not.toHaveBeenCalled();
+      expect(mockDb.user.create).not.toHaveBeenCalled();
+      expect(mockDb.activityLog.create).not.toHaveBeenCalled();
+    });
+
+    test("addPlaceholder refuses the name when the placeholder's account is gone", async () => {
+      mockDb.$queryRaw.mockResolvedValue([]);
+      const api = await caller();
+      await expect(api.addPlaceholder({ groupId: 'g1', name: 'Hal' })).rejects.toMatchObject({ code: 'CONFLICT' });
       expect(mockDb.user.create).not.toHaveBeenCalled();
     });
 
-    test('addPlaceholder adds someone new when the removed one was merged and is gone', async () => {
-      mockDb.$queryRaw.mockResolvedValue([]);
+    // Nothing to bring back, so nothing to lock
+    test("addPlaceholder doesn't lock the account when there's no removed row to bring back", async () => {
+      mockDb.groupMember.updateMany.mockResolvedValue({ count: 0 });
       mockDb.user.create.mockResolvedValue({ id: 'p10', name: 'Hal' });
       const api = await caller();
-      await expect(api.addPlaceholder({ groupId: 'g1', name: 'Hal' })).resolves.toMatchObject({ restored: false });
-      expect(mockDb.groupMember.updateMany).not.toHaveBeenCalled();
+      await api.addPlaceholder({ groupId: 'g1', name: 'Hal' });
+      const accountLock = mockDb.$queryRaw.mock.calls.findIndex(([strings]) =>
+        /FROM "User"/.test((strings as string[]).join('?')),
+      );
+      expect(accountLock).toBe(-1);
     });
 
     test('addPlaceholder adds someone new when the removed one was merged meanwhile', async () => {
@@ -812,7 +826,7 @@ describe('invites', () => {
       expect(mockDb.groupInvite.updateMany).not.toHaveBeenCalled();
     });
 
-    // Back in through another link at the same moment, or the group deleted meanwhile:
+    // Back in through another link at the same moment:
     // throwing gives the invite back
     test('refuses the link when there is no removed membership left to bring back', async () => {
       mockDb.groupInvite.findUnique.mockResolvedValue(plainInvite);
@@ -1361,7 +1375,12 @@ describe('transferring ownership', () => {
       where: { id: 'gm-bob', removedAt: null },
       data: { role: 'OWNER' },
     });
-    expect(mockDb.groupMember.update).toHaveBeenCalledWith({ where: { id: 'gm-owner' }, data: { role: 'MEMBER' } });
+    // Only while they still own the group and are in it
+    expect(mockDb.groupMember.updateMany).toHaveBeenCalledWith({
+      where: { id: 'gm-owner', role: 'OWNER', removedAt: null },
+      data: { role: 'MEMBER' },
+    });
+    expect(mockDb.groupMember.update).not.toHaveBeenCalled();
     expect(mockDb.activityLog.create).toHaveBeenCalledWith({
       data: {
         groupId: 'g1',
@@ -1468,6 +1487,20 @@ describe('transferring ownership', () => {
       message: 'Member not found',
     });
     expect(mockDb.groupMember.update).not.toHaveBeenCalled();
+    expect(mockDb.activityLog.create).not.toHaveBeenCalled();
+  });
+
+  // An admin deleting the owner's account (no group lock) can hand the group to someone
+  // else and mark the owner's row removed after it was read: the demote then finds no
+  // current owner, and throwing rolls the grant back, so the group never has two owners
+  test("is refused when the caller's account was deleted after their role was read", async () => {
+    mockMemberships({ owner: member('owner', 'OWNER'), bob: member('bob', 'MEMBER', { user: account }) });
+    mockDb.groupMember.updateMany.mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 });
+    const api = await caller('owner');
+    await expect(api.transferOwnership({ groupId: 'g1', newOwnerId: 'bob' })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      message: 'Only the owner can transfer ownership',
+    });
     expect(mockDb.activityLog.create).not.toHaveBeenCalled();
   });
 
@@ -1981,8 +2014,8 @@ describe('archiving a group', () => {
     expect(mockDb.activityLog.create).not.toHaveBeenCalled();
   });
 
-  // Settlements need both people to be members, so "settle up" alone can't
-  // clear a balance with someone who has left.
+  // Settlements need both people to be members, so "settle up" alone can't clear a
+  // balance with someone who left, or whose account an admin deleted, before #323 (no row)
   test('says so when the open balance belongs to someone no longer in the group', async () => {
     mockDb.groupMember.findMany.mockResolvedValue([{ userId: 'owner' }]);
     const api = await caller();

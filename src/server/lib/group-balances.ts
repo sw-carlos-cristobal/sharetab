@@ -56,9 +56,9 @@ export async function requireSettledUp(
   }
   // Settlements need both people to have a membership row. Someone removed from
   // the group keeps theirs, marked removed, and can still be settled with
-  // (#284, #323), so they count here. Only people who left before #323 have no
-  // row: a balance with one waits until they rejoin, and one whose account an
-  // admin deleted can't, so the expenses and payments it's in have to change instead.
+  // (#284, #323), so they count here. Only people who left, or whose account an admin
+  // deleted, before #323 have no row: a balance with one waits until they rejoin, and
+  // a deleted account can't, so the expenses and payments it's in have to change instead.
   const members = await tx.groupMember.findMany({ where: { groupId }, select: { userId: true } });
   const memberIds = new Set(members.map((m) => m.userId));
   throw new AppError(

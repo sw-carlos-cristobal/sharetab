@@ -61,7 +61,7 @@ export async function mergePlaceholderIntoUser(
   if (!target || target.isPlaceholder) {
     throw new AppError('BAD_REQUEST', 'mergeTargetNeedsAccount');
   }
-  // History handed to someone outside the group couldn't be settled. Lock their
+  // History goes only to a current member, who can see the group and settle it. Lock their
   // membership row (Prisma has no row-lock API): a removal waits for this
   // transaction, and one that got in first leaves no row to lock, or a row
   // marked removed (#323), which this skips.
