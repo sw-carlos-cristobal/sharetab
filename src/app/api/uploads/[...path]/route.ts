@@ -36,7 +36,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ pat
   // Verify receipt ownership
   const receipt = await db.receipt.findFirst({
     where: { imagePath: filePath },
-    // A placeholder removed from the group keeps their row (#284), which isn't membership
+    // Someone removed from the group keeps their row (#284, #323), which isn't membership
     include: { group: { include: { members: { where: { removedAt: null } } } } },
   });
 

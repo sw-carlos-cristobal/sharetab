@@ -109,9 +109,10 @@ export const settlementsRouter = createTRPCRouter({
           throw new AppError('BAD_REQUEST', 'settlementPartiesNotMembers');
         }
 
-        // A placeholder removed from the group (#284) is still counted above, so a
-        // balance that comes back to them can be settled. But the payment may only
-        // settle it, not make a new one: they're no longer in the group. Two such
+        // Someone removed from the group (#284, #323) is still counted above, so a
+        // balance with them (open when they left, or one that comes back) can be
+        // settled. But the payment may only settle it, not make a new one: they're no
+        // longer in the group. Two such
         // payments at once can each pass (the lock above is shared); what they
         // overpay can still be settled the same way.
         const removed = await tx.groupMember.findMany({

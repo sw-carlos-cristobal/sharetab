@@ -60,7 +60,7 @@ async function verifyReceiptAccess(
 ) {
   const receipt = await db.receipt.findUnique({
     where: { id: receiptId },
-    // A placeholder removed from the group keeps their row (#284), which isn't membership
+    // Someone removed from the group keeps their row (#284, #323), which isn't membership
     include: { group: { include: { members: { where: { removedAt: null } } } }, ...include },
   });
   if (!receipt) throw new AppError('NOT_FOUND');
@@ -601,8 +601,8 @@ export const receiptsRouter = createTRPCRouter({
         const baseCurrencyAmount = exchangeRate === null ? null : convertCents(totalAmount, exchangeRate);
 
         // Verify paidBy and all assignees are members of this group (after the lock,
-        // so someone leaving meanwhile is either gone or waits for this, #279). A
-        // placeholder removed from the group isn't (#284).
+        // so someone leaving meanwhile is either gone or waits for this, #279).
+        // Someone removed from the group isn't (#284, #323).
         const groupMembers = await tx.groupMember.findMany({
           where: { groupId: input.groupId, removedAt: null },
           select: { userId: true },

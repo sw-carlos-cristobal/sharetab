@@ -54,11 +54,11 @@ export async function requireSettledUp(
   if (unsettled.length === 0) {
     return;
   }
-  // Settlements need both people to be members, so a balance with someone
-  // who left can't be settled until they rejoin. An account an admin
-  // deleted can't rejoin, so the expenses and payments it's in have to change instead.
-  // A placeholder removed from the group keeps their row and can still be
-  // settled with (#284), so they count here.
+  // Settlements need both people to have a membership row. Someone removed from
+  // the group keeps theirs, marked removed, and can still be settled with
+  // (#284, #323), so they count here. Only people who left, or whose account an admin
+  // deleted, before #323 have no row: a balance with one waits until they rejoin, and
+  // a deleted account can't, so the expenses and payments it's in have to change instead.
   const members = await tx.groupMember.findMany({ where: { groupId }, select: { userId: true } });
   const memberIds = new Set(members.map((m) => m.userId));
   throw new AppError(

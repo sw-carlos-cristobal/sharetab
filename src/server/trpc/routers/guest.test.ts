@@ -1532,6 +1532,18 @@ describe('making a split from a receipt', () => {
     },
   );
 
+  // #323: someone who left keeps their membership row, marked removed, and can't share
+  // the group's receipts
+  test.each(Object.keys(makeSplit) as (keyof typeof makeSplit)[])(
+    "%s refuses a group's receipt to someone removed from the group",
+    async (name) => {
+      mockDb.$queryRaw.mockResolvedValue([groupReceipt]);
+      mockDb.groupMember.findUnique.mockResolvedValue({ userId: 'user-1', groupId: 'g1', removedAt: new Date() });
+      await expect(makeSplit[name](await caller(signedIn))).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(mockDb.guestSplit.create).not.toHaveBeenCalled();
+    },
+  );
+
   // Codex on #319: these procedures are public, so the session (a JWT, valid until it expires)
   // hasn't been checked against the account
   test.each(Object.keys(makeSplit) as (keyof typeof makeSplit)[])(

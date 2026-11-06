@@ -123,8 +123,9 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
   }
 
   const g = group.data;
-  // A placeholder removed from the group still has their name in the balances: one that
-  // comes back (an old expense changed) shows under it, and can be settled with them (#284)
+  // Someone removed from the group still has their name in the balances: a balance
+  // with them (open when they left, or one that comes back) shows under it and can be
+  // settled (#284, #323)
   const memberMap = new Map([...g.members, ...g.removedMembers].map((m) => [m.user.id, m.user]));
   const inDebts = new Set(debts.data?.debts.flatMap((d) => [d.from, d.to]) ?? []);
   const settleParties = [...g.members, ...g.removedMembers.filter((m) => inDebts.has(m.user.id))];

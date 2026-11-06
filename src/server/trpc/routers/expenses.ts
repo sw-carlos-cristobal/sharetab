@@ -206,8 +206,8 @@ export const expensesRouter = createTRPCRouter({
         await lockActiveGroup(tx, input.groupId, 'archivedAddExpense');
 
         // Validate paidById is a member of the group (after the lock, so someone
-        // leaving meanwhile is either gone or waits for this, #279). A placeholder
-        // removed from the group isn't (#284).
+        // leaving meanwhile is either gone or waits for this, #279). Someone
+        // removed from the group isn't (#284, #323).
         const paidByMember = await tx.groupMember.findFirst({
           where: { groupId: input.groupId, userId: input.paidById, removedAt: null },
         });
@@ -360,10 +360,10 @@ export const expensesRouter = createTRPCRouter({
         await lockActiveGroup(tx, groupId, 'archivedEditExpense');
 
         // Validate a new payer and the shares' people are members (after the lock,
-        // so someone leaving meanwhile is either gone or waits for this, #279). A
-        // placeholder removed from the group stays in the part they had in this
+        // so someone leaving meanwhile is either gone or waits for this, #279).
+        // Someone removed from the group stays in the part they had in this
         // expense, so editing it keeps that part theirs instead of moving it onto
-        // someone else, but isn't put in a part they didn't have (#284). Who has
+        // someone else, but isn't put in a part they didn't have (#284, #323). Who has
         // which part is read under the expense's row lock, so two edits at once
         // can't each check against what the other is replacing.
         const [stored] = await tx.$queryRaw<{ paidById: string }[]>`

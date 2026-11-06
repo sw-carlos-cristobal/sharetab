@@ -406,36 +406,53 @@ export const adminRouter = createTRPCRouter({
       await tx.account.deleteMany({ where: { userId: input.userId } });
       await tx.session.deleteMany({ where: { userId: input.userId } });
       await tx.passwordResetToken.deleteMany({ where: { userId: input.userId } });
-      // Transfer ownership before removing memberships
+      // Transfer ownership before removing memberships. Someone who left a group keeps
+      // their row, marked removed (#323): they're not in it, so they can't take it over.
       const ownedGroups = await tx.groupMember.findMany({
-        where: { userId: input.userId, role: 'OWNER' },
+        where: { userId: input.userId, role: 'OWNER', removedAt: null },
         select: { groupId: true },
       });
       const keepMembershipGroupIds: string[] = [];
       for (const { groupId } of ownedGroups) {
-        const nextOwner = await tx.groupMember.findFirst({
-          where: {
-            groupId,
-            userId: { not: input.userId },
-            user: { isPlaceholder: false, suspendedAt: null },
-          },
-          orderBy: { joinedAt: 'asc' },
-        });
-        if (nextOwner) {
-          await tx.groupMember.update({
-            where: { id: nextOwner.id },
+        // The search takes no lock, so a candidate can leave the group before the grant: it
+        // then matches no current row, and the next one is tried
+        let passedOver = [input.userId];
+        let handedOver = false;
+        while (!handedOver) {
+          const nextOwner = await tx.groupMember.findFirst({
+            where: {
+              groupId,
+              userId: { notIn: passedOver },
+              removedAt: null,
+              user: { isPlaceholder: false, suspendedAt: null },
+            },
+            orderBy: { joinedAt: 'asc' },
+          });
+          if (!nextOwner) break;
+          const { count } = await tx.groupMember.updateMany({
+            where: { id: nextOwner.id, removedAt: null },
             data: { role: 'OWNER' },
           });
-        } else {
+          handedOver = count === 1;
+          passedOver = [...passedOver, nextOwner.userId];
+        }
+        if (!handedOver) {
           keepMembershipGroupIds.push(groupId);
         }
       }
-      // Remove memberships except where user is the sole active owner
-      await tx.groupMember.deleteMany({
+      // Remove them from their groups, except where they're the owner and nobody could take
+      // over. The rows stay, marked removed as a removed placeholder's are (#284): the
+      // account is a placeholder now, and its expenses and payments stay, so its balances
+      // show under its name and can still be settled with it, and a group it owes in can
+      // still be archived once they are (#323). Each marked row's role becomes MEMBER, so no
+      // removed row is anyone's owner.
+      await tx.groupMember.updateMany({
         where: {
           userId: input.userId,
+          removedAt: null,
           ...(keepMembershipGroupIds.length > 0 ? { groupId: { notIn: keepMembershipGroupIds } } : {}),
         },
+        data: { removedAt: new Date(), role: 'MEMBER' },
       });
     });
 

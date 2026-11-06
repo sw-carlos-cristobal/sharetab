@@ -194,9 +194,10 @@ test.describe('Group Archiving', () => {
       await dispose();
     });
 
-    // Settlements need both people to be members, so "settle up" alone can't
-    // clear a balance with someone who has left.
-    test('archive refusal says so when someone who left still has a balance', async () => {
+    // #323: someone removed from the group keeps their membership row, marked removed, so a
+    // balance with them can be settled (a payment may only settle it), and then the group can
+    // be archived
+    test('a balance with someone removed from the group can be settled before archiving', async () => {
       const { owner, groupId, memberIds, dispose } = await createTestGroup(
         users.alice.email,
         users.alice.password,
@@ -217,13 +218,23 @@ test.describe('Group Archiving', () => {
         ],
       });
       // Bob is removed while still owing Alice (he can't leave on his own with a balance, #279).
-      await trpcMutation(owner, 'groups.removeMember', { groupId, userId: bobId });
+      const removed = await trpcMutation(owner, 'groups.removeMember', { groupId, userId: bobId });
+      expect(removed.ok(), await removed.text()).toBe(true);
 
       const error = await trpcError(await trpcMutation(owner, 'groups.archive', { groupId }));
       expect(error?.data?.code).toBe('PRECONDITION_FAILED');
-      expect(error?.message).toBe(
-        "Someone who is no longer in this group still owes or is owed money, so it can't be archived. Invite them back to settle up, or edit or delete the expenses and payments they're in.",
-      );
+      expect(error?.message).toBe('This group still has unsettled balances. Settle up before archiving it.');
+
+      // The owner records Bob paying Alice back, and the group can be archived
+      const paid = await trpcMutation(owner, 'settlements.create', {
+        groupId,
+        fromId: bobId,
+        toId: aliceId,
+        amount: 500,
+      });
+      expect(paid.ok(), await paid.text()).toBe(true);
+      const res = await trpcMutation(owner, 'groups.archive', { groupId });
+      expect((await res.json()).result?.data?.json?.archivedAt).toBeTruthy();
 
       await dispose();
     });

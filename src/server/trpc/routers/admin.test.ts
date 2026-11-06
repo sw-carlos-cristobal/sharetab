@@ -979,6 +979,7 @@ describe('password reset links (#397)', () => {
         findMany: vi.fn().mockResolvedValue([]),
         findFirst: vi.fn(),
         update: vi.fn(),
+        updateMany: vi.fn(),
         deleteMany: vi.fn(),
       },
     };
@@ -992,6 +993,143 @@ describe('password reset links (#397)', () => {
       tx.passwordResetToken.deleteMany.mock.invocationCallOrder[0]!,
     );
     expect(mockDb.passwordResetToken.deleteMany).not.toHaveBeenCalled();
+  });
+});
+
+// #323: deleting an account deleted its memberships, so a balance with it showed under no
+// name and couldn't be settled (settlements need both people in the group), and the group
+// couldn't be archived or deleted until someone edited the old expenses. The account is
+// kept as a "Deleted user" placeholder; its memberships are now marked removed, as a
+// placeholder's are (#284), so its balances show under that name and can be settled.
+describe('deleting a user keeps their memberships, marked removed', () => {
+  // Candidates for owner, in the order the search finds them
+  function transaction(ownedGroups: string[], candidates: { id: string; userId: string }[]) {
+    const findFirst = vi.fn();
+    for (const candidate of candidates) findFirst.mockResolvedValueOnce(candidate);
+    findFirst.mockResolvedValue(null);
+    const tx = {
+      user: { update: vi.fn() },
+      account: { deleteMany: vi.fn() },
+      session: { deleteMany: vi.fn() },
+      passwordResetToken: { deleteMany: vi.fn() },
+      groupMember: {
+        findMany: vi.fn().mockResolvedValue(ownedGroups.map((groupId) => ({ groupId }))),
+        findFirst,
+        update: vi.fn(),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        deleteMany: vi.fn(),
+      },
+    };
+    mockDb.$transaction.mockImplementationOnce(async (fn: (client: typeof tx) => unknown) => fn(tx));
+    return tx;
+  }
+
+  beforeEach(() => {
+    vi.stubEnv('ADMIN_EMAIL', 'admin@example.com');
+    vi.clearAllMocks();
+    mockDb.user.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
+      where.id === 'bob' ? { id: 'bob', email: 'bob@example.com' } : { suspendedAt: null },
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test('marks every membership removed, deleting none', async () => {
+    const tx = transaction([], []);
+    const api = await callerAs(adminSession);
+    await expect(api.deleteUser({ userId: 'bob' })).resolves.toEqual({ deleted: true, userId: 'bob' });
+
+    // The role becomes MEMBER, so no removed row is anyone's owner
+    expect(tx.groupMember.updateMany).toHaveBeenCalledWith({
+      where: { userId: 'bob', removedAt: null },
+      data: { removedAt: expect.any(Date), role: 'MEMBER' },
+    });
+    expect(tx.groupMember.deleteMany).not.toHaveBeenCalled();
+  });
+
+  test('keeps them in a group they own that nobody else could take over', async () => {
+    const tx = transaction(['g-own'], []);
+    const api = await callerAs(adminSession);
+    await api.deleteUser({ userId: 'bob' });
+
+    expect(tx.groupMember.updateMany).toHaveBeenCalledWith({
+      where: { userId: 'bob', removedAt: null, groupId: { notIn: ['g-own'] } },
+      data: { removedAt: expect.any(Date), role: 'MEMBER' },
+    });
+  });
+
+  // Someone who left keeps their row too, marked removed (#323): they're not in the group
+  test('hands a group they own only to a current member', async () => {
+    const tx = transaction(['g-own'], [{ id: 'gm-carol', userId: 'carol' }]);
+    const api = await callerAs(adminSession);
+    await api.deleteUser({ userId: 'bob' });
+
+    expect(tx.groupMember.findMany).toHaveBeenCalledWith({
+      where: { userId: 'bob', role: 'OWNER', removedAt: null },
+      select: { groupId: true },
+    });
+    expect(tx.groupMember.findFirst).toHaveBeenCalledWith({
+      where: {
+        groupId: 'g-own',
+        userId: { notIn: ['bob'] },
+        removedAt: null,
+        user: { isPlaceholder: false, suspendedAt: null },
+      },
+      orderBy: { joinedAt: 'asc' },
+    });
+    // Only while they're still in the group when the grant runs
+    expect(tx.groupMember.updateMany).toHaveBeenNthCalledWith(1, {
+      where: { id: 'gm-carol', removedAt: null },
+      data: { role: 'OWNER' },
+    });
+    expect(tx.groupMember.updateMany).toHaveBeenLastCalledWith({
+      where: { userId: 'bob', removedAt: null },
+      data: { removedAt: expect.any(Date), role: 'MEMBER' },
+    });
+    expect(tx.groupMember.update).not.toHaveBeenCalled();
+  });
+
+  // The search takes no lock: the first candidate can leave the group, keeping a removed
+  // row, before the grant runs. The grant then finds no current member, and the next
+  // candidate is tried.
+  test('tries the next member when the first one left before the grant', async () => {
+    const tx = transaction(
+      ['g-own'],
+      [
+        { id: 'gm-carol', userId: 'carol' },
+        { id: 'gm-dave', userId: 'dave' },
+      ],
+    );
+    tx.groupMember.updateMany.mockResolvedValueOnce({ count: 0 });
+    const api = await callerAs(adminSession);
+    await api.deleteUser({ userId: 'bob' });
+
+    expect(tx.groupMember.findFirst).toHaveBeenLastCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ userId: { notIn: ['bob', 'carol'] } }) }),
+    );
+    expect(tx.groupMember.updateMany).toHaveBeenNthCalledWith(2, {
+      where: { id: 'gm-dave', removedAt: null },
+      data: { role: 'OWNER' },
+    });
+    // Handed over, so their own row there is marked removed too
+    expect(tx.groupMember.updateMany).toHaveBeenLastCalledWith({
+      where: { userId: 'bob', removedAt: null },
+      data: { removedAt: expect.any(Date), role: 'MEMBER' },
+    });
+  });
+
+  test('stays in a group they own when every candidate left before the grant', async () => {
+    const tx = transaction(['g-own'], [{ id: 'gm-carol', userId: 'carol' }]);
+    tx.groupMember.updateMany.mockResolvedValueOnce({ count: 0 });
+    const api = await callerAs(adminSession);
+    await api.deleteUser({ userId: 'bob' });
+
+    expect(tx.groupMember.updateMany).toHaveBeenLastCalledWith({
+      where: { userId: 'bob', removedAt: null, groupId: { notIn: ['g-own'] } },
+      data: { removedAt: expect.any(Date), role: 'MEMBER' },
+    });
   });
 });
 

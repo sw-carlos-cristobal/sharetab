@@ -50,6 +50,10 @@ describe('GET /api/uploads/[...path]', () => {
     expect((await get()).status).toBe(403);
     auth.mockResolvedValue({ user: { id: 'member' } });
     expect((await get()).status).toBe(200);
+    // #323: someone removed from the group keeps their row, marked removed, and isn't a member
+    expect(mockDb.receipt.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ include: { group: { include: { members: { where: { removedAt: null } } } } } }),
+    );
   });
 
   // #318: the group scan page's Share Link makes a claim session from a group receipt, and

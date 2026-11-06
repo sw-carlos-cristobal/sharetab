@@ -3,7 +3,8 @@ import { deleteReceiptsNoSplitUses } from './receipt-cleanup';
 
 /**
  * Deletes a group in the caller's transaction, with what only it used (#265): its
- * placeholder members, who can't sign in or be in another group, and its scanned
+ * placeholder members that nothing else refers to (an account an admin deleted is kept
+ * as a placeholder, and can be in other groups, #323), and its scanned
  * receipts that no Quick Split or claim session still shows (the last split to go
  * deletes those, see `deleteUnusedSplitReceipts`). Expenses, settlements, memberships,
  * invites and activity go with the group row by cascade.
@@ -13,9 +14,10 @@ import { deleteReceiptsNoSplitUses } from './receipt-cleanup';
  */
 export async function deleteGroupWithData(tx: Prisma.TransactionClient, groupId: string): Promise<string[]> {
   // A new member or receipt row refers to the group, and the key-share lock its insert
-  // takes on the group's row waits for this one: nothing joins the group or is scanned
-  // into it once the placeholders and receipts below are read, and once this commits
-  // that insert fails.
+  // takes on the group's row waits for this one: no new membership or receipt row lands
+  // once the placeholders and receipts below are read, and once this commits that insert
+  // fails. Rejoining restores an existing row, which takes no lock here (#323): the two
+  // then deadlock and PostgreSQL aborts one, the rejoin or the delete.
   await tx.$queryRaw`SELECT 1 FROM "Group" WHERE "id" = ${groupId} FOR UPDATE`;
   // A split deleted at the same moment waits for the receipt it shares (and the
   // other way round), so one of the two sees the other gone and deletes the receipt
@@ -29,7 +31,8 @@ export async function deleteGroupWithData(tx: Prisma.TransactionClient, groupId:
   await tx.group.delete({ where: { id: groupId } });
 
   if (placeholders.length > 0) {
-    // Only ones nothing else refers to, so one that somehow is can't make the delete fail
+    // Only ones nothing else refers to, so one that somehow is can't make the delete fail.
+    // An account an admin deleted that was an admin itself is still named in the audit log.
     await tx.user.deleteMany({
       where: {
         id: { in: placeholders.map((p) => p.userId) },
@@ -40,6 +43,7 @@ export async function deleteGroupWithData(tx: Prisma.TransactionClient, groupId:
         expenseShares: { none: {} },
         settlementsPaid: { none: {} },
         settlementsFor: { none: {} },
+        adminAuditLogs: { none: {} },
       },
     });
   }
