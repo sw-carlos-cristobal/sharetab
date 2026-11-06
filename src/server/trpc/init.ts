@@ -133,8 +133,8 @@ export const groupMemberProcedure = protectedProcedure
         },
       },
     });
-    // A placeholder removed from the group keeps their row (#284). Only an admin
-    // impersonating one could get here with it.
+    // Someone removed from the group keeps their row, marked removed (#284, #323),
+    // and loses access to the group.
     if (!membership || membership.removedAt) {
       throw new AppError('FORBIDDEN', 'notGroupMember');
     }

@@ -67,16 +67,34 @@ test.describe('Admin Delete User', () => {
       const found = expenses.expenses.find((e: { title: string }) => e.title === 'Temp user expense');
       expect(found).toBeDefined();
 
-      // #390: the owner (Alice) can't delete the group while it still holds a balance with
-      // the deleted account, which no payment can settle; she's told to change what it's in
+      // #323: the account leaves the group but keeps its membership row, marked removed, so
+      // the balance with it shows under "Deleted user"
+      const after = await trpcResult(await trpcQuery(admin, 'groups.get', { groupId }));
+      expect(after.members.map((m: { user: { id: string } }) => m.user.id)).not.toContain(tempId);
+      expect(
+        after.removedMembers.map((m: { user: { id: string; name: string } }) => [m.user.id, m.user.name]),
+      ).toContainEqual([tempId, 'Deleted user']);
+
+      // #390: the owner (Alice) can't delete the group while it still holds that balance
       const refused = await trpcError(await trpcMutation(admin, 'groups.delete', { groupId }));
       expect(refused?.data?.code).toBe('PRECONDITION_FAILED');
-      expect(refused?.message).toBe(
-        "Someone who is no longer in this group still owes or is owed money, so it can't be deleted. Invite them back to settle up, or edit or delete the expenses and payments they're in.",
+      expect(refused?.message).toBe('This group still has unsettled balances. Settle up before deleting it.');
+      // A payment to it may only settle what it's owed: Alice owes $10.00
+      const overpaid = await trpcError(
+        await trpcMutation(admin, 'settlements.create', { groupId, fromId: adminId, toId: tempId, amount: 1500 }),
       );
-      // Doing so clears the balance, and the group can go
-      const removed = await trpcMutation(admin, 'expenses.delete', { groupId, expenseId: found.id });
-      expect(removed.ok(), await removed.text()).toBe(true);
+      expect(overpaid?.data?.code).toBe('BAD_REQUEST');
+      expect(overpaid?.message).toBe(
+        'A payment with someone removed from this group can only settle what they still owe or are owed.',
+      );
+      const paid = await trpcMutation(admin, 'settlements.create', {
+        groupId,
+        fromId: adminId,
+        toId: tempId,
+        amount: 1000,
+      });
+      expect(paid.ok(), await paid.text()).toBe(true);
+      // Settled, the group can go
       const deleted = await trpcMutation(admin, 'groups.delete', { groupId });
       expect(deleted.ok(), await deleted.text()).toBe(true);
       groupId = undefined;

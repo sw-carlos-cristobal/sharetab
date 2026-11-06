@@ -105,7 +105,8 @@ async function canOpenReceipt(
   const member = await tx.groupMember.findUnique({
     where: { userId_groupId: { userId, groupId: receipt.groupId } },
   });
-  return member !== null;
+  // Someone removed from the group keeps their row, marked removed (#323), and isn't a member
+  return member !== null && !member.removedAt;
 }
 
 type Db = { $transaction<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> };

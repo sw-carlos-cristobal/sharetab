@@ -37,6 +37,9 @@ test.describe('Group Membership API (2.2)', () => {
     const detailRes = await trpcQuery(owner, 'groups.get', { groupId });
     const group = await trpcResult(detailRes);
     expect(group.members.length).toBe(1);
+    // He was in none of the group's expenses or payments, so his membership is gone rather
+    // than kept marked removed (#323)
+    expect(group.removedMembers).toEqual([]);
     await dispose();
   });
 

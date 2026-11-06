@@ -30,6 +30,7 @@ export const balancesRouter = createTRPCRouter({
         settlements: {
           select: { fromId: true, toId: true, amount: true, baseCurrencyAmount: true },
         },
+        // Removed rows too, on purpose: someone removed still has their name here (#323)
         members: {
           select: { user: { select: { id: true, name: true, venmoUsername: true } } },
         },

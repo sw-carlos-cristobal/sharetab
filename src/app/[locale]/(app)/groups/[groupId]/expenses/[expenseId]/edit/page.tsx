@@ -100,9 +100,9 @@ function EditExpenseForm({
   const [title, setTitle] = useState(expense.title);
   const [amountStr, setAmountStr] = useState(() => centsToDecimal(expense.amount));
   const [category, setCategory] = useState(expense.category ?? '');
-  // A placeholder removed from the group keeps the part they had in this
+  // Someone removed from the group keeps the part they had in this
   // expense, the payment or a share, so editing it doesn't move that part onto
-  // someone else; the server refuses them anywhere else (#284).
+  // someone else; the server refuses them anywhere else (#284, #323).
   const payerChoices = useMemo(
     () => [...group.members, ...group.removedMembers.filter((m) => m.user.id === expense.paidById)],
     [group, expense],
@@ -112,9 +112,10 @@ function EditExpenseForm({
     [group, expense],
   );
 
-  // The saved payer may have left the group (member removal preserves
-  // financial history). Server-side membership validation would reject the
-  // stale id, so start empty and force the user to pick a current member.
+  // A saved payer who left or was deleted before #323 has no membership row, so isn't among
+  // the choices (someone removed since keeps theirs). Server-side membership
+  // validation would reject that id, so start empty and force the user to
+  // pick a current member.
   const [paidById, setPaidById] = useState(() =>
     payerChoices.some((m) => m.user.id === expense.paidById) ? expense.paidById : '',
   );
@@ -128,9 +129,10 @@ function EditExpenseForm({
   // Seed the split editors with the saved shares (splitEditorSeed) so editing
   // doesn't silently rewrite the split (see splitEditorSeed for when saving a
   // SHARES or PERCENTAGE split from before #331 can move its leftover cents).
-  // Saved shares can reference users who have since left the group (member
-  // removal preserves financial history). The editors only render current
-  // members, so a hidden ex-member id would be unremovable and make every
+  // Saved shares can reference users who left or were deleted before #323 and have
+  // no membership row (someone removed since keeps theirs, and stays among the
+  // choices). The editors only render those choices, so a hidden ex-member id
+  // would be unremovable and make every
   // save fail server-side membership validation. The ex-member portion is
   // reassigned to the payer when they're still a member (creating an entry
   // for them if needed), otherwise to the first remaining share-holder, or
