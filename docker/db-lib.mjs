@@ -190,9 +190,9 @@ export function hint(err, url, mode = 'external') {
   const host = parseTarget(url, mode)?.host ?? '';
   if (mode === 'bundled' && ['28P01', '28000', '3D000'].includes(err.code)) {
     return (
-      'DB_USER, DB_PASSWORD and DB_NAME only take effect when the bundled data folder is first created: ' +
-      'set them back to the values it was created with. If that first start was interrupted, the ' +
-      'folder holds no ShareTab data yet: move it aside and start again.'
+      'DB_USER and DB_NAME only take effect when the bundled database is first created (DB_PASSWORD ' +
+      'is set again on every start): set them back to the values it was created with. If that first ' +
+      'start was interrupted, the folder holds no ShareTab data yet: move it aside and start again.'
     );
   }
   const noVerify = 'sslmode=no-verify encrypts without checking who answers, so use it only on a network you trust.';
@@ -264,9 +264,7 @@ export function waitSecondsWarning(env) {
 // their escapes undecoded. A / ? or # can't be escaped that way, and raw it
 // would end the name for one driver and not the other, so that throws.
 export function bundledUrl(env) {
-  const user = env.DB_USER || 'sharetab';
-  const password = env.DB_PASSWORD || 'sharetab';
-  const name = env.DB_NAME || 'sharetab';
+  const { user, password, database: name } = bundledSettings(env);
   if (/[/?#]/.test(name)) {
     throw new Error(
       "DB_NAME has a / ? or # in it, which the app's driver and Prisma's schema step would read " +
@@ -277,6 +275,124 @@ export function bundledUrl(env) {
   return `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@localhost:5432/${encodeURI(name)}`;
 }
 
+// The bundled database's user, password and database: DB_USER, DB_PASSWORD
+// and DB_NAME, each sharetab when unset or empty, as the entrypoint has them.
+export function bundledSettings(env) {
+  return {
+    user: env.DB_USER || 'sharetab',
+    password: env.DB_PASSWORD || 'sharetab',
+    database: env.DB_NAME || 'sharetab',
+  };
+}
+
+// The bundled server's socket directory (the entrypoint starts it with -k).
+// initdb set local connections to trust, so any user may sign in there.
+const BUNDLED_SOCKET_DIR = '/run/postgresql';
+
+// Why DB_USER (`user`) and DB_NAME (`database`) can't be used with the bundled
+// data folder, as log lines, or [] when they can. `users` are the login roles
+// in it that aren't superusers, `databases` its databases other than the
+// templates and postgres. The entrypoint creates the user and database only
+// with the folder, so other values name something that isn't there; a
+// restart can't fix that. A folder with no database at all is one whose first
+// start was cut short. Names are JSON-quoted, so each stays on its line.
+export function bundledSettingsProblem({ user, database, users, databases, folder }) {
+  const quote = (name) => JSON.stringify(name);
+  const has = (names) => (names.length ? `It has: ${names.map(quote).join(', ')}.` : 'It has none.');
+  if (databases.length === 0) {
+    return [
+      `The bundled database in ${folder} has no database in it: its first start was interrupted ` +
+        'before creating one, so it holds no ShareTab data. Move it aside (rename the folder, or use ' +
+        'a new volume) and start again.',
+    ];
+  }
+  const lines = [];
+  if (!databases.includes(database)) {
+    lines.push(`DB_NAME is ${quote(database)}, but the bundled database has no database by that name. ${has(databases)}`);
+  }
+  if (!users.includes(user)) {
+    lines.push(
+      `DB_USER is ${quote(user)}, but the bundled database has no user by that name for ShareTab to sign in as. ${has(users)}`,
+    );
+  }
+  if (lines.length === 0) return [];
+  lines.push(
+    'DB_USER and DB_NAME only take effect when the bundled database is first created, so set them back ' +
+      'to the values it was created with. (DB_PASSWORD can be changed: it is set again on every start.)',
+  );
+  return lines;
+}
+
+// Checks DB_USER and DB_NAME (`settings`, from bundledSettings) against the
+// bundled server on `client` (connected as its superuser), and sets DB_USER's
+// password to DB_PASSWORD, so a changed DB_PASSWORD takes effect at the next
+// start. Returns 'ok', 'mismatch' (logged: a restart can't fix it), or
+// 'failed' (a query failed, logged). The password goes in the ALTER ROLE's
+// text, since utility statements take no parameters, so statement logging is
+// turned off for the session first: the server's log is the container's.
+export async function syncBundledCredentials({ client, settings, folder, log }) {
+  const { user, password, database } = settings;
+  let users, databases;
+  try {
+    ({ rows: users } = await client.query(
+      'SELECT rolname AS name FROM pg_roles WHERE rolcanlogin AND NOT rolsuper ORDER BY 1',
+    ));
+    ({ rows: databases } = await client.query(
+      "SELECT datname AS name FROM pg_database WHERE NOT datistemplate AND datname <> 'postgres' ORDER BY 1",
+    ));
+  } catch (err) {
+    log.error(`ERROR: cannot read the bundled database's users and databases: ${describeError(err)}`);
+    return 'failed';
+  }
+  const problem = bundledSettingsProblem({
+    user,
+    database,
+    users: users.map((row) => row.name),
+    databases: databases.map((row) => row.name),
+    folder,
+  });
+  if (problem.length > 0) {
+    for (const line of problem) log.error(`ERROR: ${line}`);
+    return 'mismatch';
+  }
+  try {
+    await client.query("SET log_statement = 'none'; SET log_min_error_statement = 'panic'");
+    await client.query(`ALTER ROLE ${pg.escapeIdentifier(user)} PASSWORD ${pg.escapeLiteral(password)}`);
+  } catch (err) {
+    log.error(`ERROR: cannot set DB_USER's password to DB_PASSWORD: ${describeError(err)}`);
+    return 'failed';
+  }
+  return 'ok';
+}
+
+// Connects to the bundled server's Unix socket as its superuser (postgres, in
+// the postgres database), hands the client to work(client), and closes it,
+// returning work's answer; or logs why it couldn't connect and returns false.
+// Each setting is given, so PGHOST, PGUSER, PGSSLMODE and the like in the
+// environment can't redirect it (TLS isn't offered on a socket).
+export async function withBundledServer(log, work, { socketDir = BUNDLED_SOCKET_DIR } = {}) {
+  const client = newClient({
+    host: socketDir,
+    port: 5432,
+    user: 'postgres',
+    database: 'postgres',
+    ssl: false,
+    connectionTimeoutMillis: 10000,
+  });
+  try {
+    try {
+      await client.connect();
+    } catch (failure) {
+      const err = connectionErrors.get(client) ?? failure;
+      log.error(`ERROR: cannot connect to the bundled database server: ${describeError(err)}`);
+      return false;
+    }
+    return await work(client);
+  } finally {
+    await close(client);
+  }
+}
+
 // The first error each client reported as an 'error' event. One the server
 // sent between calls (a shutdown right after sign-in) only reaches the next
 // query as "not queryable", so that query's failure is reported as this one.
@@ -284,9 +400,9 @@ const connectionErrors = new WeakMap();
 
 // A client whose connection errors reject the call in progress instead of
 // crashing the process: node-postgres also emits them as an 'error' event,
-// which kills Node when nothing listens.
-function newClient(url, options) {
-  const client = new pg.Client({ connectionString: url, ...options });
+// which kills Node when nothing listens. `config` is pg.Client's.
+function newClient(config) {
+  const client = new pg.Client(config);
   client.on('error', (err) => {
     if (!connectionErrors.has(client)) connectionErrors.set(client, err);
   });
@@ -305,7 +421,7 @@ async function close(client) {
 // A shutdown between sign-in and the query is thrown as itself (see
 // connectionErrors), so a restart is retried.
 export async function checkConnection(url, { timeoutMs = ATTEMPT_TIMEOUT_MS } = {}) {
-  const client = newClient(url, { connectionTimeoutMillis: timeoutMs });
+  const client = newClient({ connectionString: url, connectionTimeoutMillis: timeoutMs });
   try {
     await client.connect();
     await client.query({ text: 'SELECT 1', query_timeout: timeoutMs });
@@ -499,7 +615,7 @@ export async function withClient(url, log, work, mode = 'external') {
     log.error(`ERROR: ${problem}`);
     return false;
   }
-  const client = newClient(url, { connectionTimeoutMillis: 10000 });
+  const client = newClient({ connectionString: url, connectionTimeoutMillis: 10000 });
   try {
     try {
       await client.connect();

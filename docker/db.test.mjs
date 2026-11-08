@@ -1,8 +1,12 @@
 import { afterEach, describe, expect, test } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import pg from 'pg';
 import {
+  bundledSettings,
+  bundledSettingsProblem,
   bundledUrl,
   checkConnection,
   checkSchema,
@@ -14,9 +18,11 @@ import {
   RETIRED_TABLES,
   runSqlFile,
   schemaProblem,
+  syncBundledCredentials,
   urlProblem,
   waitForDatabase,
   waitSeconds,
+  withBundledServer,
   withClient,
 } from './db-lib.mjs';
 
@@ -366,11 +372,12 @@ describe('hint', () => {
     expect(hint({ code: '28P01', message: 'x' }, 'postgresql://u:p@localhost:5432/db', 'bundled')).toMatch(/move it aside/);
   });
 
-  test('in bundled mode, credentials point at DB_USER/DB_PASSWORD/DB_NAME, not DATABASE_URL', () => {
+  test('in bundled mode, credentials point at DB_USER/DB_NAME, not DATABASE_URL', () => {
     for (const code of ['28P01', '28000', '3D000']) {
       const text = hint(error(code, 'x'), at('localhost'), 'bundled');
-      expect(text).toMatch(/DB_PASSWORD/);
-      expect(text).toMatch(/first created/);
+      expect(text).toMatch(/DB_USER and DB_NAME only take effect when the bundled database is first created/);
+      // DB_PASSWORD is set again on every start (#419), so it isn't one to set back
+      expect(text).toMatch(/DB_PASSWORD is set again on every start/);
       expect(text).toMatch(/interrupted/);
       expect(text).not.toMatch(/DATABASE_URL/);
     }
@@ -511,6 +518,232 @@ describe('bundledUrl', () => {
 
   test('defaults each part to sharetab', () => {
     expect(bundledUrl({})).toBe('postgresql://sharetab:sharetab@localhost:5432/sharetab');
+  });
+});
+
+describe('bundledSettings', () => {
+  test('reads DB_USER, DB_PASSWORD and DB_NAME, each sharetab when unset or empty', () => {
+    expect(bundledSettings({ DB_USER: 'u', DB_PASSWORD: 'p', DB_NAME: 'n' })).toEqual({
+      user: 'u',
+      password: 'p',
+      database: 'n',
+    });
+    expect(bundledSettings({ DB_USER: '', DB_PASSWORD: '' })).toEqual({
+      user: 'sharetab',
+      password: 'sharetab',
+      database: 'sharetab',
+    });
+  });
+});
+
+describe('bundledSettingsProblem', () => {
+  const folder = '/var/lib/postgresql/data';
+  const created = { users: ['sharetab'], databases: ['sharetab'], folder };
+
+  test('DB_USER and DB_NAME naming what the folder was created with: no problem', () => {
+    expect(bundledSettingsProblem({ ...created, user: 'sharetab', database: 'sharetab' })).toEqual([]);
+  });
+
+  test('a changed DB_NAME names it and the database the folder has', () => {
+    const lines = bundledSettingsProblem({ ...created, user: 'sharetab', database: 'books' });
+    expect(lines[0]).toBe(
+      'DB_NAME is "books", but the bundled database has no database by that name. It has: "sharetab".',
+    );
+    expect(lines.join(' ')).not.toMatch(/DB_USER is/);
+    expect(lines.at(-1)).toMatch(/only take effect when the bundled database is first created/);
+    expect(lines.at(-1)).toMatch(/set them back/);
+  });
+
+  test('a changed DB_USER names it and the users the folder has', () => {
+    const lines = bundledSettingsProblem({ ...created, user: 'bob', database: 'sharetab' });
+    expect(lines[0]).toBe(
+      'DB_USER is "bob", but the bundled database has no user by that name for ShareTab to sign in as. It has: "sharetab".',
+    );
+    expect(lines.join(' ')).not.toMatch(/DB_NAME is/);
+  });
+
+  test('both changed: one line each, then what to do, once', () => {
+    const lines = bundledSettingsProblem({ ...created, user: 'bob', database: 'books' });
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toMatch(/^DB_NAME is "books"/);
+    expect(lines[1]).toMatch(/^DB_USER is "bob"/);
+  });
+
+  test('the footer says DB_PASSWORD, unlike the other two, can be changed', () => {
+    const footer = bundledSettingsProblem({ ...created, user: 'bob', database: 'sharetab' }).at(-1);
+    expect(footer).toMatch(/DB_PASSWORD/);
+    expect(footer).toMatch(/every start/);
+  });
+
+  test('names are quoted, so a quote or line break in one stays on its line', () => {
+    const [line] = bundledSettingsProblem({ ...created, user: 'sharetab', database: 'a"b\nERROR: c' });
+    expect(line).toMatch(/^DB_NAME is "a\\"b\\nERROR: c"/);
+    expect(line).not.toMatch(/\n/);
+  });
+
+  test('several users or databases are all listed; none is said as none', () => {
+    const lines = bundledSettingsProblem({ users: [], databases: ['one', 'two'], folder, user: 'u', database: 'x' });
+    expect(lines[0]).toMatch(/It has: "one", "two"\.$/);
+    expect(lines[1]).toMatch(/It has none\.$/);
+  });
+
+  test('a folder with no database at all: its first start was interrupted, so move it aside', () => {
+    const lines = bundledSettingsProblem({ users: ['sharetab'], databases: [], folder, user: 'sharetab', database: 'sharetab' });
+    const text = lines.join(' ');
+    expect(text).toMatch(/interrupted/);
+    expect(text).toMatch(/move it aside/i);
+    expect(text).toContain(folder);
+    expect(text).not.toMatch(/set them back/);
+  });
+});
+
+describe('syncBundledCredentials', () => {
+  const settings = { user: 'sharetab', password: 'n3w-secret', database: 'sharetab' };
+  const folder = '/var/lib/postgresql/data';
+  // Answers the users and databases queries as a folder created with `users`
+  // and `databases`, and anything else (SET, ALTER ROLE) with no rows
+  const server =
+    ({ users = ['sharetab'], databases = ['sharetab'], fail } = {}) =>
+    (sql) => {
+      if (fail?.test(sql)) throw Object.assign(new Error('boom'), { code: 'XX000' });
+      if (/FROM pg_roles/.test(sql)) return { rows: users.map((name) => ({ name })) };
+      if (/FROM pg_database/.test(sql)) return { rows: databases.map((name) => ({ name })) };
+      return {};
+    };
+
+  test("reads the folder's login users and databases, then sets DB_USER's password to DB_PASSWORD", async () => {
+    const { lines, log } = recorder();
+    const client = fakeClient(server());
+    expect(await syncBundledCredentials({ client, settings, folder, log })).toBe('ok');
+    const [users, databases, quiet, alter] = client.queries;
+    // The server's own administrator (postgres) can't be DB_USER: the app would
+    // run as a superuser on a password this step just gave it
+    expect(users).toMatch(/rolcanlogin/);
+    expect(users).toMatch(/NOT rolsuper/);
+    expect(databases).toMatch(/NOT datistemplate/);
+    expect(databases).toMatch(/datname <> 'postgres'/);
+    // Statement logging off for the session, so the server log (the
+    // container's) never shows the password, even if postgresql.conf logs statements
+    expect(quiet).toMatch(/log_statement = 'none'/);
+    expect(quiet).toMatch(/log_min_error_statement = 'panic'/);
+    expect(alter).toBe(`ALTER ROLE "sharetab" PASSWORD 'n3w-secret'`);
+    expect(client.queries).toHaveLength(4);
+    expect(lines.error).toEqual([]);
+  });
+
+  test('quotes the user name and password, whatever they hold', async () => {
+    const { log } = recorder();
+    const client = fakeClient(server({ users: ['Bo"b'] }));
+    const odd = { user: 'Bo"b', password: "it's a\\b", database: 'sharetab' };
+    expect(await syncBundledCredentials({ client, settings: odd, folder, log })).toBe('ok');
+    expect(client.queries.at(-1)).toBe(`ALTER ROLE "Bo""b" PASSWORD ${pg.escapeLiteral("it's a\\b")}`);
+    expect(client.queries.at(-1)).toMatch(/E'it''s a\\\\b'$/);
+  });
+
+  test('a DB_USER or DB_NAME the folder lacks is a mismatch: logged, and no password is set', async () => {
+    const { lines, log } = recorder();
+    const client = fakeClient(server({ databases: ['sharetab'] }));
+    const changed = { ...settings, database: 'books' };
+    expect(await syncBundledCredentials({ client, settings: changed, folder, log })).toBe('mismatch');
+    expect(client.queries.some((sql) => /ALTER ROLE|SET /.test(sql))).toBe(false);
+    expect(lines.error[0]).toBe(
+      'ERROR: DB_NAME is "books", but the bundled database has no database by that name. It has: "sharetab".',
+    );
+    expect(lines.error.every((line) => line.startsWith('ERROR: '))).toBe(true);
+  });
+
+  test('a failed query is reported, not thrown, and is not a mismatch', async () => {
+    for (const fail of [/FROM pg_roles/, /ALTER ROLE/]) {
+      const { lines, log } = recorder();
+      const client = fakeClient(server({ fail }));
+      expect(await syncBundledCredentials({ client, settings, folder, log })).toBe('failed');
+      expect(lines.error[0]).toMatch(/^ERROR: .*boom \(XX000\)/);
+    }
+  });
+
+  test('never logs the password', async () => {
+    for (const scenario of [{}, { users: [] }, { databases: [] }, { fail: /ALTER ROLE/ }]) {
+      const { lines, log } = recorder();
+      await syncBundledCredentials({ client: fakeClient(server(scenario)), settings, folder, log });
+      expect([...lines.info, ...lines.error].join('\n')).not.toContain(settings.password);
+    }
+  });
+});
+
+describe('withBundledServer', () => {
+  // A fake bundled server on a Unix socket, in the directory the entrypoint
+  // starts PostgreSQL with (-k). Records the startup message's parameters.
+  async function socketServer() {
+    const dir = mkdtempSync(join(tmpdir(), 'pgsock-'));
+    const seen = { startup: null, queries: [], clientEnded: false };
+    const server = createServer((socket) => {
+      sockets.add(socket);
+      socket.on('end', () => {
+        seen.clientEnded = true;
+      });
+      socket.once('data', (data) => {
+        // A startup message is length, protocol 3.0, then name\0value\0 pairs;
+        // an SSLRequest is 8 bytes with code 80877103
+        seen.startup = data.length === 8 ? { sslRequest: true } : startupParams(data);
+        if (seen.startup.sslRequest) return void socket.end(Buffer.from('N'));
+        socket.write(loginOk);
+        socket.on('data', (query) => {
+          if (query[0] !== 0x51) return;
+          seen.queries.push(query.subarray(5, query.length - 1).toString());
+          socket.write(queryOk);
+        });
+      });
+    });
+    servers.push(server);
+    await new Promise((resolve) => server.listen(join(dir, '.s.PGSQL.5432'), resolve));
+    cleanupDirs.push(dir);
+    return { dir, seen };
+  }
+  const cleanupDirs = [];
+  afterEach(() => {
+    for (const dir of cleanupDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  });
+  function startupParams(data) {
+    const pairs = data.subarray(8, data.length - 1).toString().split('\0');
+    const params = {};
+    for (let i = 0; i + 1 < pairs.length; i += 2) params[pairs[i]] = pairs[i + 1];
+    return params;
+  }
+
+  test('signs in as postgres to the postgres database over the socket, without TLS, whatever PG* says', async () => {
+    const { dir, seen } = await socketServer();
+    const saved = { ...process.env };
+    Object.assign(process.env, { PGSSLMODE: 'require', PGUSER: 'bob', PGDATABASE: 'books', PGHOST: 'db.example.com' });
+    try {
+      const { log } = recorder();
+      const answer = await withBundledServer(log, async (client) => {
+        await client.query('SELECT 1');
+        return 'ok';
+      }, { socketDir: dir });
+      expect(answer).toBe('ok');
+    } finally {
+      for (const key of ['PGSSLMODE', 'PGUSER', 'PGDATABASE', 'PGHOST']) {
+        if (key in saved) process.env[key] = saved[key];
+        else delete process.env[key];
+      }
+    }
+    expect(seen.startup).toMatchObject({ user: 'postgres', database: 'postgres' });
+    expect(seen.queries).toEqual(['SELECT 1']);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(seen.clientEnded).toBe(true);
+  });
+
+  test('a server it can’t reach is logged, and the work never runs', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pgsock-'));
+    cleanupDirs.push(dir);
+    const { lines, log } = recorder();
+    let ran = false;
+    const answer = await withBundledServer(log, async () => {
+      ran = true;
+    }, { socketDir: dir });
+    expect(answer).toBe(false);
+    expect(ran).toBe(false);
+    expect(lines.error[0]).toMatch(/^ERROR: cannot connect to the bundled database server: .*ENOENT/);
   });
 });
 

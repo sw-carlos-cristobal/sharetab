@@ -17,6 +17,11 @@
 //   node db.mjs bundled-url             print the bundled database's URL, from DB_USER,
 //                                       DB_PASSWORD and DB_NAME (exit 1 for a DB_NAME
 //                                       no URL can carry)
+//   node db.mjs bundled-credentials     over the bundled server's socket, as its superuser:
+//                                       check that DB_USER and DB_NAME name the user and
+//                                       database it has, and set DB_USER's password to
+//                                       DB_PASSWORD (exit 3 when they don't match, which
+//                                       a restart can't fix)
 //
 // `wait` retries only while the server may still be coming up (unreachable,
 // unresolvable, not answering, starting or restarting), for about
@@ -33,6 +38,7 @@
 // :variables.
 import { readFileSync } from 'node:fs';
 import {
+  bundledSettings,
   bundledUrl,
   checkConnection,
   checkSchema,
@@ -40,11 +46,17 @@ import {
   describeTarget,
   parseModels,
   runSqlFile,
+  syncBundledCredentials,
   waitForDatabase,
   waitSeconds,
   waitSecondsWarning,
+  withBundledServer,
   withClient,
 } from './db-lib.mjs';
+
+// Exit code for a DB_USER or DB_NAME the bundled database doesn't have: the
+// entrypoint waits instead of exiting, since a restart would fail the same way
+const SETTINGS_MISMATCH = 3;
 
 async function main(argv, env) {
   const log = { info: (line) => console.log(line), error: (line) => console.error(line) };
@@ -57,6 +69,13 @@ async function main(argv, env) {
       return 1;
     }
     return 0;
+  }
+  if (command === 'bundled-credentials' && rest.length === 0) {
+    const folder = env.PGDATA || '/var/lib/postgresql/data';
+    const settings = bundledSettings(env);
+    const result = await withBundledServer(log, (client) => syncBundledCredentials({ client, settings, folder, log }));
+    if (result === 'ok') return 0;
+    return result === 'mismatch' ? SETTINGS_MISMATCH : 1;
   }
   const url = env.DATABASE_URL;
   if (!url) {
@@ -101,7 +120,9 @@ async function main(argv, env) {
     const ok = await withClient(url, log, (client) => runSqlFile({ client, file: rest[0], readFile, log }), mode);
     return ok ? 0 : 1;
   }
-  log.error('usage: node db.mjs wait | check-schema [--refuse-empty] <schema.prisma> | run <file> | target | bundled-url');
+  log.error(
+    'usage: node db.mjs wait | check-schema [--refuse-empty] <schema.prisma> | run <file> | target | bundled-url | bundled-credentials',
+  );
   return 2;
 }
 
