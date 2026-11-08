@@ -93,6 +93,8 @@ describe('receiptExtractionSchema discount lines (#507)', () => {
 
     expect(totals(result)).toEqual([1800, 2700]);
     expect(result.items.map((i) => i.unitPrice)).toEqual([1800, 2700]);
+    // The subtotal stays as the model read it, not the folded items' sum
+    expect(result.subtotal).toBe(450);
   });
 
   it('adds up to the cent when the shares round, giving a tied cent to the earliest item', () => {
@@ -170,13 +172,16 @@ describe('receiptExtractionSchema discount lines (#507)', () => {
     expect(totals(result)).toEqual([0, 1500]);
   });
 
-  it('keeps zero-priced items as they are when nothing else can take the discount', () => {
-    const result = receiptExtractionSchema.parse({
+  it('refuses a discount with only zero-priced items to take it, saying why', () => {
+    const result = receiptExtractionSchema.safeParse({
       ...extraction,
       items: [item('Free sample', 0), promo(-500)],
     });
 
-    expect(result.items).toEqual([item('Free sample', 0)]);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues).toEqual([
+      expect.objectContaining({ path: ['items'], message: expect.stringMatching(/discount/i) }),
+    ]);
   });
 
   it('still reads an item with no quantity as one, discount or not', () => {
@@ -210,11 +215,14 @@ describe('receiptExtractionSchema discount lines (#507)', () => {
   });
 
   it('refuses a discount line beyond the per-field cap', () => {
-    const result = receiptExtractionSchema.safeParse({
-      ...extraction,
-      items: [item('A', 1000), promo(-1_000_000_001)],
-    });
-    expect(result.success).toBe(false);
+    for (const discount of [
+      promo(-1_000_000_001),
+      { name: 'Promo', quantity: 1, unitPrice: -100, totalPrice: -1_000_000_001 },
+      { name: 'Promo', quantity: 1, unitPrice: -1_000_000_001, totalPrice: -100 },
+    ]) {
+      const result = receiptExtractionSchema.safeParse({ ...extraction, items: [item('A', 1000), discount] });
+      expect(result.success, JSON.stringify(discount)).toBe(false);
+    }
   });
 });
 
