@@ -616,16 +616,24 @@ describe('syncBundledCredentials', () => {
     const client = fakeClient(server());
     expect(await syncBundledCredentials({ client, settings, folder, log })).toBe('ok');
     const [users, databases, quiet, alter] = client.queries;
-    // The server's own administrator (postgres) can't be DB_USER: the app would
-    // run as a superuser on a password this step just gave it
+    // The server's own superuser (postgres) can't be DB_USER: the app would run
+    // as it, on a password this step just gave it. Another superuser can (an
+    // operator may have promoted ShareTab's own user).
     expect(users).toMatch(/rolcanlogin/);
-    expect(users).toMatch(/NOT rolsuper/);
+    expect(users).toMatch(/rolname <> 'postgres'/);
+    expect(users).not.toMatch(/rolsuper/);
     expect(databases).toMatch(/NOT datistemplate/);
     expect(databases).toMatch(/datname <> 'postgres'/);
-    // Statement logging off for the session, so the server log (the
-    // container's) never shows the password, even if postgresql.conf logs statements
+    // Each setting that logs a statement's text or parse tree is off for the
+    // session, so the server log (the container's) doesn't show the password
+    // even if postgresql.conf turns one of them on
     expect(quiet).toMatch(/log_statement = 'none'/);
     expect(quiet).toMatch(/log_min_error_statement = 'panic'/);
+    expect(quiet).toMatch(/log_min_duration_statement = -1/);
+    expect(quiet).toMatch(/log_min_duration_sample = -1/);
+    expect(quiet).toMatch(/log_transaction_sample_rate = 0/);
+    expect(quiet).toMatch(/debug_print_parse = off/);
+    expect(quiet).toMatch(/debug_print_rewritten = off/);
     expect(alter).toBe(`ALTER ROLE "sharetab" PASSWORD 'n3w-secret'`);
     expect(client.queries).toHaveLength(4);
     expect(lines.error).toEqual([]);
@@ -671,8 +679,9 @@ describe('syncBundledCredentials', () => {
 });
 
 describe('withBundledServer', () => {
-  // A fake bundled server on a Unix socket, in the directory the entrypoint
-  // starts PostgreSQL with (-k). Records the startup message's parameters.
+  // A fake bundled server on a Unix socket named as PostgreSQL names it inside
+  // its -k directory (a temporary one stands in for /run/postgresql).
+  // Records the startup message's parameters.
   async function socketServer() {
     const dir = mkdtempSync(join(tmpdir(), 'pgsock-'));
     const seen = { startup: null, queries: [], clientEnded: false };

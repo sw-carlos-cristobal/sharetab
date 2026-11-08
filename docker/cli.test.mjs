@@ -2,7 +2,7 @@
 // exit code. A step that silently exits 0 would skip the wait or the SQL.
 import { afterEach, describe, expect, test } from 'vitest';
 import { execFile } from 'node:child_process';
-import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -164,6 +164,24 @@ describe('db.mjs as a command', () => {
     expect(result.code).toBe(1);
     expect(result.stdout).toBe('');
     expect(result.stderr).toMatch(/^ERROR: DB_NAME has a \/ \? or #/);
+  });
+
+  // Only where nothing listens on the bundled server's socket: the command
+  // signs in there as its superuser and would set a real user's password
+  test.skipIf(existsSync('/run/postgresql/.s.PGSQL.5432'))(
+    'bundled-credentials with no bundled server: exit 1, not the 3 that makes the entrypoint wait',
+    async () => {
+      const result = await run(['bundled-credentials'], { DB_PASSWORD: 'secret-pw' });
+      expect(result.code).toBe(1);
+      expect(result.stderr).toMatch(/^ERROR: cannot connect to the bundled database server: /);
+      expect(result.stderr).not.toContain('secret-pw');
+    },
+  );
+
+  test('bundled-credentials takes no arguments: exit 2, with the usage line naming it', async () => {
+    const result = await run(['bundled-credentials', 'x'], { DATABASE_URL: 'postgresql://u:p@h/d' });
+    expect(result.code).toBe(2);
+    expect(result.stderr).toMatch(/^usage: .*\| bundled-credentials$/m);
   });
 
   test('target in bundled mode reads a DB_NAME with @ in it', async () => {

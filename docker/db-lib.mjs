@@ -185,7 +185,10 @@ export function urlProblem(url, mode = 'external') {
 
 // What to do about a failed connection, or '' when there is nothing to add.
 // In bundled mode the entrypoint built DATABASE_URL from DB_USER, DB_PASSWORD
-// and DB_NAME, so a sign-in problem is about those.
+// and DB_NAME, and bundled-credentials has already checked DB_USER and
+// DB_NAME and set DB_USER's password, so a sign-in problem after it passed
+// comes from a cluster changed by hand (or a DB_PASSWORD PostgreSQL takes as
+// an already-hashed one); the advice below is only a fallback.
 export function hint(err, url, mode = 'external') {
   const host = parseTarget(url, mode)?.host ?? '';
   if (mode === 'bundled' && ['28P01', '28000', '3D000'].includes(err.code)) {
@@ -291,19 +294,19 @@ const BUNDLED_SOCKET_DIR = '/run/postgresql';
 
 // Why DB_USER (`user`) and DB_NAME (`database`) can't be used with the bundled
 // data folder, as log lines, or [] when they can. `users` are the login roles
-// in it that aren't superusers, `databases` its databases other than the
+// in it other than postgres, `databases` its databases other than the
 // templates and postgres. The entrypoint creates the user and database only
 // with the folder, so other values name something that isn't there; a
-// restart can't fix that. A folder with no database at all is one whose first
-// start was cut short. Names are JSON-quoted, so each stays on its line.
+// restart can't fix that. A folder with no database at all is most likely one
+// whose first start was cut short. Names are JSON-quoted, so each stays on its line.
 export function bundledSettingsProblem({ user, database, users, databases, folder }) {
   const quote = (name) => JSON.stringify(name);
   const has = (names) => (names.length ? `It has: ${names.map(quote).join(', ')}.` : 'It has none.');
   if (databases.length === 0) {
     return [
-      `The bundled database in ${folder} has no database in it: its first start was interrupted ` +
-        'before creating one, so it holds no ShareTab data. Move it aside (rename the folder, or use ' +
-        'a new volume) and start again.',
+      `The bundled database in ${folder} has no database in it, so it holds no ShareTab data: most ` +
+        'likely its first start was interrupted before creating one. Move it aside (rename the folder, ' +
+        'or use a new volume) and start again.',
     ];
   }
   const lines = [];
@@ -328,14 +331,17 @@ export function bundledSettingsProblem({ user, database, users, databases, folde
 // password to DB_PASSWORD, so a changed DB_PASSWORD takes effect at the next
 // start. Returns 'ok', 'mismatch' (logged: a restart can't fix it), or
 // 'failed' (a query failed, logged). The password goes in the ALTER ROLE's
-// text, since utility statements take no parameters, so statement logging is
-// turned off for the session first: the server's log is the container's.
+// text, since utility statements take no parameters, so the settings that log
+// a statement's text or parse tree (statement, error-statement, duration and
+// sampled logging, debug_print_parse and debug_print_rewritten) are turned off
+// for the session first: the server's log is the container's. postgres, the server's own superuser, is never DB_USER: this
+// would give it a password ShareTab then signs in with.
 export async function syncBundledCredentials({ client, settings, folder, log }) {
   const { user, password, database } = settings;
   let users, databases;
   try {
     ({ rows: users } = await client.query(
-      'SELECT rolname AS name FROM pg_roles WHERE rolcanlogin AND NOT rolsuper ORDER BY 1',
+      "SELECT rolname AS name FROM pg_roles WHERE rolcanlogin AND rolname <> 'postgres' ORDER BY 1",
     ));
     ({ rows: databases } = await client.query(
       "SELECT datname AS name FROM pg_database WHERE NOT datistemplate AND datname <> 'postgres' ORDER BY 1",
@@ -356,7 +362,11 @@ export async function syncBundledCredentials({ client, settings, folder, log }) 
     return 'mismatch';
   }
   try {
-    await client.query("SET log_statement = 'none'; SET log_min_error_statement = 'panic'");
+    await client.query(
+      "SET log_statement = 'none'; SET log_min_error_statement = 'panic'; " +
+        'SET log_min_duration_statement = -1; SET log_min_duration_sample = -1; SET log_transaction_sample_rate = 0; ' +
+        'SET debug_print_parse = off; SET debug_print_rewritten = off',
+    );
     await client.query(`ALTER ROLE ${pg.escapeIdentifier(user)} PASSWORD ${pg.escapeLiteral(password)}`);
   } catch (err) {
     log.error(`ERROR: cannot set DB_USER's password to DB_PASSWORD: ${describeError(err)}`);
@@ -368,8 +378,9 @@ export async function syncBundledCredentials({ client, settings, folder, log }) 
 // Connects to the bundled server's Unix socket as its superuser (postgres, in
 // the postgres database), hands the client to work(client), and closes it,
 // returning work's answer; or logs why it couldn't connect and returns false.
-// Each setting is given, so PGHOST, PGUSER, PGSSLMODE and the like in the
-// environment can't redirect it (TLS isn't offered on a socket).
+// Host, port, user, database and TLS are given, so PGHOST, PGPORT, PGUSER,
+// PGDATABASE and PGSSLMODE in the environment can't redirect it (TLS isn't
+// offered on a socket).
 export async function withBundledServer(log, work, { socketDir = BUNDLED_SOCKET_DIR } = {}) {
   const client = newClient({
     host: socketDir,

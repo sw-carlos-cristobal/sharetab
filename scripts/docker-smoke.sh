@@ -614,7 +614,8 @@ section "A changed DB_PASSWORD takes effect; a changed DB_USER or DB_NAME waits 
 # Unraid template do, so an exit would show as a restart.
 # Usage: creds_run [docker run options...]
 creds_run() {
-  docker rm -f "$CREDS" >/dev/null 2>&1 || true
+  # -v: the image's other VOLUMEs (uploads, claude, chatgpt) are anonymous here
+  docker rm -f -v "$CREDS" >/dev/null 2>&1 || true
   docker run -d --name "$CREDS" --label sharetab-smoke --restart=unless-stopped \
     --mount "type=volume,src=$CREDS_PGDATA,dst=/var/lib/postgresql/data" \
     -e NEXTAUTH_SECRET="$secret" -e AUTH_SECRET="$secret" "$@" "$IMAGE" >/dev/null
@@ -624,21 +625,37 @@ creds_run() {
 signs_in() {
   docker exec -e PGPASSWORD="$1" "$CREDS" psql -h 127.0.0.1 -U sharetab -d sharetab -tAc 'SELECT 1' >/dev/null 2>&1
 }
+# Quotes, a backslash, a space and URL characters: SQL and URL quoting both.
+# pw_mark, letters and digits, survives both, so grepping for it finds the
+# password in a log raw, percent-encoded or as an SQL literal.
+pw_mark="Zq7pwmark"
+new_pw="$pw_mark n3w'\"\\%@/#x"
+# Fails if the container's log shows DB_PASSWORD in any of those forms, or if
+# PostgreSQL isn't logging statements (so the check could pass on a leak).
+# Usage: no_password_in_log <label>
+no_password_in_log() {
+  local log
+  log=$(docker logs "$CREDS" 2>&1)
+  grep -qF 'statement: ' <<<"$log" || fail "PostgreSQL isn't logging statements ($1), so the password check can't fail."
+  if grep -qF -- "$pw_mark" <<<"$log"; then
+    fail "The container log shows DB_PASSWORD ($1)."
+  fi
+}
 docker volume create --label sharetab-smoke "$CREDS_PGDATA" >/dev/null
 creds_run
 wait_healthy "first start, default DB settings" "$CREDS"
+# Log every statement's text from the next start on (kept in the volume), so
+# an ALTER ROLE that reaches the log fails no_password_in_log
+docker exec "$CREDS" su-exec postgres psql -h /run/postgresql -v ON_ERROR_STOP=1 -tAc \
+  "ALTER SYSTEM SET log_statement = 'all'" >/dev/null
 docker stop "$CREDS" >/dev/null
-# Quotes, a backslash, a space and URL characters: SQL and URL quoting both
-new_pw="n3w pw'\"\\%@/#x"
 creds_run -e DB_PASSWORD="$new_pw"
 wait_healthy "a changed DB_PASSWORD" "$CREDS"
 signs_in "$new_pw" || fail "The new DB_PASSWORD doesn't sign in."
 if signs_in sharetab; then
   fail "The old DB_PASSWORD still signs in."
 fi
-if grep -qF -- "$new_pw" <<<"$(docker logs "$CREDS" 2>&1)"; then
-  fail "The container log shows DB_PASSWORD."
-fi
+no_password_in_log "a changed DB_PASSWORD"
 docker stop "$CREDS" >/dev/null
 creds_run -e DB_PASSWORD="$new_pw" -e DB_USER=bob -e DB_NAME=books
 wait_for_log "$CREDS" "This container waits rather than exit" 90
@@ -660,6 +677,7 @@ docker stop "$CREDS" >/dev/null
 # Setting them back works, on the data as it was
 creds_run -e DB_PASSWORD="$new_pw"
 wait_healthy "DB_USER and DB_NAME set back" "$CREDS"
+no_password_in_log "DB_USER and DB_NAME set back"
 docker rm -f -v "$CREDS" >/dev/null
 docker volume rm "$CREDS_PGDATA" >/dev/null
 

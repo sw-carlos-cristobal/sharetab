@@ -28,7 +28,7 @@
 // DB_WAIT_SECONDS (default 60). An unusable URL, a refused login, a missing
 // database or an untrusted certificate fails at once with the reason, since
 // waiting won't fix it. DB_MODE=bundled (set by the entrypoint) points its
-// hints at DB_USER/DB_PASSWORD/DB_NAME instead of DATABASE_URL.
+// hints at DB_USER and DB_NAME instead of DATABASE_URL.
 //
 // `run` sends the file as one simple query, so its statements run in a single
 // implicit transaction and an error rolls back the whole file (psql -f ran
