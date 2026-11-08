@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { ArrowLeft, Trash2, Pencil } from 'lucide-react';
+import { ArrowLeft, Trash2, Pencil, RotateCcw } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/confirm-dialog';
@@ -23,8 +23,21 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ groupI
 
   const expense = trpc.expenses.get.useQuery({ groupId, expenseId });
   const group = trpc.groups.get.useQuery({ groupId });
+  const utils = trpc.useUtils();
   const deleteExpense = trpc.expenses.delete.useMutation({
     onSuccess: () => router.push(`/groups/${groupId}`),
+    onError: (err) => toast.error(err.message),
+  });
+  // A deleted expense keeps its page, with Restore (#327)
+  const restoreExpense = trpc.expenses.restore.useMutation({
+    onSuccess: () => {
+      toast.success(t('detail.restored'));
+      void utils.expenses.get.invalidate({ groupId, expenseId });
+      void utils.expenses.list.invalidate({ groupId });
+      void utils.balances.getGroupBalances.invalidate({ groupId });
+      void utils.balances.getSimplifiedDebts.invalidate({ groupId });
+      void utils.balances.getDashboard.invalidate();
+    },
     onError: (err) => toast.error(err.message),
   });
 
@@ -67,6 +80,17 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ groupI
         </Button>
         <h1 className="text-2xl font-bold">{e.title}</h1>
       </div>
+
+      {e.deletedAt && (
+        <div
+          data-testid="deleted-notice"
+          className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm"
+        >
+          {e.deletedBy?.name
+            ? t('detail.deletedBy', { name: e.deletedBy.name, date: new Date(e.deletedAt).toLocaleDateString(locale) })
+            : t('detail.deletedOn', { date: new Date(e.deletedAt).toLocaleDateString(locale) })}
+        </div>
+      )}
 
       <Card>
         <CardHeader>
@@ -138,7 +162,17 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ groupI
 
       {/* An archived group refuses edits and deletes, so offer them only once the group is known to be active */}
       {group.data?.archivedAt && <p className="text-center text-sm text-muted-foreground">{t('detail.archived')}</p>}
-      {group.data && !group.data.archivedAt && (
+      {group.data && !group.data.archivedAt && e.deletedAt && (
+        <Button
+          className="w-full"
+          onClick={() => restoreExpense.mutate({ groupId, expenseId })}
+          disabled={restoreExpense.isPending}
+        >
+          <RotateCcw className="mr-2 h-4 w-4" />
+          {restoreExpense.isPending ? t('detail.restoring') : t('detail.restore')}
+        </Button>
+      )}
+      {group.data && !group.data.archivedAt && !e.deletedAt && (
         <div className="flex gap-2">
           <Button
             variant="outline"

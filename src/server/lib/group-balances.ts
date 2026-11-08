@@ -36,8 +36,8 @@ export async function loadGroupBalances(db: Prisma.TransactionClient, groupId: s
  * the record of it away for good.
  *
  * Call it once the transaction holds a lock that waits for the writes taking
- * lockActiveGroup (expenses created, edited or deleted, payments recorded or
- * deleted, receipts.assignItemsAndCreateExpense) and holds off new ones
+ * lockActiveGroup (expenses created, edited, deleted or restored, payments
+ * recorded, deleted or restored, receipts.assignItemsAndCreateExpense) and holds off new ones
  * (groups.archive's update, lockGroupMembers), so what they change is final.
  * A placeholder merge (mergePlaceholderIntoUser) takes no group lock. It
  * moves a balance from one person to another and re-rounds the shares of
@@ -70,7 +70,7 @@ export async function requireSettledUp(
 
 /**
  * Lock a group's row for a transaction that changes its balances (an expense
- * or a payment added, edited or deleted), refusing an archived group with
+ * or a payment added, edited, deleted or restored), refusing an archived group with
  * the error `message` names. Call it first in the transaction (#289).
  *
  * groups.archive sets archivedAt before it reads the balances, and that

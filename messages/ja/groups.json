@@ -183,9 +183,21 @@
     "title": "支払い",
     "deleteLabel": "{from}から{to}への{amount}の支払いを削除",
     "deleteTitle": "この支払いを削除しますか？",
-    "deleteDescription": "{from}は{date}に{to}へ{amount}を支払いました。削除すると、残高は記録されなかった状態に戻ります。",
+    "deleteDescription": "{from}は{date}に{to}へ{amount}を支払いました。削除すると、残高は記録されなかった状態に戻ります。あとでグループのページから復元できます。",
     "deleting": "削除中...",
     "deleted": "支払いを削除しました",
+    "showMore": "さらに表示"
+  },
+  "deleted": {
+    "title": "削除された支出と支払い",
+    "empty": "削除されたものはありません。",
+    "expenses": "支出",
+    "payments": "支払い",
+    "deletedBy": "{name}さんが{date}に削除しました",
+    "deletedOn": "{date}に削除されました",
+    "restore": "復元",
+    "restorePaymentLabel": "{from}から{to}への{amount}の支払いを復元",
+    "paymentRestored": "支払いを復元しました",
     "showMore": "さらに表示"
   }
 }

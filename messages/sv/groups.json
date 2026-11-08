@@ -183,9 +183,21 @@
     "title": "Betalningar",
     "deleteLabel": "Ta bort betalningen på {amount} från {from} till {to}",
     "deleteTitle": "Ta bort den här betalningen?",
-    "deleteDescription": "{from} betalade {amount} till {to} den {date}. Om du tar bort den blir saldona som om den aldrig hade registrerats.",
+    "deleteDescription": "{from} betalade {amount} till {to} den {date}. Om du tar bort den blir saldona som om den aldrig hade registrerats. Du kan återställa den senare från gruppens sida.",
     "deleting": "Tar bort...",
     "deleted": "Betalningen togs bort",
+    "showMore": "Visa fler"
+  },
+  "deleted": {
+    "title": "Borttagna utgifter och betalningar",
+    "empty": "Inget har tagits bort.",
+    "expenses": "Utgifter",
+    "payments": "Betalningar",
+    "deletedBy": "Borttagen av {name} den {date}",
+    "deletedOn": "Borttagen den {date}",
+    "restore": "Återställ",
+    "restorePaymentLabel": "Återställ betalningen på {amount} från {from} till {to}",
+    "paymentRestored": "Betalningen återställdes",
     "showMore": "Visa fler"
   }
 }
