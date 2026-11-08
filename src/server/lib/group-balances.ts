@@ -1,17 +1,18 @@
 import { AppError, type ErrorKey } from './app-error';
 import type { Prisma } from '@/generated/prisma/client';
 import { computeBalances, type MemberBalance } from './balance-calculator';
+import { notDeleted } from './soft-delete';
 
 /**
  * The net balance of everyone in a group's expenses and settlements,
- * including people who have since left. The group page's balances and the
+ * including people who have since left, leaving out deleted ones (#327). The group page's balances and the
  * archive and delete checks (requireSettledUp) all read this, so they can't
  * disagree.
  */
 export async function loadGroupBalances(db: Prisma.TransactionClient, groupId: string): Promise<MemberBalance[]> {
   const [expenses, settlements] = await Promise.all([
     db.expense.findMany({
-      where: { groupId },
+      where: { groupId, ...notDeleted },
       select: {
         paidById: true,
         amount: true,
@@ -20,7 +21,7 @@ export async function loadGroupBalances(db: Prisma.TransactionClient, groupId: s
       },
     }),
     db.settlement.findMany({
-      where: { groupId },
+      where: { groupId, ...notDeleted },
       select: { fromId: true, toId: true, amount: true, baseCurrencyAmount: true },
     }),
   ]);

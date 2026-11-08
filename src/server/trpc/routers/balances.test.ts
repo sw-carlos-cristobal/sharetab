@@ -91,6 +91,16 @@ describe('dashboard balances include archived groups', () => {
   });
 });
 
+// #327: a deleted expense or payment keeps its row, so the dashboard has to leave it out
+test.each(['getOverallDebts', 'getDashboard'] as const)('%s leaves out deleted expenses and payments', async (proc) => {
+  mockDb.group.findMany.mockResolvedValue([]);
+  const api = await caller();
+  await api[proc]();
+  const { select } = mockDb.group.findMany.mock.calls.at(-1)![0];
+  expect(select.expenses.where).toEqual({ deletedAt: null });
+  expect(select.settlements.where).toEqual({ deletedAt: null });
+});
+
 // Codex on #322: a removed placeholder's membership row (#284) isn't membership
 test.each(['getOverallDebts', 'getDashboard'] as const)(
   "%s leaves out a group the caller's membership was removed from",

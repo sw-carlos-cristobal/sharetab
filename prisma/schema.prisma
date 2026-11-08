@@ -91,6 +91,8 @@ model User {
   expenseShares   ExpenseShare[]
   settlementsPaid Settlement[]       @relation("SettledBy")
   settlementsFor  Settlement[]       @relation("SettledFor")
+  expensesDeleted Expense[]          @relation("ExpenseDeletedBy")
+  settlementsDeleted Settlement[]    @relation("SettlementDeletedBy")
   activityLogs    ActivityLog[]
   adminAuditLogs  AdminAuditLog[] @relation("AdminAuditLogs")
   systemInvitesUsed SystemInvite[] @relation("SystemInviteUsedBy")
@@ -191,10 +193,16 @@ model Expense {
   paidById    String
   addedById   String
   receiptId   String?   @unique
+  // Set when the expense is deleted (#327): it drops out of lists and balances, but
+  // its row, shares and receipt stay so it can be restored exactly. Restoring clears
+  // both. src/server/lib/soft-delete.ts says which reads skip a deleted row.
+  deletedAt   DateTime?
+  deletedById String?
 
   group  Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
   paidBy User           @relation("PaidBy", fields: [paidById], references: [id])
   addedBy User          @relation("AddedBy", fields: [addedById], references: [id])
+  deletedBy User?       @relation("ExpenseDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull)
   shares ExpenseShare[]
   receipt Receipt?      @relation(fields: [receiptId], references: [id])
 
@@ -305,10 +313,14 @@ model Settlement {
   exchangeRate        Float   @default(1.0) // rate: 1 unit of settlement currency = X units of group currency
   baseCurrencyAmount  Int?    // amount converted to group currency (cents); null = same currency
   note     String?
+  // Set when the payment is deleted (#327), as on Expense
+  deletedAt   DateTime?
+  deletedById String?
 
   group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
   from  User  @relation("SettledBy", fields: [fromId], references: [id])
   to    User  @relation("SettledFor", fields: [toId], references: [id])
+  deletedBy User? @relation("SettlementDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull)
 
   settledAt DateTime @default(now())
 
@@ -344,8 +356,10 @@ enum ActivityType {
   EXPENSE_CREATED
   EXPENSE_UPDATED
   EXPENSE_DELETED
+  EXPENSE_RESTORED
   SETTLEMENT_CREATED
   SETTLEMENT_DELETED
+  SETTLEMENT_RESTORED
   MEMBER_JOINED
   MEMBER_LEFT
   GROUP_UPDATED

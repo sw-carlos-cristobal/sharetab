@@ -126,6 +126,16 @@ test.each(['list', 'listArchived'] as const)(
   },
 );
 
+// #327: a deleted expense keeps its row so it can be restored; the group tile's count leaves it out
+test.each(['list', 'listArchived'] as const)("%s's expense count leaves out deleted expenses", async (proc) => {
+  mockDb.group.findMany.mockResolvedValue([]);
+  const api = await caller();
+  await api[proc]();
+  expect(mockDb.group.findMany.mock.calls[0]![0].include._count).toEqual({
+    select: { expenses: { where: { deletedAt: null } } },
+  });
+});
+
 describe('group and placeholder names are trimmed', () => {
   test('create refuses a group name that is only whitespace', async () => {
     const api = await caller();
@@ -1583,8 +1593,12 @@ describe('deleting a group', () => {
         code: 'PRECONDITION_FAILED',
         message: 'This group still has unsettled balances. Settle up before deleting it.',
       });
-      expect(mockDb.expense.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { groupId: 'g1' } }));
-      expect(mockDb.settlement.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { groupId: 'g1' } }));
+      expect(mockDb.expense.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { groupId: 'g1', deletedAt: null } }),
+      );
+      expect(mockDb.settlement.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { groupId: 'g1', deletedAt: null } }),
+      );
       expect(mockDb.group.delete).not.toHaveBeenCalled();
       expect(mockDb.receipt.deleteMany).not.toHaveBeenCalled();
       expect(mockDb.user.deleteMany).not.toHaveBeenCalled();
@@ -2009,8 +2023,12 @@ describe('archiving a group', () => {
       code: 'PRECONDITION_FAILED',
       message: 'This group still has unsettled balances. Settle up before archiving it.',
     });
-    expect(mockDb.expense.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { groupId: 'g1' } }));
-    expect(mockDb.settlement.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { groupId: 'g1' } }));
+    expect(mockDb.expense.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { groupId: 'g1', deletedAt: null } }),
+    );
+    expect(mockDb.settlement.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { groupId: 'g1', deletedAt: null } }),
+    );
     expect(mockDb.activityLog.create).not.toHaveBeenCalled();
   });
 
