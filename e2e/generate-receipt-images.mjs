@@ -1,12 +1,15 @@
 /**
  * Generate realistic receipt images from HTML templates using Playwright.
  * Run: npx playwright test e2e/generate-receipt-images.mjs (or just `node e2e/generate-receipt-images.mjs`)
+ * Name receipts to render only those (`node e2e/generate-receipt-images.mjs discount-bar-tab`), so the
+ * other images aren't rewritten.
  *
  * Outputs PNG files to e2e/receipts/
  */
 import { chromium } from 'playwright';
 import { writeFileSync, mkdirSync } from 'fs';
 import { resolve } from 'path';
+import { fileURLToPath } from 'url';
 
 const OUT_DIR = resolve('e2e/receipts');
 mkdirSync(OUT_DIR, { recursive: true });
@@ -260,18 +263,126 @@ const receipts = {
     <div class="center small">Suggested Tip:<br>18% = $21.67 &bull; 20% = $24.07 &bull; 25% = $30.09</div>
     <div class="center small" style="margin-top:4px">Thank you!</div>
   `),
+
+  // Receipts with promo, coupon and discount lines (#507). The scan takes an order-wide discount
+  // off the other items, so e2e/receipt-discounts.spec.ts checks the items' sum against the
+  // discounted subtotal noted on each one.
+
+  // 8. Restaurant bill with an order-wide promo code, tax and tip. Items after the promo: 32.00
+  'discount-promo-pizzeria': receiptHtml(`
+    <div class="header">BELLA NAPOLI PIZZERIA</div>
+    <div class="subheader">418 Elm Street<br>Denver, CO 80203<br>(303) 555-0187</div>
+    <div class="line"></div>
+    <div class="center small">11/06/2026 7:42 PM &bull; Table 12 &bull; Server: Maria</div>
+    <div class="line"></div>
+    ${row('Margherita Pizza', '18.00')}
+    ${row('Caesar Salad', '12.00')}
+    ${row('2 Iced Tea', '7.00')}
+    <div class="indent">2 @ 3.50</div>
+    <div class="line"></div>
+    ${row('Food &amp; Beverage', '37.00')}
+    ${row('Promo SAVE5', '-5.00')}
+    ${row('Subtotal', '32.00')}
+    ${row('Sales Tax 8.25%', '2.64')}
+    ${row('Tip', '6.00')}
+    <div class="dline"></div>
+    ${row('TOTAL', '$40.64', 'total-row')}
+    <div class="line"></div>
+    ${row('VISA ****4821', '$40.64')}
+    <div class="center small" style="margin-top:4px">Thank you! Grazie!</div>
+  `),
+
+  // 9. Grocery receipt with a per-item member saving, an order-wide store coupon and a
+  // "you saved" summary line. Items after both discounts: 24.03
+  'discount-coupon-grocery': receiptHtml(
+    `
+    <div class="header">CORNER GROCER</div>
+    <div class="subheader">1234 Oak Ave<br>Springfield, IL 62701<br>Tel: (217) 555-0142</div>
+    <div class="line"></div>
+    <div class="center small">11/07/2026 10:15 AM &bull; Lane 3</div>
+    <div class="line"></div>
+    ${row('Organic Bananas', '1.29')}
+    ${row('Whole Milk 1 Gal', '4.49')}
+    ${row('Greek Yogurt', '7.98')}
+    <div class="indent">2 @ 3.99</div>
+    ${row('Cheddar Cheese', '5.29')}
+    ${row('&nbsp;&nbsp;Member Savings', '1.00-')}
+    ${row('Sourdough Bread', '3.99')}
+    ${row('Ground Beef 1lb', '6.99')}
+    <div class="line"></div>
+    ${row('Store Coupon $5 off $25', '5.00-')}
+    ${row('Subtotal', '24.03')}
+    ${row('Tax 5%', '1.20')}
+    <div class="dline"></div>
+    ${row('TOTAL', '$25.23', 'total-row')}
+    <div class="line"></div>
+    ${row('VISA ****7291', '$25.23')}
+    <div class="center small" style="margin-top:6px">ITEMS: 6 &bull; YOU SAVED: $6.00</div>
+  `,
+    'receipt-thermal',
+  ),
+
+  // 10. Ride receipt shaped like the one in #507: a fare, a tip and a promo. Fare after the promo: 26.54
+  'discount-ride-promo': receiptHtml(`
+    <div class="header">METRO RIDES</div>
+    <div class="subheader">Trip receipt</div>
+    <div class="line"></div>
+    <div class="center small">11/05/2026 6:18 PM</div>
+    <div class="center small">9.4 mi &bull; 14 min</div>
+    <div class="line"></div>
+    ${row('Standard fare', '$27.93')}
+    ${row('Tip', '$11.73')}
+    ${row('Promo applied', '-$1.39')}
+    <div class="dline"></div>
+    ${row('Total charge', '$38.27', 'total-row')}
+    <div class="line"></div>
+    ${row('Mastercard ****3310', '$38.27')}
+    <div class="center small" style="margin-top:4px">Thanks for riding!</div>
+  `),
+
+  // 11. Bar tab with two order-wide discounts, one a percentage. Items after both: 40.50
+  'discount-bar-tab': receiptHtml(`
+    <div class="header">THE COPPER TAP</div>
+    <div class="subheader">77 Market St<br>Portland, OR 97204<br>(503) 555-0119</div>
+    <div class="line"></div>
+    <div class="center small">11/04/2026 5:47 PM &bull; Tab #208</div>
+    <div class="line"></div>
+    ${row('2 IPA Draft', '14.00')}
+    <div class="indent">2 @ 7.00</div>
+    ${row('Loaded Nachos', '11.00')}
+    ${row('Buffalo Wings', '13.00')}
+    ${row('Old Fashioned', '12.00')}
+    <div class="line"></div>
+    ${row('Happy Hour', '-5.00')}
+    ${row('Loyalty 10% Off', '-4.50')}
+    ${row('Subtotal', '40.50')}
+    ${row('Tax 8%', '3.24')}
+    <div class="dline"></div>
+    ${row('TOTAL', '$43.74', 'total-row')}
+    <div class="line"></div>
+    ${row('AMEX ****1009', '$43.74')}
+    <div class="center small" style="margin-top:4px">Cheers!</div>
+  `),
 };
 
 // ── Generate images ─────────────────────────────────────────────────
 
 async function main() {
+  // Receipt names count only when this script is run directly: under `npx playwright test` the
+  // arguments are the runner's own
+  const runDirectly = process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+  const only = runDirectly ? process.argv.slice(2) : [];
+  const unknown = only.filter((name) => !(name in receipts));
+  if (unknown.length > 0) throw new Error(`Unknown receipt: ${unknown.join(', ')}`);
+  const selected = Object.entries(receipts).filter(([name]) => only.length === 0 || only.includes(name));
+
   const browser = await chromium.launch();
   const context = await browser.newContext({
     viewport: { width: 400, height: 800 },
     deviceScaleFactor: 2, // High DPI for better AI extraction
   });
 
-  for (const [name, html] of Object.entries(receipts)) {
+  for (const [name, html] of selected) {
     const page = await context.newPage();
     await page.setContent(html, { waitUntil: 'networkidle' });
 
@@ -334,9 +445,9 @@ async function main() {
       ),
   };
 
-  // Apply each distortion to the coffee-shop receipt (short, easy to verify)
+  // Apply each distortion to the coffee-shop receipt (short, easy to verify), unless receipts were named
   const baseReceipt = receipts['coffee-shop'];
-  for (const [distName, distFn] of Object.entries(distortions)) {
+  for (const [distName, distFn] of only.length === 0 ? Object.entries(distortions) : []) {
     const distorted = distFn(baseReceipt);
     const page = await context.newPage();
     await page.setContent(distorted, { waitUntil: 'networkidle' });
@@ -357,7 +468,8 @@ async function main() {
   }
 
   await browser.close();
-  console.log(`\nDone! Generated ${Object.keys(receipts).length + Object.keys(distortions).length} receipt images.`);
+  const distortionCount = only.length === 0 ? Object.keys(distortions).length : 0;
+  console.log(`\nDone! Generated ${selected.length + distortionCount} receipt images.`);
 }
 
 main().catch(console.error);

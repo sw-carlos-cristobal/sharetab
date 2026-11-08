@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { currencyCode } from '@/lib/currencies';
+import { allocateProportionally } from '@/lib/money';
 
 // Cap individual extracted money fields well below the Int4 column limit so a
 // hallucinated or prompt-injected value can't overflow the DB or silently
@@ -14,17 +15,71 @@ const moneyCents = z.number().int().min(0).max(MAX_RECEIPT_CENTS);
 const nullAsUndefined = <T extends z.ZodType>(schema: T) =>
   z.preprocess((value) => (value === null ? undefined : value), schema.optional());
 
+const quantity = z.number().int().min(1).max(10_000);
+
 export const receiptItemSchema = z.object({
   name: z.string().max(500),
-  quantity: z.number().int().min(1).max(10_000).default(1),
+  quantity,
   unitPrice: moneyCents, // cents
   totalPrice: moneyCents, // cents
 });
 
+// An item as the model returns it: a discount, promo or coupon on the whole order comes as its own
+// line with a negative totalPrice (#507). Only such a line may have a negative price.
+const scannedItemSchema = receiptItemSchema
+  .extend({
+    quantity: quantity.default(1),
+    unitPrice: z.number().int().min(-MAX_RECEIPT_CENTS).max(MAX_RECEIPT_CENTS),
+    totalPrice: z.number().int().min(-MAX_RECEIPT_CENTS).max(MAX_RECEIPT_CENTS),
+  })
+  .refine((item) => item.totalPrice < 0 || item.unitPrice >= 0, {
+    message: 'Only a discount line (a negative totalPrice) may have a negative unitPrice',
+    path: ['unitPrice'],
+  });
+
+type PricedLine = { quantity: number; unitPrice: number; totalPrice: number };
+
+/**
+ * Takes a scan's discount lines (a negative totalPrice) out of its items and takes their sum off the
+ * other items in proportion to their totalPrice, with `allocateProportionally`, so the cents add up
+ * exactly and every price returned is non-negative (#25, #507). Tax, tip and items are all shared
+ * by item price, so each person's share of the discount follows what they had. A zero-priced item
+ * takes none of it, and a discount larger than the items makes them all 0, a free order, never less;
+ * a discount with no priced item to take it fails the parse.
+ * An item whose totalPrice changes gets the unitPrice `Math.round(totalPrice / quantity)`, as the
+ * receipt pages derive it, so on an item of several, quantity * unitPrice can be off its totalPrice
+ * by up to half the quantity in cents; the per-person split uses totalPrice, and splitting the item
+ * into rows keeps the sum exact. The other items come back as they were, in their order.
+ * #333's discount line replaces this once it lands.
+ */
+export function foldDiscountLines<T extends PricedLine>(items: T[]): T[] {
+  const kept = items.filter((item) => item.totalPrice >= 0);
+  const discount = items.reduce((sum, item) => (item.totalPrice < 0 ? sum - item.totalPrice : sum), 0);
+  const itemsTotal = kept.reduce((sum, item) => sum + item.totalPrice, 0);
+  if (discount === 0) return kept;
+  // A discount that nothing priced can take leaves no items, and the schema refuses an empty result
+  if (itemsTotal === 0) return [];
+  const shares = allocateProportionally(
+    Math.min(discount, itemsTotal),
+    kept.map((item) => item.totalPrice),
+  );
+  return kept.map((item, i) => {
+    const share = shares[i]!;
+    if (share === 0) return item;
+    const totalPrice = item.totalPrice - share;
+    return { ...item, totalPrice, unitPrice: Math.round(totalPrice / item.quantity) };
+  });
+}
+
 export const receiptExtractionSchema = z.object({
   merchantName: nullAsUndefined(z.string().max(500)),
   date: nullAsUndefined(z.string().max(100)),
-  items: z.array(receiptItemSchema).min(1).max(500),
+  items: z
+    .array(scannedItemSchema)
+    .min(1)
+    .max(500)
+    .transform(foldDiscountLines)
+    .pipe(z.array(receiptItemSchema).min(1, 'Receipt has no priced items once its discount lines are taken out')),
   subtotal: moneyCents,
   tax: moneyCents.default(0),
   tip: moneyCents.default(0),
