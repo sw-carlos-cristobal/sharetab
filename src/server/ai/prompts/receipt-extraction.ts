@@ -18,6 +18,8 @@ CRITICAL RULES:
 - All monetary values MUST be integers in cents (e.g., $12.99 = 1299)
 - Every line item on the receipt must appear in the items array
 - quantity * unitPrice should equal totalPrice for each item
+- A discount, promo or coupon that applies to one item comes off that item: give the item's unitPrice and totalPrice after the discount, and do not list the discount as its own item
+- A discount, promo or coupon on the whole order goes in the items array as its own line with a negative unitPrice and totalPrice (e.g. "Promo applied -$1.39" is { "name": "Promo applied", "quantity": 1, "unitPrice": -139, "totalPrice": -139 }). No other value may be negative
 - subtotal should equal the sum of all item totalPrices
 - total should equal subtotal + tax + tip
 - If you cannot read a value clearly, make your best estimate
