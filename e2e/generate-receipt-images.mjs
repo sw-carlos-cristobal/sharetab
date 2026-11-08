@@ -9,6 +9,7 @@
 import { chromium } from 'playwright';
 import { writeFileSync, mkdirSync } from 'fs';
 import { resolve } from 'path';
+import { fileURLToPath } from 'url';
 
 const OUT_DIR = resolve('e2e/receipts');
 mkdirSync(OUT_DIR, { recursive: true });
@@ -367,7 +368,10 @@ const receipts = {
 // ── Generate images ─────────────────────────────────────────────────
 
 async function main() {
-  const only = process.argv.slice(2);
+  // Receipt names count only when this script is run directly: under `npx playwright test` the
+  // arguments are the runner's own
+  const runDirectly = process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+  const only = runDirectly ? process.argv.slice(2) : [];
   const unknown = only.filter((name) => !(name in receipts));
   if (unknown.length > 0) throw new Error(`Unknown receipt: ${unknown.join(', ')}`);
   const selected = Object.entries(receipts).filter(([name]) => only.length === 0 || only.includes(name));
