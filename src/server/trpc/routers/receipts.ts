@@ -7,6 +7,7 @@ import { processReceiptImage } from '../../lib/receipt-processor';
 import { logger } from '../../lib/logger';
 import { parseExtractedData, receiptCurrency } from '../../lib/json-schemas';
 import { DEFAULT_CURRENCY } from '@/lib/currencies';
+import { MAX_MONEY_CENTS } from '@/lib/money';
 import { getExchangeRate, convertCents, exchangeRateSchema } from '../../lib/exchange-rates';
 import { stripUndefined } from '../../lib/strip-undefined';
 import { lockActiveGroup } from '../../lib/group-balances';
@@ -209,6 +210,9 @@ export const receiptsRouter = createTRPCRouter({
         status: receiptWithItems.status,
         imagePath: receiptWithItems.imagePath,
         paidById: receiptWithItems.paidById,
+        // What Save for later kept (#412)
+        title: receiptWithItems.title,
+        tipOverride: receiptWithItems.tipOverride,
         extractedData: withCurrency(receiptWithItems.extractedData, receipt.group?.currency ?? DEFAULT_CURRENCY),
       },
       items: receiptWithItems.items as ReceiptItem[],
@@ -679,6 +683,16 @@ export const receiptsRouter = createTRPCRouter({
         groupId: z.string(),
         receiptId: z.string(),
         paidById: z.string().nullable().optional(),
+        // The page's title and tip override (#412), within what Create Expense takes. Like the
+        // payer, null clears one and leaving it out keeps what was saved; a blank title is none
+        title: z
+          .string()
+          .trim()
+          .max(200)
+          .transform((title) => title || null)
+          .nullable()
+          .optional(),
+        tipOverride: z.number().int().min(0).max(MAX_MONEY_CENTS).nullable().optional(),
         assignments: z
           .array(
             z.object({
@@ -743,6 +757,8 @@ export const receiptsRouter = createTRPCRouter({
             groupId: input.groupId,
             savedById: ctx.user.id,
             ...(input.paidById !== undefined ? { paidById: input.paidById } : {}),
+            ...(input.title !== undefined ? { title: input.title } : {}),
+            ...(input.tipOverride !== undefined ? { tipOverride: input.tipOverride } : {}),
           },
         });
 

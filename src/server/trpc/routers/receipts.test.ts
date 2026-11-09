@@ -345,6 +345,80 @@ describe('saving a receipt for later while it is deleted from the pending list (
   });
 });
 
+// #412: Save for later sent only the payer and the assignments, so a reopened receipt lost the
+// tip typed over the scanned one (and the expense made from it charged no tip) and its title
+describe("Save for later keeps the receipt page's title and tip (#412)", () => {
+  const inGroup = {
+    id: 'r1',
+    status: 'COMPLETED',
+    groupId: 'g1',
+    uploadedById: 'u1',
+    group: { members: [{ userId: 'u1' }], currency: 'USD' },
+  };
+  const saved = () => mockDb.receipt.update.mock.calls.at(-1)![0].data;
+
+  beforeEach(() => {
+    mockDb.groupMember.findUnique.mockResolvedValue({ role: 'MEMBER', userId: 'u1', groupId: 'g1' });
+    mockDb.$transaction.mockImplementation(async (fn: (tx: typeof mockDb) => unknown) => fn(mockDb));
+    mockDb.$queryRaw.mockResolvedValue([{ '?column?': 1 }]);
+    mockDb.expense.findUnique.mockResolvedValue(null);
+    mockDb.receipt.findUnique.mockResolvedValue(inGroup);
+  });
+
+  test('saves the title and the tip typed over the scanned one', async () => {
+    const api = await caller();
+    await api.saveForLater({ groupId: 'g1', receiptId: 'r1', title: 'Team lunch', tipOverride: 1200 });
+    expect(saved()).toMatchObject({ title: 'Team lunch', tipOverride: 1200 });
+  });
+
+  test('null clears them, and leaving them out keeps what was saved', async () => {
+    const api = await caller();
+    await api.saveForLater({ groupId: 'g1', receiptId: 'r1', title: null, tipOverride: null });
+    expect(saved()).toMatchObject({ title: null, tipOverride: null });
+
+    await api.saveForLater({ groupId: 'g1', receiptId: 'r1' });
+    expect(saved()).not.toHaveProperty('title');
+    expect(saved()).not.toHaveProperty('tipOverride');
+  });
+
+  test('a title is trimmed, and one that is only whitespace is saved as none', async () => {
+    const api = await caller();
+    await api.saveForLater({ groupId: 'g1', receiptId: 'r1', title: '  Dinner  ' });
+    expect(saved()).toMatchObject({ title: 'Dinner' });
+
+    await api.saveForLater({ groupId: 'g1', receiptId: 'r1', title: '   ' });
+    expect(saved()).toMatchObject({ title: null });
+  });
+
+  test('refuses a tip Create Expense would refuse, or one too large to store', async () => {
+    const api = await caller();
+    for (const tipOverride of [-1, 12.5, 2_147_483_648]) {
+      await expect(api.saveForLater({ groupId: 'g1', receiptId: 'r1', tipOverride })).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+      });
+    }
+    await expect(api.saveForLater({ groupId: 'g1', receiptId: 'r1', title: 'x'.repeat(201) })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    expect(mockDb.receipt.update).not.toHaveBeenCalled();
+  });
+
+  test('the receipt page gets them back', async () => {
+    mockDb.receipt.findUnique.mockResolvedValue({
+      ...inGroup,
+      title: 'Team lunch',
+      tipOverride: 1200,
+      extractedData: { subtotal: 1000, tax: 0, tip: 0, total: 1000 },
+      items: [],
+    });
+    const api = await caller();
+    const { receipt } = await api.getReceiptItems({ receiptId: 'r1' });
+    expect(receipt).toMatchObject({ title: 'Team lunch', tipOverride: 1200 });
+    // The scanned tip is kept, so the page can still show it
+    expect(receipt.extractedData?.tip).toBe(0);
+  });
+});
+
 // Codex on #319: processing a receipt for a group also sets its group, so one queued behind a
 // delete from the pending list must not put the receipt back in the group
 // Codex on #322: a placeholder removed from a group keeps their row (#284), and an admin can

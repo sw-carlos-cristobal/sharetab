@@ -161,29 +161,40 @@ export function ItemAssignment({
     return () => el.removeEventListener('wheel', handler);
   }, [showImage]);
 
-  // Restore saved state (paidById, assignments) when receipt data loads.
+  // The title starts as the merchant's name, set once when the receipt first loads (#412): seeding
+  // it whenever it was empty refilled a title cleared to type another
+  const hasSeededTitleRef = useRef(false);
+  // Restore what Save for later kept (payer, assignments, title, tip) when receipt data loads.
   // Runs on every data change but only sets state when server data has values
   // and local state hasn't been set yet. This handles the case where the first
-  // render gets cached data (without paidById) and the refetch brings fresh data.
+  // render gets cached data (without them) and the refetch brings fresh data.
   const hasRestoredRef = useRef(false);
 
   /* eslint-disable react-hooks/set-state-in-effect -- init from async query data */
   useEffect(() => {
-    if (!receiptData.data || hasRestoredRef.current) return;
+    if (!receiptData.data) return;
     const data = receiptData.data;
 
-    if (data.receipt.extractedData?.merchantName && !title) {
-      setTitle(data.receipt.extractedData.merchantName);
+    if (!hasSeededTitleRef.current) {
+      hasSeededTitleRef.current = true;
+      setTitle(data.receipt.extractedData?.merchantName ?? '');
     }
+    if (hasRestoredRef.current) return;
 
-    const hasSavedPaidBy = !!data.receipt.paidById;
+    const { paidById: savedPaidById, title: savedTitle, tipOverride: savedTip } = data.receipt;
     const hasSavedAssignments = data.items.some(
       (item: { assignments?: unknown[] }) => item.assignments && item.assignments.length > 0,
     );
 
-    if (hasSavedPaidBy || hasSavedAssignments) {
-      if (hasSavedPaidBy) {
-        setPaidById(data.receipt.paidById!);
+    if (savedPaidById || savedTitle !== null || savedTip !== null || hasSavedAssignments) {
+      if (savedPaidById) {
+        setPaidById(savedPaidById);
+      }
+      if (savedTitle !== null) {
+        setTitle(savedTitle);
+      }
+      if (savedTip !== null) {
+        setTipOverride(centsToDecimal(savedTip));
       }
       const restored: Assignments = {};
       for (const item of data.items) {
@@ -196,14 +207,15 @@ export function ItemAssignment({
       }
       hasRestoredRef.current = true;
     }
-  }, [receiptData.data, title]);
+  }, [receiptData.data]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const { receipt, items } = receiptData.data ?? { receipt: null, items: [] };
   const extracted = receipt?.extractedData ?? null;
   const parsedTip = parseFloat(tipOverride);
-  const tip =
-    extracted && tipOverride !== '' && isFinite(parsedTip) ? Math.round(parsedTip * 100) : (extracted?.tip ?? 0);
+  // The tip typed over the scanned one, in cents; what Create Expense and Save for later send
+  const tipOverrideCents = tipOverride !== '' && isFinite(parsedTip) ? Math.round(parsedTip * 100) : null;
+  const tip = extracted && tipOverrideCents !== null ? tipOverrideCents : (extracted?.tip ?? 0);
   // Until someone picks a payer or a saved one loads, default to the current user (when
   // they're in the group), as Add Expense does (#271, #265)
   const currentUserId = profile.data?.id;
@@ -357,8 +369,7 @@ export function ItemAssignment({
       receiptId,
       title,
       paidById: effectivePaidById,
-      tipOverride:
-        tipOverride !== '' && isFinite(parseFloat(tipOverride)) ? Math.round(parseFloat(tipOverride) * 100) : undefined,
+      tipOverride: tipOverrideCents ?? undefined,
       assignments: assignmentList,
       expectedShares: shownTotals.map((person) => ({ userId: person.userId, amount: person.total })),
       expectedCurrency: currency,
@@ -371,6 +382,9 @@ export function ItemAssignment({
       groupId,
       receiptId,
       paidById: effectivePaidById || null,
+      // Kept so the receipt reopens with them, for anyone in the group (#412)
+      title,
+      tipOverride: tipOverrideCents,
       assignments: assignmentList,
     });
   }
