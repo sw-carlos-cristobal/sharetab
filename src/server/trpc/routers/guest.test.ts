@@ -305,6 +305,7 @@ function claimSession(
     expiresAt?: Date;
     assignments?: { itemIndex: number; personIndices: number[] }[];
     items?: { name: string; quantity: number; unitPrice: number; totalPrice: number }[];
+    receiptData?: { subtotal: number; tax: number; tip: number; total: number; currency: string };
     legacy?: boolean;
   } = {},
 ) {
@@ -1368,6 +1369,117 @@ describe('guest.finalizeSession', () => {
       code: 'BAD_REQUEST',
     });
     expect(mockDb.guestSplit.update).not.toHaveBeenCalled();
+  });
+});
+
+// #408: "Total bill" showed the scanned total, so it disagreed with what people owe once the tip
+// changed or an item was edited, added or deleted. The scan: Pasta $36.01 + Soda $3.99 = $40.00,
+// tax $3.20, no tip. Soda was then changed to $8.99 and a tip of $8.00 entered.
+describe("a split's bill adds up to what everyone owes (#408)", () => {
+  const scanned = { merchantName: 'Diner', subtotal: 4000, tax: 320, tip: 0, total: 4320, currency: 'USD' };
+  const edited = [
+    { name: 'Pasta', quantity: 1, unitPrice: 3601, totalPrice: 3601 },
+    { name: 'Soda', quantity: 1, unitPrice: 899, totalPrice: 899 },
+  ];
+  type Bill = { merchantName?: string; subtotal: number; tax: number; tip: number; total: number; currency: string };
+  type Owed = { total: number }[];
+  const sumOwed = (summary: Owed) => summary.reduce((sum, p) => sum + p.total, 0);
+
+  function created() {
+    return (mockDb.guestSplit.create.mock.calls[0]![0] as { data: { receiptData: Bill; summary?: Owed } }).data;
+  }
+  function finalized() {
+    return (mockDb.guestSplit.update.mock.calls.at(-1)![0] as { data: { receiptData: Bill; summary: Owed } }).data;
+  }
+
+  beforeEach(() => {
+    mockDb.guestSplit.create.mockResolvedValue({ id: 'gs1', shareToken: 'share-1' });
+  });
+
+  test('createSplit stores the bill from the items, with the new tip', async () => {
+    await (
+      await caller()
+    ).createSplit({
+      receiptData: scanned,
+      items: edited,
+      people: [{ name: 'Pat' }, { name: 'Lee' }],
+      assignments: [
+        { itemIndex: 0, personIndices: [0] },
+        { itemIndex: 1, personIndices: [1] },
+      ],
+      tipOverride: 800,
+    });
+    const { receiptData, summary } = created();
+    expect(receiptData).toEqual({ ...scanned, subtotal: 4500, tip: 800, total: 5620 });
+    expect(sumOwed(summary!)).toBe(5620);
+  });
+
+  test('createSplit stores the bill from the items when the tip is left as scanned', async () => {
+    await (
+      await caller()
+    ).createSplit({
+      receiptData: scanned,
+      items: edited,
+      people: [{ name: 'Pat' }],
+      assignments: [
+        { itemIndex: 0, personIndices: [0] },
+        { itemIndex: 1, personIndices: [0] },
+      ],
+    });
+    const { receiptData, summary } = created();
+    expect(receiptData).toEqual({ ...scanned, subtotal: 4500, total: 4820 });
+    expect(sumOwed(summary!)).toBe(4820);
+  });
+
+  test('createClaimSession stores the bill from the items, with the tip sent', async () => {
+    const twoCoffees = { name: 'Coffee', quantity: 2, unitPrice: 250, totalPrice: 501 };
+    await (
+      await caller()
+    ).createClaimSession({
+      receiptData: { ...scanned, tip: 800 },
+      items: [...edited, twoCoffees],
+      creatorName: 'Pat',
+      paidByName: 'Pat',
+    });
+    expect(created().receiptData).toEqual({ ...scanned, subtotal: 5001, tip: 800, total: 6121 });
+  });
+
+  test('finalizeSession stores the bill from the items, even for a session saved with the scanned total', async () => {
+    claimSession(
+      [
+        { name: 'Pat', personToken: ALICE_TOKEN },
+        { name: 'Lee', personToken: OTHER_TOKEN },
+      ],
+      {
+        receiptData: { ...scanned, tip: 800 },
+        items: edited,
+        assignments: [
+          { itemIndex: 0, personIndices: [0] },
+          { itemIndex: 1, personIndices: [0, 1] },
+        ],
+      },
+    );
+    await (await caller()).finalizeSession({ token: 'share-1', personToken: ALICE_TOKEN, personId: pid(0) });
+    const { receiptData, summary } = finalized();
+    expect(receiptData).toEqual({ ...scanned, subtotal: 4500, tip: 800, total: 5620 });
+    expect(sumOwed(summary)).toBe(5620);
+  });
+
+  test("finalizeSession's tip override goes into the bill as well as people's shares", async () => {
+    claimSession([{ name: 'Pat', personToken: ALICE_TOKEN }], {
+      receiptData: scanned,
+      items: edited,
+      assignments: [
+        { itemIndex: 0, personIndices: [0] },
+        { itemIndex: 1, personIndices: [0] },
+      ],
+    });
+    await (
+      await caller()
+    ).finalizeSession({ token: 'share-1', personToken: ALICE_TOKEN, personId: pid(0), tipOverride: 1000 });
+    const { receiptData, summary } = finalized();
+    expect(receiptData).toEqual({ ...scanned, subtotal: 4500, tip: 1000, total: 5820 });
+    expect(sumOwed(summary)).toBe(5820);
   });
 });
 
