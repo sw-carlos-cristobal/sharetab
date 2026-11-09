@@ -397,6 +397,33 @@ describe('restoring a payment', () => {
     await expect(api.restore({ groupId: 'g1', settlementId: 's1' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 
+  test('a missing payment is not found', async () => {
+    asRole('OWNER', 'carol');
+    mockDb.settlement.findUnique.mockResolvedValue(null);
+    const api = await caller('carol');
+    await expect(api.restore({ groupId: 'g1', settlementId: 's1' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(mockDb.$transaction).not.toHaveBeenCalled();
+  });
+
+  // A merge deletes a payment between the placeholder and the member it's merged into
+  test('one gone by the time its row is locked is not found, restoring and logging nothing', async () => {
+    asRole('MEMBER', 'bob');
+    mockDb.$queryRaw.mockImplementation(async (strings: string[]) =>
+      strings.join('?').includes('FROM "Settlement"') ? [] : [{ archivedAt: null }],
+    );
+    const api = await caller('bob');
+    await expect(api.restore({ groupId: 'g1', settlementId: 's1' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(mockDb.settlement.update).not.toHaveBeenCalled();
+    expect(mockDb.activityLog.create).not.toHaveBeenCalled();
+  });
+
+  test("doesn't read balances when nobody in the payment was removed", async () => {
+    asRole('MEMBER', 'bob');
+    const api = await caller('bob');
+    await expect(api.restore({ groupId: 'g1', settlementId: 's1' })).resolves.toEqual({ success: true });
+    expect(mockDb.expense.findMany).not.toHaveBeenCalled();
+  });
+
   test('both people must still have a place in the group', async () => {
     asRole('MEMBER', 'bob');
     mockDb.groupMember.count.mockResolvedValue(1);
@@ -411,7 +438,7 @@ describe('restoring a payment', () => {
   // which leaves this payment out while it's deleted
   describe('with someone removed from the group', () => {
     // Bob (removed) paid $1,000.00 split with Alice, so Alice owes Bob $500.00. A $500.00
-    // payment from Alice to Bob settles it; one from Bob to Alice would make a new debt.
+    // payment from Alice to Bob settles it; one from Bob to Alice would grow what Alice owes him.
     beforeEach(() => {
       mockDb.groupMember.findMany.mockResolvedValue([{ userId: 'bob' }]);
       mockDb.expense.findMany.mockResolvedValue([
@@ -436,12 +463,48 @@ describe('restoring a payment', () => {
       await expect(api.restore({ groupId: 'g1', settlementId: 's1' })).resolves.toEqual({ success: true });
     });
 
-    test('refuses one that would give them a new balance', async () => {
+    test('refuses one that would grow their balance', async () => {
       const api = await caller('carol');
       await expect(api.restore({ groupId: 'g1', settlementId: 's1' })).rejects.toMatchObject({
         message: 'A payment with someone removed from this group can only settle what they still owe or are owed.',
       });
       expect(mockDb.settlement.update).not.toHaveBeenCalled();
+    });
+
+    // Balances are in the group's currency: €400.00 that came to $600.00 is more than the
+    // $500.00 Alice owes Bob, though 40000 is less than 50000
+    test("checks a payment in another currency by what it came to in the group's", async () => {
+      mockDb.settlement.findUnique.mockResolvedValue({
+        ...deleted,
+        fromId: 'alice',
+        toId: 'bob',
+        amount: 40000,
+        currency: 'EUR',
+        baseCurrencyAmount: 60000,
+      });
+      lockedRow = { fromId: 'alice', toId: 'bob', deletedAt };
+      const api = await caller('carol');
+      await expect(api.restore({ groupId: 'g1', settlementId: 's1' })).rejects.toMatchObject({
+        message: 'A payment with someone removed from this group can only settle what they still owe or are owed.',
+      });
+    });
+  });
+
+  // A merge can move a deleted payment from a placeholder to the member it's merged into,
+  // so its people are the ones read under the lock
+  test('checks and logs the people the payment has now', async () => {
+    asRole('OWNER', 'carol');
+    lockedRow = { fromId: 'dave', toId: 'alice', deletedAt };
+    const api = await caller('carol');
+    await api.restore({ groupId: 'g1', settlementId: 's1' });
+    expect(mockDb.groupMember.count).toHaveBeenCalledWith({
+      where: { groupId: 'g1', userId: { in: ['dave', 'alice'] } },
+    });
+    expect(mockDb.activityLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        type: 'SETTLEMENT_RESTORED',
+        metadata: { fromId: 'dave', toId: 'alice', amount: 50000, currency: 'USD' },
+      }),
     });
   });
 });

@@ -136,6 +136,40 @@ test.each(['list', 'listArchived'] as const)("%s's expense count leaves out dele
   });
 });
 
+// #327: a deleted expense or payment still locks the currency: one restored after a change
+// would keep its amounts in, or converted to, the group's old currency
+describe('changing the group currency', () => {
+  beforeEach(() => {
+    mockDb.group.findUnique.mockResolvedValue({ currency: 'USD' });
+    mockDb.group.update.mockResolvedValue({ id: 'g1', currency: 'EUR' });
+  });
+
+  test.each([
+    ['an expense', 1, 0],
+    ['a payment', 0, 1],
+  ])('is refused once the group has %s, deleted ones included', async (_, expenses, settlements) => {
+    mockDb.expense.count.mockResolvedValue(expenses);
+    mockDb.settlement.count.mockResolvedValue(settlements);
+    const api = await caller();
+    await expect(api.update({ groupId: 'g1', currency: 'EUR' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message:
+        'Cannot change group currency after expenses or settlements have been recorded, deleted ones included, since they can be restored. Create a new group with the desired currency instead.',
+    });
+    expect(mockDb.expense.count).toHaveBeenCalledWith({ where: { groupId: 'g1' }, take: 1 });
+    expect(mockDb.settlement.count).toHaveBeenCalledWith({ where: { groupId: 'g1' }, take: 1 });
+    expect(mockDb.group.update).not.toHaveBeenCalled();
+  });
+
+  test('goes ahead in a group with no expenses or payments', async () => {
+    mockDb.expense.count.mockResolvedValue(0);
+    mockDb.settlement.count.mockResolvedValue(0);
+    const api = await caller();
+    await api.update({ groupId: 'g1', currency: 'EUR' });
+    expect(mockDb.group.update).toHaveBeenCalled();
+  });
+});
+
 describe('group and placeholder names are trimmed', () => {
   test('create refuses a group name that is only whitespace', async () => {
     const api = await caller();
@@ -997,6 +1031,13 @@ describe('removing a placeholder', () => {
       message: "Alice still owes or is owed money in this group, so they can't be removed. Settle up first.",
     });
     expectNothingChanged();
+    // #327: a deleted expense or payment leaves the balance this reads
+    expect(mockDb.expense.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { groupId: 'g1', deletedAt: null } }),
+    );
+    expect(mockDb.settlement.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { groupId: 'g1', deletedAt: null } }),
+    );
   });
 
   // Moving their part onto others shifts who owes whom, so it all stays theirs
@@ -1148,6 +1189,13 @@ describe('leaving a group', () => {
       message: 'You still owe or are owed money in this group. Settle up before you leave.',
     });
     expect(mockDb.groupMember.delete).not.toHaveBeenCalled();
+    // #327: a deleted expense or payment leaves the balance this reads
+    expect(mockDb.expense.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { groupId: 'g1', deletedAt: null } }),
+    );
+    expect(mockDb.settlement.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { groupId: 'g1', deletedAt: null } }),
+    );
   });
 
   // #323: their membership row stays, marked removed as a placeholder's is (#284), so
@@ -1959,6 +2007,27 @@ describe('merging a placeholder into a member', () => {
       data: { amount: 666, shares: 1, percentage: null },
     });
     expect(mockDb.expense.update).toHaveBeenCalledWith({ where: { id: 'e1' }, data: { splitMode: 'EXACT' } });
+  });
+
+  // #327: a deleted expense or payment can be restored, so it has to name the member too,
+  // and a deleted payment between the two would become a payment to themselves as well
+  test('hands over deleted expenses and payments too, and drops deleted payments between the two', async () => {
+    const api = await caller();
+    await api.mergePlaceholder({ groupId: 'g1', placeholderUserId: 'p1', realUserId: 'bob' });
+    const queries = [
+      mockDb.expenseShare.findMany,
+      mockDb.expense.updateMany,
+      mockDb.settlement.updateMany,
+      mockDb.settlement.deleteMany,
+    ].flatMap((fn) => fn.mock.calls.map(([args]) => args));
+    expect(queries.length).toBeGreaterThanOrEqual(6);
+    for (const query of queries) {
+      expect(JSON.stringify(query)).not.toContain('deletedAt');
+    }
+    expect(mockDb.expense.updateMany).toHaveBeenCalledWith({
+      where: { paidById: 'p1', groupId: 'g1' },
+      data: { paidById: 'bob' },
+    });
   });
 
   test('drops payments between the placeholder and the member, which would become payments to themselves', async () => {

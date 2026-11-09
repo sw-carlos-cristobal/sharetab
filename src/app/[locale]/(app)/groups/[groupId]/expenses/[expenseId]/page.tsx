@@ -25,7 +25,12 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ groupI
   const group = trpc.groups.get.useQuery({ groupId });
   const utils = trpc.useUtils();
   const deleteExpense = trpc.expenses.delete.useMutation({
-    onSuccess: () => router.push(`/groups/${groupId}`),
+    onSuccess: () => {
+      // Its page stays (as deleted, with Restore), and the group's lists change
+      void utils.expenses.get.invalidate({ groupId, expenseId });
+      void utils.expenses.list.invalidate({ groupId });
+      router.push(`/groups/${groupId}`);
+    },
     onError: (err) => toast.error(err.message),
   });
   // A deleted expense keeps its page, with Restore (#327)
@@ -160,8 +165,12 @@ export default function ExpenseDetailPage({ params }: { params: Promise<{ groupI
         </CardContent>
       </Card>
 
-      {/* An archived group refuses edits and deletes, so offer them only once the group is known to be active */}
-      {group.data?.archivedAt && <p className="text-center text-sm text-muted-foreground">{t('detail.archived')}</p>}
+      {/* An archived group refuses edits, deletes and restores, so offer them only once the group is known to be active */}
+      {group.data?.archivedAt && (
+        <p className="text-center text-sm text-muted-foreground">
+          {e.deletedAt ? t('detail.archivedDeleted') : t('detail.archived')}
+        </p>
+      )}
       {group.data && !group.data.archivedAt && e.deletedAt && (
         <Button
           className="w-full"

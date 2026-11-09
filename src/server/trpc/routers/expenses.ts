@@ -68,9 +68,12 @@ function mayRemoveExpense(
  * expense can't name someone removed (#284, #323). But a deletion can leave a removed
  * person with a balance that the restore would settle (they were removed at zero, then an
  * old expense was deleted), so, as with a payment (settlementRemovedMemberOverpaid), it
- * may go ahead when it only moves their balance toward zero without crossing it. Checked
- * after the group lock, as create checks its people (#279); two restores at once can each
- * pass, as two such payments can.
+ * may go ahead when it only moves their balance toward zero without crossing it (someone
+ * with no membership row at all counts as former here, where a payment with them is refused
+ * outright, as create does). Checked after the group lock, as create checks its people
+ * (#279); two such checked writes at once (two restores, or a restore and a payment recorded
+ * or restored) can each pass, as two such payments can: each reads the balances under the
+ * shared group lock.
  */
 async function requireRestorableFor(tx: Prisma.TransactionClient, groupId: string, expense: BalanceExpense) {
   const people = [...new Set([expense.paidById, ...expense.shares.map((s) => s.userId)])];
@@ -532,7 +535,7 @@ export const expensesRouter = createTRPCRouter({
       await ctx.db.$transaction(async (tx) => {
         await lockActiveGroup(tx, input.groupId, 'archivedDeleteExpense');
         // Marked deleted, not removed, so it can be restored (#327). Only while it isn't
-        // already: a delete that got in first leaves nothing to do.
+        // already, so one someone else deleted in the meantime is NOT_FOUND.
         const { count } = await tx.expense.updateMany({
           where: { id: input.expenseId, groupId: input.groupId, ...notDeleted },
           data: { deletedAt: new Date(), deletedById: ctx.user.id },

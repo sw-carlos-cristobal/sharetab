@@ -3,8 +3,9 @@ import type { Prisma } from '@/generated/prisma/client';
 import { loadGroupBalances } from './group-balances';
 
 // #327: a deleted expense or payment keeps its row so it can be restored, so the
-// balances every check reads (the group page, archive, delete, leave, removal and the
-// removed-member payment rule) have to leave it out.
+// balances every check reads (the group page, archive, delete, leave, removal, the
+// removed-member payment rule and the expense restore's former-member check) have to
+// leave it out.
 describe('loadGroupBalances', () => {
   test('leaves out deleted expenses and payments', async () => {
     const tx = {

@@ -5,7 +5,7 @@ import { notDeleted } from './soft-delete';
 
 /**
  * The net balance of everyone in a group's expenses and settlements,
- * including people who have since left, leaving out deleted ones (#327). The group page's balances and the
+ * including people who have since left, leaving out deleted expenses and payments (#327). The group page's balances and the
  * archive and delete checks (requireSettledUp) all read this, so they can't
  * disagree.
  */
@@ -32,7 +32,7 @@ export async function loadGroupBalances(db: Prisma.TransactionClient, groupId: s
  * Refuse a group where anyone still owes or is owed money, with
  * PRECONDITION_FAILED and the error key that fits: archiving (#275) and
  * deleting (#390) both need everyone settled up first. An archived group
- * refuses the payments that would settle a balance, and a deleted one takes
+ * refuses the payments that would settle a balance, and a deleted group takes
  * the record of it away for good.
  *
  * Call it once the transaction holds a lock that waits for the writes taking

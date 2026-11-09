@@ -283,7 +283,7 @@ describe('a group archived while a change was on its way (#289)', () => {
       code: 'BAD_REQUEST',
       message: 'Cannot delete expenses from an archived group',
     });
-    expect(mockDb.expense.delete).not.toHaveBeenCalled();
+    expect(mockDb.expense.updateMany).not.toHaveBeenCalled();
   });
 
   test('an active group is locked FOR SHARE inside the transaction, before the write', async () => {
@@ -578,7 +578,7 @@ describe('deleting and restoring an expense (#327)', () => {
         shares: [{ userId: 'u1', amount }],
       });
 
-      test('asks who in it is a current member, after the locks', async () => {
+      test('asks who in it is a current member', async () => {
         mockDb.expense.findMany.mockResolvedValue([u2Paid(500)]);
         const api = await caller();
         await api.restore({ groupId: 'g1', expenseId: 'e1' });
@@ -604,6 +604,7 @@ describe('deleting and restoring an expense (#327)', () => {
       test.each([
         ['would give them a balance', 0],
         ['would take them past zero', 300],
+        ['would take them a cent past zero', 499],
       ])('refuses one that %s, naming them', async (_, owed) => {
         mockDb.expense.findMany.mockResolvedValue(owed > 0 ? [u2Paid(owed)] : []);
         const api = await caller();
@@ -616,13 +617,115 @@ describe('deleting and restoring an expense (#327)', () => {
         expect(mockDb.activityLog.create).not.toHaveBeenCalled();
       });
 
-      test('reads the balances after the locks', async () => {
+      // The balances it reads have to leave this expense out, so they're read before it's restored
+      test('reads the balances after the locks and before the restore', async () => {
         mockDb.expense.findMany.mockResolvedValue([u2Paid(500)]);
         const api = await caller();
         await api.restore({ groupId: 'g1', expenseId: 'e1' });
         expect(mockDb.expense.findMany.mock.invocationCallOrder[0]).toBeGreaterThan(
           mockDb.$queryRaw.mock.invocationCallOrder[1]!,
         );
+        expect(mockDb.expense.update.mock.invocationCallOrder[0]).toBeGreaterThan(
+          mockDb.expense.findMany.mock.invocationCallOrder[0]!,
+        );
+      });
+
+      // The deleted expense: u2 paid $10.00, and u1 has all of it, so restoring it adds $10.00
+      // to what u2 is owed
+      describe('who paid it', () => {
+        beforeEach(() => {
+          lockedRow = { paidById: 'u2', amount: 1000, baseCurrencyAmount: null, deletedAt };
+          mockDb.expenseShare.findMany.mockResolvedValue([{ userId: 'u1', amount: 1000 }]);
+        });
+        // An expense still in the group: u1 paid for u2
+        const u1Paid = (amount: number) => ({
+          paidById: 'u1',
+          amount,
+          baseCurrencyAmount: null,
+          shares: [{ userId: 'u2', amount }],
+        });
+
+        test('restores one that settles what they owe', async () => {
+          mockDb.expense.findMany.mockResolvedValue([u1Paid(1000)]);
+          const api = await caller();
+          await expect(api.restore({ groupId: 'g1', expenseId: 'e1' })).resolves.toEqual({ success: true });
+        });
+
+        test('refuses one that adds to what they are owed', async () => {
+          mockDb.expense.findMany.mockResolvedValue([u2Paid(500)]);
+          const api = await caller();
+          await expect(api.restore({ groupId: 'g1', expenseId: 'e1' })).rejects.toMatchObject({
+            message: expect.stringContaining('Hal is no longer in the group'),
+          });
+        });
+      });
+
+      // u2 paid $10.00 split with u1: what they paid and what they owe make one change, +$5.00
+      test('takes what someone both paid and owes as one change', async () => {
+        lockedRow = { paidById: 'u2', amount: 1000, baseCurrencyAmount: null, deletedAt };
+        const u1Paid500ForU2 = {
+          paidById: 'u1',
+          amount: 500,
+          baseCurrencyAmount: null,
+          shares: [{ userId: 'u2', amount: 500 }],
+        };
+        mockDb.expense.findMany.mockResolvedValue([u1Paid500ForU2]);
+        const api = await caller();
+        await expect(api.restore({ groupId: 'g1', expenseId: 'e1' })).resolves.toEqual({ success: true });
+
+        mockDb.expense.findMany.mockResolvedValue([]);
+        await expect(api.restore({ groupId: 'g1', expenseId: 'e1' })).rejects.toMatchObject({
+          message: expect.stringContaining('Hal is no longer in the group'),
+        });
+      });
+
+      // In another currency the change is the converted share: 1,100 group-currency cents over
+      // two equal shares is 550 each
+      test.each([
+        ['restores one that settles', 550, true],
+        ['refuses one that takes them a cent past zero', 549, false],
+      ])('works out a converted expense in the group currency: %s', async (_, owed, ok) => {
+        lockedRow = { paidById: 'u1', amount: 1000, baseCurrencyAmount: 1100, deletedAt };
+        mockDb.expense.findMany.mockResolvedValue([
+          { paidById: 'u2', amount: 500, baseCurrencyAmount: owed, shares: [{ userId: 'u1', amount: 500 }] },
+        ]);
+        const api = await caller();
+        const restored = api.restore({ groupId: 'g1', expenseId: 'e1' });
+        await (ok
+          ? expect(restored).resolves.toEqual({ success: true })
+          : expect(restored).rejects.toMatchObject({
+              message: expect.stringContaining('Hal is no longer in the group'),
+            }));
+      });
+
+      test('names the one it would give a balance when two are no longer in the group', async () => {
+        mockDb.expenseShare.findMany.mockResolvedValue([
+          { userId: 'u2', amount: 500 },
+          { userId: 'u3', amount: 500 },
+        ]);
+        // u2 is owed $5.00, which restoring settles; u3 is at zero
+        mockDb.expense.findMany.mockResolvedValue([u2Paid(500)]);
+        mockDb.user.findUnique.mockImplementation(
+          async (args: { where: { id: string }; select?: Record<string, unknown> }) =>
+            args.select?.placeholderName
+              ? { name: args.where.id === 'u3' ? 'Ivy' : 'Hal', placeholderName: null }
+              : { suspendedAt: null },
+        );
+        const api = await caller();
+        await expect(api.restore({ groupId: 'g1', expenseId: 'e1' })).rejects.toMatchObject({
+          message: expect.stringContaining('Ivy is no longer in the group'),
+        });
+      });
+
+      test('says someone without naming them when they have no name', async () => {
+        mockDb.user.findUnique.mockImplementation(async (args: { select?: Record<string, unknown> }) =>
+          args.select?.placeholderName ? { name: null, placeholderName: null } : { suspendedAt: null },
+        );
+        const api = await caller();
+        await expect(api.restore({ groupId: 'g1', expenseId: 'e1' })).rejects.toMatchObject({
+          message:
+            'Someone in this expense is no longer in the group, so it can be restored only if it settles what they still owe or are owed.',
+        });
       });
     });
 
@@ -668,10 +771,48 @@ describe('deleting and restoring an expense (#327)', () => {
       await expect(api.restore({ groupId: 'g1', expenseId: 'e1' })).resolves.toEqual({ success: true });
     });
 
+    test.each([
+      ['its payer', 'MEMBER', { paidById: 'u1', addedById: 'u2' }],
+      ['who added it', 'MEMBER', { paidById: 'u2', addedById: 'u1' }],
+      ['a group admin', 'ADMIN', { paidById: 'u2', addedById: 'u2' }],
+    ] as const)('%s may restore it, as they may delete it', async (_, role, people) => {
+      mockDb.groupMember.findUnique.mockResolvedValue({ role, userId: 'u1', groupId: 'g1' });
+      mockDb.expense.findUnique.mockResolvedValue({ ...dinner, ...people, deletedAt });
+      const api = await caller();
+      await expect(api.restore({ groupId: 'g1', expenseId: 'e1' })).resolves.toEqual({ success: true });
+    });
+
+    test('a member who neither paid nor added it may not delete it either', async () => {
+      mockDb.expense.findUnique.mockResolvedValue({ ...dinner, paidById: 'u2', addedById: 'u2' });
+      const api = await caller();
+      await expect(api.delete({ groupId: 'g1', expenseId: 'e1' })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: 'Only the expense creator, payer, or group owner/admin can delete this expense',
+      });
+      expect(mockDb.expense.updateMany).not.toHaveBeenCalled();
+    });
+
     test('an expense in another group is NOT_FOUND', async () => {
       mockDb.expense.findUnique.mockResolvedValue({ ...dinner, deletedAt, groupId: 'g2' });
       const api = await caller();
       await expect(api.restore({ groupId: 'g1', expenseId: 'e1' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+
+    test('a missing expense is NOT_FOUND', async () => {
+      mockDb.expense.findUnique.mockResolvedValue(null);
+      const api = await caller();
+      await expect(api.restore({ groupId: 'g1', expenseId: 'e1' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(mockDb.$transaction).not.toHaveBeenCalled();
+    });
+
+    test('one gone by the time its row is locked is NOT_FOUND, restoring and logging nothing', async () => {
+      mockDb.$queryRaw.mockImplementation(async (strings: string[]) =>
+        strings.join('?').includes('FROM "Expense"') ? [] : [{ archivedAt: null }],
+      );
+      const api = await caller();
+      await expect(api.restore({ groupId: 'g1', expenseId: 'e1' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(mockDb.expense.update).not.toHaveBeenCalled();
+      expect(mockDb.activityLog.create).not.toHaveBeenCalled();
     });
 
     test('refuses in an archived group, checked again under the lock', async () => {
@@ -685,9 +826,13 @@ describe('deleting and restoring an expense (#327)', () => {
     });
   });
 
-  test('get says who deleted it, for the detail page', async () => {
+  test('get returns a deleted expense and says who deleted it, for the detail page', async () => {
+    mockDb.expense.findUnique.mockResolvedValue({ ...dinner, deletedAt, deletedBy: { id: 'u2', name: 'Bob' } });
     const api = await caller();
-    await api.get({ groupId: 'g1', expenseId: 'e1' });
+    await expect(api.get({ groupId: 'g1', expenseId: 'e1' })).resolves.toMatchObject({
+      deletedAt,
+      deletedBy: { name: 'Bob' },
+    });
     expect(mockDb.expense.findUnique.mock.calls[0]![0].include.deletedBy).toEqual({ select: { id: true, name: true } });
   });
 });

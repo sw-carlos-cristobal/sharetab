@@ -8,8 +8,8 @@ import { loadGroupBalances, lockActiveGroup } from '../../lib/group-balances';
 import { notDeleted, onlyDeleted } from '../../lib/soft-delete';
 
 /**
- * Refuse a payment (a new one, or a deleted one being restored, #327) between people who
- * aren't both in the group. Called after lockActiveGroup, so someone leaving meanwhile is
+ * Refuse a payment (a new one, or a deleted one being restored, #327) unless both people have a
+ * membership row, and, when one of them was removed, unless it only settles their balance. Called after lockActiveGroup, so someone leaving meanwhile is
  * either gone or waits for this write (#279). `paid` is its amount in the group's currency.
  */
 async function requireSettleableParties(
@@ -29,9 +29,9 @@ async function requireSettleableParties(
   // Someone removed from the group (#284, #323) is still counted above, so a
   // balance with them (open when they left, or one that comes back) can be
   // settled. But the payment may only settle it, not make a new one: they're no
-  // longer in the group. Two such
-  // payments at once can each pass (the lock above is shared); what they
-  // overpay can still be settled the same way.
+  // longer in the group. Two such checked writes at once (payments recorded or
+  // restored, or an expense restore naming them) can each pass (the group lock the
+  // caller holds is shared); what they overpay can still be settled the same way.
   const removed = await tx.groupMember.findMany({
     where: { groupId, userId: { in: [fromId, toId] }, removedAt: { not: null } },
     select: { userId: true },
@@ -268,8 +268,9 @@ export const settlementsRouter = createTRPCRouter({
         await lockActiveGroup(tx, input.groupId, 'archivedRestorePayment');
 
         // Under the payment's row lock, so a restore or delete racing this one is seen. Its
-        // people and amount can't change while it's deleted (a merge moves both people's
-        // payments, but only into someone in the group).
+        // amount can't change while it's deleted (nothing edits a payment); a merge can move it
+        // from a placeholder to a current member, or delete it when it's between the two, so its
+        // people are read here.
         const [stored] = await tx.$queryRaw<{ fromId: string; toId: string; deletedAt: Date | null }[]>`
           SELECT "fromId", "toId", "deletedAt" FROM "Settlement" WHERE "id" = ${input.settlementId} FOR NO KEY UPDATE`;
         if (!stored) {

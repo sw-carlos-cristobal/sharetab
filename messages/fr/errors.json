@@ -76,7 +76,7 @@
   "archivedRestoreExpense": "Impossible de restaurer des dépenses dans un groupe archivé",
   "onlyCreatorRestoresExpense": "Seuls le créateur ou le payeur de la dépense, ou un propriétaire ou administrateur du groupe, peuvent restaurer cette dépense",
   "restoreExpenseFormerMember": "{name} ne fait plus partie du groupe : cette dépense ne peut être restaurée que si elle règle ce que cette personne doit encore ou ce qu’on lui doit encore.",
-  "restoreExpenseFormerMemberUnnamed": "Une personne de cette dépense ne fait plus partie du groupe : elle ne peut être restaurée que si elle règle ce que cette personne doit encore ou ce qu’on lui doit encore.",
+  "restoreExpenseFormerMemberUnnamed": "Une personne de cette dépense ne fait plus partie du groupe : cette dépense ne peut être restaurée que si elle règle ce que cette personne doit encore ou ce qu’on lui doit encore.",
   "archivedRestorePayment": "Impossible de restaurer des paiements dans un groupe archivé",
   "paymentNotDeleted": "Ce paiement n’est pas supprimé.",
   "onlyPayerRestoresPayment": "Seuls le payeur ou un propriétaire ou administrateur du groupe peuvent restaurer ce paiement",

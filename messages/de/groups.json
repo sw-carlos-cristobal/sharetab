@@ -183,7 +183,7 @@
     "title": "Zahlungen",
     "deleteLabel": "Zahlung über {amount} von {from} an {to} löschen",
     "deleteTitle": "Diese Zahlung löschen?",
-    "deleteDescription": "{from} hat {to} am {date} {amount} gezahlt. Wenn Sie sie löschen, werden die Salden so zurückgesetzt, als wäre sie nie erfasst worden. Sie können sie später auf der Seite der Gruppe wiederherstellen.",
+    "deleteDescription": "{from} hat {to} am {date} {amount} gezahlt. Wenn Sie sie löschen, werden die Salden so zurückgesetzt, als wäre sie nie erfasst worden. Sie können sie später unter Gelöschte Ausgaben und Zahlungen auf der Seite der Gruppe wiederherstellen.",
     "deleting": "Wird gelöscht...",
     "deleted": "Zahlung gelöscht",
     "showMore": "Mehr anzeigen"
@@ -196,7 +196,7 @@
     "deletedBy": "Gelöscht von {name} am {date}",
     "deletedOn": "Gelöscht am {date}",
     "restore": "Wiederherstellen",
-    "restorePaymentLabel": "Die Zahlung von {amount} von {from} an {to} wiederherstellen",
+    "restorePaymentLabel": "Zahlung über {amount} von {from} an {to} wiederherstellen",
     "paymentRestored": "Zahlung wiederhergestellt",
     "showMore": "Mehr anzeigen"
   }

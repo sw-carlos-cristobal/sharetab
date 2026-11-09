@@ -183,7 +183,7 @@
     "title": "付款",
     "deleteLabel": "删除 {from} 付给 {to} 的 {amount} 付款",
     "deleteTitle": "删除此付款？",
-    "deleteDescription": "{from} 于 {date} 向 {to} 支付了 {amount}。删除后，余额将恢复为从未记录过此付款时的状态。之后可以在群组页面恢复。",
+    "deleteDescription": "{from} 于 {date} 向 {to} 支付了 {amount}。删除后，余额将恢复为从未记录过此付款时的状态。之后可以在群组页面的“已删除的支出和付款”中恢复。",
     "deleting": "正在删除...",
     "deleted": "付款已删除",
     "showMore": "显示更多"

@@ -5,9 +5,10 @@ import { fileURLToPath } from 'node:url';
 
 // #327: a deleted expense or payment keeps its row, so every read of these tables has to
 // decide whether a deleted one counts (soft-delete.ts). Missing one skews balances without
-// any error, so this lists every place that reads them. When a count below changes, check
-// what the new read is for: a list or a balance spreads `notDeleted` into its where (and
-// its test says so); anything else says why a deleted row still counts.
+// any error, so this lists the files that read them and how many matches each has. When a
+// count below changes, check what the new read is for: a list or a balance spreads
+// `notDeleted` into its where (and its test says so); anything else says why a deleted row
+// still counts.
 const READS: Record<string, { count: number; why: string }> = {
   'src/app/api/admin/export/route.ts': { count: 3, why: 'counts them: a full dump, deletedAt included' },
   'src/server/lib/group-balances.ts': { count: 2, why: 'skips them: every balance check reads this' },

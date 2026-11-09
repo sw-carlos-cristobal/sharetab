@@ -183,7 +183,7 @@
     "title": "Payments",
     "deleteLabel": "Delete the payment of {amount} from {from} to {to}",
     "deleteTitle": "Delete this payment?",
-    "deleteDescription": "{from} paid {to} {amount} on {date}. Deleting it puts the balances back as if it had never been recorded. You can restore it later from the group page.",
+    "deleteDescription": "{from} paid {to} {amount} on {date}. Deleting it puts the balances back as if it had never been recorded. You can restore it later from Deleted expenses and payments on the group page.",
     "deleting": "Deleting...",
     "deleted": "Payment deleted",
     "showMore": "Show more"

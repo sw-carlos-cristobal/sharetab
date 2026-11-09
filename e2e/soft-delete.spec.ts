@@ -183,8 +183,9 @@ test.describe('deleting and restoring (#327)', () => {
     }
   });
 
-  // A removed person can't be put in a new balance, but a restore that only settles theirs is
-  // the undo of the mis-tap this exists for (#284: removed at zero, then an old expense deleted)
+  // A new expense can't give a removed person a balance, but a restore that only settles one
+  // (left by deleting an old expense after they were removed at zero, #284) is the undo of the
+  // mis-tap this exists for
   test('restoring an expense with someone removed only goes ahead when it settles their balance', async () => {
     const { owner, groupId, memberIds, dispose } = await createTestGroup(
       users.alice.email,
@@ -218,7 +219,8 @@ test.describe('deleting and restoring (#327)', () => {
       await ok(owner, 'expenses.restore', { groupId, expenseId: alicePaid.id });
       expect(await balances(owner, groupId)).toEqual({});
 
-      // Deleting both and restoring one would leave Hal owing money he can't settle in the group
+      // Deleting both and restoring one would give Hal, who is no longer in the group, a new debt,
+      // which a new expense couldn't do either
       await ok(owner, 'expenses.delete', { groupId, expenseId: alicePaid.id });
       await ok(owner, 'expenses.delete', { groupId, expenseId: halPaid.id });
       const refused = await trpcError(
@@ -228,6 +230,101 @@ test.describe('deleting and restoring (#327)', () => {
         'Hal is no longer in the group, so this expense can be restored only if it settles what they still owe or are owed.',
       );
       expect(await balances(owner, groupId)).toEqual({});
+    } finally {
+      await dispose();
+    }
+  });
+
+  // The same rule as recording a payment with someone removed, checked while the payment is
+  // still deleted, so the balance it's checked against leaves it out
+  test('restoring a payment with someone removed only goes ahead when it settles their balance', async () => {
+    const { owner, groupId, memberIds, dispose } = await createTestGroup(
+      users.alice.email,
+      users.alice.password,
+      [],
+      'Soft Delete Removed Payment',
+    );
+    try {
+      const alice = memberIds[users.alice.email]!;
+      const hal = await ok(owner, 'groups.addPlaceholder', { groupId, name: 'Hal' });
+      const split = (paidById: string, title: string) =>
+        ok(owner, 'expenses.create', {
+          groupId,
+          title,
+          amount: 1000,
+          paidById,
+          splitMode: 'EQUAL',
+          shares: [
+            { userId: alice, amount: 500 },
+            { userId: hal.id, amount: 500 },
+          ],
+        });
+      const alicePaid = await split(alice, 'Alice paid');
+      await split(hal.id, 'Hal paid');
+      await ok(owner, 'groups.removeMember', { groupId, userId: hal.id });
+
+      // Hal is owed $5.00 once Alice's expense is deleted, and Alice pays him
+      await ok(owner, 'expenses.delete', { groupId, expenseId: alicePaid.id });
+      const paid = await ok(owner, 'settlements.create', { groupId, toId: hal.id, amount: 500 });
+      expect(await balances(owner, groupId)).toEqual({});
+
+      // Deleting the payment and restoring it puts that back
+      await ok(owner, 'settlements.delete', { groupId, settlementId: paid.id });
+      expect(await balances(owner, groupId)).toEqual({ [alice]: -500, [hal.id]: 500 });
+      await ok(owner, 'settlements.restore', { groupId, settlementId: paid.id });
+      expect(await balances(owner, groupId)).toEqual({});
+
+      // Once the expense is back, Hal is at zero, and the payment would make him owe Alice
+      await ok(owner, 'settlements.delete', { groupId, settlementId: paid.id });
+      await ok(owner, 'expenses.restore', { groupId, expenseId: alicePaid.id });
+      const refused = await trpcError(
+        await trpcMutation(owner, 'settlements.restore', { groupId, settlementId: paid.id }),
+      );
+      expect(refused.message).toBe(
+        'A payment with someone removed from this group can only settle what they still owe or are owed.',
+      );
+      expect(await balances(owner, groupId)).toEqual({});
+    } finally {
+      await dispose();
+    }
+  });
+
+  // Whether a placeholder is in the group's history counts deleted records, which still name
+  // them, but their balance doesn't
+  test('a placeholder whose only balance is in a deleted expense can be removed, and it stays theirs', async () => {
+    const { owner, groupId, memberIds, dispose } = await createTestGroup(
+      users.alice.email,
+      users.alice.password,
+      [],
+      'Soft Delete Remove Placeholder',
+    );
+    try {
+      const alice = memberIds[users.alice.email]!;
+      const gus = await ok(owner, 'groups.addPlaceholder', { groupId, name: 'Gus' });
+      const owed = await ok(owner, 'expenses.create', {
+        groupId,
+        title: 'Gus owes',
+        amount: 1000,
+        paidById: alice,
+        splitMode: 'EQUAL',
+        shares: [
+          { userId: alice, amount: 500 },
+          { userId: gus.id, amount: 500 },
+        ],
+      });
+      expect(
+        (await trpcError(await trpcMutation(owner, 'groups.removeMember', { groupId, userId: gus.id }))).data.code,
+      ).toBe('PRECONDITION_FAILED');
+
+      await ok(owner, 'expenses.delete', { groupId, expenseId: owed.id });
+      await ok(owner, 'groups.removeMember', { groupId, userId: gus.id });
+      const group = await trpcResult(await trpcQuery(owner, 'groups.get', { groupId }));
+      expect(group.removedMembers.map((m: { user: { id: string } }) => m.user.id)).toEqual([gus.id]);
+
+      const refused = await trpcError(await trpcMutation(owner, 'expenses.restore', { groupId, expenseId: owed.id }));
+      expect(refused.message).toBe(
+        'Gus is no longer in the group, so this expense can be restored only if it settles what they still owe or are owed.',
+      );
     } finally {
       await dispose();
     }
@@ -307,9 +404,13 @@ test.describe('deleting and restoring (#327)', () => {
       await page.goto(`/en/groups/${groupId}/expenses/${ferry.id}`);
       await page.getByRole('button', { name: 'Delete', exact: true }).click();
       const dialog = page.getByRole('alertdialog', { name: 'Delete this expense?' });
-      await expect(dialog).toContainText('You can restore it later from the group page.');
+      await expect(dialog).toContainText(
+        'You can find it later under Deleted expenses and payments on the group page and restore it from there.',
+      );
       await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
       await page.waitForURL(new RegExp(`/groups/${groupId}$`));
+      // The list has loaded (and is empty) before counting its rows
+      await expect(page.getByText('No expenses yet.')).toBeVisible();
       await expect(page.getByTestId('expense-row')).toHaveCount(0);
 
       // The payment, from the payments list
@@ -330,8 +431,11 @@ test.describe('deleting and restoring (#327)', () => {
       await deleted.getByTestId('deleted-expense-row').filter({ hasText: 'Ferry tickets' }).click();
       await page.waitForURL(new RegExp(`/expenses/${ferry.id}$`));
       await expect(page.getByTestId('deleted-notice')).toContainText(`Deleted by ${users.alice.name}`);
+      // Once the group has loaded and Restore shows, Edit doesn't
+      const restore = page.getByRole('button', { name: 'Restore expense' });
+      await expect(restore).toBeVisible();
       await expect(page.getByText('Edit Expense', { exact: true })).toHaveCount(0);
-      await page.getByRole('button', { name: 'Restore expense' }).click();
+      await restore.click();
       await expect(page.getByText('Expense restored')).toBeVisible();
       await expect(page.getByTestId('deleted-notice')).toHaveCount(0);
       await expect(page.getByText('Edit Expense', { exact: true })).toBeVisible();
