@@ -445,7 +445,7 @@ export const adminRouter = createTRPCRouter({
       // account is a placeholder now, and its expenses and payments stay, so its balances
       // show under its name and can still be settled with it, and a group it owes in can
       // still be archived once they are (#323). Each marked row's role becomes MEMBER, so no
-      // removed row is anyone's owner.
+      // removed row is anyone's owner or admin.
       await tx.groupMember.updateMany({
         where: {
           userId: input.userId,

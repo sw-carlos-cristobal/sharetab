@@ -41,6 +41,7 @@
     "backToGroups": "Tillbaka till grupper",
     "invite": "Bjud in",
     "owner": "Ägare",
+    "admin": "Administratör",
     "pending": "Väntande",
     "archivedMessage": "Denna grupp är arkiverad. Utgifter kan inte läggas till eller ändras, och betalningar kan inte registreras, förrän den avarkiveras.",
     "manage": "Hantera",
@@ -113,7 +114,10 @@
     "leaveGroup": "Lämna grupp",
     "transferDescription": "Lämna över den här gruppen till en annan medlem. Du blir då en vanlig medlem och kan sedan lämna gruppen.",
     "transferNoCandidates": "Ingen annan i den här gruppen har ett konto än, så det finns ingen att lämna över den till. Platshållarmedlemmar kan inte äga en grupp.",
-    "transferOwnership": "Överför ägarskap"
+    "transferOwnership": "Överför ägarskap",
+    "rolesDescription": "Administratörer kan ändra gruppens uppgifter, arkivera eller avarkivera den, hantera platshållarmedlemmar, ta bort medlemmar, redigera eller ta bort vems utgifter som helst och registrera eller ta bort betalningar för vem som helst. Bara du kan ta bort gruppen, lämna över den eller välja dess administratörer.",
+    "makeAdmin": "Gör till administratör",
+    "removeAdmin": "Ta bort som administratör"
   },
   "settle": {
     "title": "Registrera en betalning",
