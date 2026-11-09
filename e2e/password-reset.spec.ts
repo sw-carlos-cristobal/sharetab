@@ -335,7 +335,7 @@ test.describe('Password reset', () => {
     }
   });
 
-  // #456: bcrypt reads only a password's first 72 bytes, and a character outside ASCII takes 2 to 4
+  // #456: bcrypt reads only a password's first 72 bytes, and a character outside ASCII takes 2 to 4 bytes
   test('a new password over 72 bytes is refused before it is sent; 72 bytes of multi-byte characters work', async ({
     page,
   }) => {

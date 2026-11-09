@@ -8,7 +8,8 @@ export const MAX_PASSWORD_BYTES = 72;
 
 /**
  * Whether a password is longer than bcrypt reads. Counts bytes as bcryptjs does (its
- * `truncates`): TextEncoder writes a lone surrogate as U+FFFD, 3 bytes, as bcryptjs encodes one.
+ * `truncates`). The two encode a lone surrogate differently, TextEncoder as U+FFFD and bcryptjs as
+ * the surrogate itself, but both in 3 bytes, so the counts agree.
  */
 export function passwordTooLong(password: string): boolean {
   // Every UTF-16 code unit is at least one byte, so a longer string needs no encoding

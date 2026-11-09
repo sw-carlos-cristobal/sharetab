@@ -36,9 +36,10 @@ const RESET_REQUEST_WINDOW_MS = 60 * 60 * 1000;
 const resetSubmitsPerIp = () => parsePositiveInt(process.env.PASSWORD_RESET_RATE_LIMIT_MAX, 30);
 const RESET_SUBMIT_WINDOW_MS = 15 * 60 * 1000;
 
-// Every password ShareTab sets: registration, Settings, reset links. Its upper limit, 72 bytes
-// (#456), is checked by requirePasswordFits, the first thing each of those routes does: a
-// validation error here would reach the person as the general message, not this one
+// Every password ShareTab sets: registration, Settings, reset links. It has no upper bound: the
+// limit, 72 bytes (#456), is checked by requirePasswordFits, the first statement of each of
+// those handlers, since a validation error here would reach the person as the general message,
+// not this one. A new route that sets a password must call it first too
 const newPasswordSchema = z.string().min(8);
 
 function requirePasswordFits(password: string) {

@@ -24,7 +24,7 @@
   "passwordResetRateLimited": "Zu viele Anfragen zum Zurücksetzen des Passworts. Bitte versuchen Sie es später erneut.",
   "resetLinkInvalid": "Dieser Link zum Zurücksetzen des Passworts ist ungültig, abgelaufen, wurde bereits verwendet oder durch einen neueren ersetzt. Fordern Sie einen neuen an.",
   "passwordResetNotAllowed": "Dieses Konto ist gesperrt oder kein echtes Konto, daher kann sein Passwort nicht zurückgesetzt werden.",
-  "passwordTooLong": "Verwenden Sie ein kürzeres Passwort: höchstens {max} Byte. Einfache Buchstaben, Ziffern und Zeichen belegen je 1 Byte, Buchstaben mit Akzent, andere Schriften und Emoji je 2 bis 4.",
+  "passwordTooLong": "Verwenden Sie ein kürzeres Passwort: höchstens {max} Byte.",
   "userNotFound": "Benutzer nicht gefunden",
   "groupNotFound": "Gruppe nicht gefunden",
   "memberNotFound": "Mitglied nicht gefunden",

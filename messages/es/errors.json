@@ -24,7 +24,7 @@
   "passwordResetRateLimited": "Demasiadas solicitudes para restablecer la contraseña. Inténtalo de nuevo más tarde.",
   "resetLinkInvalid": "Este enlace para restablecer la contraseña no es válido, ha caducado, ya se usó o lo sustituyó uno más reciente. Solicita uno nuevo.",
   "passwordResetNotAllowed": "Esta cuenta está suspendida o no es una cuenta real, así que no se puede restablecer su contraseña.",
-  "passwordTooLong": "Usa una contraseña más corta: como máximo {max} bytes. Las letras, números y símbolos simples ocupan 1 byte cada uno; las letras con tilde, otros alfabetos y los emojis, de 2 a 4.",
+  "passwordTooLong": "Usa una contraseña más corta: como máximo {max} bytes.",
   "userNotFound": "Usuario no encontrado",
   "groupNotFound": "Grupo no encontrado",
   "memberNotFound": "Miembro no encontrado",
