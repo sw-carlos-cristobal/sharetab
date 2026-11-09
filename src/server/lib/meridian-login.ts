@@ -174,8 +174,9 @@ export function startLogin(): Promise<string> {
 }
 
 /**
- * Extract the authorization code from either a raw code string or a full
- * callback URL (e.g. "https://platform.claude.com/oauth/code/callback?code=XXX&state=YYY").
+ * Extract the authorization code from a raw code string, the `code#state`
+ * value Claude's authorization page shows, or a full callback URL
+ * (e.g. "https://platform.claude.com/oauth/code/callback?code=XXX&state=YYY").
  */
 function extractCodeAndState(input: string): { code: string; state: string | null } {
   const trimmed = input.trim();
@@ -186,14 +187,19 @@ function extractCodeAndState(input: string): { code: string; state: string | nul
       state: url.searchParams.get('state'),
     };
   } catch {
-    // Not a URL — treat the whole string as the code
+    // Not a URL — a raw code, or `code#state`
+  }
+  const hash = trimmed.indexOf('#');
+  if (hash !== -1) {
+    return { code: trimmed.slice(0, hash), state: trimmed.slice(hash + 1) };
   }
   return { code: trimmed, state: null };
 }
 
 /**
  * Exchange the authorization code for tokens and write credentials.
- * Accepts either a raw authorization code or the full callback URL.
+ * Accepts a raw authorization code, the `code#state` value Claude's
+ * authorization page shows, or the full callback URL.
  */
 export async function submitCode(codeOrUrl: string): Promise<{ success: boolean; error?: string }> {
   if (!pendingLogin) {
