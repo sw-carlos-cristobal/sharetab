@@ -4,23 +4,10 @@ import { getToken } from 'next-auth/jwt';
 import createIntlMiddleware from 'next-intl/middleware';
 import { routing } from '@/i18n/routing';
 import { isSupportedLocale, withLocalePrefix } from '@/lib/locale-paths';
+import { isPublicPage } from '@/lib/public-pages';
 import { sessionSecrets, usesSecureCookie } from '@/server/lib/session-cookie';
 
 const intlMiddleware = createIntlMiddleware(routing);
-
-const publicPages = [
-  '/login',
-  '/register',
-  '/verify-request',
-  '/forgot-password',
-  '/reset-password',
-  '/invite',
-  '/split',
-];
-
-function isPublicPage(pathname: string): boolean {
-  return publicPages.some((page) => pathname === page || pathname.startsWith(page + '/'));
-}
 
 export async function middleware(request: NextRequest) {
   const intlResponse = intlMiddleware(request);

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import {
   users,
   testUsers,
@@ -7,6 +7,7 @@ import {
   register,
   authedContext,
   trpcQuery,
+  trpcMutation,
   trpcResult,
   trpcError,
   removeTestUser,
@@ -191,6 +192,81 @@ test.describe('Password Change — Settings Page', () => {
       await admin?.dispose();
       await removeTestUser(email);
     }
+  });
+});
+
+test.describe('An open page whose session ended (#461)', () => {
+  const oldPassword = 'testpass123';
+  const newPassword = 'newpass456';
+
+  /** Another device changes the password, which ends every other session of the account (#397) */
+  async function changePasswordElsewhere(email: string) {
+    const otherDevice = await authedContext(email, oldPassword);
+    try {
+      const changed = await trpcMutation(otherDevice, 'auth.changePassword', {
+        currentPassword: oldPassword,
+        newPassword,
+      });
+      expect(changed.ok(), await changed.text()).toBe(true);
+    } finally {
+      await otherDevice.dispose();
+    }
+  }
+
+  async function signInAgain(page: Page, email: string) {
+    await expect(page.getByTestId('login-signed-out')).toHaveText('You were signed out. Sign in again to continue.');
+    await page.getByLabel('Email').fill(email);
+    await page.getByLabel('Password').fill(newPassword);
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  }
+
+  test('saving on the page goes to sign-in, which says so, and signing in comes back to the page', async ({ page }) => {
+    const email = uniqueEmail('ended-save');
+    try {
+      await register(page, 'Ended Save User', email, oldPassword);
+      await page.goto('/en/settings');
+      await expect(page.locator('#email')).toHaveValue(email);
+      await changePasswordElsewhere(email);
+
+      await page.getByTestId('save-profile-btn').click();
+      await expect(page).toHaveURL(/\/en\/login\?/);
+      expect(new URL(page.url()).searchParams.get('callbackUrl')).toBe('/en/settings');
+      await signInAgain(page, email);
+      await expect(page).toHaveURL(/\/en\/settings$/);
+      await expect(page.locator('#email')).toHaveValue(email);
+    } finally {
+      await removeTestUser(email);
+    }
+  });
+
+  test('following a link on the page goes to sign-in, then on to the link', async ({ page }) => {
+    const email = uniqueEmail('ended-link');
+    try {
+      await register(page, 'Ended Link User', email, oldPassword);
+      const groupsLink = page.getByRole('link', { name: 'Groups', exact: true }).first();
+      await expect(groupsLink).toBeVisible();
+      await changePasswordElsewhere(email);
+
+      await groupsLink.click();
+      await expect(page).toHaveURL(/\/en\/login\?/);
+      expect(new URL(page.url()).searchParams.get('callbackUrl')).toBe('/en/groups');
+      await signInAgain(page, email);
+      await expect(page).toHaveURL(/\/en\/groups$/);
+    } finally {
+      await removeTestUser(email);
+    }
+  });
+
+  test('a wrong current password in Settings stays on the page', async ({ page }) => {
+    await login(page, testUsers.password.email, testUsers.password.password);
+    await page.goto('/en/settings');
+    await page.locator('#currentPassword').fill('wrong-password');
+    await page.locator('#newPassword').fill('newpass456');
+    await page.locator('#confirmPassword').fill('newpass456');
+    await page.getByRole('button', { name: 'Change password' }).click();
+    await expect(page.getByText(/incorrect|wrong|invalid/i)).toBeVisible({ timeout: 5000 });
+    await expect(page).toHaveURL(/\/en\/settings$/);
+    await expect(page.getByTestId('login-signed-out')).toHaveCount(0);
   });
 });
 
