@@ -161,53 +161,40 @@ export function ItemAssignment({
     return () => el.removeEventListener('wheel', handler);
   }, [showImage]);
 
-  // The title starts as the merchant's name, set once when the receipt first loads (#412): seeding
-  // it whenever it was empty refilled a title cleared to type another
-  const hasSeededTitleRef = useRef(false);
-  // Restore what Save for later kept (payer, assignments, title, tip) when receipt data loads.
-  // Runs on every data change but only sets state when server data has values
-  // and local state hasn't been set yet. This handles the case where the first
-  // render gets cached data (without them) and the refetch brings fresh data.
-  const hasRestoredRef = useRef(false);
+  // Fill the form once (#412): the title (the saved one, else the merchant's name) and whatever
+  // Save for later kept (tip, payer, assignments). Only from the first successful fetch to finish
+  // after this mount that has the scan's data: a page reopened soon after a save first gets the cached
+  // receipt, which may hold values saved before the last save, and a fetch that fails keeps it.
+  // The form stays hidden until then (below), so nothing can be typed or saved over it. Never
+  // again after that, so a later refetch can't refill a title cleared to type another, or replace
+  // edits with what someone else saved meanwhile.
+  const [formFilled, setFormFilled] = useState(false);
+  const hasFreshData = receiptData.isSuccess && receiptData.isFetchedAfterMount;
 
   /* eslint-disable react-hooks/set-state-in-effect -- init from async query data */
   useEffect(() => {
-    if (!receiptData.data) return;
     const data = receiptData.data;
+    if (formFilled || !hasFreshData || !data?.receipt.extractedData) return;
+    setFormFilled(true);
+    const { receipt: saved } = data;
 
-    if (!hasSeededTitleRef.current) {
-      hasSeededTitleRef.current = true;
-      setTitle(data.receipt.extractedData?.merchantName ?? '');
+    setTitle(saved.title ?? saved.extractedData?.merchantName ?? '');
+    if (saved.tipOverride !== null) {
+      setTipOverride(centsToDecimal(saved.tipOverride));
     }
-    if (hasRestoredRef.current) return;
-
-    const { paidById: savedPaidById, title: savedTitle, tipOverride: savedTip } = data.receipt;
-    const hasSavedAssignments = data.items.some(
-      (item: { assignments?: unknown[] }) => item.assignments && item.assignments.length > 0,
-    );
-
-    if (savedPaidById || savedTitle !== null || savedTip !== null || hasSavedAssignments) {
-      if (savedPaidById) {
-        setPaidById(savedPaidById);
-      }
-      if (savedTitle !== null) {
-        setTitle(savedTitle);
-      }
-      if (savedTip !== null) {
-        setTipOverride(centsToDecimal(savedTip));
-      }
-      const restored: Assignments = {};
-      for (const item of data.items) {
-        if (item.assignments && item.assignments.length > 0) {
-          restored[item.id] = new Set(item.assignments.map((a: { userId: string }) => a.userId));
-        }
-      }
-      if (Object.keys(restored).length > 0) {
-        setAssignments(restored);
-      }
-      hasRestoredRef.current = true;
+    if (saved.paidById) {
+      setPaidById(saved.paidById);
     }
-  }, [receiptData.data]);
+    const restored: Assignments = {};
+    for (const item of data.items) {
+      if (item.assignments && item.assignments.length > 0) {
+        restored[item.id] = new Set(item.assignments.map((a: { userId: string }) => a.userId));
+      }
+    }
+    if (Object.keys(restored).length > 0) {
+      setAssignments(restored);
+    }
+  }, [receiptData.data, hasFreshData, formFilled]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const { receipt, items } = receiptData.data ?? { receipt: null, items: [] };
@@ -344,6 +331,14 @@ export function ItemAssignment({
   }
   if (!extracted) {
     return <p className="text-destructive">{t('noExtractedData')}</p>;
+  }
+  // Until the form is filled from fresh data: the receipt may be the cached copy from before a save
+  if (!formFilled) {
+    return receiptData.isError && !receiptData.isFetching ? (
+      <p className="text-destructive">{t('noReceiptData')}</p>
+    ) : (
+      <p className="text-muted-foreground">{t('loadingItems')}</p>
+    );
   }
 
   // After early returns, these are guaranteed non-null

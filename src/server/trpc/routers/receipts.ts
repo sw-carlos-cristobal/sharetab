@@ -684,7 +684,8 @@ export const receiptsRouter = createTRPCRouter({
         receiptId: z.string(),
         paidById: z.string().nullable().optional(),
         // The page's title and tip override (#412), within what Create Expense takes. Like the
-        // payer, null clears one and leaving it out keeps what was saved; a blank title is none
+        // payer, null clears one and leaving it out keeps what was saved; a blank title is none, so
+        // the receipt reopens with the merchant's name, if the scan read one
         title: z
           .string()
           .trim()

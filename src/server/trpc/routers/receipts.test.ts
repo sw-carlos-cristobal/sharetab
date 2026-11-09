@@ -346,7 +346,7 @@ describe('saving a receipt for later while it is deleted from the pending list (
 });
 
 // #412: Save for later sent only the payer and the assignments, so a reopened receipt lost the
-// tip typed over the scanned one (and the expense made from it charged no tip) and its title
+// tip typed over the scanned one (and the expense made from it charged the scanned tip) and its title
 describe("Save for later keeps the receipt page's title and tip (#412)", () => {
   const inGroup = {
     id: 'r1',
@@ -369,6 +369,15 @@ describe("Save for later keeps the receipt page's title and tip (#412)", () => {
     const api = await caller();
     await api.saveForLater({ groupId: 'g1', receiptId: 'r1', title: 'Team lunch', tipOverride: 1200 });
     expect(saved()).toMatchObject({ title: 'Team lunch', tipOverride: 1200 });
+  });
+
+  test('saves a tip of 0 (none, over a scanned one) and the largest tip a column holds as given', async () => {
+    const api = await caller();
+    await api.saveForLater({ groupId: 'g1', receiptId: 'r1', tipOverride: 0 });
+    expect(saved()).toMatchObject({ tipOverride: 0 });
+
+    await api.saveForLater({ groupId: 'g1', receiptId: 'r1', tipOverride: 2_147_483_647 });
+    expect(saved()).toMatchObject({ tipOverride: 2_147_483_647 });
   });
 
   test('null clears them, and leaving them out keeps what was saved', async () => {
