@@ -14,6 +14,7 @@ type Member = { id: string; name: string | null };
 export function SettleDialog({
   groupId,
   members,
+  payerId,
   suggestedFrom,
   suggestedTo,
   suggestedAmount,
@@ -23,6 +24,9 @@ export function SettleDialog({
 }: {
   groupId: string;
   members: Member[];
+  /** Fixes From to this person, shown rather than chosen: a plain member may record only
+   * payments they made, and the server refuses any other (#341) */
+  payerId?: string;
   suggestedFrom?: string;
   suggestedTo?: string;
   suggestedAmount?: number;
@@ -46,6 +50,7 @@ export function SettleDialog({
           <SettleForm
             groupId={groupId}
             members={members}
+            {...(payerId !== undefined ? { payerId } : {})}
             {...(suggestedFrom !== undefined ? { suggestedFrom } : {})}
             {...(suggestedTo !== undefined ? { suggestedTo } : {})}
             {...(suggestedAmount !== undefined ? { suggestedAmount } : {})}
@@ -61,6 +66,7 @@ export function SettleDialog({
 function SettleForm({
   groupId,
   members,
+  payerId,
   suggestedFrom,
   suggestedTo,
   suggestedAmount,
@@ -69,6 +75,7 @@ function SettleForm({
 }: {
   groupId: string;
   members: Member[];
+  payerId?: string;
   suggestedFrom?: string;
   suggestedTo?: string;
   suggestedAmount?: number;
@@ -77,7 +84,7 @@ function SettleForm({
 }) {
   const locale = useLocale();
   const t = useTranslations('groups');
-  const [fromId, setFromId] = useState(suggestedFrom ?? '');
+  const [fromId, setFromId] = useState(payerId ?? suggestedFrom ?? '');
   const [toId, setToId] = useState(suggestedTo ?? '');
   const [amountStr, setAmountStr] = useState(suggestedAmount ? (suggestedAmount / 100).toFixed(2) : '');
   const [note, setNote] = useState('');
@@ -107,20 +114,24 @@ function SettleForm({
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
         <Label htmlFor="from">{t('settle.from')}</Label>
-        <select
-          id="from"
-          value={fromId}
-          onChange={(e) => setFromId(e.target.value)}
-          required
-          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        >
-          <option value="">{t('settle.selectMember')}</option>
-          {members.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.name ?? t('settle.unnamed')}
-            </option>
-          ))}
-        </select>
+        {payerId !== undefined ? (
+          <Input id="from" readOnly value={members.find((m) => m.id === payerId)?.name ?? t('settle.unnamed')} />
+        ) : (
+          <select
+            id="from"
+            value={fromId}
+            onChange={(e) => setFromId(e.target.value)}
+            required
+            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            <option value="">{t('settle.selectMember')}</option>
+            {members.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name ?? t('settle.unnamed')}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       <div className="space-y-2">
