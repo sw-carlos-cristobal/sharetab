@@ -31,6 +31,18 @@ test.describe('Receipt page: title and tip', () => {
       await expect(title).toHaveValue('The Golden Fork', { timeout: 30000 });
 
       await title.fill('');
+      // The form is filled once: a later read of the receipt with new data (an item added on
+      // another device, read when the tab is returned to) leaves the cleared title alone
+      const added = await trpcMutation(owner, 'receipts.addItem', {
+        receiptId,
+        name: 'Late addition',
+        unitPrice: 300,
+        totalPrice: 300,
+      });
+      expect(added.ok(), await added.text()).toBe(true);
+      await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')));
+      await expect(page.getByText('Late addition')).toBeVisible({ timeout: 30000 });
+      await expect(title).toHaveValue('');
       await title.pressSequentially('Brunch');
       await expect(title).toHaveValue('Brunch');
     } finally {
@@ -62,11 +74,11 @@ test.describe('Receipt page: title and tip', () => {
       await page.waitForURL(new RegExp(`/en/groups/${groupId}$`), { timeout: 15000 });
 
       // Alice reopens it from the group page's saved receipts, in the same tab, changes both and
-      // saves again. The app's query cache keeps the receipt as it was last loaded, so the last
-      // reopen first gets it as the previous one loaded it, before the second save
+      // saves again. The app's query cache keeps the receipt as it was last loaded, so a reopen
+      // first gets that copy
       const reopen = () => page.locator(`a[href*="/scan?receiptId=${receiptId}"]`).click();
       // A read of the receipt made while `holding` is set reaches the server at once, but its answer
-      // is held until releaseReads()
+      // is held until releaseReads(), with the rest of the tRPC batch it travels in
       let holding = false;
       const heldReads: (() => void)[] = [];
       const releaseReads = () => {
@@ -92,12 +104,12 @@ test.describe('Receipt page: title and tip', () => {
       holding = false;
       await page.getByLabel('Expense title').fill('Team dinner');
       await page.getByLabel('Tip override (optional)').fill('8');
+      // From the save on every read is held, the one Save for later starts included, so the form
+      // stays hidden until the reads are let through: nothing can be typed or saved over the
+      // cached copy
+      holding = true;
       await page.getByTestId('save-for-later-btn').click();
       await page.waitForURL(new RegExp(`/en/groups/${groupId}$`), { timeout: 15000 });
-
-      // Until the reopen's own read of the receipt arrives, the form stays hidden, so nothing can be
-      // typed or saved over the cached copy
-      holding = true;
       await reopen();
       await expect(page.getByText('Loading items...')).toBeVisible({ timeout: 30000 });
       await expect(page.getByTestId('save-for-later-btn')).toHaveCount(0);

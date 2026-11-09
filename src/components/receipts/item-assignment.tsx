@@ -135,8 +135,9 @@ export function ItemAssignment({
     onSuccess: () => {
       // A read of the receipt started before the save would otherwise be reused, and fill the form
       // with what it held, when the receipt is reopened (#412). Invalidating cancels it and reads
-      // the receipt again
-      void utils.receipts.getReceiptItems.invalidate({ receiptId });
+      // the receipt again, also when the page was left while saving (`all` includes a query no
+      // page shows any more)
+      void utils.receipts.getReceiptItems.invalidate({ receiptId }, { refetchType: 'all' });
       onSaveForLater?.();
     },
     onError: (e) => {
