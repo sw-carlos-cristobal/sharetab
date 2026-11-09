@@ -7,7 +7,7 @@ import { Link, useRouter } from '@/i18n/navigation';
 import { trpc } from '@/lib/trpc';
 import { localeHeaders } from '@/lib/locale-header';
 import { formatCents, centsToDecimal, parseToCents } from '@/lib/money';
-import { calculateSplitTotals } from '@/lib/split-calculator';
+import { billTotals, calculateSplitTotals } from '@/lib/split-calculator';
 import { canStoreClaimIdentity, setStoredClaimIdentity } from '@/lib/guest-session';
 import { loadingMessageKeys, randomLoadingMessageIndex } from '@/lib/loading-messages';
 import { Button } from '@/components/ui/button';
@@ -381,6 +381,8 @@ export default function GuestSplitPage() {
   const parsedTip = parseFloat(tipOverride);
   const tip = tipOverride !== '' && isFinite(parsedTip) ? Math.round(parsedTip * 100) : (extracted?.tip ?? 0);
   const currency = extracted?.currency ?? 'USD';
+  // The bill the split will show: the items as they are now, not the subtotal the scan read (#408)
+  const bill = billTotals(items, extracted?.tax ?? 0, tip);
 
   const getPerPersonTotals = useCallback(() => {
     if (!extracted || items.length === 0) return [];
@@ -794,7 +796,7 @@ export default function GuestSplitPage() {
             <CardContent className="space-y-1 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">{t('assign.subtotal')}</span>
-                <span>{formatCents(extracted.subtotal, currency, locale)}</span>
+                <span>{formatCents(bill.subtotal, currency, locale)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">{t('assign.tax')}</span>
@@ -807,7 +809,7 @@ export default function GuestSplitPage() {
               <Separator />
               <div className="flex justify-between font-semibold">
                 <span>{t('assign.total')}</span>
-                <span>{formatCents(extracted.subtotal + extracted.tax + tip, currency, locale)}</span>
+                <span>{formatCents(bill.total, currency, locale)}</span>
               </div>
             </CardContent>
           </Card>
