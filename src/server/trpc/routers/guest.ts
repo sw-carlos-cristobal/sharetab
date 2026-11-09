@@ -23,7 +23,7 @@ import {
   parseGuestAssignments,
   validSaveRecords,
 } from '../../lib/json-schemas';
-import { calculateSplitTotals, groupSizeWeights } from '@/lib/split-calculator';
+import { billTotals, calculateSplitTotals, groupSizeWeights } from '@/lib/split-calculator';
 import { normalizeGuestName } from '@/lib/guest-session';
 import { MAX_GROUP_SIZE, MIN_GROUP_SIZE } from '@/lib/group-size';
 import { DEFAULT_CURRENCY } from '@/lib/currencies';
@@ -517,10 +517,12 @@ export const guestRouter = createTRPCRouter({
         return tx.guestSplit.create({
           data: {
             ...(receiptId !== undefined ? { receiptId, receiptShared: true } : {}),
+            // The bill from the items and the tip, not the scanned subtotal and total (#408): what
+            // people's totals add up to once every item has someone
             receiptData: {
               ...input.receiptData,
               tip,
-              ...(input.tipOverride != null ? { total: input.receiptData.subtotal + input.receiptData.tax + tip } : {}),
+              ...billTotals(input.items, input.receiptData.tax, tip),
             } as unknown as Prisma.InputJsonValue,
             items: input.items as unknown as Prisma.InputJsonValue,
             people: filteredPeople as unknown as Prisma.InputJsonValue,
@@ -686,7 +688,11 @@ export const guestRouter = createTRPCRouter({
         return tx.guestSplit.create({
           data: {
             ...(receiptId !== undefined ? { receiptId, receiptShared: true } : {}),
-            receiptData: input.receiptData as unknown as Prisma.InputJsonValue,
+            // The bill from the items and the tip sent, not the scanned subtotal and total (#408)
+            receiptData: {
+              ...input.receiptData,
+              ...billTotals(expandedItems, input.receiptData.tax, input.receiptData.tip),
+            } as unknown as Prisma.InputJsonValue,
             items: expandedItems as unknown as Prisma.InputJsonValue,
             people: people as unknown as Prisma.InputJsonValue,
             assignments: [] as unknown as Prisma.InputJsonValue,
@@ -1279,13 +1285,12 @@ export const guestRouter = createTRPCRouter({
             status: GuestSplitStatus.FINALIZED,
             summary: summaryWithNames as unknown as Prisma.InputJsonValue,
             assignments: assignments as unknown as Prisma.InputJsonValue,
-            ...(input.tipOverride !== undefined && {
-              receiptData: {
-                ...receiptData,
-                tip,
-                total: receiptData.subtotal + receiptData.tax + tip,
-              } as unknown as Prisma.InputJsonValue,
-            }),
+            // What the summary adds up to, also for a session saved with the scanned total (#408)
+            receiptData: {
+              ...receiptData,
+              tip,
+              ...billTotals(items, receiptData.tax, tip),
+            } as unknown as Prisma.InputJsonValue,
           },
         });
 
