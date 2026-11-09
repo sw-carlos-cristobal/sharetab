@@ -65,9 +65,31 @@ test.describe('Receipt page: title and tip', () => {
       // saves again. The app's query cache keeps the receipt as it was last loaded, so the last
       // reopen first gets it as the previous one loaded it, before the second save
       const reopen = () => page.locator(`a[href*="/scan?receiptId=${receiptId}"]`).click();
+      // A read of the receipt made while `holding` is set reaches the server at once, but its answer
+      // is held until releaseReads()
+      let holding = false;
+      const heldReads: (() => void)[] = [];
+      const releaseReads = () => {
+        holding = false;
+        for (const release of heldReads.splice(0)) release();
+      };
+      const receiptRead = (url: URL) => url.pathname.includes('receipts.getReceiptItems');
+      await page.route(receiptRead, async (route) => {
+        const hold = holding;
+        const response = await route.fetch();
+        if (hold) await new Promise<void>((resolve) => heldReads.push(resolve));
+        await route.fulfill({ response });
+      });
       await reopen();
       await expect(page.getByLabel('Expense title')).toHaveValue('Team lunch', { timeout: 30000 });
       await expect(page.getByLabel('Tip override (optional)')).toHaveValue('12.00');
+
+      // A read of the receipt still on its way when Save for later succeeds (here the refetch a
+      // return to the tab starts, held) predates the save, so it mustn't fill the reopened form
+      holding = true;
+      await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')));
+      await expect.poll(() => heldReads.length).toBe(1);
+      holding = false;
       await page.getByLabel('Expense title').fill('Team dinner');
       await page.getByLabel('Tip override (optional)').fill('8');
       await page.getByTestId('save-for-later-btn').click();
@@ -75,18 +97,13 @@ test.describe('Receipt page: title and tip', () => {
 
       // Until the reopen's own read of the receipt arrives, the form stays hidden, so nothing can be
       // typed or saved over the cached copy
-      let releaseRead = () => {};
-      const readHeld = new Promise<void>((resolve) => (releaseRead = resolve));
-      const receiptRead = (url: URL) => url.pathname.includes('receipts.getReceiptItems');
-      await page.route(receiptRead, async (route) => {
-        await readHeld;
-        await route.continue();
-      });
+      holding = true;
       await reopen();
       await expect(page.getByText('Loading items...')).toBeVisible({ timeout: 30000 });
       await expect(page.getByTestId('save-for-later-btn')).toHaveCount(0);
-      // Lets this read and any later ones through (unrouting now would race the held handler)
-      releaseRead();
+      // The held reads go through, oldest first, and so do later ones (the route stays: unroute()
+      // wouldn't wait for a handler still holding a read)
+      releaseReads();
       await expect(page.getByLabel('Expense title')).toHaveValue('Team dinner', { timeout: 30000 });
       await expect(page.getByLabel('Tip override (optional)')).toHaveValue('8.00');
 
