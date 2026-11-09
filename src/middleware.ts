@@ -38,7 +38,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL(withLocalePrefix(callbackUrl, preferredLocale), request.url));
   }
 
-  if (isPublicPage(strippedPathname) || strippedPathname === '/') {
+  if (isPublicPage(strippedPathname)) {
     return intlResponse;
   }
 

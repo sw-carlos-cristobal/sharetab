@@ -3,6 +3,7 @@ import {
   SIGNED_OUT_PARAM,
   createSessionEndedHandler,
   isSessionEndedError,
+  retryCheckingSession,
   sessionEndpointSaysSignedOut,
   signInAgainUrl,
 } from './session-ended';
@@ -40,7 +41,7 @@ describe('signInAgainUrl', () => {
     expect(parsed.searchParams.get(SIGNED_OUT_PARAM)).toBe('1');
   });
 
-  it('leaves the pages that need no session alone', () => {
+  it('leaves the pages the middleware lets through signed out alone', () => {
     for (const pathname of [
       '/en',
       '/en/login',
@@ -66,10 +67,26 @@ describe('sessionEndpointSaysSignedOut', () => {
   const answer = (status: number, body: unknown) =>
     vi.fn(async () => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } }));
 
+  it('is false when the session endpoint takes too long', async () => {
+    const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(AbortSignal.abort());
+    try {
+      const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+        if (init?.signal?.aborted) throw new DOMException('The operation timed out.', 'TimeoutError');
+        return new Response('null', { status: 200 });
+      });
+      await expect(sessionEndpointSaysSignedOut(fetchImpl)).resolves.toBe(false);
+    } finally {
+      timeout.mockRestore();
+    }
+  });
+
   it('is true when the session endpoint answers with no session', async () => {
     const fetchImpl = answer(200, null);
     await expect(sessionEndpointSaysSignedOut(fetchImpl)).resolves.toBe(true);
-    expect(fetchImpl).toHaveBeenCalledWith('/api/auth/session', expect.objectContaining({ cache: 'no-store' }));
+    expect(fetchImpl).toHaveBeenCalledWith(
+      '/api/auth/session',
+      expect.objectContaining({ cache: 'no-store', signal: expect.any(AbortSignal) }),
+    );
   });
 
   it('is false while someone is still signed in', async () => {
@@ -91,6 +108,45 @@ describe('sessionEndpointSaysSignedOut', () => {
     await expect(
       sessionEndpointSaysSignedOut(vi.fn(async () => new Response('<html>', { status: 200 }))),
     ).resolves.toBe(false);
+  });
+});
+
+describe('retryCheckingSession', () => {
+  it("retries like React Query's default: three times", () => {
+    const retry = retryCheckingSession(vi.fn());
+    expect([0, 1, 2, 3].map((failureCount) => retry(failureCount, new Error('Failed to fetch')))).toEqual([
+      true,
+      true,
+      true,
+      false,
+    ]);
+  });
+
+  it('keeps retrying a request with no session, which a database blip also gives', () => {
+    const retry = retryCheckingSession(vi.fn());
+    expect(retry(0, trpcError('UNAUTHORIZED'))).toBe(true);
+    expect(retry(3, trpcError('UNAUTHORIZED'))).toBe(false);
+  });
+
+  it('starts the session check on the first failure with no session, not on the retries', () => {
+    const onSessionEnded = vi.fn();
+    const retry = retryCheckingSession(onSessionEnded);
+    const error = trpcError('UNAUTHORIZED');
+    retry(0, error);
+    expect(onSessionEnded).toHaveBeenCalledWith(error);
+    retry(1, error);
+    retry(2, error);
+    retry(3, error);
+    expect(onSessionEnded).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts no check for other errors', () => {
+    const onSessionEnded = vi.fn();
+    const retry = retryCheckingSession(onSessionEnded);
+    retry(0, trpcError('UNAUTHORIZED', 'wrongPassword'));
+    retry(0, trpcError('INTERNAL_SERVER_ERROR'));
+    retry(0, new Error('Failed to fetch'));
+    expect(onSessionEnded).not.toHaveBeenCalled();
   });
 });
 

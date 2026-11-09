@@ -6,7 +6,7 @@ import { httpBatchLink, httpLink, splitLink } from '@trpc/client';
 import superjson from 'superjson';
 import { trpc } from '@/lib/trpc';
 import { localeFromHeader, localeHeaders } from '@/lib/locale-header';
-import { createSessionEndedHandler, isSessionEndedError, sessionEndpointSaysSignedOut } from '@/lib/session-ended';
+import { createSessionEndedHandler, retryCheckingSession, sessionEndpointSaysSignedOut } from '@/lib/session-ended';
 import { SessionProvider } from 'next-auth/react';
 import { ThemeProvider } from 'next-themes';
 
@@ -28,13 +28,10 @@ function createQueryClient() {
   return new QueryClient({
     queryCache: new QueryCache({ onError }),
     mutationCache: new MutationCache({ onError }),
-    // React Query's default (3 retries in the browser), except that a request with no session
-    // isn't retried: the backoff would hold the page for about 7 seconds before it goes to sign-in.
+    // React Query's default retries (none on the server), with the session check started on the
+    // first failure rather than after the backoff, which would hold the page about 7 seconds
     defaultOptions: {
-      queries: {
-        retry: (failureCount, error) =>
-          typeof window !== 'undefined' && !isSessionEndedError(error) && failureCount < 3,
-      },
+      queries: { retry: typeof window === 'undefined' ? 0 : retryCheckingSession(onSessionEnded) },
     },
   });
 }
