@@ -100,14 +100,25 @@ function SettleForm({
     },
   });
 
+  // A fixed payer wins over the one picked, even when it arrives while the dialog is
+  // open (its owner became a member), so what is sent is what From shows.
+  const effectiveFromId = payerId ?? fromId;
+
   // The server refuses a payment from someone to themselves; say so before sending it.
-  const samePerson = fromId !== '' && fromId === toId;
+  const samePerson = effectiveFromId !== '' && effectiveFromId === toId;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const amount = parseToCents(amountStr);
     if (!toId || amount <= 0 || samePerson) return;
-    settle.mutate({ groupId, fromId: fromId || undefined, toId, amount, currency, note: note || undefined });
+    settle.mutate({
+      groupId,
+      fromId: effectiveFromId || undefined,
+      toId,
+      amount,
+      currency,
+      note: note || undefined,
+    });
   }
 
   return (

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { users, login, createTestGroup, trpcMutation } from './helpers';
+import { users, login, createTestGroup, trpcMutation, trpcQuery, trpcResult } from './helpers';
 
 // #341: a plain member (role MEMBER) may record only payments they made, and settlements.create
 // refuses any other with "You can only record payments from yourself". The group page opened the
@@ -93,6 +93,38 @@ test.describe('Recording a payment by role (#341)', () => {
       await expect(page.getByRole('button', { name: /^Bob Smith.*Alice Johnson.*\$5\.00/ })).toBeVisible();
       await expect(page.getByRole('button', { name: /^Charlie Brown.*Alice Johnson.*\$15\.00/ })).toBeVisible();
     } finally {
+      await dispose();
+    }
+  });
+
+  test('an owner who becomes a member while the dialog is open records the payer it shows', async ({ page }) => {
+    const { owner, memberContexts, groupId, memberIds, dispose } = await threeWayGroup('Settle Owner Demoted');
+    const aliceId = memberIds[users.alice.email]!;
+    const bobId = memberIds[users.bob.email]!;
+    try {
+      await login(page, users.alice.email, users.alice.password);
+      await page.goto(`/en/groups/${groupId}`);
+
+      // As the owner, Alice starts recording Bob paying Charlie $5.00
+      await page.getByRole('button', { name: 'Settle up' }).click();
+      const dialog = page.getByRole('dialog');
+      await dialog.getByRole('combobox', { name: 'From' }).selectOption({ label: users.bob.name });
+      await dialog.getByLabel('To', { exact: true }).selectOption({ label: users.charlie.name });
+      await dialog.getByLabel('Amount').fill('5.00');
+
+      // She hands the group to Bob elsewhere, and the page learns of it when it refetches
+      expect((await trpcMutation(owner, 'groups.transferOwnership', { groupId, newOwnerId: bobId })).ok()).toBe(true);
+      await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')));
+      await expect(dialog.getByRole('textbox', { name: 'From' })).toHaveValue(users.alice.name);
+
+      // The payment recorded is the one the dialog shows: from Alice, which a member may record
+      await dialog.getByTestId('record-payment-btn').click();
+      await expect(dialog).not.toBeVisible();
+      const { items } = await trpcResult(await trpcQuery(owner, 'settlements.list', { groupId }));
+      expect(items.map((p: { fromId: string; amount: number }) => [p.fromId, p.amount])).toEqual([[aliceId, 500]]);
+    } finally {
+      // Back to Alice, so the group's cleanup runs as its owner
+      await trpcMutation(memberContexts[0]!, 'groups.transferOwnership', { groupId, newOwnerId: aliceId });
       await dispose();
     }
   });
