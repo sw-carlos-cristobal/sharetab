@@ -115,7 +115,7 @@
     "transferDescription": "Übergeben Sie diese Gruppe an ein anderes Mitglied. Sie werden dann normales Mitglied und können die Gruppe verlassen.",
     "transferNoCandidates": "Niemand sonst in dieser Gruppe hat bisher ein Konto, daher können Sie sie an niemanden übergeben. Platzhalter-Mitglieder können keine Gruppe besitzen.",
     "transferOwnership": "Eigentümerschaft übertragen",
-    "rolesDescription": "Administratoren können die Details der Gruppe ändern, sie archivieren, Platzhalter-Mitglieder verwalten und die Ausgaben und Zahlungen aller bearbeiten oder löschen. Nur Sie können die Gruppe löschen, sie übergeben oder ihre Administratoren auswählen.",
+    "rolesDescription": "Administratoren können die Details der Gruppe ändern, sie archivieren oder dearchivieren, Platzhalter-Mitglieder verwalten, Mitglieder entfernen, die Ausgaben aller bearbeiten oder löschen sowie Zahlungen für alle erfassen oder löschen. Nur Sie können die Gruppe löschen, sie übergeben oder ihre Administratoren auswählen.",
     "makeAdmin": "Zum Administrator machen",
     "removeAdmin": "Als Administrator entfernen"
   },

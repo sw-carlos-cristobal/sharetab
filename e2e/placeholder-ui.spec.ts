@@ -132,7 +132,8 @@ test.describe('Merging a placeholder from group settings', () => {
       await dialog.getByRole('button', { name: 'Merge', exact: true }).click();
 
       await expect(page.getByText(`Merged Frank into ${bobName}`)).toBeVisible();
-      await expect(page.getByText('Placeholder members')).toHaveCount(0);
+      // The heading only: the owner's Members card text also mentions placeholder members (#342)
+      await expect(page.getByText(/^Placeholder members \(\d+\)$/)).toHaveCount(0);
       expect(await netOf(owner, groupId, bobId)).toBe(-1000);
       expect(await netOf(owner, groupId, frankId)).toBeUndefined();
     } finally {

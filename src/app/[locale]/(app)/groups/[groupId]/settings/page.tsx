@@ -232,8 +232,8 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
   const myRole = group.data.members.find((m) => m.user.id === myId)?.role;
   const isOwnerOrAdmin = myRole === 'OWNER' || myRole === 'ADMIN';
   const canMerge = isOwnerOrAdmin && !group.data.archivedAt;
-  // Who a placeholder can be merged into, and who the owner can make an admin (#342): the
-  // members who joined with an account
+  // Who a placeholder can be merged into, and the rows of the owner's Members card, where
+  // roles are changed (#342): the members who joined with an account
   const accountMembers = group.data.members
     .filter((m) => !m.user.isPlaceholder)
     .map((m) => ({ id: m.user.id, name: m.user.name ?? m.user.email ?? '', role: m.role }));
@@ -568,8 +568,8 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
               </Button>
             </div>
           ) : (
-            // The owner can't leave (nobody else could manage or delete the group);
-            // they transfer ownership first
+            // The owner can't leave (nobody else could delete the group, hand it over or
+            // choose its admins); they transfer ownership first
             myId && (
               <div>
                 <p className="mb-2 text-sm text-muted-foreground">{t('settings.leaveDescription')}</p>

@@ -115,7 +115,7 @@
     "transferDescription": "Hand this group to another member. You'll become a regular member, and can then leave it.",
     "transferNoCandidates": "Nobody else in this group has an account yet, so there's nobody to hand it to. Placeholder members can't own a group.",
     "transferOwnership": "Transfer ownership",
-    "rolesDescription": "Admins can change the group's details, archive it, manage placeholder members, and edit or delete anyone's expenses and payments. Only you can delete the group, hand it over, or choose its admins.",
+    "rolesDescription": "Admins can change the group's details, archive or unarchive it, manage placeholder members, remove members, edit or delete anyone's expenses, and record or delete payments for anyone. Only you can delete the group, hand it over, or choose its admins.",
     "makeAdmin": "Make admin",
     "removeAdmin": "Remove admin"
   },

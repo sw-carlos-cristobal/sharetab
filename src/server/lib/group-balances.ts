@@ -96,11 +96,13 @@ export async function lockActiveGroup(tx: Prisma.TransactionClient, groupId: str
 }
 
 /**
- * Lock a group's row for a transaction that removes someone from it, so it
+ * Lock a group's row for a transaction that changes who is in it or their roles, so it
  * waits for every balance change in flight (each holds lockActiveGroup's FOR
  * SHARE) and holds off new ones until it ends. A balance read after this is
  * final until then, and a write that starts meanwhile finds the person gone
- * when it checks membership. Call it first in the transaction (#279).
+ * when it checks membership. Call it first in the transaction (#279). Role
+ * changes take it so that roles read after it are current against every other
+ * holder; joinByInvite, placeholder merges and admin.deleteUser take no group lock.
  */
 export async function lockGroupMembers(tx: Prisma.TransactionClient, groupId: string): Promise<void> {
   await tx.$queryRaw`SELECT 1 FROM "Group" WHERE "id" = ${groupId} FOR NO KEY UPDATE`;

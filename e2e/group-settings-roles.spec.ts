@@ -284,7 +284,7 @@ test.describe('Group admins', () => {
       await bobRow.getByRole('button', { name: 'Make admin' }).click();
       await expect(bobRow.getByText('Admin', { exact: true })).toBeVisible();
       await expect(bobRow.getByRole('button', { name: 'Remove admin' })).toBeVisible();
-      // The owner's own row has no role button: ownership moves only by transferring it
+      // The owner's own row has no role button: a role change never moves ownership
       const aliceRow = page.getByRole('listitem').filter({ hasText: users.alice.name });
       await expect(aliceRow.getByText('Owner', { exact: true })).toBeVisible();
       await expect(aliceRow.getByRole('button')).toHaveCount(0);
@@ -326,7 +326,8 @@ test.describe('Group admins', () => {
       await expect(page.getByLabel('Name')).toBeEnabled();
       await expect(page.getByText('Add Member', { exact: true })).toBeVisible();
       await expect(page.getByRole('button', { name: /Archive group/ })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Make admin' })).toHaveCount(0);
+      // Bob's own row would offer Remove admin if the card showed for him
+      await expect(page.getByRole('button', { name: /Make admin|Remove admin/ })).toHaveCount(0);
       await expect(page.getByRole('button', { name: /Transfer ownership/ })).toHaveCount(0);
       await expect(page.getByRole('button', { name: /Delete group/ })).toHaveCount(0);
       await expect(page.getByRole('button', { name: /Leave group/ })).toBeVisible();

@@ -115,7 +115,7 @@
     "transferDescription": "Passe este grupo para outro membro. Você se tornará um membro comum e poderá sair do grupo depois.",
     "transferNoCandidates": "Ninguém mais neste grupo tem conta ainda, então não há para quem passá-lo. Membros provisórios não podem ser donos de um grupo.",
     "transferOwnership": "Transferir propriedade",
-    "rolesDescription": "Os administradores podem alterar os detalhes do grupo, arquivá-lo, gerenciar os membros provisórios e editar ou excluir as despesas e pagamentos de qualquer pessoa. Só você pode excluir o grupo, passá-lo para outra pessoa ou escolher os administradores.",
+    "rolesDescription": "Os administradores podem alterar os detalhes do grupo, arquivá-lo ou desarquivá-lo, gerenciar os membros provisórios, remover membros, editar ou excluir as despesas de qualquer pessoa e registrar ou excluir pagamentos de qualquer pessoa. Só você pode excluir o grupo, passá-lo para outra pessoa ou escolher os administradores.",
     "makeAdmin": "Tornar administrador",
     "removeAdmin": "Remover como administrador"
   },

@@ -346,7 +346,7 @@ describe('placeholder names are unique in the group', () => {
       });
     });
 
-    // #323: an account an admin deleted (a placeholder the owner added included) becomes a
+    // #323: an account an instance admin deleted (a placeholder the owner or a group admin added included) becomes a
     // suspended placeholder with its memberships marked removed; it's never brought back.
     test('addPlaceholder refuses the name of a deleted account instead of bringing it back', async () => {
       mockDb.groupMember.findMany.mockResolvedValue([
@@ -744,9 +744,9 @@ describe('invites', () => {
     expect(values).toEqual(['bob', 'g1']);
   });
 
-  // Codex on #322: only an admin impersonating a removed placeholder could reach this
-  // with a placeholder's row (#284); a placeholder comes back only by the owner adding
-  // their name again
+  // Codex on #322: only an instance admin impersonating a removed placeholder could reach this
+  // with a placeholder's row (#284); a placeholder comes back only by the owner or a group
+  // admin adding their name again
   test("joinByInvite doesn't let a removed placeholder back in", async () => {
     mockDb.groupInvite.findUnique.mockResolvedValue({
       id: 'i1',
@@ -1229,7 +1229,7 @@ describe('leaving a group', () => {
     expect(mockDb.groupMember.updateMany).toHaveBeenCalledWith(markedRemoved('gm-bob'));
   });
 
-  // Removing someone else is a separate decision for the owner, who still sees the
+  // Removing someone else is a separate decision for the owner or an admin, who still sees the
   // balance (and the archive and delete checks name it), so it isn't held up by one.
   // #323: the balance stays under their name and can be settled with them.
   test('the owner can still remove a member who owes money', async () => {
@@ -1623,8 +1623,8 @@ describe("changing a member's role", () => {
     mockMemberships({ owner: member('owner', 'OWNER'), bob: member('bob', from, { user: account }) });
     const api = await caller('owner');
     await expect(api.setRole({ groupId: 'g1', userId: 'bob', role: to })).resolves.toEqual({ success: true });
-    // Only while they're still in the group with the role read: an admin deleting their
-    // account takes no group lock (see transferOwnership)
+    // Only while they're still in the group with the role read: an instance admin deleting
+    // an account takes no group lock (see transferOwnership)
     expect(mockDb.groupMember.updateMany).toHaveBeenCalledWith({
       where: { id: 'gm-bob', role: from, removedAt: null },
       data: { role: to },
@@ -1635,7 +1635,7 @@ describe("changing a member's role", () => {
         groupId: 'g1',
         userId: 'owner',
         type: 'MEMBER_ROLE_CHANGED',
-        metadata: { memberId: 'bob', from, to },
+        metadata: { targetUserId: 'bob', fromRole: from, toRole: to },
       },
     });
   });
@@ -1694,7 +1694,7 @@ describe("changing a member's role", () => {
     expect(mockDb.groupMember.updateMany).not.toHaveBeenCalled();
   });
 
-  // Ownership changes only by transferring it
+  // Ownership changes by transferring it (or an instance admin deleting the owner's account), never here
   test.each(['ADMIN', 'MEMBER'] as const)("doesn't change the owner's role to %s", async (role) => {
     mockMemberships({ owner: member('owner', 'OWNER', { user: account }) });
     const api = await caller('owner');
@@ -1727,7 +1727,7 @@ describe("changing a member's role", () => {
     expect(mockDb.groupMember.updateMany).not.toHaveBeenCalled();
   });
 
-  // Someone who can't sign in couldn't use the role
+  // A placeholder can't sign in and a suspended account is refused every tRPC call, so neither could use the role
   test.each([
     ['a placeholder', { isPlaceholder: true, suspendedAt: null }, 'Only a member with an account can be an admin'],
     [
@@ -1768,8 +1768,8 @@ describe("changing a member's role", () => {
     expect(mockDb.activityLog.create).not.toHaveBeenCalled();
   });
 
-  // An admin deleting their account takes no group lock, and can mark the row removed after
-  // the read above: the change waits for that, then finds no current member to change
+  // An instance admin deleting their account takes no group lock, and can mark the row removed
+  // after it was read: the change waits for that, then finds no current member to change
   test('is refused when they were removed after their membership was read', async () => {
     mockMemberships({ owner: member('owner', 'OWNER'), bob: member('bob', 'ADMIN', { user: account }) });
     mockDb.groupMember.updateMany.mockResolvedValue({ count: 0 });
