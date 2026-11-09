@@ -116,6 +116,33 @@ describe('MeridianLoginManager', () => {
     expectNoPartOf('sk-ant-ort01-REFRESHTOKEN', await loggedText());
   });
 
+  // Claude's authorization page shows the code as `<code>#<state>` (#509)
+  test('submitCode accepts the code#state form the authorization page shows', async () => {
+    vi.doMock('fs', () => ({ unlinkSync: vi.fn(), writeFileSync: vi.fn() }));
+    const { startLogin, submitCode } = await import('./meridian-login');
+    const state = new URL(await startLogin()).searchParams.get('state');
+
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ access_token: 'a', refresh_token: 'r', expires_in: 3600 }), { status: 200 }),
+    );
+    expect(await submitCode(`  test-auth-code#${state}\n`)).toEqual({ success: true });
+
+    const body = JSON.parse(vi.mocked(fetch).mock.calls[0]![1]?.body as string);
+    expect(body.code).toBe('test-auth-code');
+  });
+
+  test('submitCode refuses a code#state whose state is not the pending login', async () => {
+    const { startLogin, submitCode, isLoginInProgress } = await import('./meridian-login');
+    await startLogin();
+
+    expect(await submitCode('test-auth-code#some-other-state')).toEqual({
+      success: false,
+      error: 'OAuth state mismatch',
+    });
+    expect(fetch).not.toHaveBeenCalled();
+    expect(isLoginInProgress()).toBe(false);
+  });
+
   test('submitCode logs no part of the authorization code', async () => {
     vi.doMock('fs', () => ({ unlinkSync: vi.fn(), writeFileSync: vi.fn() }));
     const { logger } = await import('@/server/lib/logger');
