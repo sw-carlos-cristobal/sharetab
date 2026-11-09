@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { users, login, uniqueEmail } from './helpers';
+import { users, login, uniqueEmail, trpcMutation, trpcError, removeTestUser } from './helpers';
 
 test.describe('Authentication', () => {
   // ── Registration ──────────────────────────────────────────
@@ -51,6 +51,40 @@ test.describe('Authentication', () => {
 
       await page.getByLabel('Name').fill('Real Name');
       await expect(page.getByText('Enter your name.')).toHaveCount(0);
+    });
+
+    // #456: bcrypt reads only a password's first 72 bytes, and a character outside ASCII takes 2 to 4
+    test('a password over 72 bytes is refused with its own message; 72 bytes of multi-byte characters work', async ({
+      page,
+    }) => {
+      const email = uniqueEmail('long');
+      // 25 characters of 3 bytes each: fewer than the 100 characters the form used to take
+      const tooLong = 'パ'.repeat(25);
+      try {
+        await page.goto('/en/register');
+        await page.getByLabel('Name').fill('Long Password');
+        await page.getByLabel('Email').fill(email);
+        await page.getByLabel('Password').fill(tooLong);
+        await expect(page.getByText(/^Use a shorter password: at most 72 bytes\./)).toBeVisible();
+        await expect(page.getByLabel('Password')).toHaveAttribute('aria-invalid', 'true');
+        await page.getByRole('button', { name: 'Create account' }).click();
+        await expect(page).toHaveURL(/register/);
+
+        // The server refuses it with the same message
+        const error = await trpcError(
+          await trpcMutation(page.request, 'auth.register', { name: 'Long Password', email, password: tooLong }),
+        );
+        expect(error?.data?.messageKey).toBe('passwordTooLong');
+        expect(error?.message).toMatch(/^Use a shorter password: at most 72 bytes\./);
+
+        // 24 of them: 72 bytes. The form signs in with it once the account is made
+        await page.getByLabel('Password').fill('パ'.repeat(24));
+        await expect(page.getByText(/at most 72 bytes/)).toHaveCount(0);
+        await page.getByRole('button', { name: 'Create account' }).click();
+        await page.waitForURL(/\/en\/dashboard$/, { timeout: 15000 });
+      } finally {
+        await removeTestUser(email);
+      }
     });
   });
 

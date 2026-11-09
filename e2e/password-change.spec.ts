@@ -6,6 +6,7 @@ import {
   uniqueEmail,
   register,
   authedContext,
+  trpcMutation,
   trpcQuery,
   trpcResult,
   trpcError,
@@ -91,6 +92,54 @@ test.describe('Password Change — Settings Page', () => {
       await expectOnePasswordChangedEmail(email);
     } finally {
       await otherDevice?.dispose();
+      await removeTestUser(email);
+    }
+  });
+
+  // #456: bcrypt reads only a password's first 72 bytes, and a character outside ASCII takes 2 to 4
+  test('a new password over 72 bytes is refused before it is sent; 72 bytes of multi-byte characters work', async ({
+    page,
+  }) => {
+    const email = uniqueEmail('pwlong');
+    const oldPassword = 'testpass123';
+    // 25 characters of 3 bytes each: fewer than the 100 characters the form used to take
+    const tooLong = 'パ'.repeat(25);
+    const fits = 'パ'.repeat(24);
+    try {
+      await register(page, 'PW Long User', email, oldPassword);
+      await page.goto('/en/settings');
+      await page.locator('#currentPassword').fill(oldPassword);
+      await page.locator('#newPassword').fill(tooLong);
+      await page.locator('#confirmPassword').fill(tooLong);
+      await expect(page.getByText(/^Use a shorter password: at most 72 bytes\./)).toBeVisible();
+      await expect(page.locator('#newPassword')).toHaveAttribute('aria-invalid', 'true');
+      await expect(page.getByRole('button', { name: 'Change password' })).toBeDisabled();
+
+      // The server refuses it with the same message
+      const session = await authedContext(email, oldPassword);
+      try {
+        const error = await trpcError(
+          await trpcMutation(session, 'auth.changePassword', { currentPassword: oldPassword, newPassword: tooLong }),
+        );
+        expect(error?.data?.messageKey).toBe('passwordTooLong');
+        expect(error?.message).toMatch(/^Use a shorter password: at most 72 bytes\./);
+      } finally {
+        await session.dispose();
+      }
+
+      await page.locator('#newPassword').fill(fits);
+      await page.locator('#confirmPassword').fill(fits);
+      await expect(page.getByText(/at most 72 bytes/)).toHaveCount(0);
+      await page.getByRole('button', { name: 'Change password' }).click();
+      await expect(page.getByTestId('password-changed')).toBeVisible();
+
+      const ctx = await authedContext(email, fits);
+      try {
+        expect((await trpcResult(await trpcQuery(ctx, 'auth.getProfile')))?.email).toBe(email);
+      } finally {
+        await ctx.dispose();
+      }
+    } finally {
       await removeTestUser(email);
     }
   });

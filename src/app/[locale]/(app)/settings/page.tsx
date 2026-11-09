@@ -5,6 +5,7 @@ import { getProviders, signIn, useSession } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
 import { Link, useRouter } from '@/i18n/navigation';
 import { trpc } from '@/lib/trpc';
+import { MAX_PASSWORD_BYTES, passwordTooLong } from '@/lib/password-length';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -76,6 +77,7 @@ function ProfileForm({
 export default function SettingsPage() {
   const t = useTranslations('settings');
   const tLogin = useTranslations('auth.login');
+  const tPassword = useTranslations('auth.newPassword');
   const { data: session } = useSession();
 
   const profile = trpc.auth.getProfile.useQuery();
@@ -91,6 +93,8 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [signInAgainFailed, setSignInAgainFailed] = useState(false);
+  // bcrypt reads only the first 72 bytes (#456): said as it's typed, and not sent
+  const newPasswordTooLong = passwordTooLong(newPassword);
 
   const changePassword = trpc.auth.changePassword.useMutation({
     onSuccess: async ({ signInAs }, variables) => {
@@ -125,7 +129,7 @@ export default function SettingsPage() {
 
   function handleChangePassword(e: React.FormEvent) {
     e.preventDefault();
-    if (newPassword !== confirmPassword) return;
+    if (newPassword !== confirmPassword || newPasswordTooLong) return;
     changePassword.mutate({ currentPassword, newPassword });
   }
 
@@ -194,8 +198,14 @@ export default function SettingsPage() {
                   onChange={(e) => setNewPassword(e.target.value)}
                   required
                   minLength={8}
-                  maxLength={100}
+                  aria-invalid={newPasswordTooLong ? true : undefined}
+                  aria-describedby={newPasswordTooLong ? 'newPassword-error' : undefined}
                 />
+                {newPasswordTooLong && (
+                  <p id="newPassword-error" className="text-sm text-red-600">
+                    {tPassword('tooLong', { max: MAX_PASSWORD_BYTES })}
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="confirmPassword">{t('password.confirm')}</Label>
@@ -207,7 +217,6 @@ export default function SettingsPage() {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
                   minLength={8}
-                  maxLength={100}
                 />
                 {confirmPassword && newPassword !== confirmPassword && (
                   <p className="text-sm text-red-600">{t('password.mismatch')}</p>
@@ -216,7 +225,11 @@ export default function SettingsPage() {
               <Button
                 type="submit"
                 disabled={
-                  changePassword.isPending || newPassword !== confirmPassword || !currentPassword || !newPassword
+                  changePassword.isPending ||
+                  newPassword !== confirmPassword ||
+                  !currentPassword ||
+                  !newPassword ||
+                  newPasswordTooLong
                 }
               >
                 {changePassword.isPending ? t('password.submitting') : t('password.submit')}

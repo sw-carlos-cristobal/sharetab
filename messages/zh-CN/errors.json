@@ -24,6 +24,7 @@
   "passwordResetRateLimited": "密码重置请求过多，请过段时间再试。",
   "resetLinkInvalid": "此密码重置链接无效、已过期、已被使用，或已被更新的链接取代。请重新申请。",
   "passwordResetNotAllowed": "此账户已被停用或不是真实账户，因此无法重置其密码。",
+  "passwordTooLong": "请使用更短的密码：最多 {max} 字节。普通字母、数字和符号每个占 1 字节；带重音的字母、中文等其他文字和表情符号每个占 2 到 4 字节。",
   "userNotFound": "未找到用户",
   "groupNotFound": "未找到群组",
   "memberNotFound": "未找到成员",

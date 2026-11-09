@@ -24,6 +24,7 @@
   "passwordResetRateLimited": "Too many password reset requests. Please try again later.",
   "resetLinkInvalid": "This password reset link is invalid, has expired, was already used, or was replaced by a newer one. Request a new one.",
   "passwordResetNotAllowed": "This account is suspended or isn't a real account, so its password can't be reset.",
+  "passwordTooLong": "Use a shorter password: at most {max} bytes. Plain letters, digits and symbols take 1 byte each; accented letters, other scripts and emoji take 2 to 4.",
   "userNotFound": "User not found",
   "groupNotFound": "Group not found",
   "memberNotFound": "Member not found",

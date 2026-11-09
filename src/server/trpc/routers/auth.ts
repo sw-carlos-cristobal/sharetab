@@ -25,6 +25,7 @@ import {
 } from '../../lib/password-login';
 import { describeMailError } from '../../lib/mailer';
 import { Prisma } from '@/generated/prisma/client';
+import { MAX_PASSWORD_BYTES, passwordTooLong } from '@/lib/password-length';
 
 // Per client address, across email addresses (the per-account limit on emails is in
 // password-reset.ts). Configurable like the other per-IP limits, for test runs that share one IP
@@ -35,8 +36,16 @@ const RESET_REQUEST_WINDOW_MS = 60 * 60 * 1000;
 const resetSubmitsPerIp = () => parsePositiveInt(process.env.PASSWORD_RESET_RATE_LIMIT_MAX, 30);
 const RESET_SUBMIT_WINDOW_MS = 15 * 60 * 1000;
 
-// Every password ShareTab sets: registration, Settings, reset links
-const newPasswordSchema = z.string().min(8).max(100);
+// Every password ShareTab sets: registration, Settings, reset links. Its upper limit, 72 bytes
+// (#456), is checked by requirePasswordFits, the first thing each of those routes does: a
+// validation error here would reach the person as the general message, not this one
+const newPasswordSchema = z.string().min(8);
+
+function requirePasswordFits(password: string) {
+  if (passwordTooLong(password)) {
+    throw new AppError('BAD_REQUEST', 'passwordTooLong', { max: MAX_PASSWORD_BYTES });
+  }
+}
 
 /** Tells the account its password changed, when email is configured; doesn't wait for the send. */
 function notifyPasswordChanged(user: { email: string; locale: string }) {
@@ -96,6 +105,7 @@ export const authRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      requirePasswordFits(input.password);
       if (!parseAuthConfig(process.env).passwordLogin) {
         throw new AppError('FORBIDDEN', 'registrationClosed');
       }
@@ -184,6 +194,7 @@ export const authRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      requirePasswordFits(input.newPassword);
       requirePasswordLogin();
       const user = await ctx.db.user.findUnique({
         where: { id: ctx.user.id },
@@ -260,6 +271,7 @@ export const authRouter = createTRPCRouter({
   resetPassword: publicProcedure
     .input(z.object({ token: z.string().min(1).max(200), password: newPasswordSchema }))
     .mutation(async ({ ctx, input }) => {
+      requirePasswordFits(input.password);
       requirePasswordLogin();
       checkClientLimit(ctx.headers, 'password-reset-submit-ip', resetSubmitsPerIp(), RESET_SUBMIT_WINDOW_MS);
       // Hashes the password only once the link is claimed, so a bad or reused link costs no bcrypt

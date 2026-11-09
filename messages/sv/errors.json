@@ -24,6 +24,7 @@
   "passwordResetRateLimited": "För många begäranden om att återställa lösenordet. Försök igen senare.",
   "resetLinkInvalid": "Länken för att återställa lösenordet är ogiltig, har gått ut, har redan använts eller har ersatts av en nyare. Begär en ny.",
   "passwordResetNotAllowed": "Kontot är avstängt eller är inget riktigt konto, så dess lösenord kan inte återställas.",
+  "passwordTooLong": "Använd ett kortare lösenord: högst {max} byte. Vanliga bokstäver, siffror och tecken tar 1 byte var, bokstäver med accent, andra skriftsystem och emoji 2 till 4.",
   "userNotFound": "Användaren hittades inte",
   "groupNotFound": "Gruppen hittades inte",
   "memberNotFound": "Medlemmen hittades inte",
