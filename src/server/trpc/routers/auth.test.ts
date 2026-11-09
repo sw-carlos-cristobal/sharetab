@@ -522,12 +522,12 @@ describe('auth.changePassword', () => {
     expect(bcrypt.compare).toHaveBeenCalledTimes(5);
   });
 
-  test('takes a new password of 8 to 100 characters, as registration does', async () => {
+  test('takes a new password of 8 characters to 72 bytes, as registration does', async () => {
     const api = await caller({ user: { id: 'user-1' } });
     await api.changePassword({ currentPassword: 'password123', newPassword: '8-chars!' });
-    await api.changePassword({ currentPassword: 'password123', newPassword: 'x'.repeat(100) });
+    await api.changePassword({ currentPassword: 'password123', newPassword: 'x'.repeat(72) });
     mockDb.$transaction.mockClear();
-    for (const newPassword of ['7-chars', 'x'.repeat(101)]) {
+    for (const newPassword of ['7-chars', 'x'.repeat(73)]) {
       await expect(api.changePassword({ currentPassword: 'password123', newPassword })).rejects.toMatchObject({
         code: 'BAD_REQUEST',
       });
@@ -603,14 +603,76 @@ describe('auth.changePassword', () => {
   });
 });
 
-describe('auth.register password length', () => {
-  test('takes a password of 8 to 100 characters, as the other password forms do', async () => {
+// bcrypt reads only a password's first 72 bytes (#456)
+describe('new password length', () => {
+  // 24 characters of 3 bytes each: at the limit
+  const FITS = 'パ'.repeat(24);
+  // 25 of them, 75 bytes: under 100 characters, as the old limit was
+  const TOO_LONG = 'パ'.repeat(25);
+  const tooLong = { code: 'BAD_REQUEST', messageKey: 'passwordTooLong' };
+
+  test('register refuses a password under 8 characters', async () => {
     const api = await caller();
-    for (const password of ['7-chars', 'x'.repeat(101)]) {
-      await expect(api.register({ name: 'Ada', email: 'ada@example.com', password })).rejects.toMatchObject({
-        code: 'BAD_REQUEST',
-      });
+    await expect(api.register({ name: 'Ada', email: 'ada@example.com', password: '7-chars' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+  });
+
+  test('register refuses a password over 72 bytes, with a message of its own, before anything else', async () => {
+    const api = await caller();
+    for (const password of [TOO_LONG, 'x'.repeat(73), 'x'.repeat(101)]) {
+      await expect(api.register({ name: 'Ada', email: 'ada@example.com', password })).rejects.toMatchObject(tooLong);
     }
+    expect(mockDb.systemSetting.findUnique).not.toHaveBeenCalled();
+    expect(bcrypt.hash).not.toHaveBeenCalled();
+  });
+
+  test('register takes a 72-byte password of multi-byte characters', async () => {
+    stubEnv({ REGISTER_RATE_LIMIT_MAX: '9999' });
+    mockDb.systemSetting.findUnique.mockResolvedValue(null);
+    mockDb.$queryRaw.mockResolvedValue([]);
+    const tx = { user: { create: vi.fn().mockResolvedValue({ id: 'new', name: 'Ada', email: 'ada@example.com' }) } };
+    mockDb.$transaction.mockImplementation(async (fn: (client: typeof tx) => unknown) => fn(tx));
+    const api = await caller();
+    await api.register({ name: 'Ada', email: 'ada@example.com', password: FITS });
+    expect(bcrypt.hash).toHaveBeenCalledWith(FITS, 12);
+  });
+
+  test('changePassword refuses a new password over 72 bytes before checking the current one', async () => {
+    mockDb.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'a@example.com', passwordHash: 'old-hash' });
+    const api = await caller({ user: { id: 'user-1' } });
+    await expect(api.changePassword({ currentPassword: 'password123', newPassword: TOO_LONG })).rejects.toMatchObject(
+      tooLong,
+    );
+    expect(bcrypt.compare).not.toHaveBeenCalled();
+    expect(bcrypt.hash).not.toHaveBeenCalled();
+  });
+
+  test('changePassword takes a 72-byte password of multi-byte characters', async () => {
+    const tx = {
+      user: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      passwordResetToken: { deleteMany: vi.fn() },
+    };
+    mockDb.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'a@example.com', passwordHash: 'old-hash' });
+    vi.mocked(bcrypt.compare).mockResolvedValue(true as never);
+    mockDb.$transaction.mockImplementation(async (fn: (client: typeof tx) => unknown) => fn(tx));
+    const api = await caller({ user: { id: 'user-1' } });
+    await api.changePassword({ currentPassword: 'password123', newPassword: FITS });
+    expect(bcrypt.hash).toHaveBeenCalledWith(FITS, 12);
+  });
+
+  test('resetPassword refuses a password over 72 bytes without using the link', async () => {
+    const api = await caller();
+    await expect(api.resetPassword({ token: 'T'.repeat(43), password: TOO_LONG })).rejects.toMatchObject(tooLong);
+    expect(passwordReset.resetPasswordWithToken).not.toHaveBeenCalled();
+  });
+
+  test('resetPassword takes a 72-byte password of multi-byte characters', async () => {
+    passwordReset.resetPasswordWithToken.mockResolvedValue({ userId: 'bob', email: 'bob@example.com', locale: 'en' });
+    passwordReset.emailPasswordChanged.mockResolvedValue(undefined);
+    const api = await caller();
+    expect(await api.resetPassword({ token: 'T'.repeat(43), password: FITS })).toEqual({ ok: true });
+    expect(passwordReset.resetPasswordWithToken).toHaveBeenCalledWith(mockDb, 'T'.repeat(43), FITS);
   });
 });
 
@@ -887,16 +949,16 @@ describe('auth.resetPassword', () => {
     expect(logged).not.toContain('new-password');
   });
 
-  test('takes a password of 8 to 100 characters, as registration does', async () => {
+  test('takes a password of 8 characters to 72 bytes, as registration does', async () => {
     passwordReset.resetPasswordWithToken.mockResolvedValue(resetUser);
     const api = await caller();
     await api.resetPassword({ token: TOKEN, password: '8-chars!' });
-    await api.resetPassword({ token: TOKEN, password: 'x'.repeat(100) });
+    await api.resetPassword({ token: TOKEN, password: 'x'.repeat(72) });
     passwordReset.resetPasswordWithToken.mockClear();
     await expect(api.resetPassword({ token: TOKEN, password: '7-chars' })).rejects.toMatchObject({
       code: 'BAD_REQUEST',
     });
-    await expect(api.resetPassword({ token: TOKEN, password: 'x'.repeat(101) })).rejects.toMatchObject({
+    await expect(api.resetPassword({ token: TOKEN, password: 'x'.repeat(73) })).rejects.toMatchObject({
       code: 'BAD_REQUEST',
     });
     expect(passwordReset.resetPasswordWithToken).not.toHaveBeenCalled();

@@ -6,6 +6,7 @@ import { KeyRound } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { trpc } from '@/lib/trpc';
 import { readResetToken } from '@/lib/password-reset-link';
+import { MAX_PASSWORD_BYTES, passwordTooLong } from '@/lib/password-length';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -26,6 +27,7 @@ const DONE_HASH = '#done';
 // A password reset link (#397), emailed by "Forgot password?" or made by an admin
 export default function ResetPasswordPage() {
   const t = useTranslations('auth.resetPassword');
+  const tPassword = useTranslations('auth.newPassword');
   const hash = useSyncExternalStore(
     subscribeToHash,
     () => window.location.hash,
@@ -48,6 +50,8 @@ export default function ResetPasswordPage() {
     },
   });
   const mismatch = confirm !== '' && password !== confirm;
+  // bcrypt reads only the first 72 bytes (#456): said as it's typed, and not sent
+  const tooLong = passwordTooLong(password);
   const done = hash === DONE_HASH;
   // An error belongs to the link it was sent with: another link pasted into this tab only
   // changes the hash, and starts clean
@@ -56,7 +60,7 @@ export default function ResetPasswordPage() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!token || password !== confirm) return;
+    if (!token || password !== confirm || tooLong) return;
     reset.mutate({ token, password });
   }
 
@@ -98,8 +102,14 @@ export default function ResetPasswordPage() {
             onChange={(e) => setPassword(e.target.value)}
             required
             minLength={8}
-            maxLength={100}
+            aria-invalid={tooLong}
+            aria-describedby={tooLong ? 'newPassword-error' : undefined}
           />
+          {tooLong && (
+            <p id="newPassword-error" className="text-sm text-destructive">
+              {tPassword('tooLong', { max: MAX_PASSWORD_BYTES })}
+            </p>
+          )}
         </div>
         <div className="space-y-2">
           <Label htmlFor="confirmPassword">{t('confirm')}</Label>
@@ -111,7 +121,6 @@ export default function ResetPasswordPage() {
             onChange={(e) => setConfirm(e.target.value)}
             required
             minLength={8}
-            maxLength={100}
             aria-invalid={mismatch}
           />
           {mismatch && <p className="text-sm text-destructive">{t('mismatch')}</p>}
@@ -119,7 +128,7 @@ export default function ResetPasswordPage() {
         <Button
           type="submit"
           className="w-full rounded-full h-10 text-sm font-medium"
-          disabled={reset.isPending || mismatch}
+          disabled={reset.isPending || mismatch || tooLong}
         >
           {reset.isPending ? t('submitting') : t('submit')}
         </Button>

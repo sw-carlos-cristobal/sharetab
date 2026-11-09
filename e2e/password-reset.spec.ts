@@ -335,6 +335,51 @@ test.describe('Password reset', () => {
     }
   });
 
+  // #456: bcrypt reads only a password's first 72 bytes, and a character outside ASCII takes 2 to 4 bytes
+  test('a new password over 72 bytes is refused before it is sent; 72 bytes of multi-byte characters work', async ({
+    page,
+  }) => {
+    const email = uniqueEmail('pwlong');
+    // 25 characters of 3 bytes each: fewer than the 100 characters the form used to take
+    const tooLong = 'パ'.repeat(25);
+    const fits = 'パ'.repeat(24);
+    const userId = await registerUser(email);
+    try {
+      const admin = await authedContext(users.alice.email, users.alice.password);
+      let token: string;
+      try {
+        const res = await trpcMutation(admin, 'admin.createPasswordResetLink', { userId });
+        expect(res.ok()).toBe(true);
+        token = (await res.json()).result.data.json.token;
+      } finally {
+        await admin.dispose();
+      }
+
+      await page.goto(`/en/reset-password#token=${token}`);
+      await page.getByLabel('New password', { exact: true }).fill(tooLong);
+      await page.getByLabel('Confirm new password').fill(tooLong);
+      await expect(page.getByText(/^Use a shorter password: at most 72 bytes\./)).toBeVisible();
+      await expect(page.getByLabel('New password', { exact: true })).toHaveAttribute('aria-invalid', 'true');
+      await expect(page.getByRole('button', { name: 'Set password' })).toBeDisabled();
+
+      // The server refuses it with the same message, and leaves the link usable
+      const error = await trpcError(
+        await trpcMutation(page.request, 'auth.resetPassword', { token, password: tooLong }),
+      );
+      expect(error?.data?.messageKey).toBe('passwordTooLong');
+      expect(error?.message).toMatch(/^Use a shorter password: at most 72 bytes\./);
+
+      await page.getByLabel('New password', { exact: true }).fill(fits);
+      await page.getByLabel('Confirm new password').fill(fits);
+      await expect(page.getByText(/at most 72 bytes/)).toHaveCount(0);
+      await page.getByRole('button', { name: 'Set password' }).click();
+      await expect(page.getByTestId('reset-password-done')).toBeVisible();
+      expect(await signsIn(email, fits)).toBe(true);
+    } finally {
+      await removeTestUser(email);
+    }
+  });
+
   test('with password sign-in off, the admin page offers no reset link', async ({ page }) => {
     await login(page, users.alice.email, users.alice.password);
     // After signing in: the stub also hides the login page's password form
