@@ -16,6 +16,7 @@ import { Separator } from '@/components/ui/separator';
 import { Receipt } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
 import { normalizeCallbackPath, stripLocalePrefix } from '@/lib/locale-paths';
+import { MAX_PASSWORD_BYTES, passwordTooLong } from '@/lib/password-length';
 
 type RegistrationErrorKey = 'emailTaken' | 'inviteRequired' | 'inviteInvalid' | 'closed' | 'generic';
 
@@ -55,6 +56,7 @@ export default function RegisterPage() {
 
 function RegisterForm() {
   const t = useTranslations('auth.register');
+  const tPassword = useTranslations('auth.newPassword');
   const locale = useLocale() as Locale;
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -70,6 +72,8 @@ function RegisterForm() {
   const registerMutation = trpc.auth.register.useMutation();
 
   const mode = regMode.data?.mode ?? 'open';
+  // bcrypt reads only the first 72 bytes (#456): said as it's typed, and not sent
+  const tooLong = passwordTooLong(password);
   const callbackPath = normalizeCallbackPath(searchParams.get('callbackUrl'), locale);
   const callbackHref = stripLocalePrefix(callbackPath);
   const loginHref = `/login?callbackUrl=${encodeURIComponent(callbackPath)}`;
@@ -83,6 +87,7 @@ function RegisterForm() {
       setNameError(t('error.nameRequired'));
       return;
     }
+    if (tooLong) return;
     setLoading(true);
 
     try {
@@ -176,7 +181,14 @@ function RegisterForm() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={8}
+                aria-invalid={tooLong ? true : undefined}
+                aria-describedby={tooLong ? 'password-error' : undefined}
               />
+              {tooLong && (
+                <p id="password-error" className="text-sm text-destructive">
+                  {tPassword('tooLong', { max: MAX_PASSWORD_BYTES })}
+                </p>
+              )}
             </div>
             {mode === 'invite-only' && (
               <div className="space-y-2">
