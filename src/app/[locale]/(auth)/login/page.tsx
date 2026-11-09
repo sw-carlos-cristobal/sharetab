@@ -16,6 +16,7 @@ import { KeyRound, Receipt, Mail } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
 import { normalizeCallbackPath, stripLocalePrefix } from '@/lib/locale-paths';
 import { getSignInErrorKey } from '@/lib/sign-in-errors';
+import { SIGNED_OUT_PARAM } from '@/lib/session-ended';
 
 export default function LoginPage() {
   return (
@@ -106,6 +107,8 @@ function LoginForm() {
   const shownError = error || (urlErrorKey ? t(`errors.${urlErrorKey}`) : '');
   // The refusal says to sign out first, and this page has no other way to.
   const showSignOut = !error && urlErrorKey === 'sessionActive';
+  // An open page whose session ended came here (#461); an error replaces the notice.
+  const showSignedOut = !shownError && searchParams.get(SIGNED_OUT_PARAM) === '1';
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -200,6 +203,15 @@ function LoginForm() {
           <LoadingSpinner className="py-8" />
         ) : (
           <>
+            {showSignedOut && (
+              <div
+                role="status"
+                data-testid="login-signed-out"
+                className="mb-4 rounded-md bg-muted p-3 text-sm text-muted-foreground"
+              >
+                {t('signedOut')}
+              </div>
+            )}
             {shownError && (
               <div
                 role="alert"

@@ -1,11 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { httpBatchLink, httpLink, splitLink } from '@trpc/client';
 import superjson from 'superjson';
 import { trpc } from '@/lib/trpc';
-import { localeHeaders } from '@/lib/locale-header';
+import { localeFromHeader, localeHeaders } from '@/lib/locale-header';
+import { createSessionEndedHandler, retryCheckingSession, sessionEndpointSaysSignedOut } from '@/lib/session-ended';
 import { SessionProvider } from 'next-auth/react';
 import { ThemeProvider } from 'next-themes';
 
@@ -14,8 +15,29 @@ function getBaseUrl() {
   return process.env.NEXTAUTH_URL ?? 'http://localhost:3000';
 }
 
+function createQueryClient() {
+  // A page whose session ended (a password changed elsewhere, #397) goes to sign-in and comes back
+  // after (#461). A full page load, so nothing the old session loaded stays in the cache.
+  const onSessionEnded = createSessionEndedHandler({
+    checkSession: () => sessionEndpointSaysSignedOut(),
+    navigate: (url) => window.location.replace(url),
+    location: () => window.location,
+    locale: () => localeFromHeader(document.documentElement.lang),
+  });
+  const onError = (error: unknown) => void onSessionEnded(error);
+  return new QueryClient({
+    queryCache: new QueryCache({ onError }),
+    mutationCache: new MutationCache({ onError }),
+    // React Query's default retries (none on the server), with the session check started on the
+    // first failure rather than after the backoff, which would hold the page about 7 seconds
+    defaultOptions: {
+      queries: { retry: typeof window === 'undefined' ? 0 : retryCheckingSession(onSessionEnded) },
+    },
+  });
+}
+
 export function Providers({ children }: { children: React.ReactNode }) {
-  const [queryClient] = useState(() => new QueryClient());
+  const [queryClient] = useState(createQueryClient);
   const [trpcClient] = useState(() =>
     trpc.createClient({
       links: [
