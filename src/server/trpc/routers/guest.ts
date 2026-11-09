@@ -517,7 +517,8 @@ export const guestRouter = createTRPCRouter({
         return tx.guestSplit.create({
           data: {
             ...(receiptId !== undefined ? { receiptId, receiptShared: true } : {}),
-            // The bill people's totals add up to, not the scanned subtotal and total (#408)
+            // The bill from the items and the tip, not the scanned subtotal and total (#408): what
+            // people's totals add up to once every item has someone
             receiptData: {
               ...input.receiptData,
               tip,

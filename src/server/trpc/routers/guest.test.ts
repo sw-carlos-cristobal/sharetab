@@ -1400,7 +1400,7 @@ describe("a split's bill adds up to what everyone owes (#408)", () => {
     await (
       await caller()
     ).createSplit({
-      receiptData: { ...scanned, tip: 800 },
+      receiptData: scanned,
       items: edited,
       people: [{ name: 'Pat' }, { name: 'Lee' }],
       assignments: [

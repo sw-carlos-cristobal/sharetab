@@ -34,7 +34,7 @@ test.describe('createSplit total with tipOverride', () => {
 
     // The stored tip should be the override value
     expect(data.receiptData.tip).toBe(500);
-    // The stored total should be recalculated: subtotal + tax + overriddenTip
+    // The stored total should be recalculated: the items' prices + tax + overriddenTip
     expect(data.receiptData.total).toBe(2700);
 
     // Summary totals should also sum to the correct total
@@ -44,7 +44,7 @@ test.describe('createSplit total with tipOverride', () => {
     await ctx.dispose();
   });
 
-  test('stored total preserved when no tipOverride is provided', async () => {
+  test('stored total is the items plus tax and the scanned tip when no tipOverride is provided', async () => {
     const ctx = await request.newContext({ baseURL: BASE });
 
     const createRes = await trpcMutation(ctx, 'guest.createSplit', {
@@ -53,7 +53,8 @@ test.describe('createSplit total with tipOverride', () => {
         subtotal: 2000,
         tax: 200,
         tip: 100,
-        total: 2300,
+        // A scanned total that doesn't add up (#408): the stored one comes from the items
+        total: 2350,
         currency: 'USD',
       },
       items: [{ name: 'Salad', quantity: 1, unitPrice: 2000, totalPrice: 2000 }],
@@ -159,7 +160,7 @@ test.describe("Quick Split's bill adds up to what everyone owes (#408)", () => {
   });
 
   // The scan is a real extraction when the server under test uses a live AI provider, so this reads
-  // the scanned figures from the page rather than expecting the mock provider's
+  // the starting subtotal and tax from the page rather than expecting the mock provider's
   test('the assign step and Total Bill follow an added item and a new tip', async ({ page }) => {
     test.setTimeout(330_000);
     const assignStep = page.getByTestId('guest-assign-step');
