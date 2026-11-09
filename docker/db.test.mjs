@@ -590,6 +590,7 @@ describe('bundledSettingsProblem', () => {
   test('a folder with no database at all: its first start was interrupted, so move it aside', () => {
     const lines = bundledSettingsProblem({ users: ['sharetab'], databases: [], folder, user: 'sharetab', database: 'sharetab' });
     const text = lines.join(' ');
+    expect(text).toMatch(/no database besides PostgreSQL's own/);
     expect(text).toMatch(/interrupted/);
     expect(text).toMatch(/move it aside/i);
     expect(text).toContain(folder);

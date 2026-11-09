@@ -297,14 +297,15 @@ const BUNDLED_SOCKET_DIR = '/run/postgresql';
 // in it other than postgres, `databases` its databases other than the
 // templates and postgres. The entrypoint creates the user and database only
 // with the folder, so other values name something that isn't there; a
-// restart can't fix that. A folder with no database at all is most likely one
-// whose first start was cut short. Names are JSON-quoted, so each stays on its line.
+// restart can't fix that. A folder with no database besides PostgreSQL's own is
+// most likely one whose first start was cut short. Names are JSON-quoted, so each stays on its line.
 export function bundledSettingsProblem({ user, database, users, databases, folder }) {
   const quote = (name) => JSON.stringify(name);
   const has = (names) => (names.length ? `It has: ${names.map(quote).join(', ')}.` : 'It has none.');
   if (databases.length === 0) {
     return [
-      `The bundled database in ${folder} has no database in it, so it holds no ShareTab data: most ` +
+      `The bundled database in ${folder} has no database besides PostgreSQL's own (postgres and the ` +
+        'templates), so it holds no ShareTab data: most ' +
         'likely its first start was interrupted before creating one. Move it aside (rename the folder, ' +
         'or use a new volume) and start again.',
     ];
