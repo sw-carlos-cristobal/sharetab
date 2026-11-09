@@ -336,11 +336,17 @@ export function bundledSettingsProblem({ user, database, users, databases, folde
 // a statement's text or parse tree (statement, error-statement, duration and
 // sampled logging, debug_print_parse and debug_print_rewritten) are turned off
 // for the session first: the server's log is the container's. postgres, the server's own superuser, is never DB_USER: this
-// would give it a password ShareTab then signs in with.
+// would give it a password ShareTab then signs in with. DB_USER and DB_NAME are
+// compared as the server reads them (cast to name): CREATE USER and CREATE
+// DATABASE cut a name over 63 bytes, and the app signs in with the whole one,
+// which the server cuts the same way.
 export async function syncBundledCredentials({ client, settings, folder, log }) {
-  const { user, password, database } = settings;
-  let users, databases;
+  const { password } = settings;
+  let user, database, users, databases;
   try {
+    ({
+      rows: [{ username: user, dbname: database }],
+    } = await client.query('SELECT $1::name AS username, $2::name AS dbname', [settings.user, settings.database]));
     ({ rows: users } = await client.query(
       "SELECT rolname AS name FROM pg_roles WHERE rolcanlogin AND rolname <> 'postgres' ORDER BY 1",
     ));

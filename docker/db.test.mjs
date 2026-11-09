@@ -602,11 +602,13 @@ describe('syncBundledCredentials', () => {
   const settings = { user: 'sharetab', password: 'n3w-secret', database: 'sharetab' };
   const folder = '/var/lib/postgresql/data';
   // Answers the users and databases queries as a folder created with `users`
-  // and `databases`, and anything else (SET, ALTER ROLE) with no rows
+  // and `databases`, the cast to name as PostgreSQL does for ASCII (cut to 63
+  // bytes), and anything else (SET, ALTER ROLE) with no rows
   const server =
     ({ users = ['sharetab'], databases = ['sharetab'], fail } = {}) =>
-    (sql) => {
+    (sql, params) => {
       if (fail?.test(sql)) throw Object.assign(new Error('boom'), { code: 'XX000' });
+      if (/::name/.test(sql)) return { rows: [{ username: params[0].slice(0, 63), dbname: params[1].slice(0, 63) }] };
       if (/FROM pg_roles/.test(sql)) return { rows: users.map((name) => ({ name })) };
       if (/FROM pg_database/.test(sql)) return { rows: databases.map((name) => ({ name })) };
       return {};
@@ -616,7 +618,9 @@ describe('syncBundledCredentials', () => {
     const { lines, log } = recorder();
     const client = fakeClient(server());
     expect(await syncBundledCredentials({ client, settings, folder, log })).toBe('ok');
-    const [users, databases, quiet, alter] = client.queries;
+    const [names, users, databases, quiet, alter] = client.queries;
+    expect(names).toMatch(/\$1::name/);
+    expect(names).toMatch(/\$2::name/);
     // The server's own superuser (postgres) can't be DB_USER: the app would run
     // as it, on a password this step just gave it. Another superuser can (an
     // operator may have promoted ShareTab's own user).
@@ -636,7 +640,20 @@ describe('syncBundledCredentials', () => {
     expect(quiet).toMatch(/debug_print_parse = off/);
     expect(quiet).toMatch(/debug_print_rewritten = off/);
     expect(alter).toBe(`ALTER ROLE "sharetab" PASSWORD 'n3w-secret'`);
-    expect(client.queries).toHaveLength(4);
+    expect(client.queries).toHaveLength(5);
+    expect(lines.error).toEqual([]);
+  });
+
+  test('compares DB_USER and DB_NAME as PostgreSQL stored them: a name over 63 bytes was cut', async () => {
+    // CREATE USER and CREATE DATABASE cut a longer name to 63 bytes, and the
+    // app signs in with the whole one (the server cuts it the same way), so an
+    // install created with one must still start
+    const { lines, log } = recorder();
+    const [user, database] = ['u'.repeat(70), 'd'.repeat(70)];
+    const client = fakeClient(server({ users: ['u'.repeat(63)], databases: ['d'.repeat(63)] }));
+    const long = { ...settings, user, database };
+    expect(await syncBundledCredentials({ client, settings: long, folder, log })).toBe('ok');
+    expect(client.queries.at(-1)).toBe(`ALTER ROLE "${'u'.repeat(63)}" PASSWORD 'n3w-secret'`);
     expect(lines.error).toEqual([]);
   });
 
@@ -662,7 +679,7 @@ describe('syncBundledCredentials', () => {
   });
 
   test('a failed query is reported, not thrown, and is not a mismatch', async () => {
-    for (const fail of [/FROM pg_roles/, /ALTER ROLE/]) {
+    for (const fail of [/::name/, /FROM pg_roles/, /ALTER ROLE/]) {
       const { lines, log } = recorder();
       const client = fakeClient(server({ fail }));
       expect(await syncBundledCredentials({ client, settings, folder, log })).toBe('failed');
@@ -917,9 +934,9 @@ function fakeClient(behavior = () => []) {
     queries: [],
     ended: false,
     on: (event, fn) => event === 'notice' && listeners.push(fn),
-    query: async (sql) => {
+    query: async (sql, params) => {
       client.queries.push(sql);
-      const result = behavior(sql);
+      const result = behavior(sql, params);
       for (const notice of result?.notices ?? []) listeners.forEach((fn) => fn(notice));
       return { rows: result?.rows ?? [] };
     },
