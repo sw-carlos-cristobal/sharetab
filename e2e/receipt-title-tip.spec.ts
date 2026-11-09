@@ -119,14 +119,48 @@ test.describe('Receipt page: title and tip', () => {
       await expect(page.getByLabel('Expense title')).toHaveValue('Team dinner', { timeout: 30000 });
       await expect(page.getByLabel('Tip override (optional)')).toHaveValue('8.00');
 
+      // The same when Alice leaves the page before the save's answer arrives: Save for later still
+      // reads the receipt again, so a read from before the save, still on its way, can't fill the
+      // reopened form
+      holding = true;
+      await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')));
+      await expect.poll(() => heldReads.length).toBe(1);
+      holding = false;
+      await page.getByLabel('Expense title').fill('Team supper');
+      await page.getByLabel('Tip override (optional)').fill('9');
+      let saveStored = () => {};
+      const stored = new Promise<void>((resolve) => (saveStored = resolve));
+      let releaseSave = () => {};
+      const saveHeld = new Promise<void>((resolve) => (releaseSave = resolve));
+      await page.route(
+        (url) => url.pathname.includes('receipts.saveForLater'),
+        async (route) => {
+          const response = await route.fetch();
+          saveStored();
+          await saveHeld;
+          await route.fulfill({ response });
+        },
+      );
+      await page.getByTestId('save-for-later-btn').click();
+      await stored;
+      await page.getByRole('button', { name: 'Back' }).click();
+      await page.waitForURL(new RegExp(`/en/groups/${groupId}$`), { timeout: 15000 });
+      const rereadAfterSave = page.waitForRequest((request) => receiptRead(new URL(request.url())));
+      releaseSave();
+      await rereadAfterSave;
+      await reopen();
+      releaseReads();
+      await expect(page.getByLabel('Expense title')).toHaveValue('Team supper', { timeout: 30000 });
+      await expect(page.getByLabel('Tip override (optional)')).toHaveValue('9.00');
+
       // Bob opens the saved receipt
       const bobContext = await browser.newContext();
       try {
         const bobPage = await bobContext.newPage();
         await login(bobPage, users.bob.email, users.bob.password);
         await bobPage.goto(`/en/groups/${groupId}/scan?receiptId=${receiptId}`);
-        await expect(bobPage.getByLabel('Expense title')).toHaveValue('Team dinner', { timeout: 30000 });
-        await expect(bobPage.getByLabel('Tip override (optional)')).toHaveValue('8.00');
+        await expect(bobPage.getByLabel('Expense title')).toHaveValue('Team supper', { timeout: 30000 });
+        await expect(bobPage.getByLabel('Tip override (optional)')).toHaveValue('9.00');
 
         await bobPage.getByTestId('create-expense-btn').click();
         await bobPage.waitForURL(new RegExp(`/en/groups/${groupId}$`), { timeout: 15000 });
@@ -138,7 +172,7 @@ test.describe('Receipt page: title and tip', () => {
       const subtotal = items.reduce((sum: number, item: { totalPrice: number }) => sum + item.totalPrice, 0);
       const { expenses } = await trpcResult(await trpcQuery(owner, 'expenses.list', { groupId }));
       expect(expenses.map((e: { title: string; amount: number }) => [e.title, e.amount])).toEqual([
-        ['Team dinner', subtotal + receipt.extractedData.tax + 800],
+        ['Team supper', subtotal + receipt.extractedData.tax + 900],
       ]);
     } finally {
       await dispose();
