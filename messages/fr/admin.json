@@ -168,6 +168,7 @@
     "typeExpenseCreated": "Dépense créée",
     "typeExpenseUpdated": "Dépense mise à jour",
     "typeExpenseDeleted": "Dépense supprimée",
+    "typeExpenseRestored": "Dépense restaurée",
     "typeMemberJoined": "Membre rejoint",
     "typeMemberLeft": "Membre parti",
     "typeGroupUpdated": "Groupe mis à jour",
@@ -177,7 +178,8 @@
     "typeOwnershipTransferred": "Propriété transférée",
     "typePlaceholderCreated": "Espace réservé ajouté",
     "typeSettlementCreated": "Règlement",
-    "typeSettlementDeleted": "Règlement supprimé"
+    "typeSettlementDeleted": "Règlement supprimé",
+    "typeSettlementRestored": "Règlement restauré"
   },
   "tools": {
     "title": "Outils d'administration",

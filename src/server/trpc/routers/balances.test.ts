@@ -8,6 +8,9 @@ vi.mock('@/server/auth', () => ({ auth: vi.fn() }));
 const mockDb = {
   user: { findUnique: vi.fn() },
   group: { findMany: vi.fn() },
+  groupMember: { findUnique: vi.fn() },
+  expense: { findMany: vi.fn() },
+  settlement: { findMany: vi.fn() },
 };
 vi.mock('@/server/db', () => ({ db: mockDb }));
 vi.mock('@/server/lib/logger', () => ({
@@ -89,6 +92,34 @@ describe('dashboard balances include archived groups', () => {
       { groupId: 'g1', groupName: 'Old trip', emoji: '💰', currency: 'USD', balance: 500, archived: true },
     ]);
   });
+});
+
+// #327: the group page's balances read loadGroupBalances, which leaves deleted ones out
+test.each(['getGroupBalances', 'getSimplifiedDebts'] as const)(
+  '%s leaves out deleted expenses and payments',
+  async (proc) => {
+    mockDb.groupMember.findUnique.mockResolvedValue({ role: 'MEMBER', userId: 'me', groupId: 'g1' });
+    mockDb.expense.findMany.mockResolvedValue([]);
+    mockDb.settlement.findMany.mockResolvedValue([]);
+    const api = await caller();
+    await api[proc]({ groupId: 'g1' });
+    expect(mockDb.expense.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { groupId: 'g1', deletedAt: null } }),
+    );
+    expect(mockDb.settlement.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { groupId: 'g1', deletedAt: null } }),
+    );
+  },
+);
+
+// #327: a deleted expense or payment keeps its row, so the dashboard has to leave it out
+test.each(['getOverallDebts', 'getDashboard'] as const)('%s leaves out deleted expenses and payments', async (proc) => {
+  mockDb.group.findMany.mockResolvedValue([]);
+  const api = await caller();
+  await api[proc]();
+  const { select } = mockDb.group.findMany.mock.calls.at(-1)![0];
+  expect(select.expenses.where).toEqual({ deletedAt: null });
+  expect(select.settlements.where).toEqual({ deletedAt: null });
 });
 
 // Codex on #322: a removed placeholder's membership row (#284) isn't membership

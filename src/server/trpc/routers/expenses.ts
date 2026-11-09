@@ -1,11 +1,13 @@
 import { z } from 'zod';
 import { AppError } from '@/server/lib/app-error';
 import { createTRPCRouter, groupMemberProcedure } from '../init';
-import { SplitMode } from '@/generated/prisma/client';
+import { SplitMode, type Expense, type Prisma } from '@/generated/prisma/client';
 import { getExchangeRate, convertCents, exchangeRateSchema } from '../../lib/exchange-rates';
 import { MAX_MONEY_CENTS } from '@/lib/money';
 import { stripUndefined } from '../../lib/strip-undefined';
-import { lockActiveGroup } from '../../lib/group-balances';
+import { loadGroupBalances, lockActiveGroup } from '../../lib/group-balances';
+import { computeBalances, type Expense as BalanceExpense } from '../../lib/balance-calculator';
+import { notDeleted, onlyDeleted } from '../../lib/soft-delete';
 
 const expenseShareSchema = z.object({
   userId: z.string(),
@@ -50,6 +52,61 @@ function decodeExpenseCursor(token: string): ExpenseCursor | null {
   return parsed.success ? { expenseDate: new Date(parsed.data[0]), id: parsed.data[1] } : null;
 }
 
+// Who may delete an expense, and so restore it (#327)
+function mayRemoveExpense(
+  membership: { role: string },
+  userId: string,
+  expense: Pick<Expense, 'paidById' | 'addedById'>,
+) {
+  const isOwnerOrAdmin = membership.role === 'OWNER' || membership.role === 'ADMIN';
+  return isOwnerOrAdmin || expense.paidById === userId || expense.addedById === userId;
+}
+
+/**
+ * Refuse restoring a deleted expense that would give someone no longer in the group a
+ * balance to settle. Restoring puts its balances back, as creating it would, and a new
+ * expense can't name someone removed (#284, #323). But a deletion can leave a removed
+ * person with a balance that the restore would settle (they were removed at zero, then an
+ * old expense was deleted), so, as with a payment (settlementRemovedMemberOverpaid), it
+ * may go ahead when it only moves their balance toward zero without crossing it (someone
+ * with no membership row at all counts as former here, where a payment with them is refused
+ * outright, as create does). Checked after the group lock, as create checks its people
+ * (#279); two such checked writes at once (two restores, or a restore and a payment recorded
+ * or restored) can each pass, as two such payments can: each reads the balances under the
+ * shared group lock.
+ */
+async function requireRestorableFor(tx: Prisma.TransactionClient, groupId: string, expense: BalanceExpense) {
+  const people = [...new Set([expense.paidById, ...expense.shares.map((s) => s.userId)])];
+  const current = await tx.groupMember.findMany({
+    where: { groupId, userId: { in: people }, removedAt: null },
+    select: { userId: true },
+  });
+  const currentIds = new Set(current.map((m) => m.userId));
+  const former = people.filter((userId) => !currentIds.has(userId));
+  if (former.length === 0) {
+    return;
+  }
+
+  // The group's balances while this expense is still deleted, and what it adds to them
+  const balances = await loadGroupBalances(tx, groupId);
+  const net = (userId: string) => balances.find((b) => b.userId === userId)?.net ?? 0;
+  const added = computeBalances([expense], []);
+  const change = (userId: string) => added.find((b) => b.userId === userId)?.net ?? 0;
+  const blocked = former.find((userId) => {
+    const before = net(userId);
+    const after = before + change(userId);
+    return Math.abs(after) > Math.abs(before) || Math.sign(after) * Math.sign(before) < 0;
+  });
+  if (blocked === undefined) {
+    return;
+  }
+  const user = await tx.user.findUnique({ where: { id: blocked }, select: { name: true, placeholderName: true } });
+  const name = user?.placeholderName ?? user?.name;
+  throw name
+    ? new AppError('BAD_REQUEST', 'restoreExpenseFormerMember', { name })
+    : new AppError('BAD_REQUEST', 'restoreExpenseFormerMemberUnnamed');
+}
+
 export const expensesRouter = createTRPCRouter({
   list: groupMemberProcedure
     .input(
@@ -75,6 +132,8 @@ export const expensesRouter = createTRPCRouter({
           .refine((search) => !search.includes('\0'), 'Search contains a NUL byte')
           .optional(),
         limit: z.number().int().min(1).max(100).default(20),
+        // The group page's Deleted section lists only deleted expenses (#327)
+        deleted: z.boolean().default(false),
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -104,11 +163,16 @@ export const expensesRouter = createTRPCRouter({
           : []),
       ];
       const expenses = await ctx.db.expense.findMany({
-        where: { groupId: input.groupId, ...(filters.length > 0 ? { AND: filters } : {}) },
+        where: {
+          groupId: input.groupId,
+          ...(input.deleted ? onlyDeleted : notDeleted),
+          ...(filters.length > 0 ? { AND: filters } : {}),
+        },
         take: input.limit + 1,
         orderBy: [{ expenseDate: 'desc' }, { id: 'desc' }],
         include: {
           paidBy: { select: { id: true, name: true, email: true, image: true } },
+          deletedBy: { select: { id: true, name: true } },
           shares: {
             include: { user: { select: { id: true, name: true, email: true, image: true } } },
           },
@@ -128,6 +192,8 @@ export const expensesRouter = createTRPCRouter({
         include: {
           paidBy: { select: { id: true, name: true, email: true, image: true } },
           addedBy: { select: { id: true, name: true, email: true, image: true } },
+          // A deleted expense is still returned, so its page can say so and offer Restore (#327)
+          deletedBy: { select: { id: true, name: true } },
           shares: {
             include: { user: { select: { id: true, name: true, email: true, image: true } } },
           },
@@ -313,6 +379,9 @@ export const expensesRouter = createTRPCRouter({
       if (!existing || existing.groupId !== input.groupId) {
         throw new AppError('NOT_FOUND');
       }
+      if (existing.deletedAt) {
+        throw new AppError('BAD_REQUEST', 'editDeletedExpense');
+      }
 
       const isOwnerOrAdmin = ctx.membership.role === 'OWNER' || ctx.membership.role === 'ADMIN';
       const isCreatorOrPayer = existing.paidById === ctx.user.id || existing.addedById === ctx.user.id;
@@ -365,9 +434,13 @@ export const expensesRouter = createTRPCRouter({
         // expense, so editing it keeps that part theirs instead of moving it onto
         // someone else, but isn't put in a part they didn't have (#284, #323). Who has
         // which part is read under the expense's row lock, so two edits at once
-        // can't each check against what the other is replacing.
-        const [stored] = await tx.$queryRaw<{ paidById: string }[]>`
-          SELECT "paidById" FROM "Expense" WHERE "id" = ${expenseId} FOR NO KEY UPDATE`;
+        // can't each check against what the other is replacing, and a delete
+        // that got in first is seen (#327).
+        const [stored] = await tx.$queryRaw<{ paidById: string; deletedAt: Date | null }[]>`
+          SELECT "paidById", "deletedAt" FROM "Expense" WHERE "id" = ${expenseId} FOR NO KEY UPDATE`;
+        if (stored?.deletedAt) {
+          throw new AppError('BAD_REQUEST', 'editDeletedExpense');
+        }
         const storedShareIds = (await tx.expenseShare.findMany({ where: { expenseId }, select: { userId: true } })).map(
           (s) => s.userId,
         );
@@ -451,25 +524,106 @@ export const expensesRouter = createTRPCRouter({
       const expense = await ctx.db.expense.findUnique({
         where: { id: input.expenseId },
       });
-      if (!expense || expense.groupId !== input.groupId) {
+      if (!expense || expense.groupId !== input.groupId || expense.deletedAt) {
         throw new AppError('NOT_FOUND');
       }
 
-      const isOwnerOrAdmin = ctx.membership.role === 'OWNER' || ctx.membership.role === 'ADMIN';
-      const isCreatorOrPayer = expense.paidById === ctx.user.id || expense.addedById === ctx.user.id;
-      if (!isOwnerOrAdmin && !isCreatorOrPayer) {
+      if (!mayRemoveExpense(ctx.membership, ctx.user.id, expense)) {
         throw new AppError('FORBIDDEN', 'onlyCreatorDeletesExpense');
       }
 
       await ctx.db.$transaction(async (tx) => {
         await lockActiveGroup(tx, input.groupId, 'archivedDeleteExpense');
-        await tx.expense.delete({ where: { id: input.expenseId } });
+        // Marked deleted, not removed, so it can be restored (#327). Only while it isn't
+        // already, so one someone else deleted in the meantime is NOT_FOUND.
+        const { count } = await tx.expense.updateMany({
+          where: { id: input.expenseId, groupId: input.groupId, ...notDeleted },
+          data: { deletedAt: new Date(), deletedById: ctx.user.id },
+        });
+        if (count === 0) {
+          throw new AppError('NOT_FOUND');
+        }
 
         await tx.activityLog.create({
           data: {
             groupId: input.groupId,
             userId: ctx.user.id,
             type: 'EXPENSE_DELETED',
+            entityId: input.expenseId,
+            metadata: { title: expense.title, amount: expense.amount },
+          },
+        });
+      });
+
+      return { success: true };
+    }),
+
+  // Brings a deleted expense back as it was (#327): its shares and receipt were kept
+  restore: groupMemberProcedure
+    .input(z.object({ groupId: z.string(), expenseId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const groupCheck = await ctx.db.group.findUnique({
+        where: { id: input.groupId },
+        select: { archivedAt: true },
+      });
+      if (groupCheck?.archivedAt) {
+        throw new AppError('BAD_REQUEST', 'archivedRestoreExpense');
+      }
+
+      const expense = await ctx.db.expense.findUnique({
+        where: { id: input.expenseId },
+      });
+      if (!expense || expense.groupId !== input.groupId) {
+        throw new AppError('NOT_FOUND');
+      }
+      if (!expense.deletedAt) {
+        throw new AppError('BAD_REQUEST', 'expenseNotDeleted');
+      }
+      if (!mayRemoveExpense(ctx.membership, ctx.user.id, expense)) {
+        throw new AppError('FORBIDDEN', 'onlyCreatorRestoresExpense');
+      }
+
+      await ctx.db.$transaction(async (tx) => {
+        await lockActiveGroup(tx, input.groupId, 'archivedRestoreExpense');
+
+        // Under the expense's row lock, so a restore or delete racing this one is seen. A
+        // placeholder merge can move who paid or added it, so the permission is checked again.
+        const [stored] = await tx.$queryRaw<
+          {
+            paidById: string;
+            addedById: string;
+            amount: number;
+            baseCurrencyAmount: number | null;
+            deletedAt: Date | null;
+          }[]
+        >`
+          SELECT "paidById", "addedById", "amount", "baseCurrencyAmount", "deletedAt" FROM "Expense"
+          WHERE "id" = ${input.expenseId} FOR NO KEY UPDATE`;
+        if (!stored) {
+          throw new AppError('NOT_FOUND');
+        }
+        if (!stored.deletedAt) {
+          throw new AppError('BAD_REQUEST', 'expenseNotDeleted');
+        }
+        if (!mayRemoveExpense(ctx.membership, ctx.user.id, stored)) {
+          throw new AppError('FORBIDDEN', 'onlyCreatorRestoresExpense');
+        }
+        const shares = await tx.expenseShare.findMany({
+          where: { expenseId: input.expenseId },
+          select: { userId: true, amount: true },
+        });
+        await requireRestorableFor(tx, input.groupId, { ...stored, shares });
+
+        await tx.expense.update({
+          where: { id: input.expenseId },
+          data: { deletedAt: null, deletedById: null },
+        });
+
+        await tx.activityLog.create({
+          data: {
+            groupId: input.groupId,
+            userId: ctx.user.id,
+            type: 'EXPENSE_RESTORED',
             entityId: input.expenseId,
             metadata: { title: expense.title, amount: expense.amount },
           },

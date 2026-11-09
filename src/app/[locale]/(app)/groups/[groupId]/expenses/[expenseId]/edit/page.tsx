@@ -46,7 +46,8 @@ export default function EditExpensePage({ params }: { params: Promise<{ groupId:
   if (expense.isLoading || group.isLoading) {
     return <LoadingSpinner />;
   }
-  if (!expense.data || !group.data) {
+  // A deleted expense can't be edited until it's restored (#327)
+  if (!expense.data || !group.data || expense.data.deletedAt) {
     return (
       <div className="mx-auto max-w-md py-16 text-center">
         <ArrowLeft className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />

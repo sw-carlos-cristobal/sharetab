@@ -32,6 +32,7 @@ import { toast } from 'sonner';
 import { InviteDialog } from '@/components/groups/invite-dialog';
 import { SettleDialog } from '@/components/groups/settle-dialog';
 import { PaymentsList } from '@/components/groups/payments-list';
+import { DeletedRecords } from '@/components/groups/deleted-records';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { getInitials, avatarColor } from '@/lib/avatar';
 
@@ -516,6 +517,14 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
       </div>
 
       <PaymentsList
+        groupId={groupId}
+        groupCurrency={g.currency}
+        currentUserId={myId}
+        isOwnerOrAdmin={myRole === 'OWNER' || myRole === 'ADMIN'}
+        archived={!!g.archivedAt}
+      />
+
+      <DeletedRecords
         groupId={groupId}
         groupCurrency={g.currency}
         currentUserId={myId}

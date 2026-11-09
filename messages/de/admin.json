@@ -168,6 +168,7 @@
     "typeExpenseCreated": "Ausgabe erstellt",
     "typeExpenseUpdated": "Ausgabe aktualisiert",
     "typeExpenseDeleted": "Ausgabe gelöscht",
+    "typeExpenseRestored": "Ausgabe wiederhergestellt",
     "typeMemberJoined": "Mitglied beigetreten",
     "typeMemberLeft": "Mitglied ausgetreten",
     "typeGroupUpdated": "Gruppe aktualisiert",
@@ -177,7 +178,8 @@
     "typeOwnershipTransferred": "Eigentümerschaft übertragen",
     "typePlaceholderCreated": "Platzhalter hinzugefügt",
     "typeSettlementCreated": "Abrechnung",
-    "typeSettlementDeleted": "Abrechnung gelöscht"
+    "typeSettlementDeleted": "Abrechnung gelöscht",
+    "typeSettlementRestored": "Abrechnung wiederhergestellt"
   },
   "tools": {
     "title": "Admin-Werkzeuge",

@@ -183,9 +183,21 @@
     "title": "Pagamentos",
     "deleteLabel": "Excluir o pagamento de {amount} de {from} para {to}",
     "deleteTitle": "Excluir este pagamento?",
-    "deleteDescription": "{from} pagou {amount} a {to} em {date}. Ao excluí-lo, os saldos voltam a ficar como se ele nunca tivesse sido registrado.",
+    "deleteDescription": "{from} pagou {amount} a {to} em {date}. Ao excluí-lo, os saldos voltam a ficar como se ele nunca tivesse sido registrado. Você pode restaurá-lo depois em Despesas e pagamentos excluídos, na página do grupo.",
     "deleting": "Excluindo...",
     "deleted": "Pagamento excluído",
+    "showMore": "Mostrar mais"
+  },
+  "deleted": {
+    "title": "Despesas e pagamentos excluídos",
+    "empty": "Nada foi excluído.",
+    "expenses": "Despesas",
+    "payments": "Pagamentos",
+    "deletedBy": "Exclusão por {name} em {date}",
+    "deletedOn": "Exclusão em {date}",
+    "restore": "Restaurar",
+    "restorePaymentLabel": "Restaurar o pagamento de {amount} de {from} para {to}",
+    "paymentRestored": "Pagamento restaurado",
     "showMore": "Mostrar mais"
   }
 }

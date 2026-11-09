@@ -168,6 +168,7 @@
     "typeExpenseCreated": "创建支出",
     "typeExpenseUpdated": "更新支出",
     "typeExpenseDeleted": "删除支出",
+    "typeExpenseRestored": "恢复支出",
     "typeMemberJoined": "成员加入",
     "typeMemberLeft": "成员退出",
     "typeGroupUpdated": "群组更新",
@@ -177,7 +178,8 @@
     "typeOwnershipTransferred": "所有权已转让",
     "typePlaceholderCreated": "添加占位成员",
     "typeSettlementCreated": "结算",
-    "typeSettlementDeleted": "删除结算"
+    "typeSettlementDeleted": "删除结算",
+    "typeSettlementRestored": "恢复结算"
   },
   "tools": {
     "title": "管理工具",

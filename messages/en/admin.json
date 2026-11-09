@@ -168,6 +168,7 @@
     "typeExpenseCreated": "Expense Created",
     "typeExpenseUpdated": "Expense Updated",
     "typeExpenseDeleted": "Expense Deleted",
+    "typeExpenseRestored": "Expense Restored",
     "typeMemberJoined": "Member Joined",
     "typeMemberLeft": "Member Left",
     "typeGroupUpdated": "Group Updated",
@@ -177,7 +178,8 @@
     "typeOwnershipTransferred": "Ownership Transferred",
     "typePlaceholderCreated": "Placeholder Added",
     "typeSettlementCreated": "Settlement",
-    "typeSettlementDeleted": "Settlement Deleted"
+    "typeSettlementDeleted": "Settlement Deleted",
+    "typeSettlementRestored": "Settlement Restored"
   },
   "tools": {
     "title": "Admin Tools",

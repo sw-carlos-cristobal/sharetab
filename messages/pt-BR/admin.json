@@ -168,6 +168,7 @@
     "typeExpenseCreated": "Despesa criada",
     "typeExpenseUpdated": "Despesa atualizada",
     "typeExpenseDeleted": "Despesa excluída",
+    "typeExpenseRestored": "Despesa restaurada",
     "typeMemberJoined": "Membro entrou",
     "typeMemberLeft": "Membro saiu",
     "typeGroupUpdated": "Grupo atualizado",
@@ -177,7 +178,8 @@
     "typeOwnershipTransferred": "Propriedade transferida",
     "typePlaceholderCreated": "Marcador adicionado",
     "typeSettlementCreated": "Acerto",
-    "typeSettlementDeleted": "Acerto excluído"
+    "typeSettlementDeleted": "Acerto excluído",
+    "typeSettlementRestored": "Acerto restaurado"
   },
   "tools": {
     "title": "Ferramentas administrativas",

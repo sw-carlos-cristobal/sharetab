@@ -2,6 +2,7 @@ import { createTRPCRouter, groupMemberProcedure, protectedProcedure } from '../i
 import { z } from 'zod';
 import { simplifyDebts, computeBalances } from '../../lib/balance-calculator';
 import { loadGroupBalances } from '../../lib/group-balances';
+import { notDeleted } from '../../lib/soft-delete';
 
 export const balancesRouter = createTRPCRouter({
   getGroupBalances: groupMemberProcedure.input(z.object({ groupId: z.string() })).query(async ({ ctx, input }) => {
@@ -20,6 +21,7 @@ export const balancesRouter = createTRPCRouter({
       where: { members: { some: { userId: ctx.user.id, removedAt: null } } },
       select: {
         expenses: {
+          where: notDeleted,
           select: {
             paidById: true,
             amount: true,
@@ -28,6 +30,7 @@ export const balancesRouter = createTRPCRouter({
           },
         },
         settlements: {
+          where: notDeleted,
           select: { fromId: true, toId: true, amount: true, baseCurrencyAmount: true },
         },
         // Removed rows too, on purpose: someone removed still has their name here (#323)
@@ -117,6 +120,7 @@ export const balancesRouter = createTRPCRouter({
         currency: true,
         archivedAt: true,
         expenses: {
+          where: notDeleted,
           select: {
             paidById: true,
             amount: true,
@@ -125,6 +129,7 @@ export const balancesRouter = createTRPCRouter({
           },
         },
         settlements: {
+          where: notDeleted,
           select: { fromId: true, toId: true, amount: true, baseCurrencyAmount: true },
         },
       },
