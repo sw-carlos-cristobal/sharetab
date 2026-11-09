@@ -647,10 +647,11 @@ export const groupsRouter = createTRPCRouter({
           // here to show their name, the row goes.
           if (await isInGroupHistory(tx, input.userId, input.groupId)) {
             // Defensive: the row lock above makes an admin deleting their account wait, and the
-            // read above already saw one that finished
+            // read above already saw one that finished. An admin's row goes back to MEMBER, so
+            // no removed row is anyone's admin (#342); rejoining makes them a member anyway.
             const { count } = await tx.groupMember.updateMany({
               where: { id: targetMember.id, removedAt: null },
-              data: { removedAt: new Date() },
+              data: { removedAt: new Date(), role: 'MEMBER' },
             });
             if (count === 0) {
               throw new AppError('NOT_FOUND', 'memberNotFound');
@@ -673,8 +674,7 @@ export const groupsRouter = createTRPCRouter({
     }),
 
   // Hands the group to another member, so its owner can leave it (#309). The old
-  // owner becomes a plain member: nothing assigns ADMIN, so the new owner would
-  // have no way to take it back.
+  // owner becomes a plain member; the new owner can make them an admin (setRole).
   transferOwnership: groupMemberProcedure
     .input(z.object({ groupId: z.string(), newOwnerId: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -742,6 +742,76 @@ export const groupsRouter = createTRPCRouter({
             userId: ctx.user.id,
             type: 'OWNERSHIP_TRANSFERRED',
             metadata: { fromUserId: ctx.user.id, toUserId: input.newOwnerId },
+          },
+        });
+      });
+
+      return { success: true };
+    }),
+
+  // The owner makes a member an admin, or an admin a member again (#342). An admin can do
+  // what the owner can, except delete the group, transfer it, or change roles. Each check
+  // reads the caller's role when the request arrives, so a demotion holds from the next one.
+  setRole: groupMemberProcedure
+    .input(z.object({ groupId: z.string(), userId: z.string(), role: z.enum(['ADMIN', 'MEMBER']) }))
+    .mutation(async ({ ctx, input }) => {
+      const notOwner = new AppError('FORBIDDEN', 'onlyOwnerSetsRoles');
+      if (ctx.membership.role !== 'OWNER') {
+        throw notOwner;
+      }
+
+      await ctx.db.$transaction(async (tx) => {
+        // A transfer of ownership and a removal take the same lock, so the roles read
+        // below are current: a former owner changes nobody's role, and nobody is made an
+        // admin of a group they just left.
+        await lockGroupMembers(tx, input.groupId);
+
+        const [owner, target] = await Promise.all([
+          tx.groupMember.findUnique({
+            where: { userId_groupId: { userId: ctx.user.id, groupId: input.groupId } },
+            select: { role: true, removedAt: true },
+          }),
+          tx.groupMember.findUnique({
+            where: { userId_groupId: { userId: input.userId, groupId: input.groupId } },
+            include: { user: { select: { isPlaceholder: true, suspendedAt: true } } },
+          }),
+        ]);
+        if (owner?.role !== 'OWNER' || owner.removedAt) {
+          throw notOwner;
+        }
+        if (!target || target.removedAt) {
+          throw new AppError('NOT_FOUND', 'memberNotFound');
+        }
+        // Ownership moves only by transferOwnership, which leaves exactly one owner
+        if (target.role === 'OWNER') {
+          throw new AppError('BAD_REQUEST', 'ownerRoleFixed');
+        }
+        if (target.role === input.role) {
+          return;
+        }
+        // Someone who can't sign in couldn't use the role. Taking it away is always allowed.
+        if (input.role === 'ADMIN' && target.user.isPlaceholder) {
+          throw new AppError('BAD_REQUEST', 'adminNeedsAccount');
+        }
+        if (input.role === 'ADMIN' && target.user.suspendedAt) {
+          throw new AppError('BAD_REQUEST', 'adminSuspended');
+        }
+
+        // An admin deleting their account takes no group lock, and can mark the row removed
+        // (and MEMBER) after the read above: this waits for that, then finds nothing to change
+        const { count } = await tx.groupMember.updateMany({
+          where: { id: target.id, role: target.role, removedAt: null },
+          data: { role: input.role },
+        });
+        if (count === 0) {
+          throw new AppError('NOT_FOUND', 'memberNotFound');
+        }
+        await tx.activityLog.create({
+          data: {
+            groupId: input.groupId,
+            userId: ctx.user.id,
+            type: 'MEMBER_ROLE_CHANGED',
+            metadata: { memberId: input.userId, from: target.role, to: input.role },
           },
         });
       });

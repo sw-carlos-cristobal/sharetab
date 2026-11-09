@@ -41,6 +41,7 @@
     "backToGroups": "Zurück zu Gruppen",
     "invite": "Einladen",
     "owner": "Besitzer",
+    "admin": "Administrator",
     "pending": "Ausstehend",
     "archivedMessage": "Diese Gruppe ist archiviert. Bis sie dearchiviert wird, können keine Ausgaben hinzugefügt oder geändert und keine Zahlungen erfasst werden.",
     "manage": "Verwalten",
@@ -113,7 +114,10 @@
     "leaveGroup": "Gruppe verlassen",
     "transferDescription": "Übergeben Sie diese Gruppe an ein anderes Mitglied. Sie werden dann normales Mitglied und können die Gruppe verlassen.",
     "transferNoCandidates": "Niemand sonst in dieser Gruppe hat bisher ein Konto, daher können Sie sie an niemanden übergeben. Platzhalter-Mitglieder können keine Gruppe besitzen.",
-    "transferOwnership": "Eigentümerschaft übertragen"
+    "transferOwnership": "Eigentümerschaft übertragen",
+    "rolesDescription": "Administratoren können die Details der Gruppe ändern, sie archivieren, Platzhalter-Mitglieder verwalten und die Ausgaben und Zahlungen aller bearbeiten oder löschen. Nur Sie können die Gruppe löschen, sie übergeben oder ihre Administratoren auswählen.",
+    "makeAdmin": "Zum Administrator machen",
+    "removeAdmin": "Als Administrator entfernen"
   },
   "settle": {
     "title": "Zahlung erfassen",

@@ -250,3 +250,141 @@ test.describe('Transferring ownership', () => {
     }
   });
 });
+
+// #342: nothing could make anyone an admin, so every owner-or-admin action was the owner's alone
+test.describe('Group admins', () => {
+  // An expense only Alice is in, so deleting it or not leaves everyone settled up
+  async function addAliceExpense(ctx: Parameters<typeof trpcMutation>[0], groupId: string, aliceId: string) {
+    const res = await trpcMutation(ctx, 'expenses.create', {
+      groupId,
+      title: 'Alice alone',
+      amount: 1000,
+      paidById: aliceId,
+      splitMode: 'EXACT',
+      shares: [{ userId: aliceId, amount: 1000 }],
+    });
+    return (await res.json()).result?.data?.json?.id as string;
+  }
+
+  test('the owner makes a member an admin, who can act for the group until the role is taken away', async ({
+    page,
+  }) => {
+    const { owner, groupId, memberContexts, memberIds, dispose } = await createTestGroup(
+      users.alice.email,
+      users.alice.password,
+      [{ email: users.bob.email, password: users.bob.password }],
+      'Group Admins UI',
+    );
+    const bob = memberContexts[0]!;
+    const aliceId = memberIds[users.alice.email]!;
+    try {
+      await login(page, users.alice.email, users.alice.password);
+      await page.goto(`/en/groups/${groupId}/settings`);
+      const bobRow = page.getByRole('listitem').filter({ hasText: users.bob.name });
+      await bobRow.getByRole('button', { name: 'Make admin' }).click();
+      await expect(bobRow.getByText('Admin', { exact: true })).toBeVisible();
+      await expect(bobRow.getByRole('button', { name: 'Remove admin' })).toBeVisible();
+      // The owner's own row has no role button: ownership moves only by transferring it
+      const aliceRow = page.getByRole('listitem').filter({ hasText: users.alice.name });
+      await expect(aliceRow.getByText('Owner', { exact: true })).toBeVisible();
+      await expect(aliceRow.getByRole('button')).toHaveCount(0);
+
+      // Everyone in the group sees who the admins are (in the page, not the sidebar's Admin link)
+      await page.goto(`/en/groups/${groupId}`);
+      await expect(page.getByRole('main').getByText('Admin', { exact: true })).toBeVisible();
+
+      // An admin can delete an expense someone else added and paid
+      const first = await addAliceExpense(owner, groupId, aliceId);
+      expect(await trpcError(await trpcMutation(bob, 'expenses.delete', { groupId, expenseId: first }))).toBeFalsy();
+
+      // Taking the role away holds from Bob's next request
+      await page.goto(`/en/groups/${groupId}/settings`);
+      await bobRow.getByRole('button', { name: 'Remove admin' }).click();
+      await expect(bobRow.getByRole('button', { name: 'Make admin' })).toBeVisible();
+      await expect(bobRow.getByText('Admin', { exact: true })).toHaveCount(0);
+      const second = await addAliceExpense(owner, groupId, aliceId);
+      const refused = await trpcError(await trpcMutation(bob, 'expenses.delete', { groupId, expenseId: second }));
+      expect(refused?.data?.code).toBe('FORBIDDEN');
+    } finally {
+      await dispose();
+    }
+  });
+
+  test("an admin gets the admin controls in settings, but can't choose admins, hand the group over or delete it", async ({
+    page,
+  }) => {
+    const { owner, groupId, memberIds, dispose } = await createTestGroup(
+      users.alice.email,
+      users.alice.password,
+      [{ email: users.bob.email, password: users.bob.password }],
+      'Group Admins Settings',
+    );
+    await trpcMutation(owner, 'groups.setRole', { groupId, userId: memberIds[users.bob.email], role: 'ADMIN' });
+    try {
+      await login(page, users.bob.email, users.bob.password);
+      await page.goto(`/en/groups/${groupId}/settings`);
+      await expect(page.getByLabel('Name')).toBeEnabled();
+      await expect(page.getByText('Add Member', { exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: /Archive group/ })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Make admin' })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: /Transfer ownership/ })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: /Delete group/ })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: /Leave group/ })).toBeVisible();
+    } finally {
+      await dispose();
+    }
+  });
+
+  test("an admin can't make admins, demote the owner or take the group, and a placeholder can't be an admin", async () => {
+    const { owner, groupId, memberContexts, memberIds, dispose } = await createTestGroup(
+      users.alice.email,
+      users.alice.password,
+      [
+        { email: users.bob.email, password: users.bob.password },
+        { email: users.charlie.email, password: users.charlie.password },
+      ],
+      'Group Admins API',
+    );
+    const bob = memberContexts[0]!;
+    const bobId = memberIds[users.bob.email]!;
+    const dave = (await (await trpcMutation(owner, 'groups.addPlaceholder', { groupId, name: 'Dave' })).json()).result
+      ?.data?.json?.id as string;
+    await trpcMutation(owner, 'groups.setRole', { groupId, userId: bobId, role: 'ADMIN' });
+    try {
+      const promote = await trpcError(
+        await trpcMutation(bob, 'groups.setRole', { groupId, userId: memberIds[users.charlie.email], role: 'ADMIN' }),
+      );
+      expect(promote?.data?.code).toBe('FORBIDDEN');
+      expect(promote?.message).toBe('Only the owner can make or remove admins');
+
+      const demoteOwner = await trpcError(
+        await trpcMutation(bob, 'groups.setRole', { groupId, userId: memberIds[users.alice.email], role: 'MEMBER' }),
+      );
+      expect(demoteOwner?.data?.code).toBe('FORBIDDEN');
+
+      const transfer = await trpcError(
+        await trpcMutation(bob, 'groups.transferOwnership', { groupId, newOwnerId: bobId }),
+      );
+      expect(transfer?.data?.code).toBe('FORBIDDEN');
+
+      const placeholder = await trpcError(
+        await trpcMutation(owner, 'groups.setRole', { groupId, userId: dave, role: 'ADMIN' }),
+      );
+      expect(placeholder?.data?.code).toBe('BAD_REQUEST');
+      expect(placeholder?.message).toBe('Only a member with an account can be an admin');
+
+      const detail = await trpcResult(await trpcQuery(owner, 'groups.get', { groupId }));
+      const roles = Object.fromEntries(
+        detail.members.map((m: { user: { id: string }; role: string }) => [m.user.id, m.role]),
+      );
+      expect(roles).toEqual({
+        [memberIds[users.alice.email]!]: 'OWNER',
+        [bobId]: 'ADMIN',
+        [memberIds[users.charlie.email]!]: 'MEMBER',
+        [dave]: 'MEMBER',
+      });
+    } finally {
+      await dispose();
+    }
+  });
+});

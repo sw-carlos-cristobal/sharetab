@@ -33,6 +33,7 @@ export function ActivityFeedSection() {
     GROUP_ARCHIVED: t('activity.typeGroupArchived'),
     GROUP_UNARCHIVED: t('activity.typeGroupUnarchived'),
     OWNERSHIP_TRANSFERRED: t('activity.typeOwnershipTransferred'),
+    MEMBER_ROLE_CHANGED: t('activity.typeMemberRoleChanged'),
   };
 
   return (

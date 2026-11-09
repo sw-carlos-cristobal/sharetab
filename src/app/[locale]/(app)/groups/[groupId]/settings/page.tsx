@@ -24,6 +24,7 @@ import {
   Link2,
   LogOut,
   Merge,
+  Users,
 } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { InviteDialog } from '@/components/groups/invite-dialog';
@@ -191,6 +192,11 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
     onError: (e) => toast.error(e.message),
   });
 
+  const setRole = trpc.groups.setRole.useMutation({
+    onSuccess: () => utils.groups.get.invalidate({ groupId }),
+    onError: (e) => toast.error(e.message),
+  });
+
   const leaveGroup = trpc.groups.removeMember.useMutation({
     onSuccess: () => {
       utils.groups.list.invalidate();
@@ -226,10 +232,11 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
   const myRole = group.data.members.find((m) => m.user.id === myId)?.role;
   const isOwnerOrAdmin = myRole === 'OWNER' || myRole === 'ADMIN';
   const canMerge = isOwnerOrAdmin && !group.data.archivedAt;
-  // Who a placeholder can be merged into: the members who joined with an account
+  // Who a placeholder can be merged into, and who the owner can make an admin (#342): the
+  // members who joined with an account
   const accountMembers = group.data.members
     .filter((m) => !m.user.isPlaceholder)
-    .map((m) => ({ id: m.user.id, name: m.user.name ?? m.user.email ?? '' }));
+    .map((m) => ({ id: m.user.id, name: m.user.name ?? m.user.email ?? '', role: m.role }));
   // Who the owner can hand the group to (#309)
   const newOwnerCandidates = accountMembers.filter((m) => m.id !== myId);
 
@@ -280,6 +287,46 @@ export default function GroupSettingsPage({ params }: { params: Promise<{ groupI
         initialCurrency={group.data.currency}
         readOnly={!isOwnerOrAdmin}
       />
+
+      {myRole === 'OWNER' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              {t('settings.members')}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">{t('settings.rolesDescription')}</p>
+            <ul className="space-y-2">
+              {accountMembers.map((m) => (
+                <li key={m.id} className="flex items-center justify-between gap-2 rounded-md border p-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate text-sm">{m.name}</span>
+                    {m.role !== 'MEMBER' && (
+                      <Badge variant="secondary" className="text-[10px]">
+                        {m.role === 'OWNER' ? t('detail.owner') : t('detail.admin')}
+                      </Badge>
+                    )}
+                  </div>
+                  {m.role !== 'OWNER' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={setRole.isPending}
+                      onClick={() =>
+                        setRole.mutate({ groupId, userId: m.id, role: m.role === 'ADMIN' ? 'MEMBER' : 'ADMIN' })
+                      }
+                    >
+                      {m.role === 'ADMIN' ? t('settings.removeAdmin') : t('settings.makeAdmin')}
+                    </Button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       {isOwnerOrAdmin && (
         <Card>

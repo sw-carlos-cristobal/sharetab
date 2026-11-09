@@ -41,6 +41,7 @@
     "backToGroups": "返回群组列表",
     "invite": "邀请",
     "owner": "所有者",
+    "admin": "管理员",
     "pending": "待处理",
     "archivedMessage": "该群组已归档，取消归档前无法添加或修改支出，也无法记录付款。",
     "manage": "管理",
@@ -113,7 +114,10 @@
     "leaveGroup": "退出群组",
     "transferDescription": "将此群组转交给其他成员。你将成为普通成员，之后可以退出群组。",
     "transferNoCandidates": "此群组中还没有其他拥有账户的成员，因此无法转交。占位成员不能拥有群组。",
-    "transferOwnership": "转让所有权"
+    "transferOwnership": "转让所有权",
+    "rolesDescription": "管理员可以更改群组详情、将其归档、管理占位成员，以及编辑或删除任何人的支出和付款。只有你可以删除群组、转交群组或选择管理员。",
+    "makeAdmin": "设为管理员",
+    "removeAdmin": "取消管理员"
   },
   "settle": {
     "title": "记录付款",

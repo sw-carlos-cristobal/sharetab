@@ -41,6 +41,7 @@
     "backToGroups": "그룹 목록으로 돌아가기",
     "invite": "초대",
     "owner": "소유자",
+    "admin": "관리자",
     "pending": "대기 중",
     "archivedMessage": "이 그룹은 보관되었습니다. 보관을 해제할 때까지 비용을 추가하거나 변경할 수 없고 결제도 기록할 수 없습니다.",
     "manage": "관리",
@@ -113,7 +114,10 @@
     "leaveGroup": "그룹 나가기",
     "transferDescription": "이 그룹을 다른 멤버에게 넘깁니다. 회원님은 일반 멤버가 되며, 그 후 그룹에서 나갈 수 있습니다.",
     "transferNoCandidates": "이 그룹에는 아직 계정이 있는 다른 멤버가 없어 넘길 사람이 없습니다. 임시 멤버는 그룹을 소유할 수 없습니다.",
-    "transferOwnership": "소유권 이전"
+    "transferOwnership": "소유권 이전",
+    "rolesDescription": "관리자는 그룹 정보를 변경하고, 그룹을 보관하고, 임시 멤버를 관리하고, 누구의 지출과 결제든 수정하거나 삭제할 수 있습니다. 그룹 삭제, 이전, 관리자 지정은 회원님만 할 수 있습니다.",
+    "makeAdmin": "관리자로 지정",
+    "removeAdmin": "관리자 해제"
   },
   "settle": {
     "title": "결제 기록",

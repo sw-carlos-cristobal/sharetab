@@ -368,6 +368,7 @@ enum ActivityType {
   GROUP_ARCHIVED
   GROUP_UNARCHIVED
   OWNERSHIP_TRANSFERRED
+  MEMBER_ROLE_CHANGED
 }
 
 // ─── ADMIN ─────────────────────────────────────────────────

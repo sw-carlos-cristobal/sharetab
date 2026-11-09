@@ -41,6 +41,7 @@
     "backToGroups": "Volver a Grupos",
     "invite": "Invitar",
     "owner": "Propietario",
+    "admin": "Administrador",
     "pending": "Pendiente",
     "archivedMessage": "Este grupo está archivado. Hasta desarchivarlo, no se pueden agregar ni modificar gastos ni registrar pagos.",
     "manage": "Gestionar",
@@ -113,7 +114,10 @@
     "leaveGroup": "Salir del grupo",
     "transferDescription": "Pasa este grupo a otro miembro. Te convertirás en un miembro normal y después podrás salir del grupo.",
     "transferNoCandidates": "Nadie más en este grupo tiene cuenta todavía, así que no hay a quién pasárselo. Los miembros provisionales no pueden ser propietarios de un grupo.",
-    "transferOwnership": "Transferir propiedad"
+    "transferOwnership": "Transferir propiedad",
+    "rolesDescription": "Los administradores pueden cambiar los detalles del grupo, archivarlo, gestionar los miembros provisionales y editar o eliminar los gastos y pagos de cualquiera. Solo tú puedes eliminar el grupo, pasarlo a otra persona o elegir a sus administradores.",
+    "makeAdmin": "Hacer administrador",
+    "removeAdmin": "Quitar como administrador"
   },
   "settle": {
     "title": "Registrar un pago",
