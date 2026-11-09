@@ -191,6 +191,11 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
                 {t('detail.owner')}
               </span>
             )}
+            {m.role === 'ADMIN' && (
+              <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                {t('detail.admin')}
+              </span>
+            )}
             {m.user.isPlaceholder && (
               <Badge variant="outline" className="ml-0.5 text-[10px]">
                 {t('detail.pending')}

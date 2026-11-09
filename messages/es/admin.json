@@ -176,6 +176,7 @@
     "typeGroupArchived": "Grupo archivado",
     "typeGroupUnarchived": "Grupo desarchivado",
     "typeOwnershipTransferred": "Propiedad transferida",
+    "typeMemberRoleChanged": "Rol de miembro cambiado",
     "typePlaceholderCreated": "Marcador añadido",
     "typeSettlementCreated": "Liquidación",
     "typeSettlementDeleted": "Liquidación eliminada",

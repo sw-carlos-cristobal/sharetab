@@ -1041,7 +1041,7 @@ describe('deleting a user keeps their memberships, marked removed', () => {
     const api = await callerAs(adminSession);
     await expect(api.deleteUser({ userId: 'bob' })).resolves.toEqual({ deleted: true, userId: 'bob' });
 
-    // The role becomes MEMBER, so no removed row is anyone's owner
+    // The role becomes MEMBER, so no removed row is anyone's owner or admin
     expect(tx.groupMember.updateMany).toHaveBeenCalledWith({
       where: { userId: 'bob', removedAt: null },
       data: { removedAt: expect.any(Date), role: 'MEMBER' },
