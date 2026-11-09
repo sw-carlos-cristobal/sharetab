@@ -131,6 +131,8 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
   const inDebts = new Set(debts.data?.debts.flatMap((d) => [d.from, d.to]) ?? []);
   const settleParties = [...g.members, ...g.removedMembers.filter((m) => inDebts.has(m.user.id))];
   const myRole = g.members.find((m) => m.user.id === myId)?.role;
+  // A plain member may record only payments they made; settlements.create refuses any other (#341)
+  const recordsForOthers = myRole === 'OWNER' || myRole === 'ADMIN';
 
   return (
     <div className="space-y-6">
@@ -237,8 +239,9 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
               <CardTitle className="text-base" data-testid="balances-title">
                 {t('detail.balances')}
               </CardTitle>
-              {/* An archived group refuses payments (see the banner above) */}
-              {!g.archivedAt && (
+              {/* An archived group refuses payments (see the banner above). Until the
+                  profile loads it isn't known whose payments the viewer may record. */}
+              {!g.archivedAt && myRole !== undefined && (
                 <Button variant="outline" size="sm" onClick={() => setSettleState({ open: true })}>
                   <Handshake className="mr-2 h-4 w-4" />
                   {t('detail.settle')}
@@ -262,32 +265,42 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
               const venmoUrl = showVenmo
                 ? buildVenmoPayUrl(to.venmoUsername!, debt.amount, `ShareTab: ${g.name}`)
                 : null;
+              const rowContent = (
+                <>
+                  <span className="truncate text-xs font-medium text-red-600 sm:text-sm dark:text-red-400">
+                    {from?.name ?? from?.email ?? t('detail.unknown')}
+                  </span>
+                  <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <span className="truncate text-xs font-medium text-emerald-600 sm:text-sm dark:text-emerald-400">
+                    {toName}
+                  </span>
+                  <span className="ml-auto shrink-0 font-semibold tabular-nums text-red-600 dark:text-red-400">
+                    {formatCents(debt.amount, g.currency, locale)}
+                  </span>
+                </>
+              );
               return (
                 <div key={i} className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={!!g.archivedAt}
-                    className="flex flex-1 items-center gap-2 rounded-lg p-2.5 text-sm transition-all enabled:hover:bg-muted/70 enabled:hover:shadow-sm"
-                    onClick={() =>
-                      setSettleState({
-                        open: true,
-                        from: debt.from,
-                        to: debt.to,
-                        amount: debt.amount,
-                      })
-                    }
-                  >
-                    <span className="truncate text-xs font-medium text-red-600 sm:text-sm dark:text-red-400">
-                      {from?.name ?? from?.email ?? t('detail.unknown')}
-                    </span>
-                    <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                    <span className="truncate text-xs font-medium text-emerald-600 sm:text-sm dark:text-emerald-400">
-                      {toName}
-                    </span>
-                    <span className="ml-auto shrink-0 font-semibold tabular-nums text-red-600 dark:text-red-400">
-                      {formatCents(debt.amount, g.currency, locale)}
-                    </span>
-                  </button>
+                  {/* A debt between two other people isn't a plain member's to record (#341) */}
+                  {recordsForOthers || isMyDebt ? (
+                    <button
+                      type="button"
+                      disabled={!!g.archivedAt}
+                      className="flex flex-1 items-center gap-2 rounded-lg p-2.5 text-sm transition-all enabled:hover:bg-muted/70 enabled:hover:shadow-sm"
+                      onClick={() =>
+                        setSettleState({
+                          open: true,
+                          from: debt.from,
+                          to: debt.to,
+                          amount: debt.amount,
+                        })
+                      }
+                    >
+                      {rowContent}
+                    </button>
+                  ) : (
+                    <div className="flex flex-1 items-center gap-2 rounded-lg p-2.5 text-sm">{rowContent}</div>
+                  )}
                   {venmoUrl && (
                     <Button
                       variant="ghost"
@@ -542,6 +555,7 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
       <SettleDialog
         groupId={groupId}
         members={settleParties.map((m) => ({ id: m.user.id, name: m.user.name ?? m.user.email }))}
+        {...(!recordsForOthers && myId !== undefined ? { payerId: myId } : {})}
         {...(settleState.from !== undefined ? { suggestedFrom: settleState.from } : {})}
         {...(settleState.to !== undefined ? { suggestedTo: settleState.to } : {})}
         {...(settleState.amount !== undefined ? { suggestedAmount: settleState.amount } : {})}

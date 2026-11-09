@@ -125,7 +125,7 @@ ShareTab is a free, self-hosted alternative to Splitwise for tracking shared exp
 - **Group archiving** -- archive settled-up groups to declutter your dashboard; toggle archived view on groups page. A group with an open balance can't be archived, and an archived group where you still owe or are owed money (for example, one archived before this rule) stays on the dashboard
 - **Cross-group dashboard** -- see all your balances at a glance, with per-person debt breakdown
 - **Debt simplification** -- minimize the number of payments needed
-- **Settle up** -- record payments between any two group members with explicit From/To fields
+- **Settle up** -- record a payment you made to any group member; group owners and admins can record a payment between any two members
 - **Placeholder members** -- add people without accounts and rename them from group settings; when someone joins, send them a link that hands over their placeholder, or merge the placeholder into the account they joined with, and its expenses and payments move to them. Once someone has settled up, remove them: their past expenses stay under their name, and a balance that comes back can still be settled with them
 - **Dark mode** -- system-aware with manual toggle
 - **Invite links** -- share a link to add friends to your groups
