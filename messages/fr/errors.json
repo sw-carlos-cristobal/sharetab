@@ -24,6 +24,7 @@
   "passwordResetRateLimited": "Trop de demandes de réinitialisation du mot de passe. Veuillez réessayer plus tard.",
   "resetLinkInvalid": "Ce lien de réinitialisation du mot de passe est invalide, a expiré, a déjà été utilisé ou a été remplacé par un lien plus récent. Demandez-en un nouveau.",
   "passwordResetNotAllowed": "Ce compte est suspendu ou n’est pas un vrai compte, son mot de passe ne peut donc pas être réinitialisé.",
+  "passwordTooLong": "Choisissez un mot de passe plus court : {max} octets au maximum.",
   "userNotFound": "Utilisateur introuvable",
   "groupNotFound": "Groupe introuvable",
   "memberNotFound": "Membre introuvable",
