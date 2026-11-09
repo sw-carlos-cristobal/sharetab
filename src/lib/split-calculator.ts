@@ -48,6 +48,21 @@ export function calculateSplitTotals(params: {
   });
 }
 
+/**
+ * What a Quick Split's bill comes to (#408): its items' prices added up, then tax and tip on top.
+ * Once every item has someone, that is what everyone's totals from `calculateSplitTotals` add up
+ * to. The subtotal and total a scan read stop matching as soon as an item is edited, added or
+ * deleted, or the tip changes, so a split stores these instead and shows them as its Total bill.
+ */
+export function billTotals(
+  items: { totalPrice: number }[],
+  tax: number,
+  tip: number,
+): { subtotal: number; total: number } {
+  const subtotal = items.reduce((sum, item) => sum + item.totalPrice, 0);
+  return { subtotal, total: subtotal + tax + tip };
+}
+
 /** A receipt item and the people on it, in the order the split uses them */
 export type ReceiptAssignment = { receiptItemId: string; userIds: string[] };
 

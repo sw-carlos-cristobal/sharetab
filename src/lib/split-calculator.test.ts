@@ -1,5 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import {
+  billTotals,
   calculateClaimTotals,
   calculateReceiptSplitTotals,
   calculateSplitTotals,
@@ -881,5 +882,29 @@ describe('receiptAssignmentList', () => {
     expect(receiptAssignmentList(items, { deleted: new Set(['alice']), i2: new Set(), i3: new Set(['bob']) })).toEqual([
       { receiptItemId: 'i3', userIds: ['bob'] },
     ]);
+  });
+});
+
+// #408: Quick Split showed the scanned subtotal and total, which stop matching what people owe once
+// an item is edited, added or deleted, or the tip changes
+describe('billTotals', () => {
+  const items = [{ totalPrice: 899 }, { totalPrice: 1250 }, { totalPrice: 401 }];
+
+  test("is the items' prices added up, then tax and tip on top", () => {
+    expect(billTotals(items, 204, 500)).toEqual({ subtotal: 2550, total: 3254 });
+  });
+
+  test('is what everyone owes once every item has someone', () => {
+    const assignments = [
+      { itemIndex: 0, personIndices: [0] },
+      { itemIndex: 1, personIndices: [0, 1, 2] },
+      { itemIndex: 2, personIndices: [2] },
+    ];
+    const owed = calculateSplitTotals({ items, assignments, tax: 333, tip: 777, peopleCount: 3 });
+    expect(owed.reduce((sum, p) => sum + p.total, 0)).toBe(billTotals(items, 333, 777).total);
+  });
+
+  test('comes to the tax and tip alone with no items', () => {
+    expect(billTotals([], 100, 50)).toEqual({ subtotal: 0, total: 150 });
   });
 });
