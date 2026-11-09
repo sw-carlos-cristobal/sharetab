@@ -253,6 +253,10 @@ model Receipt {
   groupId       String?
   savedById     String?
   paidById      String?
+  // The receipt page's expense title and the tip typed over the scanned one (cents), kept by
+  // Save for later so the receipt reopens with them (#412); null when none was saved
+  title         String?
+  tipOverride   Int?
   uploadedById  String?
   isGuest       Boolean       @default(false)
 

@@ -1,0 +1,181 @@
+import { test, expect, type APIRequestContext } from '@playwright/test';
+import { users, login, createTestGroup, trpcMutation, trpcQuery, trpcResult, FAKE_JPEG } from './helpers';
+
+// A receipt scanned into the group with the mock provider ("The Golden Fork", scanned tip $0.00)
+async function scanIntoGroup(owner: APIRequestContext, groupId: string) {
+  const uploadRes = await owner.post('/api/upload', {
+    multipart: { file: { name: 'receipt.jpg', mimeType: 'image/jpeg', buffer: FAKE_JPEG } },
+  });
+  const { receiptId } = await uploadRes.json();
+  const processed = await (await trpcMutation(owner, 'receipts.processReceipt', { receiptId, groupId }, 60_000)).json();
+  expect(processed.result, JSON.stringify(processed)).toBeDefined();
+  return receiptId as string;
+}
+
+// #412: Save for later kept only the payer and the assignments, so a reopened receipt lost its
+// tip override and title; and on a fresh scan a cleared title refilled itself with the merchant's name
+test.describe('Receipt page: title and tip', () => {
+  test("a fresh scan's title can be cleared and typed again", async ({ page }) => {
+    const { owner, groupId, dispose } = await createTestGroup(
+      users.alice.email,
+      users.alice.password,
+      [],
+      'Scan Title',
+    );
+    try {
+      const receiptId = await scanIntoGroup(owner, groupId);
+
+      await login(page, users.alice.email, users.alice.password);
+      await page.goto(`/en/groups/${groupId}/scan?receiptId=${receiptId}`);
+      const title = page.getByLabel('Expense title');
+      await expect(title).toHaveValue('The Golden Fork', { timeout: 30000 });
+
+      await title.fill('');
+      // The form is filled once: a later read of the receipt with new data (an item added on
+      // another device, read when the tab is returned to) leaves the cleared title alone
+      const added = await trpcMutation(owner, 'receipts.addItem', {
+        receiptId,
+        name: 'Late addition',
+        unitPrice: 300,
+        totalPrice: 300,
+      });
+      expect(added.ok(), await added.text()).toBe(true);
+      await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')));
+      await expect(page.getByText('Late addition')).toBeVisible({ timeout: 30000 });
+      await expect(title).toHaveValue('');
+      await title.pressSequentially('Brunch');
+      await expect(title).toHaveValue('Brunch');
+    } finally {
+      await dispose();
+    }
+  });
+
+  test('Save for later keeps the title and tip for anyone in the group, and the expense uses them', async ({
+    page,
+    browser,
+  }) => {
+    test.setTimeout(120_000);
+    const { owner, groupId, dispose } = await createTestGroup(
+      users.alice.email,
+      users.alice.password,
+      [{ email: users.bob.email, password: users.bob.password }],
+      'Scan Title Tip',
+    );
+    try {
+      const receiptId = await scanIntoGroup(owner, groupId);
+
+      await login(page, users.alice.email, users.alice.password);
+      await page.goto(`/en/groups/${groupId}/scan?receiptId=${receiptId}`);
+      await expect(page.getByLabel('Expense title')).toHaveValue('The Golden Fork', { timeout: 30000 });
+      await page.getByLabel('Expense title').fill('Team lunch');
+      await page.getByLabel('Tip override (optional)').fill('12');
+      await page.getByTestId('split-all-btn').click();
+      await page.getByTestId('save-for-later-btn').click();
+      await page.waitForURL(new RegExp(`/en/groups/${groupId}$`), { timeout: 15000 });
+
+      // Alice reopens it from the group page's saved receipts, in the same tab, changes both and
+      // saves again. The app's query cache keeps the receipt as it was last loaded, so a reopen
+      // first gets that copy
+      const reopen = () => page.locator(`a[href*="/scan?receiptId=${receiptId}"]`).click();
+      // A read of the receipt made while `holding` is set reaches the server at once, but its answer
+      // is held until releaseReads(), with the rest of the tRPC batch it travels in
+      let holding = false;
+      const heldReads: (() => void)[] = [];
+      const releaseReads = () => {
+        holding = false;
+        for (const release of heldReads.splice(0)) release();
+      };
+      const receiptRead = (url: URL) => url.pathname.includes('receipts.getReceiptItems');
+      await page.route(receiptRead, async (route) => {
+        const hold = holding;
+        const response = await route.fetch();
+        if (hold) await new Promise<void>((resolve) => heldReads.push(resolve));
+        await route.fulfill({ response });
+      });
+      await reopen();
+      await expect(page.getByLabel('Expense title')).toHaveValue('Team lunch', { timeout: 30000 });
+      await expect(page.getByLabel('Tip override (optional)')).toHaveValue('12.00');
+
+      // A read of the receipt still on its way when Save for later succeeds (here the refetch a
+      // return to the tab starts, held) predates the save, so it mustn't fill the reopened form
+      holding = true;
+      await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')));
+      await expect.poll(() => heldReads.length).toBe(1);
+      holding = false;
+      await page.getByLabel('Expense title').fill('Team dinner');
+      await page.getByLabel('Tip override (optional)').fill('8');
+      // From the save on every read is held, the one Save for later starts included, so the form
+      // stays hidden until the reads are let through: nothing can be typed or saved over the
+      // cached copy
+      holding = true;
+      await page.getByTestId('save-for-later-btn').click();
+      await page.waitForURL(new RegExp(`/en/groups/${groupId}$`), { timeout: 15000 });
+      await reopen();
+      await expect(page.getByText('Loading items...')).toBeVisible({ timeout: 30000 });
+      await expect(page.getByTestId('save-for-later-btn')).toHaveCount(0);
+      // The held reads go through, oldest first, and so do later ones (the route stays: unroute()
+      // wouldn't wait for a handler still holding a read)
+      releaseReads();
+      await expect(page.getByLabel('Expense title')).toHaveValue('Team dinner', { timeout: 30000 });
+      await expect(page.getByLabel('Tip override (optional)')).toHaveValue('8.00');
+
+      // The same when Alice leaves the page before the save's answer arrives: Save for later still
+      // reads the receipt again, so a read from before the save, still on its way, can't fill the
+      // reopened form
+      holding = true;
+      await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')));
+      await expect.poll(() => heldReads.length).toBe(1);
+      holding = false;
+      await page.getByLabel('Expense title').fill('Team supper');
+      await page.getByLabel('Tip override (optional)').fill('9');
+      let saveStored = () => {};
+      const stored = new Promise<void>((resolve) => (saveStored = resolve));
+      let releaseSave = () => {};
+      const saveHeld = new Promise<void>((resolve) => (releaseSave = resolve));
+      await page.route(
+        (url) => url.pathname.includes('receipts.saveForLater'),
+        async (route) => {
+          const response = await route.fetch();
+          saveStored();
+          await saveHeld;
+          await route.fulfill({ response });
+        },
+      );
+      await page.getByTestId('save-for-later-btn').click();
+      await stored;
+      await page.getByRole('button', { name: 'Back' }).click();
+      await page.waitForURL(new RegExp(`/en/groups/${groupId}$`), { timeout: 15000 });
+      const rereadAfterSave = page.waitForRequest((request) => receiptRead(new URL(request.url())));
+      releaseSave();
+      await rereadAfterSave;
+      await reopen();
+      releaseReads();
+      await expect(page.getByLabel('Expense title')).toHaveValue('Team supper', { timeout: 30000 });
+      await expect(page.getByLabel('Tip override (optional)')).toHaveValue('9.00');
+
+      // Bob opens the saved receipt
+      const bobContext = await browser.newContext();
+      try {
+        const bobPage = await bobContext.newPage();
+        await login(bobPage, users.bob.email, users.bob.password);
+        await bobPage.goto(`/en/groups/${groupId}/scan?receiptId=${receiptId}`);
+        await expect(bobPage.getByLabel('Expense title')).toHaveValue('Team supper', { timeout: 30000 });
+        await expect(bobPage.getByLabel('Tip override (optional)')).toHaveValue('9.00');
+
+        await bobPage.getByTestId('create-expense-btn').click();
+        await bobPage.waitForURL(new RegExp(`/en/groups/${groupId}$`), { timeout: 15000 });
+      } finally {
+        await bobContext.close();
+      }
+
+      const { receipt, items } = await trpcResult(await trpcQuery(owner, 'receipts.getReceiptItems', { receiptId }));
+      const subtotal = items.reduce((sum: number, item: { totalPrice: number }) => sum + item.totalPrice, 0);
+      const { expenses } = await trpcResult(await trpcQuery(owner, 'expenses.list', { groupId }));
+      expect(expenses.map((e: { title: string; amount: number }) => [e.title, e.amount])).toEqual([
+        ['Team supper', subtotal + receipt.extractedData.tax + 900],
+      ]);
+    } finally {
+      await dispose();
+    }
+  });
+});

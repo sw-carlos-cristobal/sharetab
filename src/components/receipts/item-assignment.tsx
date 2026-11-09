@@ -132,7 +132,14 @@ export function ItemAssignment({
     onError: (e) => toast.error(e.message),
   });
   const saveForLater = trpc.receipts.saveForLater.useMutation({
-    onSuccess: () => onSaveForLater?.(),
+    onSuccess: () => {
+      // A read of the receipt started before the save would otherwise be reused, and fill the form
+      // with what it held, when the receipt is reopened (#412). Invalidating cancels it and reads
+      // the receipt again, also when the page was left while saving (`all` includes a query no
+      // page shows any more)
+      void utils.receipts.getReceiptItems.invalidate({ receiptId }, { refetchType: 'all' });
+      onSaveForLater?.();
+    },
     onError: (e) => {
       toast.error(e.message);
       reloadAfterError();
@@ -161,49 +168,48 @@ export function ItemAssignment({
     return () => el.removeEventListener('wheel', handler);
   }, [showImage]);
 
-  // Restore saved state (paidById, assignments) when receipt data loads.
-  // Runs on every data change but only sets state when server data has values
-  // and local state hasn't been set yet. This handles the case where the first
-  // render gets cached data (without paidById) and the refetch brings fresh data.
-  const hasRestoredRef = useRef(false);
+  // Fill the form once (#412): the title (the saved one, else the merchant's name) and whatever
+  // Save for later kept (tip, payer, assignments). Only from the first successful fetch to finish
+  // after this mount that has the scan's data: a page reopened soon after a save first gets the cached
+  // receipt, which may hold values saved before the last save, and a fetch that fails keeps it.
+  // The form stays hidden until then (below), so nothing can be typed or saved over it. Never
+  // again after that, so a later refetch can't refill a title cleared to type another, or replace
+  // edits with what someone else saved meanwhile.
+  const [formFilled, setFormFilled] = useState(false);
+  const hasFreshData = receiptData.isSuccess && receiptData.isFetchedAfterMount;
 
   /* eslint-disable react-hooks/set-state-in-effect -- init from async query data */
   useEffect(() => {
-    if (!receiptData.data || hasRestoredRef.current) return;
     const data = receiptData.data;
+    if (formFilled || !hasFreshData || !data?.receipt.extractedData) return;
+    setFormFilled(true);
+    const { receipt: saved } = data;
 
-    if (data.receipt.extractedData?.merchantName && !title) {
-      setTitle(data.receipt.extractedData.merchantName);
+    setTitle(saved.title ?? saved.extractedData?.merchantName ?? '');
+    if (saved.tipOverride !== null) {
+      setTipOverride(centsToDecimal(saved.tipOverride));
     }
-
-    const hasSavedPaidBy = !!data.receipt.paidById;
-    const hasSavedAssignments = data.items.some(
-      (item: { assignments?: unknown[] }) => item.assignments && item.assignments.length > 0,
-    );
-
-    if (hasSavedPaidBy || hasSavedAssignments) {
-      if (hasSavedPaidBy) {
-        setPaidById(data.receipt.paidById!);
-      }
-      const restored: Assignments = {};
-      for (const item of data.items) {
-        if (item.assignments && item.assignments.length > 0) {
-          restored[item.id] = new Set(item.assignments.map((a: { userId: string }) => a.userId));
-        }
-      }
-      if (Object.keys(restored).length > 0) {
-        setAssignments(restored);
-      }
-      hasRestoredRef.current = true;
+    if (saved.paidById) {
+      setPaidById(saved.paidById);
     }
-  }, [receiptData.data, title]);
+    const restored: Assignments = {};
+    for (const item of data.items) {
+      if (item.assignments && item.assignments.length > 0) {
+        restored[item.id] = new Set(item.assignments.map((a: { userId: string }) => a.userId));
+      }
+    }
+    if (Object.keys(restored).length > 0) {
+      setAssignments(restored);
+    }
+  }, [receiptData.data, hasFreshData, formFilled]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const { receipt, items } = receiptData.data ?? { receipt: null, items: [] };
   const extracted = receipt?.extractedData ?? null;
   const parsedTip = parseFloat(tipOverride);
-  const tip =
-    extracted && tipOverride !== '' && isFinite(parsedTip) ? Math.round(parsedTip * 100) : (extracted?.tip ?? 0);
+  // The tip typed over the scanned one, in cents; what Create Expense and Save for later send
+  const tipOverrideCents = tipOverride !== '' && isFinite(parsedTip) ? Math.round(parsedTip * 100) : null;
+  const tip = extracted && tipOverrideCents !== null ? tipOverrideCents : (extracted?.tip ?? 0);
   // Until someone picks a payer or a saved one loads, default to the current user (when
   // they're in the group), as Add Expense does (#271, #265)
   const currentUserId = profile.data?.id;
@@ -333,6 +339,14 @@ export function ItemAssignment({
   if (!extracted) {
     return <p className="text-destructive">{t('noExtractedData')}</p>;
   }
+  // Until the form is filled from fresh data: the receipt may be the cached copy from before a save
+  if (!formFilled) {
+    return receiptData.isError && !receiptData.isFetching ? (
+      <p className="text-destructive">{t('noReceiptData')}</p>
+    ) : (
+      <p className="text-muted-foreground">{t('loadingItems')}</p>
+    );
+  }
 
   // After early returns, these are guaranteed non-null
   const safeReceipt = receipt!;
@@ -357,8 +371,7 @@ export function ItemAssignment({
       receiptId,
       title,
       paidById: effectivePaidById,
-      tipOverride:
-        tipOverride !== '' && isFinite(parseFloat(tipOverride)) ? Math.round(parseFloat(tipOverride) * 100) : undefined,
+      tipOverride: tipOverrideCents ?? undefined,
       assignments: assignmentList,
       expectedShares: shownTotals.map((person) => ({ userId: person.userId, amount: person.total })),
       expectedCurrency: currency,
@@ -371,6 +384,9 @@ export function ItemAssignment({
       groupId,
       receiptId,
       paidById: effectivePaidById || null,
+      // Kept so the receipt reopens with them, for anyone in the group (#412)
+      title,
+      tipOverride: tipOverrideCents,
       assignments: assignmentList,
     });
   }
