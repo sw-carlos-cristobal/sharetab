@@ -98,6 +98,7 @@ export const publicProcedure = t.procedure.use(loggingMiddleware);
 
 export const protectedProcedure = t.procedure.use(loggingMiddleware).use(async ({ ctx, next }) => {
   if (!ctx.session?.user?.id) {
+    // Keyless on purpose: src/lib/session-ended.ts reads a keyless UNAUTHORIZED as a session that may have ended (#461)
     throw new AppError('UNAUTHORIZED');
   }
 
@@ -107,6 +108,7 @@ export const protectedProcedure = t.procedure.use(loggingMiddleware).use(async (
   });
 
   if (!user) {
+    // Keyless on purpose, as above (#461)
     throw new AppError('UNAUTHORIZED');
   }
 
