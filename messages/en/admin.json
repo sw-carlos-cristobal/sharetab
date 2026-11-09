@@ -176,6 +176,7 @@
     "typeGroupArchived": "Group Archived",
     "typeGroupUnarchived": "Group Unarchived",
     "typeOwnershipTransferred": "Ownership Transferred",
+    "typeMemberRoleChanged": "Member Role Changed",
     "typePlaceholderCreated": "Placeholder Added",
     "typeSettlementCreated": "Settlement",
     "typeSettlementDeleted": "Settlement Deleted",

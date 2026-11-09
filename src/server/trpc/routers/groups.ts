@@ -40,7 +40,7 @@ async function findNameHolder(tx: Prisma.TransactionClient, groupId: string, nam
       m.userId !== exceptUserId &&
       [m.user.placeholderName, m.user.name].some((n) => n != null && normalizeGuestName(n) === wanted),
   );
-  // Among people removed, a placeholder the owner can bring back by name comes first
+  // Among people removed, a placeholder the owner or a group admin can bring back by name comes first
   return (
     holders.find((m) => !m.removedAt) ??
     holders.find((m) => m.user.isPlaceholder && !m.user.suspendedAt) ??
@@ -400,8 +400,9 @@ export const groupsRouter = createTRPCRouter({
       },
     });
     // Someone removed from the group keeps their row, marked removed (#284, #323), and joins
-    // again by bringing it back below. A placeholder can't: only an admin impersonating one
-    // gets here with it, and a placeholder comes back by the owner adding their name again.
+    // again by bringing it back below. A placeholder can't: only an instance admin impersonating
+    // one gets here with it, and a placeholder comes back by the owner or a group admin adding
+    // their name again.
     if (existing?.removedAt) {
       const user = await ctx.db.user.findUnique({ where: { id: ctx.user.id }, select: { isPlaceholder: true } });
       if (user?.isPlaceholder !== false) {
@@ -532,8 +533,8 @@ export const groupsRouter = createTRPCRouter({
       await ctx.db.$transaction(async (tx) => {
         // Waits for balance changes in flight and holds off new ones, so the
         // checks below see every change, and a change that starts meanwhile
-        // finds this person gone (#279). A transfer of ownership takes the same
-        // lock, so the roles read below are current (#309).
+        // finds this person gone (#279). A transfer of ownership or a role change
+        // (setRole) takes the same lock, so the roles read below are current (#309, #342).
         await lockGroupMembers(tx, input.groupId);
         // A placeholder merge into this person takes no group lock, only a share lock on
         // their row (mergePlaceholderIntoUser). Wait for one in flight, so the balance and
@@ -562,7 +563,7 @@ export const groupsRouter = createTRPCRouter({
         if (targetMember.role === 'OWNER' && !isSelf) {
           throw new AppError('FORBIDDEN', 'cannotRemoveOwner');
         }
-        // Nobody else could manage or delete the group (#279)
+        // Nobody else could delete the group, hand it over or choose its admins (#279, #342)
         if (targetMember.role === 'OWNER') {
           throw new AppError('FORBIDDEN', 'ownerCannotLeave');
         }
@@ -573,7 +574,7 @@ export const groupsRouter = createTRPCRouter({
         });
 
         // Someone who leaves no longer sees the group, so a debt in it would drop
-        // out of their view. The owner removing a member isn't held up by one: they
+        // out of their view. The owner or an admin removing a member isn't held up by one: they
         // still see it, and the archive and delete checks name it.
         if (isSelf) {
           const balance = (await loadGroupBalances(tx, input.groupId)).find((b) => b.userId === ctx.user.id);
@@ -646,11 +647,12 @@ export const groupsRouter = createTRPCRouter({
           // brings the row back (#323). Removed, they lose access to the group. With nothing
           // here to show their name, the row goes.
           if (await isInGroupHistory(tx, input.userId, input.groupId)) {
-            // Defensive: the row lock above makes an admin deleting their account wait, and the
-            // read above already saw one that finished
+            // Defensive: the row lock above makes an instance admin deleting their account wait,
+            // and the read above already saw one that finished. A group admin's row goes back to
+            // MEMBER, so no removed row is anyone's admin (#342); rejoining makes them a member anyway.
             const { count } = await tx.groupMember.updateMany({
               where: { id: targetMember.id, removedAt: null },
-              data: { removedAt: new Date() },
+              data: { removedAt: new Date(), role: 'MEMBER' },
             });
             if (count === 0) {
               throw new AppError('NOT_FOUND', 'memberNotFound');
@@ -673,8 +675,7 @@ export const groupsRouter = createTRPCRouter({
     }),
 
   // Hands the group to another member, so its owner can leave it (#309). The old
-  // owner becomes a plain member: nothing assigns ADMIN, so the new owner would
-  // have no way to take it back.
+  // owner becomes a plain member; the new owner can make them an admin (setRole).
   transferOwnership: groupMemberProcedure
     .input(z.object({ groupId: z.string(), newOwnerId: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -749,6 +750,84 @@ export const groupsRouter = createTRPCRouter({
       return { success: true };
     }),
 
+  // The owner makes a member an admin, or an admin a member again (#342). An admin can do
+  // what the owner can, except delete the group, transfer it, or change roles. The checks read
+  // the caller's role when the request arrives (removeMember again under its lock), so a
+  // demotion holds from the admin's next request.
+  setRole: groupMemberProcedure
+    .input(z.object({ groupId: z.string(), userId: z.string(), role: z.enum(['ADMIN', 'MEMBER']) }))
+    .mutation(async ({ ctx, input }) => {
+      const notOwner = new AppError('FORBIDDEN', 'onlyOwnerSetsRoles');
+      if (ctx.membership.role !== 'OWNER') {
+        throw notOwner;
+      }
+
+      await ctx.db.$transaction(async (tx) => {
+        // A transfer of ownership and a removal take the same lock, so the roles read
+        // below are current: an owner who just handed the group over changes nobody's role,
+        // and nobody is made an admin of a group they just left. An instance admin deleting
+        // the owner's account takes no group lock, so a role change that passed the owner check
+        // just before that deletion commits still lands, as if made a moment earlier, unless the
+        // deletion has already handed the group to this member (the write below then waits for
+        // it and changes nothing).
+        await lockGroupMembers(tx, input.groupId);
+
+        const [owner, target] = await Promise.all([
+          tx.groupMember.findUnique({
+            where: { userId_groupId: { userId: ctx.user.id, groupId: input.groupId } },
+            select: { role: true, removedAt: true },
+          }),
+          tx.groupMember.findUnique({
+            where: { userId_groupId: { userId: input.userId, groupId: input.groupId } },
+            include: { user: { select: { isPlaceholder: true, suspendedAt: true } } },
+          }),
+        ]);
+        if (owner?.role !== 'OWNER' || owner.removedAt) {
+          throw notOwner;
+        }
+        if (!target || target.removedAt) {
+          throw new AppError('NOT_FOUND', 'memberNotFound');
+        }
+        // Ownership moves by transferOwnership (or admin.deleteUser handing it on), never here
+        if (target.role === 'OWNER') {
+          throw new AppError('BAD_REQUEST', 'ownerRoleFixed');
+        }
+        if (target.role === input.role) {
+          return;
+        }
+        // A placeholder can't sign in and a suspended account is refused every tRPC call, so
+        // neither could use the role. Taking it away is always allowed.
+        if (input.role === 'ADMIN' && target.user.isPlaceholder) {
+          throw new AppError('BAD_REQUEST', 'adminNeedsAccount');
+        }
+        if (input.role === 'ADMIN' && target.user.suspendedAt) {
+          throw new AppError('BAD_REQUEST', 'adminSuspended');
+        }
+
+        // An instance admin deleting an account takes no group lock (admin.deleteUser): after
+        // the read above it can mark the target's row removed (and MEMBER), or make the target
+        // the owner when the deleted account owned the group. Writing only while the row is
+        // current and still has the role read waits for that, then finds nothing to change.
+        const { count } = await tx.groupMember.updateMany({
+          where: { id: target.id, role: target.role, removedAt: null },
+          data: { role: input.role },
+        });
+        if (count === 0) {
+          throw new AppError('NOT_FOUND', 'memberNotFound');
+        }
+        await tx.activityLog.create({
+          data: {
+            groupId: input.groupId,
+            userId: ctx.user.id,
+            type: 'MEMBER_ROLE_CHANGED',
+            metadata: { targetUserId: input.userId, fromRole: target.role, toRole: input.role },
+          },
+        });
+      });
+
+      return { success: true };
+    }),
+
   addPlaceholder: groupMemberProcedure
     .input(
       z.object({
@@ -772,9 +851,9 @@ export const groupsRouter = createTRPCRouter({
         }
         // Adding a removed placeholder's name brings them back with their history,
         // rather than a second person by that name (#284). A merge that took them
-        // meanwhile leaves nobody to bring back, and the name is free. An account an admin
-        // deleted (a placeholder the owner added included) is suspended and stays removed:
-        // it's never brought back, and its name is taken (#323).
+        // meanwhile leaves nobody to bring back, and the name is free. An account an instance
+        // admin deleted (a placeholder the owner or a group admin added included) is suspended and
+        // stays removed: it's never brought back, and its name is taken (#323).
         if (holder?.user.isPlaceholder && !holder.user.suspendedAt) {
           const { count } = await tx.groupMember.updateMany({
             where: { userId: holder.userId, groupId: input.groupId, removedAt: { not: null } },

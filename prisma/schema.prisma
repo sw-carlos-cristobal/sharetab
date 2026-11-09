@@ -135,14 +135,14 @@ model GroupMember {
 
   joinedAt DateTime @default(now())
   // Set when someone who is in the group's expenses or payments leaves or is
-  // removed (#284, #323), and on each membership of an account an admin deletes,
+  // removed (#284, #323), and on each membership of an account an instance admin deletes,
   // except a group it owns that nobody else can take over (that row stays, as
   // OWNER): they're no longer a member, but their history stays theirs, so their
   // name still shows and a balance with them can be settled. Someone with an
-  // account joining again by invite clears it, and so does the owner adding a
-  // removed placeholder's name again; a deleted account's stays. Rows deleted
-  // before #323 (people with an account who left, and accounts an admin deleted)
-  // stay gone.
+  // account joining again by invite clears it, and so does the owner or a group
+  // admin adding a removed placeholder's name again; a deleted account's stays.
+  // A removed row's role is MEMBER (#342). Rows deleted before #323 (people with
+  // an account who left, and accounts an instance admin deleted) stay gone.
   removedAt DateTime?
 
   @@unique([userId, groupId])
@@ -368,6 +368,7 @@ enum ActivityType {
   GROUP_ARCHIVED
   GROUP_UNARCHIVED
   OWNERSHIP_TRANSFERRED
+  MEMBER_ROLE_CHANGED
 }
 
 // ─── ADMIN ─────────────────────────────────────────────────

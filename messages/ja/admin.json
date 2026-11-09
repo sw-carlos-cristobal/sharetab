@@ -176,6 +176,7 @@
     "typeGroupArchived": "グループをアーカイブ",
     "typeGroupUnarchived": "グループのアーカイブを解除",
     "typeOwnershipTransferred": "オーナー権限譲渡",
+    "typeMemberRoleChanged": "メンバーの役割変更",
     "typePlaceholderCreated": "プレースホルダー追加",
     "typeSettlementCreated": "精算",
     "typeSettlementDeleted": "精算を削除",

@@ -41,6 +41,7 @@
     "backToGroups": "Back to Groups",
     "invite": "Invite",
     "owner": "Owner",
+    "admin": "Admin",
     "pending": "Pending",
     "archivedMessage": "This group is archived. Expenses can't be added or changed, and payments can't be recorded, until it's unarchived.",
     "manage": "Manage",
@@ -113,7 +114,10 @@
     "leaveGroup": "Leave group",
     "transferDescription": "Hand this group to another member. You'll become a regular member, and can then leave it.",
     "transferNoCandidates": "Nobody else in this group has an account yet, so there's nobody to hand it to. Placeholder members can't own a group.",
-    "transferOwnership": "Transfer ownership"
+    "transferOwnership": "Transfer ownership",
+    "rolesDescription": "Admins can change the group's details, archive or unarchive it, manage placeholder members, remove members, edit or delete anyone's expenses, and record or delete payments for anyone. Only you can delete the group, hand it over, or choose its admins.",
+    "makeAdmin": "Make admin",
+    "removeAdmin": "Remove admin"
   },
   "settle": {
     "title": "Record a payment",
