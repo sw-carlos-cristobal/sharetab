@@ -1,17 +1,18 @@
 import { AppError, type ErrorKey } from './app-error';
 import type { Prisma } from '@/generated/prisma/client';
 import { computeBalances, type MemberBalance } from './balance-calculator';
+import { notDeleted } from './soft-delete';
 
 /**
  * The net balance of everyone in a group's expenses and settlements,
- * including people who have since left. The group page's balances and the
+ * including people who have since left, leaving out deleted expenses and payments (#327). The group page's balances and the
  * archive and delete checks (requireSettledUp) all read this, so they can't
  * disagree.
  */
 export async function loadGroupBalances(db: Prisma.TransactionClient, groupId: string): Promise<MemberBalance[]> {
   const [expenses, settlements] = await Promise.all([
     db.expense.findMany({
-      where: { groupId },
+      where: { groupId, ...notDeleted },
       select: {
         paidById: true,
         amount: true,
@@ -20,7 +21,7 @@ export async function loadGroupBalances(db: Prisma.TransactionClient, groupId: s
       },
     }),
     db.settlement.findMany({
-      where: { groupId },
+      where: { groupId, ...notDeleted },
       select: { fromId: true, toId: true, amount: true, baseCurrencyAmount: true },
     }),
   ]);
@@ -31,12 +32,12 @@ export async function loadGroupBalances(db: Prisma.TransactionClient, groupId: s
  * Refuse a group where anyone still owes or is owed money, with
  * PRECONDITION_FAILED and the error key that fits: archiving (#275) and
  * deleting (#390) both need everyone settled up first. An archived group
- * refuses the payments that would settle a balance, and a deleted one takes
+ * refuses the payments that would settle a balance, and a deleted group takes
  * the record of it away for good.
  *
  * Call it once the transaction holds a lock that waits for the writes taking
- * lockActiveGroup (expenses created, edited or deleted, payments recorded or
- * deleted, receipts.assignItemsAndCreateExpense) and holds off new ones
+ * lockActiveGroup (expenses created, edited, deleted or restored, payments
+ * recorded, deleted or restored, receipts.assignItemsAndCreateExpense) and holds off new ones
  * (groups.archive's update, lockGroupMembers), so what they change is final.
  * A placeholder merge (mergePlaceholderIntoUser) takes no group lock. It
  * moves a balance from one person to another and re-rounds the shares of
@@ -69,7 +70,7 @@ export async function requireSettledUp(
 
 /**
  * Lock a group's row for a transaction that changes its balances (an expense
- * or a payment added, edited or deleted), refusing an archived group with
+ * or a payment added, edited, deleted or restored), refusing an archived group with
  * the error `message` names. Call it first in the transaction (#289).
  *
  * groups.archive sets archivedAt before it reads the balances, and that

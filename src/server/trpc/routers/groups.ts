@@ -7,6 +7,7 @@ import { loadGroupBalances, lockGroupMembers, requireSettledUp } from '../../lib
 import { deleteGroupWithData } from '../../lib/group-delete';
 import { removeReceiptFiles } from '../../lib/receipt-cleanup';
 import { mergePlaceholderIntoUser } from '../../lib/placeholder-merge';
+import { notDeleted } from '../../lib/soft-delete';
 import { checkRateLimit } from '../../lib/rate-limit';
 import { normalizeGuestName } from '@/lib/guest-session';
 
@@ -65,7 +66,7 @@ export const groupsRouter = createTRPCRouter({
             },
           },
         },
-        _count: { select: { expenses: true } },
+        _count: { select: { expenses: { where: notDeleted } } },
       },
       orderBy: { updatedAt: 'desc' },
     });
@@ -88,7 +89,7 @@ export const groupsRouter = createTRPCRouter({
             },
           },
         },
-        _count: { select: { expenses: true } },
+        _count: { select: { expenses: { where: notDeleted } } },
       },
       orderBy: { archivedAt: 'desc' },
     });

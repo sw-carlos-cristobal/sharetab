@@ -168,6 +168,7 @@
     "typeExpenseCreated": "Utgift skapad",
     "typeExpenseUpdated": "Utgift uppdaterad",
     "typeExpenseDeleted": "Utgift borttagen",
+    "typeExpenseRestored": "Utgift återställd",
     "typeMemberJoined": "Medlem gick med",
     "typeMemberLeft": "Medlem lämnade",
     "typeGroupUpdated": "Grupp uppdaterad",
@@ -177,7 +178,8 @@
     "typeOwnershipTransferred": "Ägarskap överfört",
     "typePlaceholderCreated": "Platshållare tillagd",
     "typeSettlementCreated": "Avräkning",
-    "typeSettlementDeleted": "Avräkning borttagen"
+    "typeSettlementDeleted": "Avräkning borttagen",
+    "typeSettlementRestored": "Avräkning återställd"
   },
   "tools": {
     "title": "Adminverktyg",

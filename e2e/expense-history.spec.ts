@@ -165,7 +165,10 @@ test.describe('Expense history (#326)', () => {
 
     const first = await page();
     expect(first.ids).toEqual(ids.slice(0, 2));
-    // The cursor stands for ids[2], the first expense not shown yet: delete it.
+    // The cursor stands for ids[2], the first expense not shown yet: delete it. Since #327 a
+    // deleted expense keeps its row and the list filters it out, so this checks a cursor whose
+    // row is filtered out, not one whose row is gone; the re-date below still moves the row
+    // the cursor stands for away from where it was (#478).
     const deleted = await trpcMutation(history.owner, 'expenses.delete', {
       groupId: history.groupId,
       expenseId: ids[2],

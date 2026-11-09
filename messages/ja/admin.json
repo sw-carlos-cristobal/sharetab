@@ -168,6 +168,7 @@
     "typeExpenseCreated": "支出を作成",
     "typeExpenseUpdated": "支出を更新",
     "typeExpenseDeleted": "支出を削除",
+    "typeExpenseRestored": "支出を復元",
     "typeMemberJoined": "メンバー参加",
     "typeMemberLeft": "メンバー脱退",
     "typeGroupUpdated": "グループ更新",
@@ -177,7 +178,8 @@
     "typeOwnershipTransferred": "オーナー権限譲渡",
     "typePlaceholderCreated": "プレースホルダー追加",
     "typeSettlementCreated": "精算",
-    "typeSettlementDeleted": "精算を削除"
+    "typeSettlementDeleted": "精算を削除",
+    "typeSettlementRestored": "精算を復元"
   },
   "tools": {
     "title": "管理ツール",

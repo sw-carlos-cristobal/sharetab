@@ -168,6 +168,7 @@
     "typeExpenseCreated": "Gasto creado",
     "typeExpenseUpdated": "Gasto actualizado",
     "typeExpenseDeleted": "Gasto eliminado",
+    "typeExpenseRestored": "Gasto restaurado",
     "typeMemberJoined": "Miembro unido",
     "typeMemberLeft": "Miembro salió",
     "typeGroupUpdated": "Grupo actualizado",
@@ -177,7 +178,8 @@
     "typeOwnershipTransferred": "Propiedad transferida",
     "typePlaceholderCreated": "Marcador añadido",
     "typeSettlementCreated": "Liquidación",
-    "typeSettlementDeleted": "Liquidación eliminada"
+    "typeSettlementDeleted": "Liquidación eliminada",
+    "typeSettlementRestored": "Liquidación restaurada"
   },
   "tools": {
     "title": "Herramientas de administración",

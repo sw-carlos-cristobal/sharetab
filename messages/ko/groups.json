@@ -183,9 +183,21 @@
     "title": "결제",
     "deleteLabel": "{from}님이 {to}님에게 보낸 {amount} 결제 삭제",
     "deleteTitle": "이 결제를 삭제하시겠습니까?",
-    "deleteDescription": "{from}님이 {date}에 {to}님에게 {amount}을(를) 결제했습니다. 삭제하면 잔액이 기록되지 않았던 상태로 돌아갑니다.",
+    "deleteDescription": "{from}님이 {date}에 {to}님에게 {amount}을(를) 결제했습니다. 삭제하면 잔액이 기록되지 않았던 상태로 돌아갑니다. 나중에 그룹 페이지의 삭제된 비용과 결제에서 복원할 수 있습니다.",
     "deleting": "삭제 중...",
     "deleted": "결제가 삭제되었습니다",
+    "showMore": "더 보기"
+  },
+  "deleted": {
+    "title": "삭제된 비용과 결제",
+    "empty": "삭제된 항목이 없습니다.",
+    "expenses": "비용",
+    "payments": "결제",
+    "deletedBy": "{name}님이 {date}에 삭제함",
+    "deletedOn": "{date}에 삭제됨",
+    "restore": "복원",
+    "restorePaymentLabel": "{from}님이 {to}님에게 보낸 {amount} 결제 복원",
+    "paymentRestored": "결제가 복원되었습니다",
     "showMore": "더 보기"
   }
 }
