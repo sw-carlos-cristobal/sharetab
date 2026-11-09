@@ -427,11 +427,17 @@ describe('deleting and restoring an expense (#327)', () => {
     deletedAt: null as Date | null,
   };
   // What the row read under its lock says
-  let lockedRow: { paidById: string; amount: number; baseCurrencyAmount: number | null; deletedAt: Date | null };
+  let lockedRow: {
+    paidById: string;
+    addedById: string;
+    amount: number;
+    baseCurrencyAmount: number | null;
+    deletedAt: Date | null;
+  };
 
   beforeEach(() => {
     mockDb.group.findUnique.mockResolvedValue({ archivedAt: null, currency: 'USD' });
-    lockedRow = { paidById: 'u1', amount: 1000, baseCurrencyAmount: null, deletedAt: null };
+    lockedRow = { paidById: 'u1', addedById: 'u1', amount: 1000, baseCurrencyAmount: null, deletedAt: null };
     mockDb.$queryRaw.mockImplementation(async (strings: string[]) =>
       strings.join('?').includes('FROM "Expense"') ? [lockedRow] : [{ archivedAt: null }],
     );
@@ -634,7 +640,7 @@ describe('deleting and restoring an expense (#327)', () => {
       // to what u2 is owed
       describe('who paid it', () => {
         beforeEach(() => {
-          lockedRow = { paidById: 'u2', amount: 1000, baseCurrencyAmount: null, deletedAt };
+          lockedRow = { paidById: 'u2', addedById: 'u1', amount: 1000, baseCurrencyAmount: null, deletedAt };
           mockDb.expenseShare.findMany.mockResolvedValue([{ userId: 'u1', amount: 1000 }]);
         });
         // An expense still in the group: u1 paid for u2
@@ -662,7 +668,7 @@ describe('deleting and restoring an expense (#327)', () => {
 
       // u2 paid $10.00 split with u1: what they paid and what they owe make one change, +$5.00
       test('takes what someone both paid and owes as one change', async () => {
-        lockedRow = { paidById: 'u2', amount: 1000, baseCurrencyAmount: null, deletedAt };
+        lockedRow = { paidById: 'u2', addedById: 'u1', amount: 1000, baseCurrencyAmount: null, deletedAt };
         const u1Paid500ForU2 = {
           paidById: 'u1',
           amount: 500,
@@ -685,7 +691,7 @@ describe('deleting and restoring an expense (#327)', () => {
         ['restores one that settles', 550, true],
         ['refuses one that takes them a cent past zero', 549, false],
       ])('works out a converted expense in the group currency: %s', async (_, owed, ok) => {
-        lockedRow = { paidById: 'u1', amount: 1000, baseCurrencyAmount: 1100, deletedAt };
+        lockedRow = { paidById: 'u1', addedById: 'u1', amount: 1000, baseCurrencyAmount: 1100, deletedAt };
         mockDb.expense.findMany.mockResolvedValue([
           { paidById: 'u2', amount: 500, baseCurrencyAmount: owed, shares: [{ userId: 'u1', amount: 500 }] },
         ]);
@@ -762,6 +768,20 @@ describe('deleting and restoring an expense (#327)', () => {
         message: 'Only the expense creator, payer, or group owner/admin can restore this expense',
       });
       expect(mockDb.$transaction).not.toHaveBeenCalled();
+    });
+
+    // A placeholder merge moves who paid and who added it, deleted or not, so the
+    // permission is checked again on the row read under its lock
+    test('checks the permission again on who paid and added it under the row lock', async () => {
+      lockedRow = { ...lockedRow, paidById: 'u3', addedById: 'u3' };
+      const api = await caller();
+      await expect(api.restore({ groupId: 'g1', expenseId: 'e1' })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: 'Only the expense creator, payer, or group owner/admin can restore this expense',
+      });
+      expect(rawSql().at(-1)).toMatch(/SELECT "paidById", "addedById",/);
+      expect(mockDb.expense.update).not.toHaveBeenCalled();
+      expect(mockDb.activityLog.create).not.toHaveBeenCalled();
     });
 
     test("an owner may restore anyone's", async () => {

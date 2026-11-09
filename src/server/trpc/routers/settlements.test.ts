@@ -358,6 +358,20 @@ describe('restoring a payment', () => {
     expect(mockDb.$transaction).not.toHaveBeenCalled();
   });
 
+  // A placeholder merge moves who paid it, deleted or not, so the permission is checked
+  // again on the payer read under the row lock
+  test('checks the permission again on who paid it under the row lock', async () => {
+    asRole('MEMBER', 'bob');
+    lockedRow = { fromId: 'carol', toId: 'alice', deletedAt };
+    const api = await caller('bob');
+    await expect(api.restore({ groupId: 'g1', settlementId: 's1' })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      message: 'Only the payer or a group owner/admin can restore this payment',
+    });
+    expect(mockDb.settlement.update).not.toHaveBeenCalled();
+    expect(mockDb.activityLog.create).not.toHaveBeenCalled();
+  });
+
   test('refuses a payment that is not deleted', async () => {
     asRole('MEMBER', 'bob');
     mockDb.settlement.findUnique.mockResolvedValue(payment);

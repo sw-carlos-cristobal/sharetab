@@ -586,17 +586,27 @@ export const expensesRouter = createTRPCRouter({
       await ctx.db.$transaction(async (tx) => {
         await lockActiveGroup(tx, input.groupId, 'archivedRestoreExpense');
 
-        // Under the expense's row lock, so a restore or delete racing this one is seen
+        // Under the expense's row lock, so a restore or delete racing this one is seen. A
+        // placeholder merge can move who paid or added it, so the permission is checked again.
         const [stored] = await tx.$queryRaw<
-          { paidById: string; amount: number; baseCurrencyAmount: number | null; deletedAt: Date | null }[]
+          {
+            paidById: string;
+            addedById: string;
+            amount: number;
+            baseCurrencyAmount: number | null;
+            deletedAt: Date | null;
+          }[]
         >`
-          SELECT "paidById", "amount", "baseCurrencyAmount", "deletedAt" FROM "Expense"
+          SELECT "paidById", "addedById", "amount", "baseCurrencyAmount", "deletedAt" FROM "Expense"
           WHERE "id" = ${input.expenseId} FOR NO KEY UPDATE`;
         if (!stored) {
           throw new AppError('NOT_FOUND');
         }
         if (!stored.deletedAt) {
           throw new AppError('BAD_REQUEST', 'expenseNotDeleted');
+        }
+        if (!mayRemoveExpense(ctx.membership, ctx.user.id, stored)) {
+          throw new AppError('FORBIDDEN', 'onlyCreatorRestoresExpense');
         }
         const shares = await tx.expenseShare.findMany({
           where: { expenseId: input.expenseId },

@@ -270,7 +270,7 @@ export const settlementsRouter = createTRPCRouter({
         // Under the payment's row lock, so a restore or delete racing this one is seen. Its
         // amount can't change while it's deleted (nothing edits a payment); a merge can move it
         // from a placeholder to a current member, or delete it when it's between the two, so its
-        // people are read here.
+        // people are read here, and who may restore it is checked again.
         const [stored] = await tx.$queryRaw<{ fromId: string; toId: string; deletedAt: Date | null }[]>`
           SELECT "fromId", "toId", "deletedAt" FROM "Settlement" WHERE "id" = ${input.settlementId} FOR NO KEY UPDATE`;
         if (!stored) {
@@ -278,6 +278,9 @@ export const settlementsRouter = createTRPCRouter({
         }
         if (!stored.deletedAt) {
           throw new AppError('BAD_REQUEST', 'paymentNotDeleted');
+        }
+        if (!mayRemovePayment(ctx.membership, ctx.user.id, stored)) {
+          throw new AppError('FORBIDDEN', 'onlyPayerRestoresPayment');
         }
         // What recording it would check now; the balances leave it out while it's deleted
         await requireSettleableParties(
