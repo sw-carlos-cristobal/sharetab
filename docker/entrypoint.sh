@@ -92,7 +92,8 @@ case "$(echo "${SHARETAB_MAINTENANCE:-}" | sed 's/^[[:space:]]*//;s/[[:space:]]*
     ;;
 esac
 
-# Steps for maintenance mode, run with run_step so a stop is handled at once.
+# Waiting steps for maintenance mode and for bundled settings that don't match
+# (below), run with run_step so a stop is handled at once.
 # shellcheck disable=SC2317 # called through run_step
 wait_while_postgres_runs() {
   while su-exec postgres pg_ctl -D "$PGDATA" status >/dev/null 2>&1; do
@@ -238,6 +239,34 @@ if [ "$MAINTENANCE" = true ]; then
   fi
   run_step wait_for_stop
   exit 0
+fi
+
+# The bundled user and database are created only with the data folder, so
+# DB_USER and DB_NAME must still name them; DB_PASSWORD becomes the user's
+# password on every start, so changing it takes effect (#419). Passed in the
+# environment, not as arguments, which any process here could read.
+# shellcheck disable=SC2317 # called through run_step
+bundled_credentials() {
+  DB_USER="$DB_USER" DB_PASSWORD="$DB_PASSWORD" DB_NAME="$DB_NAME" PGDATA="$PGDATA" \
+    su-exec postgres node /app/db.mjs bundled-credentials
+}
+if [ "$DB_MODE" = bundled ]; then
+  credentials_status=0
+  run_step bundled_credentials || credentials_status=$?
+  # 3 is SETTINGS_MISMATCH in docker/db.mjs
+  if [ "$credentials_status" -eq 3 ]; then
+    # Exiting would have Docker restart the container into the same error
+    # (restart: unless-stopped), so stop the server and wait for a stop.
+    stop_postgres
+    echo "ERROR: ShareTab is not started. This container waits rather than exit, so Docker doesn't"
+    echo "ERROR: restart it again and again: do what the ERROR lines above say, then recreate the"
+    echo "ERROR: container (Unraid: edit it and click Apply; Compose: docker compose up -d). A restart"
+    echo "ERROR: keeps the old settings."
+    run_step wait_for_stop
+    exit 0
+  elif [ "$credentials_status" -ne 0 ]; then
+    exit "$credentials_status"
+  fi
 fi
 
 # Both modes. For an external server, waits for it to come up; for the bundled

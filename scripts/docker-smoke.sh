@@ -9,7 +9,8 @@
 # build (Meridian and what it loads at runtime). Then it runs the image
 # against PostgreSQL in its own container (DATABASE_URL set, the bundled
 # server off), over TLS with a self-signed certificate. Backups are restored
-# the README's way, in maintenance mode (SHARETAB_MAINTENANCE).
+# the README's way, in maintenance mode (SHARETAB_MAINTENANCE), and a bundled
+# install is started again with a changed DB_PASSWORD, DB_USER and DB_NAME.
 #
 # CI runs it on every pull request and before publishing an image. Run it
 # before pushing a Docker, entrypoint, or dependency change:
@@ -98,6 +99,9 @@ MAINT="$CONTAINER-maint"
 FRESH="$CONTAINER-fresh"
 # The overlay's ShareTab in maintenance mode, for its restore
 OVERLAY_MAINT="$CONTAINER-overlay-maint"
+# A bundled install started again with other DB_PASSWORD, DB_USER and DB_NAME
+CREDS="$CONTAINER-creds"
+CREDS_PGDATA="$CONTAINER-creds-pgdata"
 # Temporary files and folders made on this machine, removed on exit
 TEMP_PATHS=()
 # The overlay's Compose project
@@ -154,7 +158,7 @@ cleanup() {
     docker logs --tail 200 "$CONTAINER" 2>&1 || true
   fi
   if [[ "$FAILED" == true ]]; then
-    for c in "$EXT_APP" "$EXT_ONESHOT" "$EXT_PG" "$BOOT" "$OVERLAY_APP" "$OVERLAY_MAINT" "$MAINT" "$FRESH"; do
+    for c in "$EXT_APP" "$EXT_ONESHOT" "$EXT_PG" "$BOOT" "$OVERLAY_APP" "$OVERLAY_MAINT" "$MAINT" "$FRESH" "$CREDS"; do
       if docker inspect "$c" >/dev/null 2>&1; then
         printf '\n== %s logs (last 200 lines)\n' "$c"
         docker logs --tail 200 "$c" 2>&1 || true
@@ -164,7 +168,7 @@ cleanup() {
   # --keep keeps only the main container
   # $FRESH before $MAINT, whose volumes it uses
   docker rm -f "$FRESH" >/dev/null 2>&1 || true
-  docker rm -f -v "$EXT_APP" "$EXT_ONESHOT" "$EXT_PG" "$BOOT" "$OVERLAY_APP" "$OVERLAY_MAINT" "$MAINT" >/dev/null 2>&1 || true
+  docker rm -f -v "$EXT_APP" "$EXT_ONESHOT" "$EXT_PG" "$BOOT" "$OVERLAY_APP" "$OVERLAY_MAINT" "$MAINT" "$CREDS" >/dev/null 2>&1 || true
   if ((${#TEMP_PATHS[@]})); then
     rm -rf "${TEMP_PATHS[@]}"
   fi
@@ -179,7 +183,7 @@ cleanup() {
   docker ps -aq --filter "$compose_label" | xargs -r docker rm -f -v >/dev/null 2>&1 || true
   docker volume ls -q --filter "$compose_label" | xargs -r docker volume rm >/dev/null 2>&1 || true
   docker network ls -q --filter "$compose_label" | xargs -r docker network rm >/dev/null 2>&1 || true
-  docker volume rm "$EXT_PGDATA" "$EXT_PGDATA_NEW" "$EXT_PGDATA_OLD" >/dev/null 2>&1 || true
+  docker volume rm "$EXT_PGDATA" "$EXT_PGDATA_NEW" "$EXT_PGDATA_OLD" "$CREDS_PGDATA" >/dev/null 2>&1 || true
   docker network rm "$EXT_NET" >/dev/null 2>&1 || true
   if [[ -n "$TLS_DIR" ]]; then
     rm -rf "$TLS_DIR"
@@ -603,6 +607,79 @@ fi
 grep -qF 'database system was shut down at' <<<"$restart_log" ||
   fail "No clean-shutdown record from PostgreSQL after a failed step."
 docker rm -f -v "$BOOT" >/dev/null
+
+section "A changed DB_PASSWORD takes effect; a changed DB_USER or DB_NAME waits with a message"
+# The bundled user and database are created with the data folder (#419). Each
+# start has Docker restart the container when it exits, as Compose and the
+# Unraid template do, so an exit would show as a restart.
+# Usage: creds_run [docker run options...]
+creds_run() {
+  # -v: the image's other VOLUMEs (uploads, claude, chatgpt) are anonymous here
+  docker rm -f -v "$CREDS" >/dev/null 2>&1 || true
+  docker run -d --name "$CREDS" --label sharetab-smoke --restart=unless-stopped \
+    --mount "type=volume,src=$CREDS_PGDATA,dst=/var/lib/postgresql/data" \
+    -e NEXTAUTH_SECRET="$secret" -e AUTH_SECRET="$secret" "$@" "$IMAGE" >/dev/null
+}
+# Whether <password> signs in as sharetab over TCP, as the app does.
+# Usage: signs_in <password>
+signs_in() {
+  docker exec -e PGPASSWORD="$1" "$CREDS" psql -h 127.0.0.1 -U sharetab -d sharetab -tAc 'SELECT 1' >/dev/null 2>&1
+}
+# Quotes, a backslash, a space and URL characters: SQL and URL quoting both.
+# pw_mark, letters and digits, survives both, so grepping for it finds the
+# password in a log raw, percent-encoded or as an SQL literal.
+pw_mark="Zq7pwmark"
+new_pw="$pw_mark n3w'\"\\%@/#x"
+# Fails if the container's log shows DB_PASSWORD in any of those forms, or if
+# PostgreSQL isn't logging statements (so the check could pass on a leak).
+# Usage: no_password_in_log <label>
+no_password_in_log() {
+  local log
+  log=$(docker logs "$CREDS" 2>&1)
+  grep -qF 'statement: ' <<<"$log" || fail "PostgreSQL isn't logging statements ($1), so the password check can't fail."
+  if grep -qF -- "$pw_mark" <<<"$log"; then
+    fail "The container log shows DB_PASSWORD ($1)."
+  fi
+}
+docker volume create --label sharetab-smoke "$CREDS_PGDATA" >/dev/null
+creds_run
+wait_healthy "first start, default DB settings" "$CREDS"
+# Log every statement's text from the next start on (kept in the volume), so
+# an ALTER ROLE that reaches the log fails no_password_in_log
+docker exec "$CREDS" su-exec postgres psql -h /run/postgresql -v ON_ERROR_STOP=1 -tAc \
+  "ALTER SYSTEM SET log_statement = 'all'" >/dev/null
+docker stop "$CREDS" >/dev/null
+creds_run -e DB_PASSWORD="$new_pw"
+wait_healthy "a changed DB_PASSWORD" "$CREDS"
+signs_in "$new_pw" || fail "The new DB_PASSWORD doesn't sign in."
+if signs_in sharetab; then
+  fail "The old DB_PASSWORD still signs in."
+fi
+no_password_in_log "a changed DB_PASSWORD"
+docker stop "$CREDS" >/dev/null
+creds_run -e DB_PASSWORD="$new_pw" -e DB_USER=bob -e DB_NAME=books
+wait_for_log "$CREDS" "This container waits rather than exit" 90
+creds_log=$(docker logs "$CREDS" 2>&1)
+grep -qF 'ERROR: DB_NAME is "books", but the bundled database has no database by that name. It has: "sharetab".' <<<"$creds_log" ||
+  fail "A changed DB_NAME isn't named, with the database there is."
+grep -qF 'ERROR: DB_USER is "bob", but the bundled database has no user by that name' <<<"$creds_log" ||
+  fail "A changed DB_USER isn't named."
+grep -qF 'Stopping PostgreSQL' <<<"$creds_log" || fail "The bundled server was left running while waiting."
+if grep -qE 'Database is ready|Running database migrations|Starting ShareTab\.\.\.' <<<"$creds_log"; then
+  fail "A changed DB_USER or DB_NAME went on past the check."
+fi
+# Long enough for an exit to have been restarted (Docker's first delay is 100 ms)
+sleep 10
+[[ "$(docker inspect -f '{{.State.Running}} {{.RestartCount}}' "$CREDS")" == "true 0" ]] ||
+  fail "A changed DB_USER or DB_NAME made the container exit or restart."
+docker stop "$CREDS" >/dev/null
+[[ "$(docker inspect -f '{{.State.ExitCode}}' "$CREDS")" == 0 ]] || fail "docker stop while waiting didn't exit cleanly."
+# Setting them back works, on the data as it was
+creds_run -e DB_PASSWORD="$new_pw"
+wait_healthy "DB_USER and DB_NAME set back" "$CREDS"
+no_password_in_log "DB_USER and DB_NAME set back"
+docker rm -f -v "$CREDS" >/dev/null
+docker volume rm "$CREDS_PGDATA" >/dev/null
 
 # ── Backups ────────────────────────────────────────────────────
 
