@@ -540,3 +540,118 @@ test('settlements.list with deleted lists only the deleted payments, for the Del
   await api.list({ groupId: 'g1', deleted: true });
   expect(mockDb.settlement.findMany.mock.calls[0]![0].where).toEqual({ groupId: 'g1', deletedAt: { not: null } });
 });
+
+// #335
+describe('a payment in a currency with no decimals', () => {
+  beforeEach(() => {
+    mockDb.group.findUnique.mockResolvedValue({ archivedAt: null, currency: 'JPY' });
+    mockDb.groupMember.count.mockResolvedValue(2);
+    mockDb.settlement.create.mockResolvedValue({ id: 's2' });
+    asRole('MEMBER', 'bob');
+  });
+
+  // Alice paid ¥1,000 shared three ways; before #335 the shares could keep hundredths
+  const aliceSplitYen = (bobOwes: number) => {
+    mockDb.expense.findMany.mockResolvedValue([
+      {
+        paidById: 'alice',
+        amount: 100000,
+        baseCurrencyAmount: null,
+        shares: [
+          { userId: 'alice', amount: 100000 - 2 * bobOwes },
+          { userId: 'bob', amount: bobOwes },
+          { userId: 'charlie', amount: bobOwes },
+        ],
+      },
+    ]);
+    mockDb.settlement.findMany.mockResolvedValue([]);
+  };
+
+  test('refuses ¥333.33 when that pays off nobody, recording nothing', async () => {
+    aliceSplitYen(33400);
+    const api = await caller('bob');
+    await expect(api.create({ groupId: 'g1', toId: 'alice', amount: 33333, currency: 'JPY' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'Amounts in JPY must be whole units, with no decimals.',
+    });
+    expect(mockDb.settlement.create).not.toHaveBeenCalled();
+  });
+
+  test('records ¥333.33 that pays off exactly what Bob owes from amounts saved before #335', async () => {
+    aliceSplitYen(33333);
+    const api = await caller('bob');
+    await api.create({ groupId: 'g1', toId: 'alice', amount: 33333, currency: 'JPY' });
+    expect(mockDb.settlement.create.mock.calls[0]![0].data).toMatchObject({ amount: 33333 });
+    // Read under the group lock
+    const [locked] = mockDb.$queryRaw.mock.invocationCallOrder;
+    expect(mockDb.expense.findMany.mock.invocationCallOrder[0]).toBeGreaterThan(locked!);
+  });
+
+  describe('with two debtors and two creditors', () => {
+    // c1 is owed 1,000.50 and c2 499.50; d1 owes 1,000 and d2 500. The group page lists
+    // d1 -> c1 1,000, d2 -> c1 0.50 (the rest of what c1 is owed) and d2 -> c2 499.50
+    beforeEach(() => {
+      mockDb.expense.findMany.mockResolvedValue([
+        {
+          paidById: 'c1',
+          amount: 100050,
+          baseCurrencyAmount: null,
+          shares: [
+            { userId: 'd1', amount: 100000 },
+            { userId: 'd2', amount: 50 },
+          ],
+        },
+        { paidById: 'c2', amount: 49950, baseCurrencyAmount: null, shares: [{ userId: 'd2', amount: 49950 }] },
+      ]);
+      mockDb.settlement.findMany.mockResolvedValue([]);
+    });
+
+    test('records a listed debt that is neither side’s whole balance', async () => {
+      asRole('MEMBER', 'd2');
+      const api = await caller('d2');
+      await api.create({ groupId: 'g1', toId: 'c1', amount: 50, currency: 'JPY' });
+      expect(mockDb.settlement.create.mock.calls[0]![0].data).toMatchObject({ fromId: 'd2', toId: 'c1', amount: 50 });
+    });
+
+    test('refuses an amount with hundredths that is no listed debt', async () => {
+      asRole('MEMBER', 'd2');
+      const api = await caller('d2');
+      await expect(api.create({ groupId: 'g1', toId: 'c1', amount: 51, currency: 'JPY' })).rejects.toMatchObject({
+        message: 'Amounts in JPY must be whole units, with no decimals.',
+      });
+      expect(mockDb.settlement.create).not.toHaveBeenCalled();
+    });
+
+    test('records all the payee is owed, though the payer owes more and no such debt is listed', async () => {
+      asRole('MEMBER', 'd1');
+      const api = await caller('d1');
+      await api.create({ groupId: 'g1', toId: 'c2', amount: 49950, currency: 'JPY' });
+      expect(mockDb.settlement.create.mock.calls[0]![0].data).toMatchObject({
+        fromId: 'd1',
+        toId: 'c2',
+        amount: 49950,
+      });
+    });
+  });
+
+  test('refuses yen with hundredths in a group that keeps its balances in another currency', async () => {
+    mockDb.group.findUnique.mockResolvedValue({ archivedAt: null, currency: 'USD' });
+    const api = await caller('bob');
+    await expect(
+      api.create({ groupId: 'g1', toId: 'alice', amount: 33333, currency: 'JPY', exchangeRate: 0.0067 }),
+    ).rejects.toMatchObject({ message: 'Amounts in JPY must be whole units, with no decimals.' });
+    expect(mockDb.$transaction).not.toHaveBeenCalled();
+  });
+
+  test('records ¥333', async () => {
+    const api = await caller('bob');
+    await api.create({ groupId: 'g1', toId: 'alice', amount: 33300, currency: 'JPY' });
+    expect(mockDb.settlement.create.mock.calls[0]![0].data).toMatchObject({ amount: 33300, baseCurrencyAmount: null });
+  });
+
+  test('a payment in dollars into a yen group lands on a whole yen', async () => {
+    const api = await caller('bob');
+    await api.create({ groupId: 'g1', toId: 'alice', amount: 1000, currency: 'USD', exchangeRate: 150.3271 });
+    expect(mockDb.settlement.create.mock.calls[0]![0].data).toMatchObject({ amount: 1000, baseCurrencyAmount: 150300 });
+  });
+});

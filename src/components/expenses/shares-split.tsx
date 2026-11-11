@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { formatCents } from '@/lib/money';
+import { currencyStep, formatCents } from '@/lib/money';
 import { sharesSplitShares } from '@/lib/expense-split';
 import { Input } from '@/components/ui/input';
 
@@ -29,16 +29,19 @@ export function SharesSplit({
   );
 
   const unitsOf = (id: string) => parseInt(shareUnits[id] ?? '0') || 0;
-  // Each row shows the amount that's saved, leftover cents included (#331)
+  // Each row shows the amount that's saved, leftover cents included (#331), in whole units in a
+  // currency with no decimals (#335)
+  const step = currencyStep(currency);
   const shares: ShareEntry[] = sharesSplitShares(
     totalCents,
     members.map((m) => ({ userId: m.id, units: unitsOf(m.id) })),
+    step,
   );
 
   useEffect(() => {
     onChange(shares);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shareUnits, totalCents]);
+  }, [shareUnits, totalCents, step]);
 
   function setUnits(id: string, value: string) {
     setShareUnits((prev) => ({ ...prev, [id]: value }));

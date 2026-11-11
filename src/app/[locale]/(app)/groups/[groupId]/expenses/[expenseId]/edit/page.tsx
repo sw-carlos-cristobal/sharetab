@@ -6,7 +6,7 @@ import { Link, useRouter } from '@/i18n/navigation';
 import type { inferRouterOutputs } from '@trpc/server';
 import type { AppRouter } from '@/server/trpc/router';
 import { trpc } from '@/lib/trpc';
-import { parseToCents, centsToDecimal, formatCents } from '@/lib/money';
+import { amountInputStep, centsToDecimal, convertAmount, currencyStep, formatCents, parseToCents } from '@/lib/money';
 import { COMMON_CURRENCIES } from '@/lib/currencies';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -99,7 +99,7 @@ function EditExpenseForm({
   const initiallyDifferentCurrency = expense.currency.toUpperCase() !== group.currency.toUpperCase();
 
   const [title, setTitle] = useState(expense.title);
-  const [amountStr, setAmountStr] = useState(() => centsToDecimal(expense.amount));
+  const [amountStr, setAmountStr] = useState(() => centsToDecimal(expense.amount, expense.currency));
   const [category, setCategory] = useState(expense.category ?? '');
   // Someone removed from the group keeps the part they had in this
   // expense, the payment or a share, so editing it doesn't move that part onto
@@ -203,7 +203,10 @@ function EditExpenseForm({
     initialAmounts,
     initialPercentages,
     initialShareUnits,
-  } = useMemo(() => splitEditorSeed(expense.splitMode, savedShares), [expense.splitMode, savedShares]);
+  } = useMemo(
+    () => splitEditorSeed(expense.splitMode, savedShares, expense.currency),
+    [expense.splitMode, savedShares, expense.currency],
+  );
   const [splitMode, setSplitMode] = useState<SplitMode>(initialSplitMode);
 
   const updateExpense = trpc.expenses.update.useMutation({
@@ -219,9 +222,13 @@ function EditExpenseForm({
   const members = shareChoices.map(toMemberInfo);
   const payers = payerChoices.map(toMemberInfo);
 
-  const amountCents = parseToCents(amountStr);
   const groupCurrency = group.currency;
   const effectiveCurrency = currency || groupCurrency;
+  // An amount with decimals in a currency that has none (¥1000.50) reads as 0, so it can't be
+  // submitted, and the field says why (#335)
+  const wholeUnits = currencyStep(effectiveCurrency) === 100;
+  const amountCents = parseToCents(amountStr, effectiveCurrency);
+  const amountHasDecimals = wholeUnits && parseToCents(amountStr) % 100 !== 0;
   const isDifferentCurrency = effectiveCurrency.toUpperCase() !== groupCurrency.toUpperCase();
   const parsedManualRate = parseFloat(manualRate);
   const manualRateValid = useManualRate && !isNaN(parsedManualRate) && parsedManualRate > 0;
@@ -295,13 +302,18 @@ function EditExpenseForm({
                 <Input
                   id="amount"
                   type="number"
-                  step="0.01"
-                  min="0.01"
-                  placeholder={t('new.amountPlaceholder')}
+                  step={amountInputStep(effectiveCurrency)}
+                  min={amountInputStep(effectiveCurrency)}
+                  placeholder={wholeUnits ? '0' : t('new.amountPlaceholder')}
                   value={amountStr}
                   onChange={(e) => setAmountStr(e.target.value)}
                   required
                 />
+                {amountHasDecimals && (
+                  <p className="text-sm text-destructive" data-testid="amount-whole-units">
+                    {t('new.wholeUnitsOnly', { currency: effectiveCurrency })}
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="currency">{t('new.currency')}</Label>
@@ -359,7 +371,11 @@ function EditExpenseForm({
                     {manualRateValid && amountCents > 0 && (
                       <p className="mt-1 text-xs text-blue-700 dark:text-blue-300">
                         {t('new.convertedAmount', {
-                          amount: formatCents(Math.round(amountCents * parsedManualRate), groupCurrency, locale),
+                          amount: formatCents(
+                            convertAmount(amountCents, parsedManualRate, groupCurrency),
+                            groupCurrency,
+                            locale,
+                          ),
                         })}
                       </p>
                     )}

@@ -4,7 +4,7 @@ import { use, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Link, useRouter } from '@/i18n/navigation';
 import { trpc } from '@/lib/trpc';
-import { parseToCents, formatCents } from '@/lib/money';
+import { amountInputStep, convertAmount, currencyStep, formatCents, parseToCents } from '@/lib/money';
 import { COMMON_CURRENCIES } from '@/lib/currencies';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -92,7 +92,11 @@ export default function NewExpensePage({ params }: { params: Promise<{ groupId: 
   const defaultPaidById = currentUserId && members.some((m) => m.id === currentUserId) ? currentUserId : '';
   const effectivePaidById = paidById || defaultPaidById;
 
-  const amountCents = parseToCents(amountStr);
+  // An amount with decimals in a currency that has none (¥1000.50) reads as 0, so it can't be
+  // submitted, and the field says why (#335)
+  const wholeUnits = currencyStep(effectiveCurrency) === 100;
+  const amountCents = parseToCents(amountStr, effectiveCurrency);
+  const amountHasDecimals = wholeUnits && parseToCents(amountStr) % 100 !== 0;
   const parsedManualRate = parseFloat(manualRate);
   const manualRateValid = useManualRate && !isNaN(parsedManualRate) && parsedManualRate > 0;
 
@@ -154,13 +158,18 @@ export default function NewExpensePage({ params }: { params: Promise<{ groupId: 
                 <Input
                   id="amount"
                   type="number"
-                  step="0.01"
-                  min="0.01"
-                  placeholder={t('new.amountPlaceholder')}
+                  step={amountInputStep(effectiveCurrency)}
+                  min={amountInputStep(effectiveCurrency)}
+                  placeholder={wholeUnits ? '0' : t('new.amountPlaceholder')}
                   value={amountStr}
                   onChange={(e) => setAmountStr(e.target.value)}
                   required
                 />
+                {amountHasDecimals && (
+                  <p className="text-sm text-destructive" data-testid="amount-whole-units">
+                    {t('new.wholeUnitsOnly', { currency: effectiveCurrency })}
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="currency">{t('new.currency')}</Label>
@@ -214,7 +223,11 @@ export default function NewExpensePage({ params }: { params: Promise<{ groupId: 
                     {manualRateValid && amountCents > 0 && (
                       <p className="mt-1 text-xs text-blue-700 dark:text-blue-300">
                         {t('new.convertedAmount', {
-                          amount: formatCents(Math.round(amountCents * parsedManualRate), groupCurrency, locale),
+                          amount: formatCents(
+                            convertAmount(amountCents, parsedManualRate, groupCurrency),
+                            groupCurrency,
+                            locale,
+                          ),
                         })}
                       </p>
                     )}

@@ -36,7 +36,9 @@ export type Settlement = {
 
 /**
  * Simplify a set of member balances into the minimum number of debts.
- * Uses a greedy algorithm: match largest creditor with largest debtor.
+ * Uses a greedy algorithm: match largest creditor with largest debtor. Equal balances go in user
+ * id order, so the list follows from the balances alone: `settlements.create` matches a payment
+ * with hundredths against it (#335).
  */
 export function simplifyDebts(balances: MemberBalance[]): SimplifiedDebt[] {
   const creditors: { userId: string; amount: number }[] = [];
@@ -47,8 +49,8 @@ export function simplifyDebts(balances: MemberBalance[]): SimplifiedDebt[] {
     if (b.net < 0) debtors.push({ userId: b.userId, amount: -b.net });
   }
 
-  creditors.sort((a, b) => b.amount - a.amount);
-  debtors.sort((a, b) => b.amount - a.amount);
+  creditors.sort((a, b) => b.amount - a.amount || a.userId.localeCompare(b.userId));
+  debtors.sort((a, b) => b.amount - a.amount || a.userId.localeCompare(b.userId));
 
   const result: SimplifiedDebt[] = [];
   let ci = 0;
@@ -80,9 +82,11 @@ export function simplifyDebts(balances: MemberBalance[]): SimplifiedDebt[] {
 
 /**
  * Compute member balances from a set of expenses and settlements.
- * Returns per-member paid, owes, and net amounts.
+ * Returns per-member paid, owes, and net amounts. `step` is the group currency's `currencyStep`:
+ * a converted expense whose group-currency amount is whole is shared in whole units of a currency
+ * with no decimals (#335).
  */
-export function computeBalances(expenses: Expense[], settlements: Settlement[]): MemberBalance[] {
+export function computeBalances(expenses: Expense[], settlements: Settlement[], step = 1): MemberBalance[] {
   const balanceMap = new Map<string, MemberBalance>();
 
   const getOrCreate = (userId: string): MemberBalance => {
@@ -99,14 +103,19 @@ export function computeBalances(expenses: Expense[], settlements: Settlement[]):
     const effectiveAmount = expense.baseCurrencyAmount ?? expense.amount;
     payer.paid += effectiveAmount;
 
-    // If currency was converted, scale each share proportionally: each within a cent of its exact
-    // scaled value, a zero share staying zero (#331). Sorting by user id keeps who gets a tied cent
-    // the same however the shares were loaded.
-    if (expense.baseCurrencyAmount != null && expense.baseCurrencyAmount !== expense.amount) {
+    // If currency was converted, scale each share proportionally: each within a cent (a whole
+    // unit, at a step of 100) of its exact scaled value, a zero share staying zero (#331). Sorting
+    // by user id keeps who gets a tied cent the same however the shares were loaded. Whole units
+    // only for an amount that is whole: one converted before #335 whose amount has hundredths
+    // keeps the shares it had; one whose amount is whole is shared again in whole units (#335). At a
+    // step of 100 that includes a converted amount equal to the original (a rate of 1), whose shares
+    // may not be whole units
+    if (expense.baseCurrencyAmount != null && (step !== 1 || expense.baseCurrencyAmount !== expense.amount)) {
       const sortedShares = [...expense.shares].sort((a, b) => a.userId.localeCompare(b.userId));
       const scaled = allocateProportionally(
         effectiveAmount,
         sortedShares.map((share) => share.amount),
+        effectiveAmount % step === 0 ? step : 1,
       );
       for (const [i, share] of sortedShares.entries()) {
         const member = getOrCreate(share.userId);

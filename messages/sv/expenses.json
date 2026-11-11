@@ -5,6 +5,7 @@
     "descriptionPlaceholder": "t.ex. Middag, Matvaror, Uber",
     "amount": "Belopp",
     "amountPlaceholder": "0.00",
+    "wholeUnitsOnly": "{currency} har inga decimaler: ange ett heltal.",
     "paidBy": "Betalad av",
     "date": "Datum",
     "splitType": "Uppdelningsläge",

@@ -4,35 +4,41 @@ import { getExchangeRate, convertCents, clearRateCache } from './exchange-rates'
 describe('convertCents', () => {
   test('converts cents with exchange rate', () => {
     // 1000 cents USD * 0.92 EUR/USD = 920 cents EUR
-    expect(convertCents(1000, 0.92)).toBe(920);
+    expect(convertCents(1000, 0.92, 'EUR')).toBe(920);
   });
 
   test('rounds to nearest cent', () => {
     // 1000 cents * 1.234 = 1234.0 (no rounding needed)
-    expect(convertCents(1000, 1.234)).toBe(1234);
+    expect(convertCents(1000, 1.234, 'USD')).toBe(1234);
     // 999 cents * 1.234 = 1232.766 → 1233
-    expect(convertCents(999, 1.234)).toBe(1233);
+    expect(convertCents(999, 1.234, 'USD')).toBe(1233);
   });
 
   test('handles rate of 1.0 (same currency)', () => {
-    expect(convertCents(5000, 1.0)).toBe(5000);
+    expect(convertCents(5000, 1.0, 'USD')).toBe(5000);
   });
 
   test('handles very small amounts', () => {
-    expect(convertCents(1, 0.5)).toBe(1); // Math.round(0.5) = 1 in JS
+    expect(convertCents(1, 0.5, 'USD')).toBe(1); // Math.round(0.5) = 1 in JS
   });
 
   test('handles zero', () => {
-    expect(convertCents(0, 1.5)).toBe(0);
+    expect(convertCents(0, 1.5, 'USD')).toBe(0);
   });
 
   test('rejects amounts that overflow the Int4 money column', () => {
     // 10,000,000 cents * 1,000,000 rate = 10^13, beyond int4 max (2147483647)
-    expect(() => convertCents(10_000_000, 1_000_000)).toThrow('Converted amount is too large');
+    expect(() => convertCents(10_000_000, 1_000_000, 'USD')).toThrow('Converted amount is too large');
   });
 
   test('accepts amounts at the Int4 boundary', () => {
-    expect(convertCents(2_147_483_647, 1.0)).toBe(2_147_483_647);
+    expect(convertCents(2_147_483_647, 1.0, 'USD')).toBe(2_147_483_647);
+  });
+
+  // #335
+  test('rounds to a whole unit of a currency with no decimals', () => {
+    // $10.00 at 150.3271 yen to the dollar is ¥1,503.271
+    expect(convertCents(1000, 150.3271, 'JPY')).toBe(150300);
   });
 });
 

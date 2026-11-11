@@ -92,6 +92,7 @@
   "sharesSumMismatch": "Shares sum ({sum}) does not equal expense amount ({amount})",
   "exchangeRateUnavailable": "Could not fetch exchange rate. Please provide a manual rate or try again.",
   "convertedAmountTooLarge": "Converted amount is too large. Check the exchange rate.",
+  "amountNotWholeUnits": "Amounts in {currency} must be whole units, with no decimals.",
   "settleWithYourself": "Cannot settle a debt with yourself",
   "paymentsFromYourselfOnly": "You can only record payments from yourself",
   "settlementPartiesNotMembers": "Both the payer and recipient must be members of this group",

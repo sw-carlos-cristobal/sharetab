@@ -11,8 +11,10 @@ export function calculateSplitTotals(params: {
   tip: number;
   peopleCount: number;
   personWeights?: number[]; // weight for each person index (default all 1)
+  /** The bill currency's `currencyStep`: 100 shares a whole price in whole units (#335) */
+  step?: number;
 }): { personIndex: number; itemTotal: number; tax: number; tip: number; total: number }[] {
-  const { items, assignments, tax, tip, personWeights } = params;
+  const { items, assignments, tax, tip, personWeights, step } = params;
 
   // Calculate per-person item subtotals
   const personSubtotals = new Map<number, number>();
@@ -21,7 +23,7 @@ export function calculateSplitTotals(params: {
     const item = items[assignment.itemIndex];
     if (!item || assignment.personIndices.length === 0) continue;
 
-    const amounts = splitItemPrice(item.totalPrice, assignment.personIndices, personWeights);
+    const amounts = splitItemPrice(item.totalPrice, assignment.personIndices, personWeights, step);
     for (const [i, personIdx] of assignment.personIndices.entries()) {
       personSubtotals.set(personIdx, (personSubtotals.get(personIdx) ?? 0) + amounts[i]!);
     }
@@ -30,16 +32,16 @@ export function calculateSplitTotals(params: {
   const entries = Array.from(personSubtotals.entries());
   if (entries.length === 0) return [];
 
-  // Tax and tip follow each person's items (#331: within a cent of their exact share, so nobody's
-  // goes below zero and free items pay none). Someone whose items come to nothing or less (the
+  // Tax and tip follow each person's items (#331: within a cent of their exact share, a whole unit
+  // at a step of 100, so nobody's goes below zero and free items pay none). Someone whose items come to nothing or less (the
   // guest API takes a negative price) counts as free. When everyone does, they can't follow the
   // items, so they're shared by head, a group counting for as many people as it stands for.
   const subtotals = entries.map(([, itemTotal]) => Math.max(0, itemTotal));
   const weights = subtotals.some((s) => s > 0)
     ? subtotals
     : entries.map(([personIdx]) => personWeights?.[personIdx] ?? 1);
-  const taxes = allocateProportionally(tax, weights);
-  const tips = allocateProportionally(tip, weights);
+  const taxes = allocateProportionally(tax, weights, step);
+  const tips = allocateProportionally(tip, weights, step);
 
   return entries.map(([personIndex, itemTotal], i) => {
     const personTax = taxes[i]!;
@@ -82,6 +84,8 @@ export function calculateReceiptSplitTotals(params: {
   assignments: ReceiptAssignment[];
   tax: number;
   tip: number;
+  /** The receipt currency's `currencyStep` (#335) */
+  step?: number;
 }): { userId: string; itemTotal: number; tax: number; tip: number; total: number }[] {
   const itemIndices = new Map(params.items.map((item, i) => [item.id, i]));
   const userIds: string[] = [];
@@ -105,6 +109,7 @@ export function calculateReceiptSplitTotals(params: {
     tax: params.tax,
     tip: params.tip,
     peopleCount: userIds.length,
+    ...(params.step !== undefined ? { step: params.step } : {}),
   });
   return totals.map(({ personIndex, ...rest }) => ({ userId: userIds[personIndex]!, ...rest }));
 }
@@ -129,12 +134,18 @@ export function receiptAssignmentList(
  * How one item's price is divided among the people on it, in cents, in `personIndices` order.
  * `calculateSplitTotals` adds these up into each person's item total.
  */
-function splitItemPrice(totalPrice: number, personIndices: number[], personWeights?: number[]): number[] {
+function splitItemPrice(
+  totalPrice: number,
+  personIndices: number[],
+  personWeights?: number[],
+  step?: number,
+): number[] {
   // By group size when weighted, else equally; leftover cents go to the largest remainders, the
   // first people on the item on a tie (#331), so equal weights split it as no weights do
   return allocateProportionally(
     totalPrice,
     personIndices.map((personIdx) => personWeights?.[personIdx] ?? 1),
+    step,
   );
 }
 
@@ -152,15 +163,15 @@ function itemWeight(personIndices: number[], personWeights: number[]): number {
  */
 export function personItemShares(
   personIndex: number,
-  params: Pick<Parameters<typeof calculateSplitTotals>[0], 'items' | 'assignments' | 'personWeights'>,
+  params: Pick<Parameters<typeof calculateSplitTotals>[0], 'items' | 'assignments' | 'personWeights' | 'step'>,
 ): { itemIndex: number; amount: number; share: { numerator: number; denominator: number } }[] {
-  const { items, assignments, personWeights } = params;
+  const { items, assignments, personWeights, step } = params;
   const shares: ReturnType<typeof personItemShares> = [];
   for (const { itemIndex, personIndices } of assignments) {
     const item = items[itemIndex];
     if (!item || !personIndices.includes(personIndex)) continue;
 
-    const amounts = splitItemPrice(item.totalPrice, personIndices, personWeights);
+    const amounts = splitItemPrice(item.totalPrice, personIndices, personWeights, step);
     let amount = 0;
     let numerator = 0;
     for (const [i, personIdx] of personIndices.entries()) {
@@ -216,8 +227,8 @@ export function calculateClaimTotals(params: Parameters<typeof calculateSplitTot
   const subtotals = [...people.map((p) => p.itemTotal), billSubtotal - claimedSubtotal];
   // As in calculateSplitTotals, someone whose items come to nothing or less takes no tax or tip
   const weights = freeBill ? [...people.map(() => 0), 1] : subtotals.map((s) => Math.max(0, s));
-  const taxes = allocateProportionally(params.tax, weights);
-  const tips = allocateProportionally(params.tip, weights);
+  const taxes = allocateProportionally(params.tax, weights, params.step);
+  const tips = allocateProportionally(params.tip, weights, params.step);
   const withShares = (itemTotal: number, i: number) => ({
     itemTotal,
     tax: taxes[i]!,

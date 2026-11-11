@@ -3,8 +3,9 @@ import { AppError } from '@/server/lib/app-error';
 import { createTRPCRouter, groupMemberProcedure } from '../init';
 import type { Prisma } from '@/generated/prisma/client';
 import { getExchangeRate, convertCents } from '../../lib/exchange-rates';
-import { MAX_MONEY_CENTS } from '@/lib/money';
+import { MAX_MONEY_CENTS, currencyStep } from '@/lib/money';
 import { loadGroupBalances, lockActiveGroup } from '../../lib/group-balances';
+import { simplifyDebts } from '../../lib/balance-calculator';
 import { notDeleted, onlyDeleted } from '../../lib/soft-delete';
 
 /**
@@ -127,8 +128,17 @@ export const settlementsRouter = createTRPCRouter({
         throw new AppError('FORBIDDEN', 'paymentsFromYourselfOnly');
       }
 
-      // Currency conversion: compute base currency amount if currencies differ
+      // Amounts in a currency with no decimals are whole units (#335), except a payment in the
+      // group's currency that pays off exactly a debt with hundredths (left by amounts saved before
+      // #335, or a receipt expense's shares): one the group page lists (`simplifyDebts`), all the
+      // payer owes, or all the payee is owed, checked against the balances under the group lock below
       const groupCurrency = group?.currency ?? 'USD';
+      const wholeUnits = input.amount % currencyStep(input.currency) === 0;
+      if (!wholeUnits && input.currency !== groupCurrency.toUpperCase()) {
+        throw new AppError('BAD_REQUEST', 'amountNotWholeUnits', { currency: input.currency });
+      }
+
+      // Currency conversion: compute base currency amount if currencies differ
       let exchangeRate: number | null = null;
       let baseCurrencyAmount: number | null = null;
 
@@ -143,11 +153,21 @@ export const settlementsRouter = createTRPCRouter({
           throw new AppError('BAD_REQUEST', 'exchangeRateUnavailable');
         }
 
-        baseCurrencyAmount = convertCents(input.amount, exchangeRate);
+        baseCurrencyAmount = convertCents(input.amount, exchangeRate, groupCurrency);
       }
 
       const settlement = await ctx.db.$transaction(async (tx) => {
         await lockActiveGroup(tx, input.groupId, 'archivedCreateSettlement');
+        if (!wholeUnits) {
+          const balances = await loadGroupBalances(tx, input.groupId);
+          const net = (userId: string) => balances.find((b) => b.userId === userId)?.net ?? 0;
+          const listedDebt = simplifyDebts(balances).some(
+            (d) => d.from === effectiveFromId && d.to === input.toId && d.amount === input.amount,
+          );
+          if (!listedDebt && input.amount !== -net(effectiveFromId) && input.amount !== net(input.toId)) {
+            throw new AppError('BAD_REQUEST', 'amountNotWholeUnits', { currency: input.currency });
+          }
+        }
         // Balances are in the group's currency
         await requireSettleableParties(
           tx,

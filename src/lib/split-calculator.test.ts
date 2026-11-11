@@ -908,3 +908,52 @@ describe('billTotals', () => {
     expect(billTotals([], 100, 50)).toEqual({ subtotal: 0, total: 150 });
   });
 });
+
+// #335: a bill in a currency with no decimals (step 100) is shared in whole units
+describe('in whole units', () => {
+  const yenItem = { items: [{ totalPrice: 100000 }], assignments: [{ itemIndex: 0, personIndices: [0, 1, 2] }] };
+
+  test('calculateSplitTotals: a ¥1,000 item three ways with ¥100 tax', () => {
+    const totals = calculateSplitTotals({ ...yenItem, tax: 10000, tip: 0, peopleCount: 3, step: 100 });
+    expect(totals.map((t) => [t.itemTotal, t.tax, t.total])).toEqual([
+      [33400, 3400, 36800],
+      [33300, 3300, 36600],
+      [33300, 3300, 36600],
+    ]);
+  });
+
+  test('calculateReceiptSplitTotals passes the step on', () => {
+    const totals = calculateReceiptSplitTotals({
+      items: [{ id: 'i1', totalPrice: 100000 }],
+      assignments: [{ receiptItemId: 'i1', userIds: ['a', 'b', 'c'] }],
+      tax: 10000,
+      tip: 5000,
+      step: 100,
+    });
+    expect(totals.map((t) => [t.userId, t.total])).toEqual([
+      ['a', 38500],
+      ['b', 38300],
+      ['c', 38200],
+    ]);
+  });
+
+  test('personItemShares: the same part of the item calculateSplitTotals counts', () => {
+    expect(personItemShares(1, { ...yenItem, step: 100 })).toEqual([
+      { itemIndex: 0, amount: 33300, share: { numerator: 1, denominator: 3 } },
+    ]);
+    expect(personItemShares(0, { ...yenItem, step: 100 })[0]!.amount).toBe(33400);
+  });
+
+  test("calculateClaimTotals: tax on what's still unclaimed in whole units too", () => {
+    const { people, unclaimed } = calculateClaimTotals({
+      items: [{ totalPrice: 100000 }, { totalPrice: 50000 }],
+      assignments: [{ itemIndex: 0, personIndices: [0] }],
+      tax: 10000,
+      tip: 0,
+      peopleCount: 1,
+      step: 100,
+    });
+    expect(people.map((p) => p.tax)).toEqual([6700]);
+    expect(unclaimed?.tax).toBe(3300);
+  });
+});

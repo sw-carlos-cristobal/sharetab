@@ -92,6 +92,7 @@
   "sharesSumMismatch": "負担額の合計（{sum}）が支出の金額（{amount}）と一致しません",
   "exchangeRateUnavailable": "為替レートを取得できませんでした。レートを手動で入力するか、もう一度お試しください。",
   "convertedAmountTooLarge": "換算額が大きすぎます。為替レートを確認してください。",
+  "amountNotWholeUnits": "{currency} の金額は小数点なしの整数にしてください。",
   "settleWithYourself": "自分自身との精算はできません",
   "paymentsFromYourselfOnly": "記録できるのは、あなたからの支払いのみです",
   "settlementPartiesNotMembers": "支払い元と支払い先は、どちらもこのグループのメンバーである必要があります",

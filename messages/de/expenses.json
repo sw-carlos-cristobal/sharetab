@@ -5,6 +5,7 @@
     "descriptionPlaceholder": "z.B. Abendessen, Einkäufe, Uber",
     "amount": "Betrag",
     "amountPlaceholder": "0,00",
+    "wholeUnitsOnly": "{currency} hat keine Nachkommastellen: Geben Sie einen ganzen Betrag ein.",
     "paidBy": "Bezahlt von",
     "date": "Datum",
     "splitType": "Aufteilungsmodus",

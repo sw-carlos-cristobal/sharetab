@@ -5,6 +5,7 @@
     "descriptionPlaceholder": "ex. Jantar, Compras, Uber",
     "amount": "Valor",
     "amountPlaceholder": "0,00",
+    "wholeUnitsOnly": "{currency} não tem casas decimais: insira um valor inteiro.",
     "paidBy": "Pago por",
     "date": "Data",
     "splitType": "Modo de divisão",

@@ -3,7 +3,15 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { trpc } from '@/lib/trpc';
-import { formatCents, centsToDecimal, parseToCents } from '@/lib/money';
+import {
+  amountInputStep,
+  formatCents,
+  centsToDecimal,
+  convertAmount,
+  currencyStep,
+  editedAmount,
+  parseToCents,
+} from '@/lib/money';
 import { calculateReceiptSplitTotals, receiptAssignmentList } from '@/lib/split-calculator';
 import { COMMON_CURRENCIES } from '@/lib/currencies';
 import { Button } from '@/components/ui/button';
@@ -187,7 +195,7 @@ export function ItemAssignment({
 
     setTitle(saved.title ?? saved.extractedData?.merchantName ?? '');
     if (saved.tipOverride !== null) {
-      setTipOverride(centsToDecimal(saved.tipOverride));
+      setTipOverride(centsToDecimal(saved.tipOverride, saved.extractedData?.currency));
     }
     if (saved.paidById) {
       setPaidById(saved.paidById);
@@ -206,9 +214,15 @@ export function ItemAssignment({
 
   const { receipt, items } = receiptData.data ?? { receipt: null, items: [] };
   const extracted = receipt?.extractedData ?? null;
+  // The currency the money fields are in and the split is calculated in: the receipt's, or the
+  // one being saved (#335)
+  const fieldCurrency = setCurrency.isPending ? setCurrency.variables.currency : extracted?.currency;
   const parsedTip = parseFloat(tipOverride);
-  // The tip typed over the scanned one, in cents; what Create Expense and Save for later send
-  const tipOverrideCents = tipOverride !== '' && isFinite(parsedTip) ? Math.round(parsedTip * 100) : null;
+  // The tip typed over the scanned one, in cents; what Create Expense and Save for later send. One
+  // with decimals in a currency that has none counts as not entered, as an exact share does (#335)
+  const typedTipCents = tipOverride !== '' && isFinite(parsedTip) ? Math.round(parsedTip * 100) : null;
+  const tipOverrideCents =
+    typedTipCents !== null && typedTipCents % currencyStep(fieldCurrency) === 0 ? typedTipCents : null;
   const tip = extracted && tipOverrideCents !== null ? tipOverrideCents : (extracted?.tip ?? 0);
   // Until someone picks a payer or a saved one loads, default to the current user (when
   // they're in the group), as Add Expense does (#271, #265)
@@ -247,7 +261,7 @@ export function ItemAssignment({
     setEditValues({
       name: item.name,
       quantity: String(item.quantity),
-      totalPrice: centsToDecimal(item.totalPrice),
+      totalPrice: centsToDecimal(item.totalPrice, fieldCurrency),
     });
   }
 
@@ -257,7 +271,12 @@ export function ItemAssignment({
       toast.error(t('validationNameRequired'));
       return;
     }
-    const totalPrice = parseToCents(editValues.totalPrice);
+    // A price left as it opened keeps its stored amount, hundredths and all (#335)
+    const stored = items.find((item) => item.id === itemId)?.totalPrice;
+    const totalPrice =
+      stored === undefined
+        ? parseToCents(editValues.totalPrice, fieldCurrency)
+        : editedAmount(editValues.totalPrice, stored, fieldCurrency);
     if (totalPrice <= 0) {
       toast.error(t('validationPricePositive'));
       return;
@@ -277,7 +296,7 @@ export function ItemAssignment({
   }
 
   function handleAddItem() {
-    const totalPrice = parseToCents(newItem.totalPrice);
+    const totalPrice = parseToCents(newItem.totalPrice, fieldCurrency);
     const quantity = parseInt(newItem.quantity) || 1;
     if (!newItem.name.trim() || totalPrice <= 0 || quantity < 1) return;
     addItem.mutate({
@@ -294,10 +313,12 @@ export function ItemAssignment({
   const assignmentList = useMemo(() => receiptAssignmentList(items, assignments), [items, assignments]);
   // The server calculates the expense with the same function and the same list, and saves it only
   // if each person's total is the one shown here (#364). Memoized to avoid recomputation on every
-  // render (Finding #36).
+  // render (Finding #36). In whole units of a currency with no decimals (#335), the currency
+  // being the one the server will read: Create Expense waits for a currency change to save
+  const step = currencyStep(fieldCurrency);
   const shownTotals = useMemo(
-    () => calculateReceiptSplitTotals({ items, assignments: assignmentList, tax: extracted?.tax ?? 0, tip }),
-    [items, assignmentList, extracted, tip],
+    () => calculateReceiptSplitTotals({ items, assignments: assignmentList, tax: extracted?.tax ?? 0, tip, step }),
+    [items, assignmentList, extracted, tip, step],
   );
   const perPersonTotals = useMemo(
     () => new Map(shownTotals.map((person) => [person.userId, person.total])),
@@ -625,7 +646,11 @@ export function ItemAssignment({
                   {manualRateValid && expenseTotal > 0 && (
                     <p className="mt-1 text-xs text-blue-700 dark:text-blue-300">
                       {tNew('convertedAmount', {
-                        amount: formatCents(Math.round(expenseTotal * parsedManualRate), groupCurrency, locale),
+                        amount: formatCents(
+                          convertAmount(expenseTotal, parsedManualRate, groupCurrency),
+                          groupCurrency,
+                          locale,
+                        ),
                       })}
                     </p>
                   )}
@@ -640,7 +665,7 @@ export function ItemAssignment({
             <Input
               id="tip"
               type="number"
-              step="0.01"
+              step={amountInputStep(currency)}
               min="0"
               placeholder={t('tipDetected', { amount: formatCents(safeExtracted.tip, currency, locale) })}
               value={tipOverride}
@@ -698,7 +723,7 @@ export function ItemAssignment({
                 />
                 <Input
                   type="number"
-                  step="0.01"
+                  step={amountInputStep(currency)}
                   placeholder={t('pricePlaceholder')}
                   value={newItem.totalPrice}
                   onChange={(e) => setNewItem((p) => ({ ...p, totalPrice: e.target.value }))}
@@ -751,7 +776,7 @@ export function ItemAssignment({
                       />
                       <Input
                         type="number"
-                        step="0.01"
+                        step={amountInputStep(currency)}
                         value={editValues.totalPrice}
                         onChange={(e) => setEditValues((p) => ({ ...p, totalPrice: e.target.value }))}
                         className="w-24"

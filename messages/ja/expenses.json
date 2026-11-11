@@ -5,6 +5,7 @@
     "descriptionPlaceholder": "例：夕食、食料品、Uber",
     "amount": "金額",
     "amountPlaceholder": "0.00",
+    "wholeUnitsOnly": "{currency} には小数点以下の単位がありません。整数で入力してください。",
     "paidBy": "支払った人",
     "date": "日付",
     "splitType": "割り勘モード",

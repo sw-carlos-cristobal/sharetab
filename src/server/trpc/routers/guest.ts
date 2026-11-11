@@ -24,6 +24,7 @@ import {
   validSaveRecords,
 } from '../../lib/json-schemas';
 import { billTotals, calculateSplitTotals, groupSizeWeights } from '@/lib/split-calculator';
+import { currencyStep } from '@/lib/money';
 import { normalizeGuestName } from '@/lib/guest-session';
 import { MAX_GROUP_SIZE, MIN_GROUP_SIZE } from '@/lib/group-size';
 import { DEFAULT_CURRENCY } from '@/lib/currencies';
@@ -499,6 +500,7 @@ export const guestRouter = createTRPCRouter({
         tax: input.receiptData.tax,
         tip,
         peopleCount: filteredPeople.length,
+        step: currencyStep(input.receiptData.currency),
       });
 
       const summaryWithNames = summary.map((s) => ({
@@ -1272,6 +1274,7 @@ export const guestRouter = createTRPCRouter({
           tip,
           peopleCount: people.length,
           ...groupSizeWeights(people),
+          step: currencyStep(receiptData.currency),
         });
 
         const summaryWithNames = summary.map((s) => ({

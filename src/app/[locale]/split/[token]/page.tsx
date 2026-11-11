@@ -4,7 +4,7 @@ import { use, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import { trpc } from '@/lib/trpc';
-import { formatCents } from '@/lib/money';
+import { currencyStep, formatCents } from '@/lib/money';
 import { copyToClipboard } from '@/lib/clipboard';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -172,6 +172,7 @@ export default function SharedSplitPage({ params }: { params: Promise<{ token: s
             items: data.items,
             assignments: data.assignments,
             ...weights,
+            step: currencyStep(currency),
           });
 
           return (

@@ -92,6 +92,7 @@
   "sharesSumMismatch": "分摊总额（{sum}）不等于支出金额（{amount}）",
   "exchangeRateUnavailable": "无法获取汇率。请手动输入汇率或重试。",
   "convertedAmountTooLarge": "换算后的金额过大。请检查汇率。",
+  "amountNotWholeUnits": "{currency} 金额必须为整数，不能有小数。",
   "settleWithYourself": "无法与自己结算债务",
   "paymentsFromYourselfOnly": "您只能记录自己付出的款项",
   "settlementPartiesNotMembers": "付款人和收款人都必须是此群组的成员",

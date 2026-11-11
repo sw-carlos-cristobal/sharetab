@@ -120,6 +120,24 @@ describe('simplifyDebts', () => {
     const totalTransferred = debts.reduce((sum, d) => sum + d.amount, 0);
     expect(totalTransferred).toBe(350); // total credits
   });
+
+  // #335: settlements.create matches a payment with hundredths against this list, so the page and
+  // the server must list the same debts for the same balances
+  test('lists the same debts whichever order equal balances arrive in', () => {
+    const balances: MemberBalance[] = [
+      { userId: 'c1', paid: 0, owes: 0, net: 100050 },
+      { userId: 'c2', paid: 0, owes: 0, net: 49950 },
+      { userId: 'd1', paid: 0, owes: 0, net: -75000 },
+      { userId: 'd2', paid: 0, owes: 0, net: -75000 },
+    ];
+    const listed = [
+      { from: 'd1', to: 'c1', amount: 75000 },
+      { from: 'd2', to: 'c1', amount: 25050 },
+      { from: 'd2', to: 'c2', amount: 49950 },
+    ];
+    expect(simplifyDebts(balances)).toEqual(listed);
+    expect(simplifyDebts([...balances].reverse())).toEqual(listed);
+  });
 });
 
 // ── computeBalances ────────────────────────────────────────
@@ -732,5 +750,71 @@ describe('computeBalances: converted shares and their leftover cents', () => {
       [],
     );
     expect(owes(tied)).toEqual({ alice: 501, bob: 500 });
+  });
+});
+
+// #335
+describe('computeBalances in a currency with no decimals', () => {
+  test('shares in whole units a converted expense whose amount comes out the same (a rate of 1)', () => {
+    const balances = computeBalances(
+      [
+        {
+          paidById: 'a',
+          amount: 1000,
+          baseCurrencyAmount: 1000,
+          shares: [
+            { userId: 'a', amount: 334 },
+            { userId: 'b', amount: 333 },
+            { userId: 'c', amount: 333 },
+          ],
+        },
+      ],
+      [],
+      100,
+    );
+    expect(Object.fromEntries(balances.map((b) => [b.userId, b.owes]))).toEqual({ a: 400, b: 300, c: 300 });
+  });
+
+  test("shares a converted expense in whole units of the group's currency", () => {
+    // $10.00 converted to ¥1,503: 502.002, 500.499 and 500.499 yen
+    const balances = computeBalances(
+      [
+        {
+          paidById: 'a',
+          amount: 1000,
+          baseCurrencyAmount: 150300,
+          shares: [
+            { userId: 'c', amount: 333 },
+            { userId: 'a', amount: 334 },
+            { userId: 'b', amount: 333 },
+          ],
+        },
+      ],
+      [],
+      100,
+    );
+    expect(Object.fromEntries(balances.map((b) => [b.userId, b.owes]))).toEqual({ a: 50200, b: 50100, c: 50000 });
+  });
+
+  test('keeps the shares of an expense converted before #335, whose amount has hundredths', () => {
+    // $10.00 converted to ¥1,503.27 before #335: shared in hundredths as it was, so a balance
+    // settled then stays settled
+    const balances = computeBalances(
+      [
+        {
+          paidById: 'a',
+          amount: 1000,
+          baseCurrencyAmount: 150327,
+          shares: [
+            { userId: 'a', amount: 334 },
+            { userId: 'b', amount: 333 },
+            { userId: 'c', amount: 333 },
+          ],
+        },
+      ],
+      [],
+      100,
+    );
+    expect(Object.fromEntries(balances.map((b) => [b.userId, b.owes]))).toEqual({ a: 50209, b: 50059, c: 50059 });
   });
 });
