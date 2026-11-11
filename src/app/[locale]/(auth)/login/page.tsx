@@ -16,6 +16,7 @@ import { KeyRound, Receipt, Mail } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
 import { normalizeCallbackPath, stripLocalePrefix } from '@/lib/locale-paths';
 import { getSignInErrorKey } from '@/lib/sign-in-errors';
+import { rateLimitedMinutes } from '@/lib/sign-in-rate-limit';
 import { SIGNED_OUT_PARAM } from '@/lib/session-ended';
 
 export default function LoginPage() {
@@ -126,7 +127,9 @@ function LoginForm() {
     setLoading(false);
 
     if (result?.error) {
-      setError(t('error'));
+      // A sign-in refused by a login limit says how long to wait, not that the password is wrong (#401)
+      const minutes = rateLimitedMinutes(result.code);
+      setError(minutes === null ? t('error') : t('rateLimited', { minutes }));
     } else {
       router.push(callbackHref);
       router.refresh();

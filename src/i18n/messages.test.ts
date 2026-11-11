@@ -60,6 +60,7 @@ const COUNT_MESSAGES: [namespace: string, key: string, values: (n: number) => Va
   ['groups', 'list.expenseCount', (n) => ({ count: n })],
   ['auth', 'invite.invitedBy', (n) => ({ inviter: 'Ana', group: 'Trip', count: n, name: tag, b: tag })],
   ['auth', 'invite.invited', (n) => ({ group: 'Trip', count: n, b: tag })],
+  ['auth', 'login.rateLimited', (n) => ({ minutes: n })],
 ];
 
 // Plural messages left out of COUNT_MESSAGES, and why

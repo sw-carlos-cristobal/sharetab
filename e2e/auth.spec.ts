@@ -130,6 +130,25 @@ test.describe('Authentication', () => {
       await expect(page.getByText('Invalid email or password')).toBeVisible({ timeout: 15000 });
     });
 
+    test('a sign-in refused by the login limit says how long to wait (#401)', async ({ page }) => {
+      await page.goto('/en/login');
+      // Auth.js's answer when the limit refuses: CI's limits are too high to reach for real
+      await page.route('**/api/auth/callback/credentials**', (route) =>
+        route.fulfill({
+          status: 200,
+          json: { url: new URL('/login?error=CredentialsSignin&code=rate_limited%3A5', page.url()).href },
+        }),
+      );
+      await page.getByLabel('Email').fill(users.alice.email);
+      await page.getByLabel('Password').fill(users.alice.password);
+      await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+      await expect(page.getByText('Too many sign-in attempts. Try again in 5 minutes.')).toBeVisible({
+        timeout: 15000,
+      });
+      await expect(page.getByText('Invalid email or password')).toHaveCount(0);
+      await expect(page).toHaveURL(/\/en\/login/);
+    });
+
     test('7.1.3 — navigate to register page', async ({ page }) => {
       await page.goto('/en/login');
       await page.getByRole('link', { name: 'Create one' }).click();

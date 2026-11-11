@@ -12,7 +12,7 @@ import { mailFrom, smtpOptions } from './lib/mailer';
 import { parseAuthConfig } from './lib/auth-config';
 import { GOOGLE_PROVIDER_ID, checkGoogleSignIn, googleProviderOptions } from './lib/google-sign-in';
 import { OIDC_PROVIDER_ID, checkOidcSignIn, mapOidcProfile } from './lib/oidc-sign-in';
-import { authorizePasswordLogin } from './lib/password-login';
+import { authorizeCredentials } from './lib/password-credentials';
 import { sessionCookieSubject } from './lib/session-cookie';
 import { markPasswordVersionUnread } from './lib/session-endpoint';
 import { readEmailVerified } from './lib/sign-in-identity';
@@ -43,7 +43,7 @@ if (authConfig.passwordLogin) {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
       },
-      authorize: (credentials, request) => authorizePasswordLogin(credentials, request.headers),
+      authorize: authorizeCredentials,
     }),
   );
 }

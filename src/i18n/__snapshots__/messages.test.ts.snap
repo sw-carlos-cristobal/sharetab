@@ -67,6 +67,11 @@ exports[`count messages > read as they should for none, one and two in de 1`] = 
     "Ana hat Sie eingeladen, der Gruppe Trip beizutreten (1 Mitglied)",
     "Ana hat Sie eingeladen, der Gruppe Trip beizutreten (2 Mitglieder)",
   ],
+  "auth.login.rateLimited": [
+    "Zu viele Anmeldeversuche. Versuchen Sie es in 0 Minuten erneut.",
+    "Zu viele Anmeldeversuche. Versuchen Sie es in 1 Minute erneut.",
+    "Zu viele Anmeldeversuche. Versuchen Sie es in 2 Minuten erneut.",
+  ],
   "dashboard.archivedGroups": [
     "0 archivierte Gruppen",
     "1 archivierte Gruppe",
@@ -186,6 +191,11 @@ exports[`count messages > read as they should for none, one and two in en 1`] = 
     "Ana invited you to join Trip (0 members)",
     "Ana invited you to join Trip (1 member)",
     "Ana invited you to join Trip (2 members)",
+  ],
+  "auth.login.rateLimited": [
+    "Too many sign-in attempts. Try again in 0 minutes.",
+    "Too many sign-in attempts. Try again in 1 minute.",
+    "Too many sign-in attempts. Try again in 2 minutes.",
   ],
   "dashboard.archivedGroups": [
     "0 archived groups",
@@ -307,6 +317,11 @@ exports[`count messages > read as they should for none, one and two in es 1`] = 
     "Ana te ha invitado a unirte a Trip (1 miembro)",
     "Ana te ha invitado a unirte a Trip (2 miembros)",
   ],
+  "auth.login.rateLimited": [
+    "Demasiados intentos de inicio de sesión. Inténtalo de nuevo en 0 minutos.",
+    "Demasiados intentos de inicio de sesión. Inténtalo de nuevo en 1 minuto.",
+    "Demasiados intentos de inicio de sesión. Inténtalo de nuevo en 2 minutos.",
+  ],
   "dashboard.archivedGroups": [
     "0 grupos archivados",
     "1 grupo archivado",
@@ -426,6 +441,11 @@ exports[`count messages > read as they should for none, one and two in fr 1`] = 
     "Ana vous a invité à rejoindre Trip (0 membre)",
     "Ana vous a invité à rejoindre Trip (1 membre)",
     "Ana vous a invité à rejoindre Trip (2 membres)",
+  ],
+  "auth.login.rateLimited": [
+    "Trop de tentatives de connexion. Réessayez dans 0 minute.",
+    "Trop de tentatives de connexion. Réessayez dans 1 minute.",
+    "Trop de tentatives de connexion. Réessayez dans 2 minutes.",
   ],
   "dashboard.archivedGroups": [
     "0 groupe archivé",
@@ -547,6 +567,11 @@ exports[`count messages > read as they should for none, one and two in pt-BR 1`]
     "Ana convidou você para participar de Trip (1 membro)",
     "Ana convidou você para participar de Trip (2 membros)",
   ],
+  "auth.login.rateLimited": [
+    "Muitas tentativas de login. Tente novamente em 0 minuto.",
+    "Muitas tentativas de login. Tente novamente em 1 minuto.",
+    "Muitas tentativas de login. Tente novamente em 2 minutos.",
+  ],
   "dashboard.archivedGroups": [
     "0 grupo arquivado",
     "1 grupo arquivado",
@@ -666,6 +691,11 @@ exports[`count messages > read as they should for none, one and two in sv 1`] = 
     "Ana har bjudit in dig att gå med i Trip (0 medlemmar)",
     "Ana har bjudit in dig att gå med i Trip (1 medlem)",
     "Ana har bjudit in dig att gå med i Trip (2 medlemmar)",
+  ],
+  "auth.login.rateLimited": [
+    "För många inloggningsförsök. Försök igen om 0 minuter.",
+    "För många inloggningsförsök. Försök igen om 1 minut.",
+    "För många inloggningsförsök. Försök igen om 2 minuter.",
   ],
   "dashboard.archivedGroups": [
     "0 arkiverade grupper",
