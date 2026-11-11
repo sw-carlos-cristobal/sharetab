@@ -87,6 +87,16 @@ export function centsToDecimal(cents: number, currency = 'USD'): string {
   return (cents / 100).toFixed(currencyDecimals(currency));
 }
 
+/**
+ * An edit field's amount: `stored` while the field still holds what it opened with
+ * (`centsToDecimal(stored, currency)`), else the field read with `parseToCents`. A stored amount
+ * with hundredths in a currency with no decimals (a receipt item price from discount folding or an
+ * item split) opens rounded, and an edit of something else keeps it as it was (#335).
+ */
+export function editedAmount(text: string, stored: number, currency?: string): number {
+  return text === centsToDecimal(stored, currency) ? stored : parseToCents(text, currency);
+}
+
 /** The `step`, and smallest `min`, of a number input for an amount in `currency`: "0.01", or "1" (#335) */
 export function amountInputStep(currency?: string): string {
   return centsToDecimal(currencyStep(currency), currency);

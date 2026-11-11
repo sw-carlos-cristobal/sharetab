@@ -6,7 +6,7 @@ import { TRPCClientError } from '@trpc/client';
 import { Link, useRouter } from '@/i18n/navigation';
 import { trpc } from '@/lib/trpc';
 import { localeHeaders } from '@/lib/locale-header';
-import { amountInputStep, currencyStep, formatCents, centsToDecimal, parseToCents } from '@/lib/money';
+import { amountInputStep, currencyStep, formatCents, centsToDecimal, editedAmount, parseToCents } from '@/lib/money';
 import { billTotals, calculateSplitTotals } from '@/lib/split-calculator';
 import { canStoreClaimIdentity, setStoredClaimIdentity } from '@/lib/guest-session';
 import { loadingMessageKeys, randomLoadingMessageIndex } from '@/lib/loading-messages';
@@ -280,7 +280,12 @@ export default function GuestSplitPage() {
       toast.error(t('assign.validationNameRequired'));
       return;
     }
-    const totalPrice = parseToCents(editValues.totalPrice, extracted?.currency);
+    // A price left as it opened keeps its stored amount, hundredths and all (#335)
+    const stored = items[editingItem]?.totalPrice;
+    const totalPrice =
+      stored === undefined
+        ? parseToCents(editValues.totalPrice, extracted?.currency)
+        : editedAmount(editValues.totalPrice, stored, extracted?.currency);
     if (totalPrice <= 0) {
       toast.error(t('assign.validationPricePositive'));
       return;

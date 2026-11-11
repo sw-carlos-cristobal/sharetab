@@ -3,7 +3,15 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { trpc } from '@/lib/trpc';
-import { amountInputStep, formatCents, centsToDecimal, convertAmount, currencyStep, parseToCents } from '@/lib/money';
+import {
+  amountInputStep,
+  formatCents,
+  centsToDecimal,
+  convertAmount,
+  currencyStep,
+  editedAmount,
+  parseToCents,
+} from '@/lib/money';
 import { calculateReceiptSplitTotals, receiptAssignmentList } from '@/lib/split-calculator';
 import { COMMON_CURRENCIES } from '@/lib/currencies';
 import { Button } from '@/components/ui/button';
@@ -263,7 +271,12 @@ export function ItemAssignment({
       toast.error(t('validationNameRequired'));
       return;
     }
-    const totalPrice = parseToCents(editValues.totalPrice, fieldCurrency);
+    // A price left as it opened keeps its stored amount, hundredths and all (#335)
+    const stored = items.find((item) => item.id === itemId)?.totalPrice;
+    const totalPrice =
+      stored === undefined
+        ? parseToCents(editValues.totalPrice, fieldCurrency)
+        : editedAmount(editValues.totalPrice, stored, fieldCurrency);
     if (totalPrice <= 0) {
       toast.error(t('validationPricePositive'));
       return;

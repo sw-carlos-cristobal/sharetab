@@ -182,7 +182,7 @@ function SettleForm({
           type="number"
           step={amountInputStep(fieldCurrency)}
           min={amountInputStep(fieldCurrency)}
-          placeholder={centsToDecimal(0, currency)}
+          placeholder={centsToDecimal(0, fieldCurrency)}
           value={amountStr}
           onChange={(e) => setAmountStr(e.target.value)}
           required

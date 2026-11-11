@@ -6,6 +6,7 @@ import {
   allocateProportionally,
   currencyStep,
   convertAmount,
+  editedAmount,
 } from './money';
 
 describe('formatCents', () => {
@@ -203,6 +204,21 @@ describe('centsToDecimal', () => {
     expect(centsToDecimal(33300, 'JPY')).toBe('333');
     expect(centsToDecimal(0, 'JPY')).toBe('0');
     expect(centsToDecimal(33300, 'USD')).toBe('333.00');
+  });
+});
+
+// #335 review: a receipt item price with hundredths in yen (from discount folding or an item
+// split) opened rounded, and renaming the item saved the rounded price
+describe('editedAmount', () => {
+  test('keeps the stored amount when the field still holds what it opened with', () => {
+    expect(editedAmount('167', 16667, 'JPY')).toBe(16667);
+    expect(editedAmount('12.99', 1299, 'USD')).toBe(1299);
+  });
+
+  test('reads a changed field as typed, in the currency’s units', () => {
+    expect(editedAmount('170', 16667, 'JPY')).toBe(17000);
+    expect(editedAmount('166.5', 16667, 'JPY')).toBe(0);
+    expect(editedAmount('13.50', 1299, 'USD')).toBe(1350);
   });
 });
 
