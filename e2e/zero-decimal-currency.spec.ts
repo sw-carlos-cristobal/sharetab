@@ -45,12 +45,16 @@ test.describe('A currency with no decimals (#335)', () => {
 
       // Bob's debt opens the payment dialog on it in whole yen, which settles it exactly
       const bobsDebt = page.getByRole('button', { name: /^Bob Smith.*Alice Johnson.*¥33[34]/ });
+      const owed = /¥(33[34])/.exec((await bobsDebt.textContent()) ?? '')?.[1];
+      expect(owed).toBeDefined();
       await bobsDebt.click();
       const dialog = page.getByRole('dialog');
-      await expect(dialog.getByLabel('Amount')).toHaveValue(/^33[34]$/);
+      await expect(dialog.getByLabel('Amount')).toHaveValue(owed!);
       await dialog.getByTestId('record-payment-btn').click();
       await expect(dialog).not.toBeVisible();
+      // Paid off exactly: no debt left either way
       await expect(page.getByRole('button', { name: /^Bob Smith.*Alice Johnson/ })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: /^Alice Johnson.*Bob Smith/ })).toHaveCount(0);
     } finally {
       await dispose();
     }

@@ -26,7 +26,9 @@ export type SplitEditorSeed = {
  * person whatever the others' rounding left, and the editors now divide the
  * amount with `allocateProportionally`, so saving such an expense can move
  * its leftover cents, wherever the old rounding put them elsewhere (never for
- * two people).
+ * two people). A second: an amount or share with hundredths in a currency with
+ * no decimals (saved before #335) opens rounded to whole units, so saving it
+ * doesn't keep the stored split (#335).
  * Only the opening mode is seeded; the other modes keep their new-expense
  * defaults. (percentage is stored in basis points: 5000 = 50%) Amounts are
  * written with `currency`'s decimals, none for one like JPY (#335).

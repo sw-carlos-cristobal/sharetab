@@ -405,8 +405,10 @@ export const expensesRouter = createTRPCRouter({
       // Recompute currency conversion if currency or amount changed
       const effectiveCurrency = inputCurrency ?? existing.currency;
       const effectiveAmount = data.amount ?? existing.amount;
-      // In the currency the expense will have. An edit that changes neither its amounts nor its
-      // currency leaves an amount saved before #335 as it is
+      // In the currency the expense will have. An edit that sends no amount, shares or currency
+      // doesn't check them, so one saved before #335 keeps them through an edit of its other fields
+      // (the edit page always sends the amount and shares, in whole units); a converted one's
+      // group-currency amount is still recomputed below, in whole units
       if (data.amount !== undefined || inputCurrency !== undefined || shares) {
         requireWholeUnits(effectiveCurrency, [effectiveAmount, ...(shares ?? []).map((s) => s.amount)]);
       }

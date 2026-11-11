@@ -20,8 +20,9 @@ const moneyLocales: Record<string, string> = {
  * (ICU 78.3, which Node 22 and Node 26 both ship). Kept here rather than asked of Intl at run
  * time, since browsers and servers ship other ICU versions, whose currency data can differ (#335
  * was filed listing six of ShareTab's currencies as having no decimals; ICU 78.3 also counts
- * COP), and the server refuses an amount in one of these that isn't whole: the page and the
- * server must agree on which they are. `money.test.ts` compares the list with the runtime's.
+ * COP), and the server refuses an expense or payment amount in one of these that isn't whole
+ * (except a payment that pays off a debt exactly): the page and the server must agree on which
+ * they are. `money.test.ts` compares the list with the runtime's.
  */
 const ZERO_DECIMAL_CODES =
   'AFN ALL BIF CLP COP DJF GNF HUF IDR IQD IRR ISK JPY KMF KPW KRW LAK LBP MGA MMK PKR PYG RWF SLL SOS SYP UGX VND VUV XAF XOF XPF YER';
@@ -30,8 +31,9 @@ const ZERO_DECIMAL_CURRENCIES = new Set(ZERO_DECIMAL_CODES.split(' '));
 /**
  * The smallest amount of `currency` in the hundredths every amount is stored in (#335): 100 for a
  * currency with no decimals (¥1 is 100), 1 for any other. Amounts in a currency with no decimals
- * are whole units: entered (`parseToCents`), checked by the server, split (`allocateProportionally`)
- * and converted into (`convertAmount`) in steps of this size.
+ * are entered (`parseToCents`), checked by the server for an expense, a receipt expense's total or
+ * a payment, split (`allocateProportionally`) and converted into (`convertAmount`) in steps of
+ * this size.
  */
 export function currencyStep(currency?: string | null): 1 | 100 {
   return currency && ZERO_DECIMAL_CURRENCIES.has(currency.toUpperCase()) ? 100 : 1;
@@ -109,9 +111,10 @@ export function convertAmount(amount: number, exchangeRate: number, currency: st
  * share several cents off everyone else's, or below zero.
  *
  * With a `step` (`currencyStep`: 100 for a currency with no decimals, #335) the shares are whole
- * steps, each within a step of its exact value, the leftover steps handed out the same way. Only
- * an amount that isn't itself whole steps (one saved before #335) has hundredths left below a
- * step: those are shared the same way on top, so the shares still add up to `amount`.
+ * steps, each within a step of its exact value, the leftover steps handed out the same way. An
+ * amount that isn't itself whole steps (one saved before #335, or a receipt item price the scan's
+ * discount folding or an item split left with hundredths) has hundredths left below a step: those
+ * are shared the same way on top, so the shares still add up to `amount`.
  *
  * `amount` and `weights` must be integers. The arithmetic is done in BigInt, since an amount times
  * a weight (an expense's share, when converting it) can pass 2^53, where a number can't hold the

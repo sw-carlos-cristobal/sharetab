@@ -2,7 +2,8 @@ import { allocateProportionally } from './money';
 
 /**
  * What the expense form's Equal, Shares and Percentage editors save (#331). They divide the amount
- * with `allocateProportionally`, so each share is within a cent of its exact value and the leftover
+ * with `allocateProportionally`, so each share is within a cent (a whole unit, at a step of 100) of
+ * its exact value and the leftover
  * cents go to the largest remainders, the first person on a tie, rather than all to the last.
  * `step` is the expense currency's `currencyStep`: 100 makes every share a whole unit (#335).
  */

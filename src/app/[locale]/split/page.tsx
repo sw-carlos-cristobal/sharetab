@@ -6,7 +6,7 @@ import { TRPCClientError } from '@trpc/client';
 import { Link, useRouter } from '@/i18n/navigation';
 import { trpc } from '@/lib/trpc';
 import { localeHeaders } from '@/lib/locale-header';
-import { currencyStep, formatCents, centsToDecimal, parseToCents } from '@/lib/money';
+import { amountInputStep, currencyStep, formatCents, centsToDecimal, parseToCents } from '@/lib/money';
 import { billTotals, calculateSplitTotals } from '@/lib/split-calculator';
 import { canStoreClaimIdentity, setStoredClaimIdentity } from '@/lib/guest-session';
 import { loadingMessageKeys, randomLoadingMessageIndex } from '@/lib/loading-messages';
@@ -269,7 +269,7 @@ export default function GuestSplitPage() {
     setEditValues({
       name: item.name,
       quantity: String(item.quantity),
-      totalPrice: centsToDecimal(item.totalPrice),
+      totalPrice: centsToDecimal(item.totalPrice, extracted?.currency),
     });
   }
 
@@ -280,7 +280,7 @@ export default function GuestSplitPage() {
       toast.error(t('assign.validationNameRequired'));
       return;
     }
-    const totalPrice = parseToCents(editValues.totalPrice);
+    const totalPrice = parseToCents(editValues.totalPrice, extracted?.currency);
     if (totalPrice <= 0) {
       toast.error(t('assign.validationPricePositive'));
       return;
@@ -319,7 +319,7 @@ export default function GuestSplitPage() {
 
   function handleAddItem(e: React.FormEvent) {
     e.preventDefault();
-    const totalPrice = parseToCents(newItem.totalPrice);
+    const totalPrice = parseToCents(newItem.totalPrice, extracted?.currency);
     const quantity = parseInt(newItem.quantity) || 1;
     if (!newItem.name || totalPrice <= 0) return;
     setItems((prev) => [
@@ -379,7 +379,11 @@ export default function GuestSplitPage() {
 
   // Calculate totals
   const parsedTip = parseFloat(tipOverride);
-  const tip = tipOverride !== '' && isFinite(parsedTip) ? Math.round(parsedTip * 100) : (extracted?.tip ?? 0);
+  // A tip with decimals in a currency that has none counts as not entered, as an exact share does (#335)
+  const typedTipCents = tipOverride !== '' && isFinite(parsedTip) ? Math.round(parsedTip * 100) : null;
+  const tipOverrideCents =
+    typedTipCents !== null && typedTipCents % currencyStep(extracted?.currency) === 0 ? typedTipCents : null;
+  const tip = tipOverrideCents ?? extracted?.tip ?? 0;
   const currency = extracted?.currency ?? 'USD';
   // The bill the split will show: the items as they are now, not the subtotal the scan read (#408)
   const bill = billTotals(items, extracted?.tax ?? 0, tip);
@@ -444,10 +448,7 @@ export default function GuestSplitPage() {
         people: validPeople.map((n) => ({ name: n })),
         assignments: assignmentList,
         paidByIndex: remappedPaidBy,
-        tipOverride:
-          tipOverride !== '' && isFinite(parseFloat(tipOverride))
-            ? Math.round(parseFloat(tipOverride) * 100)
-            : undefined,
+        tipOverride: tipOverrideCents ?? undefined,
       });
       router.push(`/split/${result.shareToken}`);
     } catch (err) {
@@ -822,7 +823,7 @@ export default function GuestSplitPage() {
             <Input
               id="guest-tip"
               type="number"
-              step="0.01"
+              step={amountInputStep(currency)}
               min="0"
               placeholder={t('assign.tipDetected', { amount: formatCents(extracted.tip, currency, locale) })}
               value={tipOverride}
@@ -866,7 +867,7 @@ export default function GuestSplitPage() {
                     />
                     <Input
                       type="number"
-                      step="0.01"
+                      step={amountInputStep(currency)}
                       placeholder={t('assign.pricePlaceholder')}
                       value={newItem.totalPrice}
                       onChange={(e) => setNewItem((p) => ({ ...p, totalPrice: e.target.value }))}
@@ -920,7 +921,7 @@ export default function GuestSplitPage() {
                           />
                           <Input
                             type="number"
-                            step="0.01"
+                            step={amountInputStep(currency)}
                             value={editValues.totalPrice}
                             onChange={(e) => setEditValues((p) => ({ ...p, totalPrice: e.target.value }))}
                             className="flex-1 h-12"

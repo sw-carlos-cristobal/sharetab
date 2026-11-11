@@ -8,8 +8,8 @@ import { notDeleted } from './soft-delete';
  * The net balance of everyone in a group's expenses and settlements,
  * including people who have since left, leaving out deleted expenses and payments (#327). The group page's balances and the
  * archive and delete checks (requireSettledUp) all read this, so they can't
- * disagree. Converted expenses are shared in steps of the group currency's
- * `currencyStep` (#335).
+ * disagree. A converted expense whose group-currency amount is whole is shared
+ * in steps of the group currency's `currencyStep` (#335).
  */
 export async function loadGroupBalances(db: Prisma.TransactionClient, groupId: string): Promise<MemberBalance[]> {
   const [group, expenses, settlements] = await Promise.all([
@@ -44,9 +44,10 @@ export async function loadGroupBalances(db: Prisma.TransactionClient, groupId: s
  * (groups.archive's update, lockGroupMembers), so what they change is final.
  * A placeholder merge (mergePlaceholderIntoUser) takes no group lock. It
  * moves a balance from one person to another and re-rounds the shares of
- * converted-currency expenses (a tied cent can land on someone else, since
- * computeBalances orders shares by user id), so one landing mid-read can make
- * this refuse a settled group or pass one that is a few cents out.
+ * converted-currency expenses (a tied cent, or a tied whole unit in a currency
+ * with no decimals, can land on someone else, since computeBalances orders
+ * shares by user id), so one landing mid-read can make this refuse a settled
+ * group or pass one that is a few cents, or units, out.
  * Throwing rolls back whatever the transaction did before.
  */
 export async function requireSettledUp(

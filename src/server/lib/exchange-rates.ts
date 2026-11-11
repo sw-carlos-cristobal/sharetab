@@ -104,7 +104,8 @@ export function convertCents(amountCents: number, exchangeRate: number, currency
 /**
  * Refuse amounts that aren't whole units of `currency` when it has no decimals: ¥1,000.50, or
  * ¥1,000 shared as ¥333.34, ¥333.33 and ¥333.33 (#335). Amounts are stored in hundredths of any
- * currency, so the server is what keeps one like JPY in whole yen.
+ * currency. Used by `expenses.create` and `update` and for a receipt expense's total;
+ * `settlements.create` checks payments itself, so one can pay off a balance with hundredths.
  */
 export function requireWholeUnits(currency: string, amounts: number[]): void {
   const step = currencyStep(currency);

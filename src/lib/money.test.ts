@@ -287,7 +287,7 @@ describe('allocateProportionally', () => {
       expect(allocateProportionally(100, [1, 1, 1], 100)).toEqual([100, 0, 0]);
     });
 
-    test('shares what is below a step, which only an amount saved before #335 has, in hundredths', () => {
+    test('shares what is below a step (an amount saved before #335, or a receipt item price) in hundredths', () => {
       expect(allocateProportionally(100050, [1, 1, 1], 100)).toEqual([33417, 33317, 33316]);
       expect(allocateProportionally(-100050, [1, 1, 1], 100)).toEqual([-33417, -33317, -33316]);
     });

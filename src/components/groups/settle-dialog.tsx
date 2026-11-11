@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { trpc } from '@/lib/trpc';
-import { amountInputStep, centsToDecimal, formatCents, parseToCents } from '@/lib/money';
+import { amountInputStep, centsToDecimal, currencyStep, formatCents, parseToCents } from '@/lib/money';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -86,8 +86,14 @@ function SettleForm({
   const t = useTranslations('groups');
   const [fromId, setFromId] = useState(payerId ?? suggestedFrom ?? '');
   const [toId, setToId] = useState(suggestedTo ?? '');
-  // In the currency's decimals: "333" for a ¥333 debt (#335)
-  const [amountStr, setAmountStr] = useState(suggestedAmount ? centsToDecimal(suggestedAmount, currency) : '');
+  // In the currency's decimals: "333" for a ¥333 debt (#335). A debt with hundredths in a
+  // currency that has none (left by amounts saved before #335, or a receipt expense's shares) is
+  // offered as it is, "333.33", since no whole amount could pay it off: the server takes a payment
+  // with hundredths only when it is a debt the group page lists, all the payer owes, or all the
+  // payee is owed, and refuses any other with a message shown below
+  const exactSuggestion = suggestedAmount !== undefined && suggestedAmount % currencyStep(currency) !== 0;
+  const fieldCurrency = exactSuggestion ? undefined : currency;
+  const [amountStr, setAmountStr] = useState(suggestedAmount ? centsToDecimal(suggestedAmount, fieldCurrency) : '');
   const [note, setNote] = useState('');
 
   const utils = trpc.useUtils();
@@ -110,7 +116,7 @@ function SettleForm({
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const amount = parseToCents(amountStr, currency);
+    const amount = parseToCents(amountStr, fieldCurrency);
     if (!toId || amount <= 0 || samePerson) return;
     settle.mutate({
       groupId,
@@ -174,8 +180,8 @@ function SettleForm({
         <Input
           id="settle-amount"
           type="number"
-          step={amountInputStep(currency)}
-          min={amountInputStep(currency)}
+          step={amountInputStep(fieldCurrency)}
+          min={amountInputStep(fieldCurrency)}
           placeholder={centsToDecimal(0, currency)}
           value={amountStr}
           onChange={(e) => setAmountStr(e.target.value)}
@@ -184,7 +190,7 @@ function SettleForm({
         {suggestedAmount && (
           <button
             type="button"
-            onClick={() => setAmountStr(centsToDecimal(suggestedAmount, currency))}
+            onClick={() => setAmountStr(centsToDecimal(suggestedAmount, fieldCurrency))}
             className="text-xs text-primary hover:underline"
           >
             {t('settle.useSuggested', { amount: formatCents(suggestedAmount, currency, locale) })}

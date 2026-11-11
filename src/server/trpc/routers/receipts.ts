@@ -8,7 +8,7 @@ import { logger } from '../../lib/logger';
 import { parseExtractedData, receiptCurrency } from '../../lib/json-schemas';
 import { DEFAULT_CURRENCY } from '@/lib/currencies';
 import { MAX_MONEY_CENTS, currencyStep } from '@/lib/money';
-import { getExchangeRate, convertCents, exchangeRateSchema } from '../../lib/exchange-rates';
+import { getExchangeRate, convertCents, exchangeRateSchema, requireWholeUnits } from '../../lib/exchange-rates';
 import { receiptExpenseDate } from '../../lib/normalize-date';
 import { stripUndefined } from '../../lib/strip-undefined';
 import { lockActiveGroup } from '../../lib/group-balances';
@@ -611,6 +611,10 @@ export const receiptsRouter = createTRPCRouter({
           throw new AppError('CONFLICT', 'receiptChangedElsewhere');
         }
         const totalAmount = userTotals.reduce((sum, user) => sum + user.total, 0);
+        // Whole units in a currency with no decimals, as for any expense (#335). The total only:
+        // an item price the scan's discount folding or an item split left with hundredths keeps the
+        // total whole but not each share
+        requireWholeUnits(currency, [totalAmount]);
         const baseCurrencyAmount =
           exchangeRate === null ? null : convertCents(totalAmount, exchangeRate, groupCurrency);
 

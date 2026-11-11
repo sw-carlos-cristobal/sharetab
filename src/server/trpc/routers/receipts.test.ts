@@ -949,6 +949,36 @@ describe("a receipt's saved split matches the receipt page's preview (#364)", ()
     expect(mockDb.$transaction).not.toHaveBeenCalled();
   });
 
+  // #335: a currency with no decimals is shared and saved in whole units
+  describe('in yen', () => {
+    const everyone = [{ receiptItemId: 'i1', userIds: ['alice', 'bob', 'carol'] }];
+
+    beforeEach(() => {
+      mockDb.group.findUnique.mockResolvedValue({ archivedAt: null, currency: 'JPY' });
+    });
+
+    test('a ¥1,000 item shared three ways saves ¥334, ¥333 and ¥333', async () => {
+      scanned([{ id: 'i1', totalPrice: 100000 }], { subtotal: 100000, tax: 0, tip: 0, currency: 'JPY' });
+      expect(await save(everyone)).toEqual({ amount: 100000, shares: { alice: 33400, bob: 33300, carol: 33300 } });
+    });
+
+    test('a tip with hundredths is refused, writing nothing', async () => {
+      scanned([{ id: 'i1', totalPrice: 100000 }], { subtotal: 100000, tax: 0, tip: 0, currency: 'JPY' });
+      await expectRefused(
+        everyone,
+        { code: 'BAD_REQUEST', message: 'Amounts in JPY must be whole units, with no decimals.' },
+        { tipOverride: 15050 },
+      );
+    });
+
+    test('a receipt in dollars lands on a whole yen', async () => {
+      // $10.00 at 150.3271 yen to the dollar is ¥1,503.271
+      scanned([{ id: 'i1', totalPrice: 1000 }], { subtotal: 1000, tax: 0, tip: 0, currency: 'USD' });
+      await save(everyone, { exchangeRate: 150.3271 });
+      expect(mockDb.expense.create.mock.calls[0]![0].data).toMatchObject({ amount: 1000, baseCurrencyAmount: 150300 });
+    });
+  });
+
   // #361: the receipt's currency can be changed on another device, and the expense must be in the
   // one the page showed
   test('a receipt whose currency changed since the page loaded it is refused, writing nothing', async () => {

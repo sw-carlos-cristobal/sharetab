@@ -11,7 +11,7 @@ export function calculateSplitTotals(params: {
   tip: number;
   peopleCount: number;
   personWeights?: number[]; // weight for each person index (default all 1)
-  /** The bill currency's `currencyStep`: 100 shares it in whole units (#335) */
+  /** The bill currency's `currencyStep`: 100 shares a whole price in whole units (#335) */
   step?: number;
 }): { personIndex: number; itemTotal: number; tax: number; tip: number; total: number }[] {
   const { items, assignments, tax, tip, personWeights, step } = params;
@@ -32,8 +32,8 @@ export function calculateSplitTotals(params: {
   const entries = Array.from(personSubtotals.entries());
   if (entries.length === 0) return [];
 
-  // Tax and tip follow each person's items (#331: within a cent of their exact share, so nobody's
-  // goes below zero and free items pay none). Someone whose items come to nothing or less (the
+  // Tax and tip follow each person's items (#331: within a cent of their exact share, a whole unit
+  // at a step of 100, so nobody's goes below zero and free items pay none). Someone whose items come to nothing or less (the
   // guest API takes a negative price) counts as free. When everyone does, they can't follow the
   // items, so they're shared by head, a group counting for as many people as it stands for.
   const subtotals = entries.map(([, itemTotal]) => Math.max(0, itemTotal));
