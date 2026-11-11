@@ -443,7 +443,7 @@
     Name="Login Rate Limit"
     Target="AUTH_RATE_LIMIT_MAX"
     Default="5"
-    Description="Max login attempts per email address per 15 minutes, and wrong current passwords per account in Settings. Increase for testing."
+    Description="Max failed login attempts per email address per 15 minutes (a successful sign-in clears the count), and wrong current passwords per account in Settings. Increase for testing."
     Type="Variable"
     Display="advanced"
     Required="false"

@@ -10,9 +10,24 @@ import { db } from '../db';
 import { AppError } from './app-error';
 import { parseAuthConfig } from './auth-config';
 import { logger } from './logger';
-import { checkRateLimit, parsePositiveInt } from './rate-limit';
+import { checkRateLimit, clearRateLimit, parsePositiveInt, refundRateLimit } from './rate-limit';
 import { getClientIp, FALLBACK_IP } from './client-ip';
 import { AmbiguousEmailError, findUserByEmail } from './user-email';
+
+/**
+ * A sign-in refused by a login limit, which lifts in `retryAfterMs`. `password-credentials.ts`
+ * turns it into the code the login page reads (#401); this module stays free of next-auth, whose
+ * entry the routers' tests can't load.
+ */
+export class LoginRateLimited extends Error {
+  readonly retryAfterMs: number;
+
+  constructor(retryAfterMs: number) {
+    super('Too many sign-in attempts');
+    this.name = 'LoginRateLimited';
+    this.retryAfterMs = retryAfterMs;
+  }
+}
 
 /** Refuses the password routes while password sign-in is off (`DISABLE_PASSWORD_LOGIN`). */
 export function requirePasswordLogin() {
@@ -31,7 +46,12 @@ export function loginRateLimitKey(email: string): string {
   return `login:${email.toLowerCase()}`;
 }
 
-/** Password attempts per address in LOGIN_WINDOW_MS (configurable for CI/testing). Settings shares it. */
+/** The per-IP login rate-limit key. */
+function loginIpRateLimitKey(ip: string): string {
+  return `login-ip:${ip}`;
+}
+
+/** Failed password attempts per address in LOGIN_WINDOW_MS (configurable for CI/testing). Settings shares it. */
 export function loginAttemptsPerEmail(): number {
   return parsePositiveInt(process.env.AUTH_RATE_LIMIT_MAX, 5);
 }
@@ -55,6 +75,12 @@ export async function authorizePasswordLogin(credentials: unknown, headers: Head
   const parsed = loginSchema.safeParse(credentials);
   if (!parsed.success) return null;
 
+  // Both limits count only failed attempts (#401), yet each attempt is counted
+  // here, before its password is checked, so guesses sent at once are held too;
+  // a successful sign-in then gives its attempt back (below). A refusal throws
+  // LoginRateLimited, so the login page says to wait rather than that the
+  // password is wrong.
+
   // Rate limit login attempts per IP — bounds password spraying across
   // many emails while staying generous for shared NATs/households.
   // Checked BEFORE the per-email bucket so attempts denied by the IP
@@ -66,20 +92,22 @@ export async function authorizePasswordLogin(credentials: unknown, headers: Head
   // would let one client lock every user out of login, and the
   // per-email bucket below still bounds attempts in that case.
   const ip = getClientIp(headers);
-  if (ip !== FALLBACK_IP) {
+  const ipKey = ip === FALLBACK_IP ? null : loginIpRateLimitKey(ip);
+  if (ipKey) {
     const maxIpAttempts = parsePositiveInt(process.env.AUTH_IP_RATE_LIMIT_MAX, 30);
-    const { allowed: ipAllowed } = checkRateLimit(`login-ip:${ip}`, maxIpAttempts, 15 * 60 * 1000);
+    const { allowed: ipAllowed, retryAfterMs } = checkRateLimit(ipKey, maxIpAttempts, LOGIN_WINDOW_MS);
     if (!ipAllowed) {
       logger.warn('auth.rate_limited_ip', { ip });
-      return null;
+      throw new LoginRateLimited(retryAfterMs);
     }
   }
 
   // Rate limit login attempts per email
-  const { allowed } = checkRateLimit(loginRateLimitKey(parsed.data.email), loginAttemptsPerEmail(), LOGIN_WINDOW_MS);
+  const emailKey = loginRateLimitKey(parsed.data.email);
+  const { allowed, retryAfterMs } = checkRateLimit(emailKey, loginAttemptsPerEmail(), LOGIN_WINDOW_MS);
   if (!allowed) {
     logger.warn('auth.rate_limited', { email: parsed.data.email });
-    return null;
+    throw new LoginRateLimited(retryAfterMs);
   }
 
   let user;
@@ -97,6 +125,12 @@ export async function authorizePasswordLogin(credentials: unknown, headers: Head
     logger.warn('auth.login_failed', { email: parsed.data.email, reason: 'invalid_password' });
     return null;
   }
+
+  // The address's count clears, as a right password does in Settings: only its
+  // owner gets here. The IP's only gives back this attempt, so signing in to an
+  // account of one's own can't reset the count of guesses at other addresses.
+  clearRateLimit(emailKey);
+  if (ipKey) refundRateLimit(ipKey);
 
   logger.info('auth.login', { userId: user.id, email: user.email });
   return {

@@ -16,7 +16,11 @@ const { nextAuth, authMock, google, nodemailer, sessionCookieSubject, logger, ch
     checkOidcSignIn: vi.fn(),
     db: { user: { findUnique: vi.fn() } },
   }));
-vi.mock('next-auth', () => ({ default: nextAuth }));
+// CredentialsSignin as next-auth re-exports it (password-login.ts extends it)
+vi.mock('next-auth', async () => ({
+  default: nextAuth,
+  CredentialsSignin: (await import('@auth/core/errors')).CredentialsSignin,
+}));
 vi.mock('@auth/prisma-adapter', () => ({ PrismaAdapter: vi.fn(() => ({})) }));
 vi.mock('next-auth/providers/credentials', () => ({ default: vi.fn(() => ({ id: 'credentials' })) }));
 vi.mock('next-auth/providers/google', () => ({ default: google }));
