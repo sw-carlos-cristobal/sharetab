@@ -852,6 +852,61 @@ describe("a receipt's saved split matches the receipt page's preview (#364)", ()
     });
   });
 
+  // #362: the expense was dated the moment it was saved, while its rate was the receipt date's
+  describe("the expense is dated the receipt's day (#362)", () => {
+    const now = new Date('2026-11-11T15:30:00Z');
+    const assignments = [{ receiptItemId: 'i1', userIds: ['alice'] }];
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(now);
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    test('a receipt in the group currency', async () => {
+      scanned([{ id: 'i1', totalPrice: 2000 }], { subtotal: 2000, tax: 0, tip: 0, date: '2026-10-15' });
+      await save(assignments);
+      expect(mockDb.expense.create.mock.calls[0]![0].data.expenseDate).toEqual(new Date('2026-10-15T10:00:00Z'));
+      expect(getExchangeRate).not.toHaveBeenCalled();
+    });
+
+    test("a receipt in another currency, converted at that day's rate", async () => {
+      vi.mocked(getExchangeRate).mockResolvedValue(1.1);
+      scanned([{ id: 'i1', totalPrice: 2000 }], {
+        subtotal: 2000,
+        tax: 0,
+        tip: 0,
+        currency: 'EUR',
+        date: '2026-10-15',
+      });
+      await save(assignments);
+      expect(getExchangeRate).toHaveBeenCalledWith('EUR', 'USD', '2026-10-15');
+      expect(mockDb.expense.create.mock.calls[0]![0].data).toMatchObject({
+        expenseDate: new Date('2026-10-15T10:00:00Z'),
+        exchangeRate: 1.1,
+        baseCurrencyAmount: 2200,
+      });
+    });
+
+    // No date, or one after today (here a misread year)
+    test.each([undefined, '2027-10-15'])("a receipt dated %j is dated now, at today's rate", async (date) => {
+      vi.mocked(getExchangeRate).mockResolvedValue(1.1);
+      scanned([{ id: 'i1', totalPrice: 2000 }], {
+        subtotal: 2000,
+        tax: 0,
+        tip: 0,
+        currency: 'EUR',
+        ...(date !== undefined ? { date } : {}),
+      });
+      await save(assignments);
+      expect(getExchangeRate).toHaveBeenCalledWith('EUR', 'USD', undefined);
+      expect(mockDb.expense.create.mock.calls[0]![0].data.expenseDate).toEqual(now);
+    });
+  });
+
   test('a receipt in another currency with no rate available is refused, writing nothing', async () => {
     vi.mocked(getExchangeRate).mockResolvedValue(null);
     scanned([{ id: 'i1', totalPrice: 2000 }], { subtotal: 2000, tax: 0, tip: 0, currency: 'EUR' });
@@ -863,8 +918,8 @@ describe("a receipt's saved split matches the receipt page's preview (#364)", ()
     });
   });
 
-  // #361: a currency Frankfurter doesn't carry, or a receipt dated in the future, never gets a
-  // rate, so the receipt couldn't become an expense at all
+  // #361: a currency Frankfurter doesn't carry never gets a rate, so the receipt couldn't become
+  // an expense at all
   test('a rate entered by hand is used in place of looking one up', async () => {
     scanned([{ id: 'i1', totalPrice: 2000 }], { subtotal: 2000, tax: 200, tip: 0, currency: 'AED' });
     await save([{ receiptItemId: 'i1', userIds: ['alice'] }], { exchangeRate: 0.27 });
