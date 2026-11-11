@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { formatCents } from '@/lib/money';
+import { currencyStep, formatCents } from '@/lib/money';
+import { equalSplitShares } from '@/lib/expense-split';
 
 type Member = { id: string; name: string | null };
 type ShareEntry = { userId: string; amount: number };
@@ -24,24 +25,14 @@ export function EqualSplit({
 }) {
   const [selected, setSelected] = useState<Set<string>>(() => new Set(initialSelected ?? members.map((m) => m.id)));
 
+  // Whole units in a currency with no decimals (#335); each row shows the amount that's saved
+  const step = currencyStep(currency);
+  const shares: ShareEntry[] = equalSplitShares(totalCents, Array.from(selected), step);
+
   useEffect(() => {
-    if (selected.size === 0 || totalCents <= 0) {
-      onChange([]);
-      return;
-    }
-
-    const perPerson = Math.floor(totalCents / selected.size);
-    const remainder = totalCents - perPerson * selected.size;
-    const selectedArr = Array.from(selected);
-
-    const shares: ShareEntry[] = selectedArr.map((userId, i) => ({
-      userId,
-      amount: perPerson + (i < remainder ? 1 : 0),
-    }));
-
     onChange(shares);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, totalCents]);
+  }, [selected, totalCents, step]);
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -56,6 +47,7 @@ export function EqualSplit({
   }
 
   const perPerson = selected.size > 0 ? totalCents / selected.size : 0;
+  const amounts = new Map(shares.map((s) => [s.userId, s.amount]));
 
   return (
     <div className="space-y-2">
@@ -73,10 +65,8 @@ export function EqualSplit({
             />
             <span className="text-sm">{m.name ?? 'Unnamed'}</span>
           </div>
-          {selected.has(m.id) && totalCents > 0 && (
-            <span className="text-sm text-muted-foreground">
-              {formatCents(Math.round(perPerson), currency, locale)}
-            </span>
+          {amounts.has(m.id) && (
+            <span className="text-sm text-muted-foreground">{formatCents(amounts.get(m.id)!, currency, locale)}</span>
           )}
         </label>
       ))}

@@ -5,7 +5,7 @@
 
 import { z } from 'zod';
 import { AppError } from './app-error';
-import { MAX_MONEY_CENTS } from '@/lib/money';
+import { MAX_MONEY_CENTS, convertAmount, currencyStep } from '@/lib/money';
 
 /** A rate entered by hand (1 unit of the expense's currency = rate units of the group's) */
 export const exchangeRateSchema = z.number().positive().finite().max(1_000_000);
@@ -88,15 +88,29 @@ export async function getExchangeRate(from: string, to: string, date?: string): 
  *
  * @param amountCents - Amount in cents in the source currency
  * @param exchangeRate - The exchange rate (1 unit source = rate units target)
- * @returns Amount in cents in the target currency, rounded to nearest cent
+ * @param currency - The target currency (the group's)
+ * @returns Amount in cents in the target currency, rounded to the nearest cent, or to the nearest
+ *   whole unit when the target currency has no decimals (#335)
  * @throws AppError if the converted amount exceeds the Int4 money column range
  */
-export function convertCents(amountCents: number, exchangeRate: number): number {
-  const converted = Math.round(amountCents * exchangeRate);
+export function convertCents(amountCents: number, exchangeRate: number, currency: string): number {
+  const converted = convertAmount(amountCents, exchangeRate, currency);
   if (!Number.isFinite(converted) || Math.abs(converted) > MAX_MONEY_CENTS) {
     throw new AppError('BAD_REQUEST', 'convertedAmountTooLarge');
   }
   return converted;
+}
+
+/**
+ * Refuse amounts that aren't whole units of `currency` when it has no decimals: ¥1,000.50, or
+ * ¥1,000 shared as ¥333.34, ¥333.33 and ¥333.33 (#335). Amounts are stored in hundredths of any
+ * currency, so the server is what keeps one like JPY in whole yen.
+ */
+export function requireWholeUnits(currency: string, amounts: number[]): void {
+  const step = currencyStep(currency);
+  if (amounts.some((amount) => amount % step !== 0)) {
+    throw new AppError('BAD_REQUEST', 'amountNotWholeUnits', { currency });
+  }
 }
 
 /**

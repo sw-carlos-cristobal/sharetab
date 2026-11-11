@@ -5,6 +5,7 @@
     "descriptionPlaceholder": "e.g., Dinner, Groceries, Uber",
     "amount": "Amount",
     "amountPlaceholder": "0.00",
+    "wholeUnitsOnly": "{currency} has no decimals: enter a whole amount.",
     "paidBy": "Paid by",
     "date": "Date",
     "splitType": "Split mode",

@@ -5,6 +5,7 @@
     "descriptionPlaceholder": "ex. Dîner, Courses, Uber",
     "amount": "Montant",
     "amountPlaceholder": "0,00",
+    "wholeUnitsOnly": "{currency} n'a pas de décimales : saisissez un montant entier.",
     "paidBy": "Payé par",
     "date": "Date",
     "splitType": "Mode de répartition",

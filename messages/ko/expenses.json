@@ -5,6 +5,7 @@
     "descriptionPlaceholder": "예: 저녁식사, 장보기, 우버",
     "amount": "금액",
     "amountPlaceholder": "0.00",
+    "wholeUnitsOnly": "{currency}에는 소수 단위가 없습니다. 정수 금액을 입력하세요.",
     "paidBy": "결제자",
     "date": "날짜",
     "splitType": "분할 모드",

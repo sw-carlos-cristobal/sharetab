@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { AppError } from '@/server/lib/app-error';
 import { createTRPCRouter, groupMemberProcedure } from '../init';
 import type { Prisma } from '@/generated/prisma/client';
-import { getExchangeRate, convertCents } from '../../lib/exchange-rates';
+import { getExchangeRate, convertCents, requireWholeUnits } from '../../lib/exchange-rates';
 import { MAX_MONEY_CENTS } from '@/lib/money';
 import { loadGroupBalances, lockActiveGroup } from '../../lib/group-balances';
 import { notDeleted, onlyDeleted } from '../../lib/soft-delete';
@@ -127,6 +127,8 @@ export const settlementsRouter = createTRPCRouter({
         throw new AppError('FORBIDDEN', 'paymentsFromYourselfOnly');
       }
 
+      requireWholeUnits(input.currency, [input.amount]);
+
       // Currency conversion: compute base currency amount if currencies differ
       const groupCurrency = group?.currency ?? 'USD';
       let exchangeRate: number | null = null;
@@ -143,7 +145,7 @@ export const settlementsRouter = createTRPCRouter({
           throw new AppError('BAD_REQUEST', 'exchangeRateUnavailable');
         }
 
-        baseCurrencyAmount = convertCents(input.amount, exchangeRate);
+        baseCurrencyAmount = convertCents(input.amount, exchangeRate, groupCurrency);
       }
 
       const settlement = await ctx.db.$transaction(async (tx) => {

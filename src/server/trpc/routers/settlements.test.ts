@@ -540,3 +540,34 @@ test('settlements.list with deleted lists only the deleted payments, for the Del
   await api.list({ groupId: 'g1', deleted: true });
   expect(mockDb.settlement.findMany.mock.calls[0]![0].where).toEqual({ groupId: 'g1', deletedAt: { not: null } });
 });
+
+// #335
+describe('a payment in a currency with no decimals', () => {
+  beforeEach(() => {
+    mockDb.group.findUnique.mockResolvedValue({ archivedAt: null, currency: 'JPY' });
+    mockDb.groupMember.count.mockResolvedValue(2);
+    mockDb.settlement.create.mockResolvedValue({ id: 's2' });
+    asRole('MEMBER', 'bob');
+  });
+
+  test('refuses ¥333.33, recording nothing', async () => {
+    const api = await caller('bob');
+    await expect(api.create({ groupId: 'g1', toId: 'alice', amount: 33333, currency: 'JPY' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'Amounts in JPY must be whole units, with no decimals.',
+    });
+    expect(mockDb.settlement.create).not.toHaveBeenCalled();
+  });
+
+  test('records ¥333', async () => {
+    const api = await caller('bob');
+    await api.create({ groupId: 'g1', toId: 'alice', amount: 33300, currency: 'JPY' });
+    expect(mockDb.settlement.create.mock.calls[0]![0].data).toMatchObject({ amount: 33300, baseCurrencyAmount: null });
+  });
+
+  test('a payment in dollars into a yen group lands on a whole yen', async () => {
+    const api = await caller('bob');
+    await api.create({ groupId: 'g1', toId: 'alice', amount: 1000, currency: 'USD', exchangeRate: 150.3271 });
+    expect(mockDb.settlement.create.mock.calls[0]![0].data).toMatchObject({ amount: 1000, baseCurrencyAmount: 150300 });
+  });
+});

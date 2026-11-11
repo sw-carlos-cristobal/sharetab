@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { formatCents } from '@/lib/money';
+import { currencyStep, formatCents } from '@/lib/money';
 import { evenPercentages, percentageSplitShares, percentTolerance } from '@/lib/expense-split';
 import { Input } from '@/components/ui/input';
 
@@ -34,16 +34,19 @@ export function PercentageSplit({
 
   const pctOf = (id: string) => parseFloat(percentages[id] ?? '0') || 0;
   // Null until the percentages add up to 100%: no shares are reported, which keeps the submit
-  // button disabled, and each row shows its percentage of the total as typed
+  // button disabled, and each row shows its percentage of the total as typed. Whole units in a
+  // currency with no decimals (#335)
+  const step = currencyStep(currency);
   const shares: ShareEntry[] | null = percentageSplitShares(
     totalCents,
     members.map((m) => ({ userId: m.id, pct: pctOf(m.id) })),
+    step,
   );
 
   useEffect(() => {
     onChange(shares ?? []);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [percentages, totalCents]);
+  }, [percentages, totalCents, step]);
 
   function setPct(id: string, value: string) {
     setPercentages((prev) => ({ ...prev, [id]: value }));

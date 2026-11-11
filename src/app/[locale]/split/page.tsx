@@ -6,7 +6,7 @@ import { TRPCClientError } from '@trpc/client';
 import { Link, useRouter } from '@/i18n/navigation';
 import { trpc } from '@/lib/trpc';
 import { localeHeaders } from '@/lib/locale-header';
-import { formatCents, centsToDecimal, parseToCents } from '@/lib/money';
+import { currencyStep, formatCents, centsToDecimal, parseToCents } from '@/lib/money';
 import { billTotals, calculateSplitTotals } from '@/lib/split-calculator';
 import { canStoreClaimIdentity, setStoredClaimIdentity } from '@/lib/guest-session';
 import { loadingMessageKeys, randomLoadingMessageIndex } from '@/lib/loading-messages';
@@ -399,8 +399,10 @@ export default function GuestSplitPage() {
       tax: extracted.tax,
       tip,
       peopleCount: people.length,
+      // In whole units of a currency with no decimals, as Create Split saves it (#335)
+      step: currencyStep(currency),
     });
-  }, [items, assignments, extracted, tip, people.length]);
+  }, [items, assignments, extracted, tip, people.length, currency]);
 
   const perPersonTotals = step === 'assign' ? getPerPersonTotals() : [];
   const validPeople = people.filter((n) => n.trim().length > 0);

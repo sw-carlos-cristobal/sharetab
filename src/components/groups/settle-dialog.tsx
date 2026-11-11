@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { trpc } from '@/lib/trpc';
-import { parseToCents, formatCents } from '@/lib/money';
+import { amountInputStep, centsToDecimal, formatCents, parseToCents } from '@/lib/money';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -86,7 +86,8 @@ function SettleForm({
   const t = useTranslations('groups');
   const [fromId, setFromId] = useState(payerId ?? suggestedFrom ?? '');
   const [toId, setToId] = useState(suggestedTo ?? '');
-  const [amountStr, setAmountStr] = useState(suggestedAmount ? (suggestedAmount / 100).toFixed(2) : '');
+  // In the currency's decimals: "333" for a ¥333 debt (#335)
+  const [amountStr, setAmountStr] = useState(suggestedAmount ? centsToDecimal(suggestedAmount, currency) : '');
   const [note, setNote] = useState('');
 
   const utils = trpc.useUtils();
@@ -109,7 +110,7 @@ function SettleForm({
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const amount = parseToCents(amountStr);
+    const amount = parseToCents(amountStr, currency);
     if (!toId || amount <= 0 || samePerson) return;
     settle.mutate({
       groupId,
@@ -173,9 +174,9 @@ function SettleForm({
         <Input
           id="settle-amount"
           type="number"
-          step="0.01"
-          min="0.01"
-          placeholder="0.00"
+          step={amountInputStep(currency)}
+          min={amountInputStep(currency)}
+          placeholder={centsToDecimal(0, currency)}
           value={amountStr}
           onChange={(e) => setAmountStr(e.target.value)}
           required
@@ -183,7 +184,7 @@ function SettleForm({
         {suggestedAmount && (
           <button
             type="button"
-            onClick={() => setAmountStr((suggestedAmount / 100).toFixed(2))}
+            onClick={() => setAmountStr(centsToDecimal(suggestedAmount, currency))}
             className="text-xs text-primary hover:underline"
           >
             {t('settle.useSuggested', { amount: formatCents(suggestedAmount, currency, locale) })}

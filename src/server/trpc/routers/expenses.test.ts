@@ -865,3 +865,109 @@ test('expenses.list with deleted lists only the deleted expenses, for the Delete
   expect(query.where).toEqual({ groupId: 'g1', deletedAt: { not: null } });
   expect(query.include.deletedBy).toEqual({ select: { id: true, name: true } });
 });
+
+// #335: amounts in a currency with no decimals are whole units, and an amount converted into
+// one lands on a whole unit
+describe('amounts in a currency with no decimals', () => {
+  const ramen = {
+    groupId: 'g1',
+    title: 'Ramen',
+    currency: 'JPY',
+    paidById: 'u1',
+    splitMode: 'EQUAL' as const,
+  };
+  const threeWays = (amounts: number[]) => amounts.map((amount, i) => ({ userId: `u${i + 1}`, amount }));
+  const storedYen = {
+    id: 'e1',
+    groupId: 'g1',
+    paidById: 'u1',
+    addedById: 'u1',
+    amount: 100000,
+    currency: 'JPY',
+    exchangeRate: 1,
+    baseCurrencyAmount: null,
+    expenseDate: new Date('2026-10-01T00:00:00Z'),
+    deletedAt: null,
+  };
+
+  beforeEach(() => {
+    mockDb.group.findUnique.mockResolvedValue({ archivedAt: null, currency: 'JPY' });
+    mockDb.$queryRaw.mockResolvedValue([{ archivedAt: null, paidById: 'u1', deletedAt: null }]);
+    mockDb.expense.findUnique.mockResolvedValue(storedYen);
+    mockDb.groupMember.findFirst.mockResolvedValue({ userId: 'u1' });
+    mockDb.groupMember.count.mockResolvedValue(3);
+    mockDb.expenseShare.findMany.mockResolvedValue([]);
+    mockDb.expense.create.mockResolvedValue({ id: 'e2', shares: [] });
+    mockDb.expense.update.mockResolvedValue({ id: 'e1' });
+    mockDb.$transaction.mockImplementation(async (fn: (tx: typeof mockDb) => unknown) => fn(mockDb));
+  });
+
+  const notWhole = { code: 'BAD_REQUEST', message: 'Amounts in JPY must be whole units, with no decimals.' };
+
+  test('create refuses ¥1,000.50, writing nothing', async () => {
+    const api = await caller();
+    await expect(
+      api.create({ ...ramen, amount: 100050, shares: threeWays([33350, 33350, 33350]) }),
+    ).rejects.toMatchObject(notWhole);
+    expect(mockDb.expense.create).not.toHaveBeenCalled();
+  });
+
+  test('create refuses ¥1,000 shared as ¥333.34, ¥333.33 and ¥333.33', async () => {
+    const api = await caller();
+    await expect(
+      api.create({ ...ramen, amount: 100000, shares: threeWays([33334, 33333, 33333]) }),
+    ).rejects.toMatchObject(notWhole);
+    expect(mockDb.expense.create).not.toHaveBeenCalled();
+  });
+
+  test('create saves ¥1,000 shared as ¥334, ¥333 and ¥333', async () => {
+    const api = await caller();
+    await api.create({ ...ramen, amount: 100000, shares: threeWays([33400, 33300, 33300]) });
+    expect(mockDb.expense.create).toHaveBeenCalled();
+  });
+
+  test('update refuses an amount with decimals in the currency the expense keeps', async () => {
+    const api = await caller();
+    await expect(
+      api.update({ groupId: 'g1', expenseId: 'e1', amount: 100050, shares: threeWays([33350, 33350, 33350]) }),
+    ).rejects.toMatchObject(notWhole);
+    expect(mockDb.expense.update).not.toHaveBeenCalled();
+  });
+
+  test('update refuses moving an amount with cents into a currency with no decimals', async () => {
+    mockDb.expense.findUnique.mockResolvedValue({ ...storedYen, amount: 1050, currency: 'USD' });
+    mockDb.group.findUnique.mockResolvedValue({ archivedAt: null, currency: 'USD' });
+    const api = await caller();
+    await expect(
+      api.update({ groupId: 'g1', expenseId: 'e1', currency: 'JPY', exchangeRate: 0.0067 }),
+    ).rejects.toMatchObject(notWhole);
+    expect(mockDb.expense.update).not.toHaveBeenCalled();
+  });
+
+  test('update leaves an amount saved before #335 alone when it changes neither amount nor currency', async () => {
+    mockDb.expense.findUnique.mockResolvedValue({ ...storedYen, amount: 100050 });
+    const api = await caller();
+    await api.update({ groupId: 'g1', expenseId: 'e1', title: 'Ramen night' });
+    expect(mockDb.expense.update).toHaveBeenCalled();
+  });
+
+  test('a USD expense converted into a yen group lands on a whole yen', async () => {
+    const api = await caller();
+    // $10.00 at 150.3271 yen to the dollar is ¥1,503.271
+    await api.create({
+      ...ramen,
+      currency: 'USD',
+      exchangeRate: 150.3271,
+      amount: 1000,
+      shares: threeWays([334, 333, 333]),
+    });
+    expect(mockDb.expense.create.mock.calls[0]![0].data).toMatchObject({ amount: 1000, baseCurrencyAmount: 150300 });
+  });
+
+  test('an edit converted into a yen group lands on a whole yen', async () => {
+    mockDb.expense.findUnique.mockResolvedValue({ ...storedYen, amount: 1000, currency: 'USD' });
+    const api = await caller();
+    await api.update({ groupId: 'g1', expenseId: 'e1', exchangeRate: 150.3271 });
+    expect(mockDb.expense.update.mock.calls[0]![0].data).toMatchObject({ baseCurrencyAmount: 150300 });
+  });
+});

@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { evenPercentages, percentageSplitShares, sharesSplitShares } from './expense-split';
+import { equalSplitShares, evenPercentages, percentageSplitShares, sharesSplitShares } from './expense-split';
 
 // #331: the shares and percentage editors rounded each share on its own and gave the last person
 // whatever was left, so the last person could pay several cents more or less than everyone else
@@ -112,5 +112,48 @@ describe('percentageSplitShares', () => {
   test("percentages that don't add up to 100 make no split", () => {
     expect(percentageSplitShares(10000, people([30, 30]))).toBeNull();
     expect(percentageSplitShares(10000, people([]))).toBeNull();
+  });
+});
+
+// #335: in a currency with no decimals (step 100), every share is a whole unit
+describe('in whole units', () => {
+  test('¥1,000 equally among three is ¥334, ¥333 and ¥333, adding up to ¥1,000', () => {
+    const shares = equalSplitShares(100000, ['a', 'b', 'c'], 100);
+    expect(shares).toEqual([
+      { userId: 'a', amount: 33400 },
+      { userId: 'b', amount: 33300 },
+      { userId: 'c', amount: 33300 },
+    ]);
+  });
+
+  test('¥1,000 by shares 1:1:1 and by the even percentages is the same', () => {
+    const units = ['a', 'b', 'c'].map((userId) => ({ userId, units: 1 }));
+    expect(sharesSplitShares(100000, units, 100).map((s) => s.amount)).toEqual([33400, 33300, 33300]);
+    const pcts = evenPercentages(3).map((pct, i) => ({ userId: `u${i}`, pct: Number(pct) }));
+    expect(percentageSplitShares(100000, pcts, 100)?.map((s) => s.amount)).toEqual([33400, 33300, 33300]);
+  });
+
+  test('a percentage worth less than a unit leaves that person out', () => {
+    expect(
+      percentageSplitShares(
+        100000,
+        [
+          { userId: 'a', pct: 99.99 },
+          { userId: 'b', pct: 0.01 },
+        ],
+        100,
+      ),
+    ).toEqual([{ userId: 'a', amount: 100000, percentage: 9999 }]);
+  });
+});
+
+describe('equalSplitShares', () => {
+  test('$10 among three: the extra cent to the first', () => {
+    expect(equalSplitShares(1000, ['a', 'b', 'c']).map((s) => s.amount)).toEqual([334, 333, 333]);
+  });
+
+  test('no one, or nothing to split: no split', () => {
+    expect(equalSplitShares(1000, [])).toEqual([]);
+    expect(equalSplitShares(0, ['a'])).toEqual([]);
   });
 });

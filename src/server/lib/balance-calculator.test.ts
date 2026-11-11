@@ -734,3 +734,27 @@ describe('computeBalances: converted shares and their leftover cents', () => {
     expect(owes(tied)).toEqual({ alice: 501, bob: 500 });
   });
 });
+
+// #335
+describe('computeBalances in a currency with no decimals', () => {
+  test("shares a converted expense in whole units of the group's currency", () => {
+    // $10.00 converted to ¥1,503: 502.002, 500.499 and 500.499 yen
+    const balances = computeBalances(
+      [
+        {
+          paidById: 'a',
+          amount: 1000,
+          baseCurrencyAmount: 150300,
+          shares: [
+            { userId: 'c', amount: 333 },
+            { userId: 'a', amount: 334 },
+            { userId: 'b', amount: 333 },
+          ],
+        },
+      ],
+      [],
+      100,
+    );
+    expect(Object.fromEntries(balances.map((b) => [b.userId, b.owes]))).toEqual({ a: 50200, b: 50100, c: 50000 });
+  });
+});

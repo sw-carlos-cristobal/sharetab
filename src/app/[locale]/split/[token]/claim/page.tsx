@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useLocale, useTranslations } from 'next-intl';
 import { TRPCClientError } from '@trpc/client';
 import { trpc } from '@/lib/trpc';
-import { formatCents } from '@/lib/money';
+import { currencyStep, formatCents } from '@/lib/money';
 import { copyToClipboard } from '@/lib/clipboard';
 import {
   canAdoptAnswer,
@@ -618,6 +618,8 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
 
     // Group sizes weight the items people share
     const weightsParam = groupSizeWeights(session.data.people);
+    // Whole units of a currency with no decimals, as finalizing saves them (#335)
+    const step = currencyStep(session.data.receiptData.currency);
 
     if (localEdits.size > 0 || pendingByIndex.size > 0) {
       // Build assignment map from server state
@@ -654,6 +656,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
         tip: session.data.receiptData.tip,
         peopleCount: session.data.people.length,
         ...weightsParam,
+        step,
       });
     }
 
@@ -664,6 +667,7 @@ export default function ClaimPage({ params }: { params: Promise<{ token: string 
       tip: session.data.receiptData.tip,
       peopleCount: session.data.people.length,
       ...weightsParam,
+      step,
     });
   }, [session.data, baseClaimsMap, localEdits, pendingByIndex]);
 

@@ -5,6 +5,7 @@
     "descriptionPlaceholder": "例如：晚餐、杂货、打车",
     "amount": "金额",
     "amountPlaceholder": "0.00",
+    "wholeUnitsOnly": "{currency} 没有小数单位，请输入整数金额。",
     "paidBy": "付款人",
     "date": "日期",
     "splitType": "分账模式",

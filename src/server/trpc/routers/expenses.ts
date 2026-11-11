@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { AppError } from '@/server/lib/app-error';
 import { createTRPCRouter, groupMemberProcedure } from '../init';
 import { SplitMode, type Expense, type Prisma } from '@/generated/prisma/client';
-import { getExchangeRate, convertCents, exchangeRateSchema } from '../../lib/exchange-rates';
-import { MAX_MONEY_CENTS } from '@/lib/money';
+import { getExchangeRate, convertCents, exchangeRateSchema, requireWholeUnits } from '../../lib/exchange-rates';
+import { MAX_MONEY_CENTS, currencyStep } from '@/lib/money';
 import { stripUndefined } from '../../lib/strip-undefined';
 import { loadGroupBalances, lockActiveGroup } from '../../lib/group-balances';
 import { computeBalances, type Expense as BalanceExpense } from '../../lib/balance-calculator';
@@ -90,7 +90,9 @@ async function requireRestorableFor(tx: Prisma.TransactionClient, groupId: strin
   // The group's balances while this expense is still deleted, and what it adds to them
   const balances = await loadGroupBalances(tx, groupId);
   const net = (userId: string) => balances.find((b) => b.userId === userId)?.net ?? 0;
-  const added = computeBalances([expense], []);
+  // Converted in steps of the group's currency, as loadGroupBalances does (#335)
+  const group = await tx.group.findUnique({ where: { id: groupId }, select: { currency: true } });
+  const added = computeBalances([expense], [], currencyStep(group?.currency));
   const change = (userId: string) => added.find((b) => b.userId === userId)?.net ?? 0;
   const blocked = former.find((userId) => {
     const before = net(userId);
@@ -243,6 +245,7 @@ export const expensesRouter = createTRPCRouter({
       if (sharesSum !== input.amount) {
         throw new AppError('BAD_REQUEST', 'sharesSumMismatch', { sum: sharesSum, amount: input.amount });
       }
+      requireWholeUnits(input.currency, [input.amount, ...input.shares.map((s) => s.amount)]);
 
       // Currency conversion: compute base currency amount if currencies differ
       let exchangeRate: number | null = null;
@@ -265,7 +268,7 @@ export const expensesRouter = createTRPCRouter({
           throw new AppError('BAD_REQUEST', 'exchangeRateUnavailable');
         }
 
-        baseCurrencyAmount = convertCents(input.amount, exchangeRate);
+        baseCurrencyAmount = convertCents(input.amount, exchangeRate, groupCurrency);
       }
 
       const expense = await ctx.db.$transaction(async (tx) => {
@@ -402,6 +405,11 @@ export const expensesRouter = createTRPCRouter({
       // Recompute currency conversion if currency or amount changed
       const effectiveCurrency = inputCurrency ?? existing.currency;
       const effectiveAmount = data.amount ?? existing.amount;
+      // In the currency the expense will have. An edit that changes neither its amounts nor its
+      // currency leaves an amount saved before #335 as it is
+      if (data.amount !== undefined || inputCurrency !== undefined || shares) {
+        requireWholeUnits(effectiveCurrency, [effectiveAmount, ...(shares ?? []).map((s) => s.amount)]);
+      }
       const groupCurrency = groupCheck?.currency ?? 'USD';
       let newExchangeRate: number | null = existing.exchangeRate;
       let newBaseCurrencyAmount: number | null = existing.baseCurrencyAmount;
@@ -418,7 +426,7 @@ export const expensesRouter = createTRPCRouter({
           }
           newExchangeRate = fetched;
         }
-        newBaseCurrencyAmount = newExchangeRate ? convertCents(effectiveAmount, newExchangeRate) : null;
+        newBaseCurrencyAmount = newExchangeRate ? convertCents(effectiveAmount, newExchangeRate, groupCurrency) : null;
       } else {
         // Same currency as group -- clear conversion fields
         newExchangeRate = 1.0;

@@ -92,6 +92,7 @@
   "sharesSumMismatch": "La suma de las partes ({sum}) no coincide con el monto del gasto ({amount})",
   "exchangeRateUnavailable": "No se pudo obtener el tipo de cambio. Indica uno manualmente o inténtalo de nuevo.",
   "convertedAmountTooLarge": "El monto convertido es demasiado grande. Revisa el tipo de cambio.",
+  "amountNotWholeUnits": "Los importes en {currency} deben ser enteros, sin decimales.",
   "settleWithYourself": "No puedes saldar una deuda contigo mismo",
   "paymentsFromYourselfOnly": "Solo puedes registrar pagos hechos por ti",
   "settlementPartiesNotMembers": "Quien paga y quien recibe deben ser miembros de este grupo",

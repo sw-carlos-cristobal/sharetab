@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { trpc } from '@/lib/trpc';
-import { formatCents, centsToDecimal, parseToCents } from '@/lib/money';
+import { formatCents, centsToDecimal, convertAmount, currencyStep, parseToCents } from '@/lib/money';
 import { calculateReceiptSplitTotals, receiptAssignmentList } from '@/lib/split-calculator';
 import { COMMON_CURRENCIES } from '@/lib/currencies';
 import { Button } from '@/components/ui/button';
@@ -294,10 +294,12 @@ export function ItemAssignment({
   const assignmentList = useMemo(() => receiptAssignmentList(items, assignments), [items, assignments]);
   // The server calculates the expense with the same function and the same list, and saves it only
   // if each person's total is the one shown here (#364). Memoized to avoid recomputation on every
-  // render (Finding #36).
+  // render (Finding #36). In whole units of a currency with no decimals (#335), the currency
+  // being the one the server will read: Create Expense waits for a currency change to save
+  const step = currencyStep(setCurrency.isPending ? setCurrency.variables.currency : extracted?.currency);
   const shownTotals = useMemo(
-    () => calculateReceiptSplitTotals({ items, assignments: assignmentList, tax: extracted?.tax ?? 0, tip }),
-    [items, assignmentList, extracted, tip],
+    () => calculateReceiptSplitTotals({ items, assignments: assignmentList, tax: extracted?.tax ?? 0, tip, step }),
+    [items, assignmentList, extracted, tip, step],
   );
   const perPersonTotals = useMemo(
     () => new Map(shownTotals.map((person) => [person.userId, person.total])),
@@ -625,7 +627,11 @@ export function ItemAssignment({
                   {manualRateValid && expenseTotal > 0 && (
                     <p className="mt-1 text-xs text-blue-700 dark:text-blue-300">
                       {tNew('convertedAmount', {
-                        amount: formatCents(Math.round(expenseTotal * parsedManualRate), groupCurrency, locale),
+                        amount: formatCents(
+                          convertAmount(expenseTotal, parsedManualRate, groupCurrency),
+                          groupCurrency,
+                          locale,
+                        ),
                       })}
                     </p>
                   )}

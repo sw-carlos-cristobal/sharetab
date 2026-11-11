@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { formatCents, parseToCents } from '@/lib/money';
+import { amountInputStep, centsToDecimal, formatCents, parseToCents } from '@/lib/money';
 import { Input } from '@/components/ui/input';
 
 type Member = { id: string; name: string | null };
@@ -25,23 +25,24 @@ export function ExactSplit({
 }) {
   const [amounts, setAmounts] = useState<Record<string, string>>(() => initialAmounts ?? {});
 
+  // An amount with decimals in a currency that has none counts as nothing entered (#335)
   useEffect(() => {
     const shares: ShareEntry[] = [];
     for (const m of members) {
-      const cents = parseToCents(amounts[m.id] ?? '0');
+      const cents = parseToCents(amounts[m.id] ?? '0', currency);
       if (cents > 0) {
         shares.push({ userId: m.id, amount: cents });
       }
     }
     onChange(shares);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [amounts]);
+  }, [amounts, currency]);
 
   function setAmount(id: string, value: string) {
     setAmounts((prev) => ({ ...prev, [id]: value }));
   }
 
-  const allocated = members.reduce((sum, m) => sum + parseToCents(amounts[m.id] ?? '0'), 0);
+  const allocated = members.reduce((sum, m) => sum + parseToCents(amounts[m.id] ?? '0', currency), 0);
   const remaining = totalCents - allocated;
 
   return (
@@ -51,9 +52,9 @@ export function ExactSplit({
           <span className="flex-1 text-sm">{m.name ?? 'Unnamed'}</span>
           <Input
             type="number"
-            step="0.01"
+            step={amountInputStep(currency)}
             min="0"
-            placeholder="0.00"
+            placeholder={centsToDecimal(0, currency)}
             className="w-28"
             value={amounts[m.id] ?? ''}
             onChange={(e) => setAmount(m.id, e.target.value)}

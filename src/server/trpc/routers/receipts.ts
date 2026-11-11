@@ -7,7 +7,7 @@ import { processReceiptImage } from '../../lib/receipt-processor';
 import { logger } from '../../lib/logger';
 import { parseExtractedData, receiptCurrency } from '../../lib/json-schemas';
 import { DEFAULT_CURRENCY } from '@/lib/currencies';
-import { MAX_MONEY_CENTS } from '@/lib/money';
+import { MAX_MONEY_CENTS, currencyStep } from '@/lib/money';
 import { getExchangeRate, convertCents, exchangeRateSchema } from '../../lib/exchange-rates';
 import { receiptExpenseDate } from '../../lib/normalize-date';
 import { stripUndefined } from '../../lib/strip-undefined';
@@ -600,12 +600,19 @@ export const receiptsRouter = createTRPCRouter({
         // The receipt page previews these totals with the same function and the same list (#364).
         // It sends the totals it showed: when they differ, the receipt changed since the page
         // loaded it (an item repriced, say), and the person didn't confirm this split
-        const userTotals = calculateReceiptSplitTotals({ items, assignments: input.assignments, tax, tip });
+        const userTotals = calculateReceiptSplitTotals({
+          items,
+          assignments: input.assignments,
+          tax,
+          tip,
+          step: currencyStep(currency),
+        });
         if (input.expectedShares && !sameShares(userTotals, input.expectedShares)) {
           throw new AppError('CONFLICT', 'receiptChangedElsewhere');
         }
         const totalAmount = userTotals.reduce((sum, user) => sum + user.total, 0);
-        const baseCurrencyAmount = exchangeRate === null ? null : convertCents(totalAmount, exchangeRate);
+        const baseCurrencyAmount =
+          exchangeRate === null ? null : convertCents(totalAmount, exchangeRate, groupCurrency);
 
         // Verify paidBy and all assignees are members of this group (after the lock,
         // so someone leaving meanwhile is either gone or waits for this, #279).

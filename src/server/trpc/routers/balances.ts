@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { simplifyDebts, computeBalances } from '../../lib/balance-calculator';
 import { loadGroupBalances } from '../../lib/group-balances';
 import { notDeleted } from '../../lib/soft-delete';
+import { currencyStep } from '@/lib/money';
 
 export const balancesRouter = createTRPCRouter({
   getGroupBalances: groupMemberProcedure.input(z.object({ groupId: z.string() })).query(async ({ ctx, input }) => {
@@ -20,6 +21,7 @@ export const balancesRouter = createTRPCRouter({
       // Archived groups count too: an open balance stays visible until it's settled
       where: { members: { some: { userId: ctx.user.id, removedAt: null } } },
       select: {
+        currency: true,
         expenses: {
           where: notDeleted,
           select: {
@@ -45,7 +47,7 @@ export const balancesRouter = createTRPCRouter({
     const aggregated = new Map<string, { userName: string; venmoUsername: string | null; amount: number }>();
 
     for (const group of groups) {
-      const balances = computeBalances(group.expenses, group.settlements);
+      const balances = computeBalances(group.expenses, group.settlements, currencyStep(group.currency));
       const debts = simplifyDebts(balances);
 
       // Build a userId -> user info lookup for this group
@@ -148,7 +150,7 @@ export const balancesRouter = createTRPCRouter({
     }[] = [];
 
     for (const group of groups) {
-      const balances = computeBalances(group.expenses, group.settlements);
+      const balances = computeBalances(group.expenses, group.settlements, currencyStep(group.currency));
       const userBalance = balances.find((b) => b.userId === ctx.user.id);
       const net = userBalance?.net ?? 0;
       if (net > 0) totalOwed += net;

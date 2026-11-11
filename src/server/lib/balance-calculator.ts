@@ -80,9 +80,10 @@ export function simplifyDebts(balances: MemberBalance[]): SimplifiedDebt[] {
 
 /**
  * Compute member balances from a set of expenses and settlements.
- * Returns per-member paid, owes, and net amounts.
+ * Returns per-member paid, owes, and net amounts. `step` is the group currency's `currencyStep`:
+ * a converted expense's shares are whole units of a currency with no decimals (#335).
  */
-export function computeBalances(expenses: Expense[], settlements: Settlement[]): MemberBalance[] {
+export function computeBalances(expenses: Expense[], settlements: Settlement[], step = 1): MemberBalance[] {
   const balanceMap = new Map<string, MemberBalance>();
 
   const getOrCreate = (userId: string): MemberBalance => {
@@ -107,6 +108,7 @@ export function computeBalances(expenses: Expense[], settlements: Settlement[]):
       const scaled = allocateProportionally(
         effectiveAmount,
         sortedShares.map((share) => share.amount),
+        step,
       );
       for (const [i, share] of sortedShares.entries()) {
         const member = getOrCreate(share.userId);

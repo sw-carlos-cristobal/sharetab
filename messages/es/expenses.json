@@ -5,6 +5,7 @@
     "descriptionPlaceholder": "p. ej., Cena, Supermercado, Uber",
     "amount": "Monto",
     "amountPlaceholder": "0.00",
+    "wholeUnitsOnly": "{currency} no tiene decimales: introduce un importe entero.",
     "paidBy": "Pagado por",
     "date": "Fecha",
     "splitType": "Modo de reparto",

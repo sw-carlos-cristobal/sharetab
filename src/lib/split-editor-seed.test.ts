@@ -18,6 +18,19 @@ describe('splitEditorSeed', () => {
     expect(seed).toEqual({ mode: 'EXACT', initialAmounts: { a: '19.31', b: '11.20' } });
   });
 
+  // #335
+  test('EXACT opens with whole units for a currency with no decimals', () => {
+    const seed = splitEditorSeed(
+      'EXACT',
+      [
+        { userId: 'a', amount: 33400 },
+        { userId: 'b', amount: 66600 },
+      ],
+      'JPY',
+    );
+    expect(seed).toEqual({ mode: 'EXACT', initialAmounts: { a: '334', b: '666' } });
+  });
+
   test('PERCENTAGE opens with the saved basis points as percentages', () => {
     const seed = splitEditorSeed('PERCENTAGE', [
       { userId: 'a', amount: 3333, percentage: 3333 },

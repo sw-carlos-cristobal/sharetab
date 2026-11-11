@@ -7,7 +7,7 @@ vi.mock('@/server/auth', () => ({ auth: vi.fn() }));
 
 const mockDb = {
   user: { findUnique: vi.fn() },
-  group: { findMany: vi.fn() },
+  group: { findMany: vi.fn(), findUnique: vi.fn() },
   groupMember: { findUnique: vi.fn() },
   expense: { findMany: vi.fn() },
   settlement: { findMany: vi.fn() },
