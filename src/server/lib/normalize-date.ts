@@ -55,3 +55,41 @@ export function normalizeDate(date: string | undefined): string | undefined {
 
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
+
+// Pages show an expense's date in the browser's time zone, so a day with no time of its own is
+// stored at an hour that is still that day from UTC−10 (Hawaii) to UTC+13 (New Zealand in summer,
+// Tonga). Only UTC−11 (American Samoa, Niue) and UTC+14 (Kiribati's Line Islands) see another day
+const DAY_ONLY_UTC_HOUR = 10;
+
+/**
+ * The date an expense made from a receipt takes, and the day its exchange rate is looked up for
+ * (#362): the receipt's own date when the scan read one, else now, at the latest rate.
+ *
+ * A date that isn't a real calendar day, or is after today, counts as none. A date after today can
+ * be misread, and Frankfurter answers one with its latest rate, or, more than about two weeks
+ * ahead, with no rate at all. "Today" is UTC's day, whatever the server's time zone. So in a time
+ * zone ahead of UTC, from local midnight until UTC's day catches up, a receipt from the local today
+ * counts as after today and is dated now, which a viewer in that zone sees as that day; for the
+ * rest of the local day it is dated its own day like any other. A receipt from today is dated no
+ * later than now.
+ */
+export function receiptExpenseDate(
+  date: string | undefined,
+  now: Date,
+): { expenseDate: Date; rateDate: string | undefined } {
+  // The scan stores normalizeDate's output (#33, #49); a receipt scanned before then holds the text
+  // as it was read, perhaps an ISO date followed by a time, which the first 10 characters leave out
+  const day = normalizeDate(date?.trim().slice(0, 10));
+  const today = now.toISOString().slice(0, 10);
+  if (!day || day > today) {
+    return { expenseDate: now, rateDate: undefined };
+  }
+
+  const [year, month, dayOfMonth] = day.split('-').map(Number) as [number, number, number];
+  const stored = new Date(Date.UTC(year, month - 1, dayOfMonth, DAY_ONLY_UTC_HOUR));
+  // Date.UTC rolls an impossible day over (February 30 to March 2) and reads years 0-99 as 1900-1999
+  if (stored.toISOString().slice(0, 10) !== day) {
+    return { expenseDate: now, rateDate: undefined };
+  }
+  return { expenseDate: stored < now ? stored : now, rateDate: day };
+}

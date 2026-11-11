@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { normalizeDate } from './normalize-date';
+import { normalizeDate, receiptExpenseDate } from './normalize-date';
 
 describe('normalizeDate', () => {
   // ── Passthrough ──
@@ -70,5 +70,65 @@ describe('normalizeDate', () => {
   // ── Edge: invalid day/month range ──
   test('returns undefined for out-of-range month/day', () => {
     expect(normalizeDate('00/32/2025')).toBeUndefined();
+  });
+});
+
+// #362: an expense made from a receipt is dated the receipt's day, and its rate looked up for it
+describe('receiptExpenseDate', () => {
+  const now = new Date('2026-11-11T15:30:00Z');
+
+  test("a past receipt date dates the expense that day, and its rate is that day's", () => {
+    expect(receiptExpenseDate('2026-10-15', now)).toEqual({
+      expenseDate: new Date('2026-10-15T10:00:00Z'),
+      rateDate: '2026-10-15',
+    });
+  });
+
+  // Pages show an expense's date in the browser's time zone. 10:00 UTC is the receipt's day from
+  // UTC−10 (Hawaii) to UTC+13 (New Zealand in summer, Tonga)
+  test.each([
+    'Pacific/Honolulu',
+    'America/Los_Angeles',
+    'Europe/Berlin',
+    'Asia/Tokyo',
+    'Pacific/Auckland',
+    'Pacific/Tongatapu',
+  ])('it shows as the receipt date in %s', (timeZone) => {
+    const { expenseDate } = receiptExpenseDate('2026-10-15', now);
+    expect(expenseDate.toLocaleDateString('en-US', { timeZone })).toBe('10/15/2026');
+  });
+
+  test.each([undefined, '', 'not a date', '2026-02-30', '2026-13-01', '0026-10-15'])(
+    'no usable date (%j) dates the expense now, at the latest rate',
+    (date) => {
+      expect(receiptExpenseDate(date, now)).toEqual({ expenseDate: now, rateDate: undefined });
+    },
+  );
+
+  // After today (UTC): misread, or the local today in a time zone ahead of UTC
+  test.each(['2026-11-12', '2027-10-15', '3026-01-01'])(
+    'a date after today (%s) dates the expense now, at the latest rate',
+    (date) => {
+      expect(receiptExpenseDate(date, now)).toEqual({ expenseDate: now, rateDate: undefined });
+    },
+  );
+
+  test("a receipt from today keeps today's rate, dated no later than now", () => {
+    expect(receiptExpenseDate('2026-11-11', now)).toEqual({
+      expenseDate: new Date('2026-11-11T10:00:00Z'),
+      rateDate: '2026-11-11',
+    });
+    const early = new Date('2026-11-11T03:00:00Z');
+    expect(receiptExpenseDate('2026-11-11', early)).toEqual({ expenseDate: early, rateDate: '2026-11-11' });
+  });
+
+  // Receipts scanned before the scan normalized its date (#33, #49) hold the text as it was read
+  test.each([
+    ['10/15/2026', '2026-10-15'],
+    ['15.10.2026', '2026-10-15'],
+    [' 2026-10-15 ', '2026-10-15'],
+    ['2026-10-15T19:45:00', '2026-10-15'],
+  ])('an older stored date (%j) is read as %s', (date, day) => {
+    expect(receiptExpenseDate(date, now).rateDate).toBe(day);
   });
 });

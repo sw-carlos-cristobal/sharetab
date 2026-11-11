@@ -9,6 +9,7 @@ import { parseExtractedData, receiptCurrency } from '../../lib/json-schemas';
 import { DEFAULT_CURRENCY } from '@/lib/currencies';
 import { MAX_MONEY_CENTS } from '@/lib/money';
 import { getExchangeRate, convertCents, exchangeRateSchema } from '../../lib/exchange-rates';
+import { receiptExpenseDate } from '../../lib/normalize-date';
 import { stripUndefined } from '../../lib/strip-undefined';
 import { lockActiveGroup } from '../../lib/group-balances';
 import { deleteUnusedSplitReceipts, removeReceiptFiles } from '../../lib/receipt-cleanup';
@@ -485,7 +486,7 @@ export const receiptsRouter = createTRPCRouter({
         // in that currency (#361), since it can be changed on another device. The page always sends it
         expectedCurrency: currencyCodeSchema.optional(),
         // A rate entered by hand, used when the receipt isn't in the group's currency in place of
-        // looking one up (#361): Frankfurter has none for some currencies, or for a future date
+        // looking one up (#361): Frankfurter has none for some currencies
         exchangeRate: exchangeRateSchema.optional(),
       }),
     )
@@ -534,11 +535,13 @@ export const receiptsRouter = createTRPCRouter({
       if (input.expectedCurrency !== undefined && input.expectedCurrency !== currency) {
         throw new AppError('CONFLICT', 'receiptChangedElsewhere');
       }
+      // Dated the receipt's day, and converted at its rate (#362). With no date, one after today, or
+      // one that isn't a calendar day, it's dated now at the latest rate
+      const { expenseDate, rateDate } = receiptExpenseDate(extractedData.date, new Date());
       let exchangeRate: number | null = null;
 
       if (currency !== groupCurrency) {
-        const receiptDate = extractedData.date?.slice(0, 10);
-        exchangeRate = input.exchangeRate ?? (await getExchangeRate(currency, groupCurrency, receiptDate));
+        exchangeRate = input.exchangeRate ?? (await getExchangeRate(currency, groupCurrency, rateDate));
         if (exchangeRate === null) {
           // The expense form's message, which asks for a rate; the receipt page opens its rate field on it
           throw new AppError('BAD_REQUEST', 'exchangeRateUnavailable');
@@ -631,6 +634,7 @@ export const receiptsRouter = createTRPCRouter({
             currency,
             exchangeRate: exchangeRate ?? 1.0,
             baseCurrencyAmount,
+            expenseDate,
             splitMode: 'ITEM',
             paidById: input.paidById,
             addedById: ctx.user.id,
