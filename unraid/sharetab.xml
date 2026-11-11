@@ -461,7 +461,7 @@
     Name="Login Rate Limit per IP"
     Target="AUTH_IP_RATE_LIMIT_MAX"
     Default="30"
-    Description="Max login attempts per client IP per 15 minutes. The client IP comes from the cf-connecting-ip, x-real-ip, or first x-forwarded-for header. Clients can forge these unless your reverse proxy overwrites all three; see the README Rate Limiting section."
+    Description="Max failed login attempts per client IP per 15 minutes. The client IP comes from the cf-connecting-ip, x-real-ip, or first x-forwarded-for header. Clients can forge these unless your reverse proxy overwrites all three; see the README Rate Limiting section."
     Type="Variable"
     Display="advanced"
     Required="false"

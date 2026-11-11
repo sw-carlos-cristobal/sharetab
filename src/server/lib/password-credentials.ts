@@ -2,7 +2,9 @@
  * The Credentials provider's `authorize` as auth.ts registers it: `authorizePasswordLogin`, with a
  * refusal by a login limit turned into a `CredentialsSignin` whose `code` Auth.js hands to the login
  * page's `signIn()` result (#401), so the page says how long to wait rather than that the password
- * is wrong. Kept out of password-login.ts, which the routers import, so only auth.ts loads next-auth.
+ * is wrong. Kept out of password-login.ts, which stays free of next-auth: the routers import it, and
+ * their tests can't load next-auth's main entry. This module comes in only through auth.ts, which
+ * those tests mock.
  */
 
 import { CredentialsSignin } from 'next-auth';

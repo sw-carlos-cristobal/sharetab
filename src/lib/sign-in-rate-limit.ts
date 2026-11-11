@@ -1,8 +1,8 @@
 /**
  * The code a password sign-in refused by a login limit carries to the login page (#401): the
- * server throws Auth.js's `CredentialsSignin` with it (`password-login.ts`), and `signIn()` hands
- * it back as `result.code`, so the page can say how long to wait instead of that the password is
- * wrong. Shared by both so they agree on its shape.
+ * server throws Auth.js's `CredentialsSignin` with it (`src/server/lib/password-credentials.ts`),
+ * and `signIn()` hands it back as `result.code`, so the page can say how long to wait instead of
+ * that the password is wrong. Shared by both so they agree on its shape.
  */
 
 const PREFIX = 'rate_limited:';

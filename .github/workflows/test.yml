@@ -119,8 +119,8 @@ jobs:
           BASE_URL: http://localhost:3000
           AUTH_RATE_LIMIT_MAX: "1000"
           # Next.js synthesizes x-forwarded-for for local requests, so every
-          # CI login shares one IP bucket — raise the cap or logins start
-          # failing partway through the suite.
+          # CI sign-in shares one IP bucket — raise the cap so the suite's
+          # wrong passwords, and sign-ins still in progress, don't fill it.
           AUTH_IP_RATE_LIMIT_MAX: "10000"
           REGISTER_RATE_LIMIT_MAX: "1000"
           GUEST_RATE_LIMIT_MAX: "1000"

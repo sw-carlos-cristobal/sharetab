@@ -16,13 +16,15 @@ const { nextAuth, authMock, google, nodemailer, sessionCookieSubject, logger, ch
     checkOidcSignIn: vi.fn(),
     db: { user: { findUnique: vi.fn() } },
   }));
-// CredentialsSignin as next-auth re-exports it (password-login.ts extends it)
+// CredentialsSignin as next-auth re-exports it (password-credentials.ts extends it)
 vi.mock('next-auth', async () => ({
   default: nextAuth,
   CredentialsSignin: (await import('@auth/core/errors')).CredentialsSignin,
 }));
 vi.mock('@auth/prisma-adapter', () => ({ PrismaAdapter: vi.fn(() => ({})) }));
-vi.mock('next-auth/providers/credentials', () => ({ default: vi.fn(() => ({ id: 'credentials' })) }));
+vi.mock('next-auth/providers/credentials', () => ({
+  default: vi.fn((options: unknown) => ({ id: 'credentials', options })),
+}));
 vi.mock('next-auth/providers/google', () => ({ default: google }));
 vi.mock('next-auth/providers/nodemailer', () => ({ default: nodemailer }));
 // Reading the cookie itself is tested against Auth.js in lib/session-cookie.test.ts
@@ -157,6 +159,14 @@ describe('other providers', () => {
     expect((await loadAuth()).providers.map((p) => p.id)).toContain('credentials');
     const ssoOnly = await loadAuth({ ...OIDC_ENV, DISABLE_PASSWORD_LOGIN: 'true' });
     expect(ssoOnly.providers.map((p) => p.id)).not.toContain('credentials');
+  });
+
+  test('registers the authorize step that tells the login page about the login limits (#401)', async () => {
+    const config = await loadAuth();
+    // The instance auth.ts just loaded (loadAuth resets the module registry first)
+    const { authorizeCredentials } = await import('./lib/password-credentials');
+    const credentials = config.providers.find((p) => p.id === 'credentials');
+    expect(credentials?.options).toMatchObject({ authorize: authorizeCredentials });
   });
 
   test('registers OIDC with UserInfo profiles, its email-linking setting and the profile caps', async () => {

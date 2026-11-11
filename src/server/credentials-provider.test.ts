@@ -24,10 +24,11 @@ vi.mock('bcryptjs', () => ({ default: { compare: vi.fn(async () => false) } }));
 
 const { authorizeCredentials } = await import('./lib/password-credentials');
 
-// The Credentials provider as auth.ts registers it, run through the real Auth.js the way the login
-// page's signIn('credentials', { redirect: false }) calls it, and read the way next-auth/react
-// reads the answer (`code` from the URL it returns). An Auth.js upgrade that stops passing a
-// refusal's code to the page fails here (#401).
+// The authorize step auth.ts registers (auth.test.ts checks that it does), in a Credentials
+// provider run through Auth.js's core (`Auth` from @auth/core) the way the login page's
+// signIn('credentials', { redirect: false }) calls it, with the answer read the way
+// next-auth/react reads it (`code` from the URL it returns). An @auth/core upgrade that stops
+// putting a refusal's code in that URL fails here (#401).
 
 const ORIGIN = 'http://localhost:3000';
 const config = {

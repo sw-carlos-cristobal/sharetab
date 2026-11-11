@@ -39,7 +39,8 @@ export function requirePasswordLogin() {
 }
 
 /**
- * The per-address login rate-limit key, also cleared by a password reset or a change in Settings.
+ * The per-address login rate-limit key, cleared by a successful sign-in, a password reset or a
+ * change in Settings.
  * Lowercased like the user lookup, so case variants share a bucket.
  */
 export function loginRateLimitKey(email: string): string {
@@ -77,7 +78,8 @@ export async function authorizePasswordLogin(credentials: unknown, headers: Head
 
   // Both limits count only failed attempts (#401), yet each attempt is counted
   // here, before its password is checked, so guesses sent at once are held too;
-  // a successful sign-in then gives its attempt back (below). A refusal throws
+  // a successful sign-in then clears the address's count and gives the IP back
+  // its attempt (below). A refusal throws
   // LoginRateLimited, so the login page says to wait rather than that the
   // password is wrong.
 
@@ -107,20 +109,28 @@ export async function authorizePasswordLogin(credentials: unknown, headers: Head
   const { allowed, retryAfterMs } = checkRateLimit(emailKey, loginAttemptsPerEmail(), LOGIN_WINDOW_MS);
   if (!allowed) {
     logger.warn('auth.rate_limited', { email: parsed.data.email });
+    // No password was checked, so the IP gets back the attempt it was charged
+    if (ipKey) refundRateLimit(ipKey);
     throw new LoginRateLimited(retryAfterMs);
   }
 
   let user;
+  let valid;
   try {
     user = await findUserByEmail(db, parsed.data.email);
+    if (!user?.passwordHash) return null;
+    valid = await bcrypt.compare(parsed.data.password, user.passwordHash);
   } catch (error) {
-    if (!(error instanceof AmbiguousEmailError)) throw error;
-    logger.warn('auth.login_failed', { email: parsed.data.email, reason: 'ambiguous_email' });
-    return null;
+    if (error instanceof AmbiguousEmailError) {
+      logger.warn('auth.login_failed', { email: parsed.data.email, reason: 'ambiguous_email' });
+      return null;
+    }
+    // Not a wrong password (the database or bcrypt failed): both limits get back what this
+    // attempt counted, so an outage doesn't use up an address's attempts
+    refundRateLimit(emailKey);
+    if (ipKey) refundRateLimit(ipKey);
+    throw error;
   }
-  if (!user?.passwordHash) return null;
-
-  const valid = await bcrypt.compare(parsed.data.password, user.passwordHash);
   if (!valid) {
     logger.warn('auth.login_failed', { email: parsed.data.email, reason: 'invalid_password' });
     return null;

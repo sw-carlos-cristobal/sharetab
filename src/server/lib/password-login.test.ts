@@ -85,11 +85,9 @@ describe('authorizePasswordLogin', () => {
 
   test('returns null and logs when several accounts match ignoring case', async () => {
     usersFound([BOB, { ...BOB, id: 'bob2', email: 'BOB@example.com' }]);
-    await expect(signIn('bob@example.com', RIGHT)).resolves.toBeNull();
-    expect(logger.warn).toHaveBeenCalledWith('auth.login_failed', {
-      email: 'bob@example.com',
-      reason: 'ambiguous_email',
-    });
+    const email = newEmail();
+    await expect(signIn(email, RIGHT)).resolves.toBeNull();
+    expect(logger.warn).toHaveBeenCalledWith('auth.login_failed', { email, reason: 'ambiguous_email' });
   });
 
   test('other lookup failures still throw', async () => {
@@ -176,6 +174,22 @@ describe('the per-address login limit (#401)', () => {
     expect(bcrypt.compare).toHaveBeenCalledTimes(5);
   });
 
+  test('a database or bcrypt error gives back what the attempt counted', async () => {
+    vi.stubEnv('AUTH_IP_RATE_LIMIT_MAX', '3');
+    const email = newEmail();
+    const headers = fromIp();
+    for (let i = 0; i < 5; i++) {
+      mockDb.$queryRaw.mockRejectedValueOnce(new Error('db down'));
+      await expect(signIn(email, RIGHT, headers)).rejects.toThrow('db down');
+    }
+    for (let i = 0; i < 5; i++) {
+      vi.mocked(bcrypt.compare).mockRejectedValueOnce(new Error('bcrypt failed') as never);
+      await expect(signIn(email, RIGHT, headers)).rejects.toThrow('bcrypt failed');
+    }
+    // Neither the address's limit nor the IP's was used up
+    await expect(signIn(email, RIGHT, headers)).resolves.toMatchObject({ id: 'bob' });
+  });
+
   test('AUTH_RATE_LIMIT_MAX sets it', async () => {
     vi.stubEnv('AUTH_RATE_LIMIT_MAX', '2');
     const email = newEmail();
@@ -207,6 +221,30 @@ describe('the per-IP login limit', () => {
     // A refusal by the IP limit doesn't charge the address's own limit
     vi.stubEnv('AUTH_RATE_LIMIT_MAX', '1');
     await expect(signIn(email, RIGHT, fromIp())).resolves.toMatchObject({ id: 'bob' });
+  });
+
+  test("a success gives back only its own attempt, so it can't reset the count of guesses at other addresses", async () => {
+    vi.stubEnv('AUTH_IP_RATE_LIMIT_MAX', '3');
+    const headers = fromIp();
+    await expect(signIn(newEmail(), WRONG, headers)).resolves.toBeNull();
+    await expect(signIn(newEmail(), WRONG, headers)).resolves.toBeNull();
+    await expect(signIn(newEmail(), RIGHT, headers)).resolves.toMatchObject({ id: 'bob' });
+    await expect(signIn(newEmail(), WRONG, headers)).resolves.toBeNull();
+    // Three wrong passwords from this IP: the success between them didn't wipe the first two
+    await expect(signIn(newEmail(), WRONG, headers)).rejects.toMatchObject(RATE_LIMITED);
+  });
+
+  test('a refusal by the address limit gives the IP back its attempt', async () => {
+    vi.stubEnv('AUTH_RATE_LIMIT_MAX', '1');
+    vi.stubEnv('AUTH_IP_RATE_LIMIT_MAX', '3');
+    const locked = newEmail();
+    await expect(signIn(locked, WRONG, fromIp())).resolves.toBeNull();
+    const headers = fromIp();
+    for (let i = 0; i < 5; i++) {
+      await expect(signIn(locked, RIGHT, headers)).rejects.toMatchObject(RATE_LIMITED);
+    }
+    // No password was checked, so this IP's limit is untouched
+    await expect(signIn(newEmail(), RIGHT, headers)).resolves.toMatchObject({ id: 'bob' });
   });
 
   test('is skipped when no header identifies the client', async () => {
