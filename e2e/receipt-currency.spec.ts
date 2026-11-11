@@ -182,3 +182,28 @@ test.describe('Receipt currency (#361)', () => {
     }
   });
 });
+
+// #362: an expense made from a receipt was dated the moment it was saved, while its rate was the
+// receipt date's
+test.describe('Receipt date (#362)', () => {
+  test("the expense is dated the receipt's day", async ({ page }) => {
+    const { owner, groupId, dispose } = await createTestGroup(
+      users.alice.email,
+      users.alice.password,
+      [],
+      'Dated Scan',
+    );
+    try {
+      const { receiptId } = await scanReceipt(owner, groupId);
+      await openReceipt(page, groupId, receiptId);
+      await createExpenseFromPage(page, groupId);
+
+      // The mock provider reads 2025-03-15 from every receipt; a day is stored at 10:00 UTC
+      expect((await savedExpense(owner, groupId)).expenseDate).toBe('2025-03-15T10:00:00.000Z');
+      // The group page's expense row: "Paid by Alice Johnson · 3/15/2025"
+      await expect(page.getByText('· 3/15/2025')).toBeVisible({ timeout: 30000 });
+    } finally {
+      await dispose();
+    }
+  });
+});
