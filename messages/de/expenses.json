@@ -136,6 +136,7 @@
     "validationNameRequired": "Artikelname ist erforderlich.",
     "validationPricePositive": "Der Preis muss größer als null sein.",
     "validationQtyPositive": "Die Menge muss eine positive ganze Zahl sein.",
+    "formerMembersNotice": "Dieser Beleg wurde mit jemandem gespeichert, der nicht mehr in der Gruppe ist, daher wurde die Person vom Beleg entfernt. Prüfen Sie, wer bezahlt hat, und ordnen Sie ihre Artikel jemand anderem zu.",
     "receiptImageAlt": "Beleg"
   },
   "splits": {

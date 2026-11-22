@@ -136,6 +136,7 @@
     "validationNameRequired": "Le nom de l'article est requis.",
     "validationPricePositive": "Le prix doit être supérieur à zéro.",
     "validationQtyPositive": "La quantité doit être un nombre entier positif.",
+    "formerMembersNotice": "Ce reçu a été enregistré avec quelqu’un qui ne fait plus partie du groupe : cette personne en a donc été retirée. Vérifiez qui a payé et attribuez ses articles à quelqu’un d’autre.",
     "receiptImageAlt": "Reçu"
   },
   "splits": {

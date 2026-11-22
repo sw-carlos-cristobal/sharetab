@@ -4,6 +4,7 @@ import { AppError } from '@/server/lib/app-error';
 import { createTRPCRouter, protectedProcedure, groupMemberProcedure } from '../init';
 import { stripUndefined } from '../../lib/strip-undefined';
 import { loadGroupBalances, lockGroupMembers, requireSettledUp } from '../../lib/group-balances';
+import { dropFromPendingReceipts } from '../../lib/pending-receipts';
 import { deleteGroupWithData } from '../../lib/group-delete';
 import { removeReceiptFiles } from '../../lib/receipt-cleanup';
 import { mergePlaceholderIntoUser } from '../../lib/placeholder-merge';
@@ -606,15 +607,10 @@ export const groupsRouter = createTRPCRouter({
             }
           }
 
+          // A receipt saved for later can't become an expense with them in it (#414). The
+          // ones already made into expenses keep who had which item, which a merge hands over.
+          await dropFromPendingReceipts(tx, input.userId, input.groupId);
           if (inHistory) {
-            // A receipt saved for later can't become an expense with them in it. The
-            // ones already made into expenses keep who had which item, which a merge
-            // hands over.
-            const pending = { groupId: input.groupId, expense: { is: null } };
-            await tx.receiptItemAssignment.deleteMany({
-              where: { userId: input.userId, receiptItem: { receipt: pending } },
-            });
-            await tx.receipt.updateMany({ where: { paidById: input.userId, ...pending }, data: { paidById: null } });
             // Defensive: the row lock above makes a merge of them wait, and the read
             // above already saw one that finished
             const { count } = await tx.groupMember.updateMany({
@@ -645,7 +641,9 @@ export const groupsRouter = createTRPCRouter({
           // their name still shows in the balances, a balance with them (open when they
           // left, #279, or one that comes back) can be settled, and joining again by invite
           // brings the row back (#323). Removed, they lose access to the group. With nothing
-          // here to show their name, the row goes.
+          // here to show their name, the row goes. Either way, the group's receipts saved for
+          // later stop naming them (#414).
+          await dropFromPendingReceipts(tx, input.userId, input.groupId);
           if (await isInGroupHistory(tx, input.userId, input.groupId)) {
             // Defensive: the row lock above makes an instance admin deleting their account wait,
             // and the read above already saw one that finished. A group admin's row goes back to

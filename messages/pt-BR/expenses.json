@@ -136,6 +136,7 @@
     "validationNameRequired": "O nome do item é obrigatório.",
     "validationPricePositive": "O preço deve ser maior que zero.",
     "validationQtyPositive": "A quantidade deve ser um número inteiro positivo.",
+    "formerMembersNotice": "Este recibo foi salvo com alguém que não está mais no grupo, então essa pessoa foi retirada dele. Confira quem pagou e atribua os itens dela a outra pessoa.",
     "receiptImageAlt": "Recibo"
   },
   "splits": {

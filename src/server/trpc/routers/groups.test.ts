@@ -1117,6 +1117,11 @@ describe('removing a placeholder', () => {
     // Their activity-log entries stay (the user link is cleared by the database)
     expect(mockDb.activityLog.deleteMany).not.toHaveBeenCalled();
     expect(mockDb.receiptItemAssignment.deleteMany).toHaveBeenCalledWith({ where: { userId: 'p1' } });
+    // #414: a receipt saved for later named them as its payer, an id no user has once they're deleted
+    expect(mockDb.receipt.updateMany).toHaveBeenCalledWith({
+      where: { paidById: 'p1', groupId: 'g1', expense: { is: null } },
+      data: { paidById: null },
+    });
     expect(mockDb.activityLog.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ type: 'MEMBER_LEFT' }) }),
     );
@@ -1304,6 +1309,64 @@ describe('leaving a group', () => {
     await expect(api.removeMember({ groupId: 'g1', userId: 'bob' })).resolves.toEqual({ success: true });
     expect(mockDb.groupMember.updateMany).toHaveBeenCalledWith(markedRemoved('gm-bob'));
     expect(mockDb.groupMember.delete).not.toHaveBeenCalled();
+  });
+
+  // #414: they stayed assigned on the group's receipts saved for later, and stayed their
+  // payer. The receipt page shows only current members, so their items counted as assigned
+  // to nobody it showed, and both Create Expense and Save for later were refused.
+  describe("takes them off the group's receipts saved for later (#414)", () => {
+    const pending = { groupId: 'g1', expense: { is: null } };
+    function expectTakenOff(userId: string) {
+      // Receipts made into expenses keep who had which item
+      expect(mockDb.receiptItemAssignment.deleteMany).toHaveBeenCalledWith({
+        where: { userId, receiptItem: { receipt: pending } },
+      });
+      expect(mockDb.receipt.updateMany).toHaveBeenCalledWith({
+        where: { paidById: userId, ...pending },
+        data: { paidById: null },
+      });
+    }
+
+    test.each([
+      ['in the group history', 1],
+      ['in none of its expenses or payments', 0],
+    ])('when a member %s leaves', async (_, shares) => {
+      setUp({ userId: 'bob', role: 'MEMBER' }, { userId: 'bob', role: 'MEMBER' });
+      mockDb.settlement.findMany.mockResolvedValue(bobPaidBack);
+      mockDb.expenseShare.count.mockResolvedValue(shares);
+      const api = await caller('bob');
+      await expect(api.removeMember({ groupId: 'g1', userId: 'bob' })).resolves.toEqual({ success: true });
+      expectTakenOff('bob');
+    });
+
+    test('when the owner removes them', async () => {
+      setUp({ userId: 'owner', role: 'OWNER' }, { userId: 'bob', role: 'MEMBER' });
+      const api = await caller('owner');
+      await api.removeMember({ groupId: 'g1', userId: 'bob' });
+      expectTakenOff('bob');
+    });
+
+    // A Save for later takes the group's row FOR SHARE before it checks who is in the group,
+    // so it either finished first and this takes the people it saved off, or waits and finds
+    // them gone
+    test('under the group lock', async () => {
+      setUp({ userId: 'owner', role: 'OWNER' }, { userId: 'bob', role: 'MEMBER' });
+      const api = await caller('owner');
+      await api.removeMember({ groupId: 'g1', userId: 'bob' });
+      const locked = mockDb.$queryRaw.mock.invocationCallOrder[0]!;
+      expect(mockDb.receiptItemAssignment.deleteMany.mock.invocationCallOrder[0]!).toBeGreaterThan(locked);
+      expect(mockDb.receipt.updateMany.mock.invocationCallOrder[0]!).toBeGreaterThan(locked);
+    });
+
+    test("not when they can't leave", async () => {
+      setUp({ userId: 'bob', role: 'MEMBER' }, { userId: 'bob', role: 'MEMBER' });
+      const api = await caller('bob');
+      await expect(api.removeMember({ groupId: 'g1', userId: 'bob' })).rejects.toMatchObject({
+        code: 'PRECONDITION_FAILED',
+      });
+      expect(mockDb.receiptItemAssignment.deleteMany).not.toHaveBeenCalled();
+      expect(mockDb.receipt.updateMany).not.toHaveBeenCalled();
+    });
   });
 
   // Nothing in the group shows their name, so there's nothing to keep the row for

@@ -136,6 +136,7 @@
     "validationNameRequired": "品目名は必須です。",
     "validationPricePositive": "価格はゼロより大きくする必要があります。",
     "validationQtyPositive": "数量は正の整数である必要があります。",
+    "formerMembersNotice": "このレシートは、グループにいなくなった人を含めて保存されていたため、その人はレシートから外されました。支払った人を確認し、その人の品目を別の人に割り当ててください。",
     "receiptImageAlt": "レシート"
   },
   "splits": {

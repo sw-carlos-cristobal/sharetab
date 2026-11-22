@@ -136,6 +136,7 @@
     "validationNameRequired": "请输入项目名称。",
     "validationPricePositive": "价格必须大于零。",
     "validationQtyPositive": "数量必须是正整数。",
+    "formerMembersNotice": "此收据保存时包含了已不在群组中的人，因此已将其从收据中移除。请检查付款人，并将其项目分配给其他人。",
     "receiptImageAlt": "收据"
   },
   "splits": {

@@ -724,6 +724,12 @@ export const receiptsRouter = createTRPCRouter({
       await verifyReceiptAccess(ctx.db, input.receiptId, ctx.user.id);
 
       await ctx.db.$transaction(async (tx) => {
+        // Someone leaving or removed takes the group's row (lockGroupMembers) and then comes off
+        // its receipts saved for later (#414). Holding it FOR SHARE, this save either waits for
+        // that and finds them gone below, or finishes first and they're taken off what it saved.
+        // Before the receipt's lock, as in Create Expense: a removal holding the group's row
+        // updates receipts, so the other order could deadlock with it
+        await tx.$queryRaw`SELECT 1 FROM "Group" WHERE "id" = ${input.groupId} FOR SHARE`;
         // Deleting it from the pending list takes it off the group and keeps it while a claim
         // session uses it (#318). Under its lock, that either waits for this save or is seen
         // here, and the access check above runs again on what the delete left
@@ -760,9 +766,13 @@ export const receiptsRouter = createTRPCRouter({
             select: { userId: true },
           });
           const validMemberIds = new Set(validMembers.map((member) => member.userId));
+          // The messages Create Expense gives, which don't show the person's raw id (#414)
+          if (input.paidById && !validMemberIds.has(input.paidById)) {
+            throw new AppError('BAD_REQUEST', 'payerNotMember');
+          }
           for (const userId of userIdsToValidate) {
             if (!validMemberIds.has(userId)) {
-              throw new AppError('BAD_REQUEST', 'userNotGroupMember', { userId });
+              throw new AppError('BAD_REQUEST', 'assigneeNotMember');
             }
           }
         }
