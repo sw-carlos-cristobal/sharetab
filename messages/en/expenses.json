@@ -136,6 +136,7 @@
     "validationNameRequired": "Item name is required.",
     "validationPricePositive": "Price must be greater than zero.",
     "validationQtyPositive": "Quantity must be a positive whole number.",
+    "formerMembersNotice": "This receipt was saved with someone who is no longer in the group, so they've been taken off it. Check who paid, and assign their items to someone else.",
     "receiptImageAlt": "Receipt"
   },
   "splits": {

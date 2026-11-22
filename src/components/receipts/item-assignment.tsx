@@ -224,11 +224,17 @@ export function ItemAssignment({
   const tipOverrideCents =
     typedTipCents !== null && typedTipCents % currencyStep(fieldCurrency) === 0 ? typedTipCents : null;
   const tip = extracted && tipOverrideCents !== null ? tipOverrideCents : (extracted?.tip ?? 0);
+  // Who is in the group now. A receipt saved before someone left can still name them (#414): the
+  // server takes people off saved receipts as they leave, but not ones saved earlier, nor always
+  // when an admin deletes an account. The page shows no chip for them, so it leaves them out of
+  // the payer, the totals and what it sends, rather than count an item as assigned to someone
+  // who can't be shown or unselected and have Create Expense refused for naming them
+  const memberIds = useMemo(() => new Set(members.map((m) => m.id)), [members]);
   // Until someone picks a payer or a saved one loads, default to the current user (when
   // they're in the group), as Add Expense does (#271, #265)
   const currentUserId = profile.data?.id;
-  const defaultPaidById = currentUserId && members.some((m) => m.id === currentUserId) ? currentUserId : '';
-  const effectivePaidById = paidById || defaultPaidById;
+  const defaultPaidById = currentUserId && memberIds.has(currentUserId) ? currentUserId : '';
+  const effectivePaidById = (memberIds.has(paidById) ? paidById : '') || defaultPaidById;
 
   // Note (Finding #29): toggleAssignment and assignAllToEveryone are intentionally
   // duplicated from split/page.tsx. This component uses Record<string, Set<string>>
@@ -309,8 +315,20 @@ export function ItemAssignment({
   }
 
   // What the totals below show, and what Create Expense and Save for later send: the current items
-  // that have someone. Read through `items`, so an item deleted on another device doesn't count (#411).
-  const assignmentList = useMemo(() => receiptAssignmentList(items, assignments), [items, assignments]);
+  // that have someone. Read through `items`, so an item deleted on another device doesn't count (#411),
+  // and through `memberIds`, so someone no longer in the group doesn't either (#414).
+  const memberAssignments = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(assignments).map(([itemId, people]) => [itemId, [...people].filter((id) => memberIds.has(id))]),
+      ),
+    [assignments, memberIds],
+  );
+  const assignmentList = useMemo(() => receiptAssignmentList(items, memberAssignments), [items, memberAssignments]);
+  // The receipt names someone no longer in the group: say why their items, or the payer, need picking again
+  const namesFormerMembers =
+    (paidById !== '' && !memberIds.has(paidById)) ||
+    Object.values(assignments).some((people) => [...people].some((id) => !memberIds.has(id)));
   // The server calculates the expense with the same function and the same list, and saves it only
   // if each person's total is the one shown here (#364). Memoized to avoid recomputation on every
   // render (Finding #36). In whole units of a currency with no decimals (#335), the currency
@@ -674,6 +692,16 @@ export function ItemAssignment({
           </div>
         </CardContent>
       </Card>
+
+      {namesFormerMembers && (
+        <p
+          role="status"
+          className="rounded-md border border-amber-500/30 bg-amber-500/15 p-3 text-sm text-amber-800 dark:text-amber-200"
+          data-testid="former-members-notice"
+        >
+          {t('formerMembersNotice')}
+        </p>
+      )}
 
       {/* Quick actions */}
       <div className="flex gap-2">

@@ -136,6 +136,7 @@
     "validationNameRequired": "Artikelnamn krävs.",
     "validationPricePositive": "Priset måste vara större än noll.",
     "validationQtyPositive": "Antal måste vara ett positivt heltal.",
+    "formerMembersNotice": "Kvittot sparades med någon som inte längre är med i gruppen, så personen har tagits bort från det. Kontrollera vem som betalade och tilldela personens artiklar till någon annan.",
     "receiptImageAlt": "Kvitto"
   },
   "splits": {

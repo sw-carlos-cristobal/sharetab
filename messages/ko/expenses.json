@@ -136,6 +136,7 @@
     "validationNameRequired": "항목 이름은 필수입니다.",
     "validationPricePositive": "가격은 0보다 커야 합니다.",
     "validationQtyPositive": "수량은 양의 정수여야 합니다.",
+    "formerMembersNotice": "이 영수증은 더 이상 그룹에 없는 사람을 포함해 저장되어, 그 사람은 영수증에서 제외되었습니다. 결제자를 확인하고 그 사람의 항목을 다른 사람에게 배정하세요.",
     "receiptImageAlt": "영수증"
   },
   "splits": {
