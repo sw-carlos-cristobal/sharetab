@@ -1002,8 +1002,8 @@ describe('password reset links (#397)', () => {
 // kept as a "Deleted user" placeholder; its memberships are now marked removed, as a
 // placeholder's are (#284), so its balances show under that name and can be settled.
 describe('deleting a user keeps their memberships, marked removed', () => {
-  // Candidates for owner, in the order the search finds them
-  function transaction(ownedGroups: string[], candidates: { id: string; userId: string }[]) {
+  // Candidates for owner, in the order the search finds them; then the groups they're taken out of
+  function transaction(ownedGroups: string[], candidates: { id: string; userId: string }[], leftGroups: string[] = []) {
     const findFirst = vi.fn();
     for (const candidate of candidates) findFirst.mockResolvedValueOnce(candidate);
     findFirst.mockResolvedValue(null);
@@ -1013,12 +1013,17 @@ describe('deleting a user keeps their memberships, marked removed', () => {
       session: { deleteMany: vi.fn() },
       passwordResetToken: { deleteMany: vi.fn() },
       groupMember: {
-        findMany: vi.fn().mockResolvedValue(ownedGroups.map((groupId) => ({ groupId }))),
+        findMany: vi
+          .fn()
+          .mockResolvedValueOnce(ownedGroups.map((groupId) => ({ groupId })))
+          .mockResolvedValue(leftGroups.map((groupId) => ({ groupId }))),
         findFirst,
         update: vi.fn(),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         deleteMany: vi.fn(),
       },
+      receipt: { updateMany: vi.fn() },
+      receiptItemAssignment: { deleteMany: vi.fn() },
     };
     mockDb.$transaction.mockImplementationOnce(async (fn: (client: typeof tx) => unknown) => fn(tx));
     return tx;
@@ -1118,6 +1123,36 @@ describe('deleting a user keeps their memberships, marked removed', () => {
       where: { userId: 'bob', removedAt: null },
       data: { removedAt: expect.any(Date), role: 'MEMBER' },
     });
+  });
+
+  // #414: they stayed assigned on those groups' receipts saved for later, and their payer, so the
+  // receipt page counted their items as assigned to nobody it showed and couldn't finish them
+  test("takes them off the receipts saved for later in the groups they're taken out of", async () => {
+    const tx = transaction(['g-own'], [], ['g1', 'g2']);
+    const api = await callerAs(adminSession);
+    await api.deleteUser({ userId: 'bob' });
+
+    // The groups whose rows are marked: they stay in one they own that nobody could take over
+    expect(tx.groupMember.findMany).toHaveBeenLastCalledWith({
+      where: { userId: 'bob', removedAt: null, groupId: { notIn: ['g-own'] } },
+      select: { groupId: true },
+    });
+    for (const groupId of ['g1', 'g2']) {
+      const pending = { groupId, expense: { is: null } };
+      expect(tx.receiptItemAssignment.deleteMany).toHaveBeenCalledWith({
+        where: { userId: 'bob', receiptItem: { receipt: pending } },
+      });
+      expect(tx.receipt.updateMany).toHaveBeenCalledWith({
+        where: { paidById: 'bob', ...pending },
+        data: { paidById: null },
+      });
+    }
+    expect(tx.receiptItemAssignment.deleteMany).toHaveBeenCalledTimes(2);
+    expect(tx.receipt.updateMany).toHaveBeenCalledTimes(2);
+    // Read before the rows are marked, which would take them out of it
+    expect(tx.groupMember.findMany.mock.invocationCallOrder[1]!).toBeLessThan(
+      tx.groupMember.updateMany.mock.invocationCallOrder.at(-1)!,
+    );
   });
 
   test('stays in a group they own when every candidate left before the grant', async () => {

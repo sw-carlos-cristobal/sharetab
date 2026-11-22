@@ -14,6 +14,10 @@ const READS: Record<string, { count: number; why: string }> = {
   'src/server/lib/group-balances.ts': { count: 2, why: 'skips them: every balance check reads this' },
   'src/server/lib/group-delete.ts': { count: 5, why: 'counts them: placeholders still named by a row stay' },
   'src/server/lib/placeholder-merge.ts': { count: 6, why: 'counts them: a merge hands deleted records over too' },
+  'src/server/lib/pending-receipts.ts': {
+    count: 1,
+    why: 'counts them: a receipt whose expense was deleted is not saved for later',
+  },
   'src/server/lib/receipt-cleanup.ts': { count: 2, why: 'counts them: a deleted expense keeps its receipt' },
   'src/server/trpc/routers/admin.ts': { count: 6, why: 'counts them: stored rows, as with removed members' },
   'src/server/trpc/routers/balances.ts': { count: 4, why: 'skips them: the dashboard balances' },
@@ -22,7 +26,7 @@ const READS: Record<string, { count: number; why: string }> = {
     why: 'list skips them (or lists only them); get returns one; update, delete and restore check deletedAt',
   },
   'src/server/trpc/routers/groups.ts': {
-    count: 12,
+    count: 11,
     why: 'expense counts skip them; the currency lock, history checks and saved receipts count them',
   },
   'src/server/trpc/routers/receipts.ts': { count: 4, why: 'counts them: a deleted expense keeps its receipt' },

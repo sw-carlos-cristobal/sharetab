@@ -56,6 +56,7 @@ import { requirePasswordLogin } from '@/server/lib/password-login';
 import { isAdmin } from '@/server/lib/admin-email';
 import { REGISTRATION_MODES, readRegistrationMode } from '@/server/lib/registration-mode';
 import { isGuestUploadsForcedOff, readGuestUploadsSetting, saveGuestUploadsSetting } from '@/server/lib/guest-uploads';
+import { dropFromPendingReceipts } from '@/server/lib/pending-receipts';
 
 // How long a successful Meridian login waits for the proxy start attempt.
 const MERIDIAN_LOGIN_START_WAIT_MS = 15_000;
@@ -446,14 +447,17 @@ export const adminRouter = createTRPCRouter({
       // show under its name and can still be settled with it, and a group it owes in can
       // still be archived once they are (#323). Each marked row's role becomes MEMBER, so no
       // removed row is anyone's owner or admin.
-      await tx.groupMember.updateMany({
-        where: {
-          userId: input.userId,
-          removedAt: null,
-          ...(keepMembershipGroupIds.length > 0 ? { groupId: { notIn: keepMembershipGroupIds } } : {}),
-        },
-        data: { removedAt: new Date(), role: 'MEMBER' },
-      });
+      const leaving = {
+        userId: input.userId,
+        removedAt: null,
+        ...(keepMembershipGroupIds.length > 0 ? { groupId: { notIn: keepMembershipGroupIds } } : {}),
+      };
+      const leftGroups = await tx.groupMember.findMany({ where: leaving, select: { groupId: true } });
+      await tx.groupMember.updateMany({ where: leaving, data: { removedAt: new Date(), role: 'MEMBER' } });
+      // Nor are they on those groups' receipts saved for later any more (#414)
+      for (const { groupId } of leftGroups) {
+        await dropFromPendingReceipts(tx, input.userId, groupId);
+      }
     });
 
     await logAdminAction(ctx.db, ctx.user.id, 'USER_DELETED', input.userId, {
