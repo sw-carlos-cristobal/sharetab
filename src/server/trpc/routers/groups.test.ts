@@ -1317,7 +1317,7 @@ describe('leaving a group', () => {
   describe("takes them off the group's receipts saved for later (#414)", () => {
     const pending = { groupId: 'g1', expense: { is: null } };
     function expectTakenOff(userId: string) {
-      // Receipts made into expenses keep who had which item, which their history shows
+      // Receipts made into expenses keep who had which item
       expect(mockDb.receiptItemAssignment.deleteMany).toHaveBeenCalledWith({
         where: { userId, receiptItem: { receipt: pending } },
       });

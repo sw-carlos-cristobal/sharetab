@@ -118,7 +118,8 @@ export function calculateReceiptSplitTotals(params: {
  * The list the group scan page previews `calculateReceiptSplitTotals` with and sends to Create
  * Expense and Save for later (#364, #411): the receipt's items that have someone, in receipt
  * order, each with its people in the order the page holds them. The page's selections can still
- * hold an item deleted from the receipt, so they're read through `items`.
+ * hold an item deleted from the receipt, so they're read through `items`; the page leaves out
+ * people no longer in the group before calling this (#414).
  */
 export function receiptAssignmentList(
   items: { id: string }[],

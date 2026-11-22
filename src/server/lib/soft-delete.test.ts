@@ -27,7 +27,7 @@ const READS: Record<string, { count: number; why: string }> = {
   },
   'src/server/trpc/routers/groups.ts': {
     count: 11,
-    why: 'expense counts skip them; the currency lock, history checks and saved receipts count them',
+    why: 'expense counts skip them; the currency lock and history checks count them',
   },
   'src/server/trpc/routers/receipts.ts': { count: 4, why: 'counts them: a deleted expense keeps its receipt' },
   'src/server/trpc/routers/settlements.ts': {

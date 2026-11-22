@@ -78,6 +78,8 @@ test.describe('Receipt scan: someone saved on a receipt leaves the group (#414)'
       const create = page.getByTestId('create-expense-btn');
       await expect(create).toHaveText('Assign all items (1 remaining)');
       await expect(page.getByTestId('paid-by-select')).toHaveValue(alice);
+      // Nobody on it is gone any more, so there's nothing to explain
+      await expect(page.getByTestId('former-members-notice')).toHaveCount(0);
 
       await page.getByTestId(`item-card-${charliesItem!.id}`).getByTestId(`member-toggle-${bob}`).click();
       await expect(create).toHaveText('Create Expense from Receipt');
@@ -91,61 +93,32 @@ test.describe('Receipt scan: someone saved on a receipt leaves the group (#414)'
     }
   });
 
-  // Receipts saved before people were taken off them as they left still name them, and a save
-  // racing an admin deleting an account can too. The page leaves them out of what it counts and
-  // sends, so the receipt can still be finished, and says why their items need someone.
+  // Someone who left before the server took people off saved receipts as they leave is still on
+  // them, whenever the receipt was saved, and a save naming someone while an admin deletes their
+  // account can put them back. The page leaves them out of what it shows, counts and sends, so the
+  // receipt can still be finished, and says why their items need someone.
   test('the page leaves out a saved payer and assignee who are no longer in the group', async ({ page }) => {
     const { owner, groupId, memberIds, dispose } = await newGroup('Saved Receipt Gone');
     const alice = memberIds[users.alice.email]!;
     const bob = memberIds[users.bob.email]!;
-    const gone = 'departed-user-id';
     try {
-      const { receiptId, items } = await scanReceipt(owner, groupId);
-      const [sharedItem, goneItem, ...rest] = items;
-      await ok(
-        await trpcMutation(owner, 'receipts.saveForLater', {
-          groupId,
-          receiptId,
-          paidById: bob,
-          assignments: [
-            { receiptItemId: sharedItem!.id, userIds: [bob] },
-            ...rest.map((item) => ({ receiptItemId: item.id, userIds: [alice] })),
-          ],
-        }),
-      );
-
-      // The receipt as such a save left it: the person gone is its payer, has one item to
-      // themselves and shares another
-      await page.route('**/api/trpc/**receipts.getReceiptItems**', async (route) => {
-        const response = await route.fetch();
-        const procedures = new URL(route.request().url()).pathname.split('/').at(-1)!.split(',');
-        const body = await response.json();
-        const answer = body[procedures.indexOf('receipts.getReceiptItems')].result.data.json;
-        answer.receipt.paidById = gone;
-        for (const item of answer.items as (Item & { id: string })[]) {
-          if (item.id === sharedItem!.id || item.id === goneItem!.id) {
-            item.assignments.push({
-              userId: gone,
-              receiptItemId: item.id,
-              id: `a-${item.id}`,
-              shareOfItem: 1,
-            } as never);
-          }
-        }
-        await route.fulfill({ response, json: body });
-      });
+      const { receiptId, sharedItem, goneItem } = await receiptNamingSomeoneGone(page, owner, groupId, memberIds);
 
       await openReceipt(page, groupId, receiptId);
       await expect(page.getByTestId('former-members-notice')).toBeVisible();
       // Not the payer: the page picks the signed-in user, as for a receipt saved with none
       await expect(page.getByTestId('paid-by-select')).toHaveValue(alice);
-      // Their own item has nobody; the one they shared still has Bob
+      // Their own item has nobody, and looks it; the one they shared still has Bob
       const create = page.getByTestId('create-expense-btn');
       await expect(create).toHaveText('Assign all items (1 remaining)');
+      const goneCard = page.getByTestId(`item-card-${goneItem.id}`);
+      await expect(goneCard).toHaveClass(/border-amber-300/);
+      await expect(page.getByTestId(`item-card-${sharedItem.id}`)).not.toHaveClass(/border-amber-300/);
       await expect(page.getByTestId(`person-total-${bob}`)).toBeVisible();
 
-      await page.getByTestId(`item-card-${goneItem!.id}`).getByTestId(`member-toggle-${bob}`).click();
+      await goneCard.getByTestId(`member-toggle-${bob}`).click();
       await expect(create).toHaveText('Create Expense from Receipt');
+      await expect(goneCard).not.toHaveClass(/border-amber-300/);
 
       // Saved without them, so Save for later isn't refused for naming them
       const saved = page.waitForResponse((res) => res.url().includes('receipts.saveForLater'));
@@ -161,10 +134,73 @@ test.describe('Receipt scan: someone saved on a receipt leaves the group (#414)'
       const people = Object.fromEntries(
         (after as Item[]).map((item) => [item.id, item.assignments.map((a) => a.userId).sort()]),
       );
-      expect(people[sharedItem!.id]).toEqual([bob]);
-      expect(people[goneItem!.id]).toEqual([bob]);
+      expect(people[sharedItem.id]).toEqual([bob]);
+      expect(people[goneItem.id]).toEqual([bob]);
+    } finally {
+      await dispose();
+    }
+  });
+
+  test('a receipt that names someone no longer in the group can be made into an expense', async ({ page }) => {
+    const { owner, groupId, memberIds, dispose } = await newGroup('Saved Receipt Gone Create');
+    const alice = memberIds[users.alice.email]!;
+    const bob = memberIds[users.bob.email]!;
+    try {
+      const { receiptId, goneItem } = await receiptNamingSomeoneGone(page, owner, groupId, memberIds);
+
+      await openReceipt(page, groupId, receiptId);
+      await page.getByTestId(`item-card-${goneItem.id}`).getByTestId(`member-toggle-${bob}`).click();
+      const create = page.getByTestId('create-expense-btn');
+      await expect(create).toHaveText('Create Expense from Receipt');
+      await create.click();
+      await expect(page).toHaveURL(new RegExp(`/groups/${groupId}$`), { timeout: 30000 });
+
+      // Paid by the signed-in user and shared by the two of them: nobody gone is in it
+      const { expenses } = await trpcResult(await trpcQuery(owner, 'expenses.list', { groupId, limit: 1 }));
+      expect(expenses).toHaveLength(1);
+      const expense = await trpcResult(await trpcQuery(owner, 'expenses.get', { groupId, expenseId: expenses[0].id }));
+      expect(expense.paidById).toBe(alice);
+      expect((expense.shares as { userId: string }[]).map((share) => share.userId).sort()).toEqual([alice, bob].sort());
     } finally {
       await dispose();
     }
   });
 });
+
+// A receipt saved for later as one saved before #414 can still read: someone who is in no group is
+// its payer, has one item to themselves and shares another with Bob. Saved through the API with
+// Bob as payer and on the shared item (the API refuses anyone not in the group), then the receipt
+// page's reads of it are rewritten to add the person gone.
+async function receiptNamingSomeoneGone(page: Page, owner: Owner, groupId: string, memberIds: Record<string, string>) {
+  const alice = memberIds[users.alice.email]!;
+  const bob = memberIds[users.bob.email]!;
+  const gone = 'departed-user-id';
+  const { receiptId, items } = await scanReceipt(owner, groupId);
+  const [sharedItem, goneItem, ...rest] = items;
+  await ok(
+    await trpcMutation(owner, 'receipts.saveForLater', {
+      groupId,
+      receiptId,
+      paidById: bob,
+      assignments: [
+        { receiptItemId: sharedItem!.id, userIds: [bob] },
+        ...rest.map((item) => ({ receiptItemId: item.id, userIds: [alice] })),
+      ],
+    }),
+  );
+
+  await page.route('**/api/trpc/**receipts.getReceiptItems**', async (route) => {
+    const response = await route.fetch();
+    const procedures = new URL(route.request().url()).pathname.split('/').at(-1)!.split(',');
+    const body = await response.json();
+    const answer = body[procedures.indexOf('receipts.getReceiptItems')].result.data.json;
+    answer.receipt.paidById = gone;
+    for (const item of answer.items as Item[]) {
+      if (item.id === sharedItem!.id || item.id === goneItem!.id) {
+        item.assignments.push({ userId: gone, receiptItemId: item.id, id: `a-${item.id}`, shareOfItem: 1 } as never);
+      }
+    }
+    await route.fulfill({ response, json: body });
+  });
+  return { receiptId, sharedItem: sharedItem!, goneItem: goneItem! };
+}

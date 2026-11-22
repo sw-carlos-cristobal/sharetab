@@ -224,14 +224,19 @@ export function ItemAssignment({
   const tipOverrideCents =
     typedTipCents !== null && typedTipCents % currencyStep(fieldCurrency) === 0 ? typedTipCents : null;
   const tip = extracted && tipOverrideCents !== null ? tipOverrideCents : (extracted?.tip ?? 0);
-  // Who is in the group now. A receipt saved before someone left can still name them (#414): the
-  // server takes people off saved receipts as they leave, but not ones saved earlier, nor always
-  // when an admin deletes an account. The page shows no chip for them, so it leaves them out of
-  // the payer, the totals and what it sends, rather than count an item as assigned to someone
-  // who can't be shown or unselected and have Create Expense refused for naming them
-  const memberIds = useMemo(() => new Set(members.map((m) => m.id)), [members]);
+  // Who is in the group now. A saved receipt can still name someone who isn't (#414): the server
+  // takes people off saved receipts as they leave, but not people who left before it did, whenever
+  // the receipt was saved, nor someone a save names while an admin deletes their account. The page
+  // shows no chip for them, so it leaves them out of the payer, the item cards, the totals and what
+  // it sends, rather than count an item as assigned to someone who can't be shown or unselected
+  // and have Create Expense refused for naming them
+  // Keyed on the ids, not `members`, which the page builds again on every render: the same set
+  // until someone joins or leaves, so the memos below that read it keep their values
+  const memberIdKey = members.map((m) => m.id).join('\n');
+  const memberIds = useMemo(() => new Set(memberIdKey ? memberIdKey.split('\n') : []), [memberIdKey]);
   // Until someone picks a payer or a saved one loads, default to the current user (when
-  // they're in the group), as Add Expense does (#271, #265)
+  // they're in the group), as Add Expense does (#271, #265); a payer picked or saved who isn't in
+  // the group now counts as none (#414)
   const currentUserId = profile.data?.id;
   const defaultPaidById = currentUserId && memberIds.has(currentUserId) ? currentUserId : '';
   const effectivePaidById = (memberIds.has(paidById) ? paidById : '') || defaultPaidById;
@@ -314,16 +319,21 @@ export function ItemAssignment({
     });
   }
 
-  // What the totals below show, and what Create Expense and Save for later send: the current items
-  // that have someone. Read through `items`, so an item deleted on another device doesn't count (#411),
-  // and through `memberIds`, so someone no longer in the group doesn't either (#414).
-  const memberAssignments = useMemo(
+  // Who has each item, leaving out anyone no longer in the group (#414): what the item cards show
+  // and what the list below is built from
+  const memberAssignments = useMemo<Assignments>(
     () =>
       Object.fromEntries(
-        Object.entries(assignments).map(([itemId, people]) => [itemId, [...people].filter((id) => memberIds.has(id))]),
+        Object.entries(assignments).map(([itemId, people]) => [
+          itemId,
+          new Set([...people].filter((id) => memberIds.has(id))),
+        ]),
       ),
     [assignments, memberIds],
   );
+  // What the totals below show, and what Create Expense and Save for later send: the current items
+  // that have someone. Read through `items`, so an item deleted on another device doesn't count (#411),
+  // and through `memberAssignments`, so someone no longer in the group doesn't either (#414).
   const assignmentList = useMemo(() => receiptAssignmentList(items, memberAssignments), [items, memberAssignments]);
   // The receipt names someone no longer in the group: say why their items, or the payer, need picking again
   const namesFormerMembers =
@@ -775,7 +785,8 @@ export function ItemAssignment({
       <div className="space-y-2">
         <Label>{t('assignItems', { assigned: assignedItemCount, total: items.length })}</Label>
         {items.map((item) => {
-          const assigned = assignments[item.id] ?? new Set();
+          // Without anyone no longer in the group, so an item only they had shows as unassigned (#414)
+          const assigned = memberAssignments[item.id] ?? new Set<string>();
           const isEditing = editingItem === item.id;
 
           return (
