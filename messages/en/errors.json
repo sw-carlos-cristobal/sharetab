@@ -29,7 +29,6 @@
   "groupNotFound": "Group not found",
   "memberNotFound": "Member not found",
   "notGroupMember": "Not a member of this group",
-  "userNotGroupMember": "User {userId} is not a member of this group",
   "onlyAdminsUpdateGroup": "Only admins and owners can update groups",
   "onlyAdminsArchiveGroup": "Only admins and owners can archive groups",
   "onlyAdminsUnarchiveGroup": "Only admins and owners can unarchive groups",

@@ -29,7 +29,6 @@
   "groupNotFound": "Gruppen hittades inte",
   "memberNotFound": "Medlemmen hittades inte",
   "notGroupMember": "Du är inte medlem i den här gruppen",
-  "userNotGroupMember": "Användaren {userId} är inte medlem i den här gruppen",
   "onlyAdminsUpdateGroup": "Bara administratörer och ägare kan ändra grupper",
   "onlyAdminsArchiveGroup": "Bara administratörer och ägare kan arkivera grupper",
   "onlyAdminsUnarchiveGroup": "Bara administratörer och ägare kan avarkivera grupper",

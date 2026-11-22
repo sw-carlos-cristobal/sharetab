@@ -29,7 +29,6 @@
   "groupNotFound": "未找到群组",
   "memberNotFound": "未找到成员",
   "notGroupMember": "您不是此群组的成员",
-  "userNotGroupMember": "用户 {userId} 不是此群组的成员",
   "onlyAdminsUpdateGroup": "只有管理员和所有者可以更新群组",
   "onlyAdminsArchiveGroup": "只有管理员和所有者可以归档群组",
   "onlyAdminsUnarchiveGroup": "只有管理员和所有者可以取消归档群组",

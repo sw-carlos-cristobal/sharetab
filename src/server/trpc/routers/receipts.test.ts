@@ -305,12 +305,64 @@ describe('saving a receipt for later while it is deleted from the pending list (
     const api = await caller();
     await api.saveForLater({ groupId: 'g1', receiptId: 'r1' });
 
-    expect(rawSql()[0]).toMatch(/FROM "Receipt" WHERE "id" = \? FOR NO KEY UPDATE/);
-    const [locked] = mockDb.$queryRaw.mock.invocationCallOrder;
+    const receiptLock = rawSql().findIndex((sql) => /FROM "Receipt" WHERE "id" = \? FOR NO KEY UPDATE/.test(sql));
+    expect(receiptLock).toBeGreaterThanOrEqual(0);
+    const locked = mockDb.$queryRaw.mock.invocationCallOrder[receiptLock];
     expect(locked).toBeGreaterThan(mockDb.$transaction.mock.invocationCallOrder[0]!);
     const lastRead = mockDb.receipt.findUnique.mock.invocationCallOrder.at(-1)!;
     expect(lastRead).toBeGreaterThan(locked!);
     expect(mockDb.receipt.update.mock.invocationCallOrder[0]).toBeGreaterThan(lastRead);
+  });
+
+  // #414: a save checking who is in the group while someone was being removed could put them
+  // back on the receipt after the removal took them off. A removal holds the group's row
+  // (lockGroupMembers), so the save waits for it and then finds them gone, or the removal waits
+  // for the save and takes off whom it saved. The group's row comes before the receipt's, as in
+  // Create Expense: a removal holding it updates receipts, so the other order could deadlock.
+  test("the group's row is locked before the receipt's, and before who is in the group is read", async () => {
+    mockDb.receipt.findUnique.mockResolvedValue(inGroup);
+    mockDb.groupMember.findMany.mockResolvedValue([{ userId: 'u1' }]);
+    const api = await caller();
+    await api.saveForLater({ groupId: 'g1', receiptId: 'r1', paidById: 'u1' });
+
+    expect(rawSql()[0]).toMatch(/FROM "Group" WHERE "id" = \? FOR SHARE/);
+    expect(mockDb.$queryRaw.mock.calls[0]!.slice(1)).toEqual(['g1']);
+    expect(rawSql()[1]).toMatch(/FROM "Receipt" WHERE "id" = \? FOR NO KEY UPDATE/);
+    const [groupLocked] = mockDb.$queryRaw.mock.invocationCallOrder;
+    expect(groupLocked).toBeGreaterThan(mockDb.$transaction.mock.invocationCallOrder[0]!);
+    expect(mockDb.groupMember.findMany.mock.invocationCallOrder[0]).toBeGreaterThan(groupLocked!);
+  });
+
+  // #414: the message showed the person's raw id
+  test('a payer no longer in the group is refused without their id in the message', async () => {
+    mockDb.receipt.findUnique.mockResolvedValue(inGroup);
+    mockDb.groupMember.findMany.mockResolvedValue([{ userId: 'u1' }]);
+    const api = await caller();
+    const refusal = api.saveForLater({
+      groupId: 'g1',
+      receiptId: 'r1',
+      paidById: 'carol',
+      assignments: [{ receiptItemId: 'i1', userIds: ['u1'] }],
+    });
+    await expect(refusal).rejects.toMatchObject({ code: 'BAD_REQUEST', messageKey: 'payerNotMember' });
+    await expect(refusal).rejects.not.toMatchObject({ message: expect.stringContaining('carol') });
+    expect(mockDb.receipt.update).not.toHaveBeenCalled();
+  });
+
+  test('an assignee no longer in the group is refused without their id in the message', async () => {
+    mockDb.receipt.findUnique.mockResolvedValue(inGroup);
+    mockDb.groupMember.findMany.mockResolvedValue([{ userId: 'u1' }]);
+    const api = await caller();
+    const refusal = api.saveForLater({
+      groupId: 'g1',
+      receiptId: 'r1',
+      paidById: 'u1',
+      assignments: [{ receiptItemId: 'i1', userIds: ['u1', 'carol'] }],
+    });
+    await expect(refusal).rejects.toMatchObject({ code: 'BAD_REQUEST', messageKey: 'assigneeNotMember' });
+    await expect(refusal).rejects.not.toMatchObject({ message: expect.stringContaining('carol') });
+    expect(mockDb.receipt.update).not.toHaveBeenCalled();
+    expect(mockDb.receiptItemAssignment.deleteMany).not.toHaveBeenCalled();
   });
 
   // #411: the message showed the item's raw id

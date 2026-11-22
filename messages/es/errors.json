@@ -29,7 +29,6 @@
   "groupNotFound": "Grupo no encontrado",
   "memberNotFound": "Miembro no encontrado",
   "notGroupMember": "No eres miembro de este grupo",
-  "userNotGroupMember": "El usuario {userId} no es miembro de este grupo",
   "onlyAdminsUpdateGroup": "Solo los administradores y propietarios pueden modificar grupos",
   "onlyAdminsArchiveGroup": "Solo los administradores y propietarios pueden archivar grupos",
   "onlyAdminsUnarchiveGroup": "Solo los administradores y propietarios pueden desarchivar grupos",
